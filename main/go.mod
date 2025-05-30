@@ -2,6 +2,11 @@ module main
 
 go 1.24.2
 
-replace client_handlers => ../client_handlers
+replace routes => ../routes
 
-require client_handlers v0.0.0-00010101000000-000000000000
+replace info => ../info
+
+require (
+	info v0.0.0-00010101000000-000000000000
+	routes v0.0.0-00010101000000-000000000000
+)

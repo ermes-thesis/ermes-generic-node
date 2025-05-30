@@ -1,49 +1,71 @@
 package main
 
-// Tutorial found here: https://www.digitalocean.com/community/tutorials/how-to-make-an-http-server-in-go
-
-// More info about net package can be found here: https://pkg.go.dev/net
-
 import (
-	"client_handlers"
-	"errors"
+	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"sync"
+	"time"
 )
 
-func getRoot(w http.ResponseWriter, r *http.Request) {
+func run(ctx context.Context, w io.Writer, args []string) error {
+	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
+	defer cancel()
 
-	hasFirst := r.URL.Query().Has("first")
-	first := r.URL.Query().Get("first")
-	hasSecond := r.URL.Query().Has("second")
-	second := r.URL.Query().Get("second")
+	//Run server
+	ser, err := NewServer(args, w)
 
-	fmt.Printf("got / request. first(%t)=%s, second(%t)=%s\n",
-		hasFirst, first,
-		hasSecond, second)
+	if err != nil {
+		return err
+	}
 
-	io.WriteString(w, "This is my website!\n")
+	httpServer := &http.Server{
+		Addr:    net.JoinHostPort("localhost", ser.port),
+		Handler: ser.handler,
+	}
+
+	go func() {
+		fmt.Fprintf(w, "Server correctly created and listening on port %s \n", ser.port)
+
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			fmt.Fprintf(os.Stderr, "error listening and serving: %s\n", err)
+		}
+	}()
+
+	// TODO: understand these lines of code
+	// I think it should be some synchronization method when the server shuts down
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		<-ctx.Done()
+		shutdownCtx := context.Background()
+		shutdownCtx, newcancel := context.WithTimeout(shutdownCtx, 10*time.Second)
+		defer newcancel()
+
+		if err := httpServer.Shutdown(shutdownCtx); err != nil {
+			fmt.Fprintf(os.Stderr, "error shutting down http server: %s\n", err)
+		}
+	}()
+
+	wg.Wait()
+
+	return nil
 }
 
 func main() {
 
-	// The main function is responsible for parsing the info received.
-	// For the moment the info passed as arguments are his own name
+	ctx := context.Background()
 
-	// Accept all incoming connections.
-	// If want to define only a set of addresses use "localhost:3333"
-	mux := http.NewServeMux()
-	mux.HandleFunc("/", getRoot)
-	mux.HandleFunc("/hello", client_handlers.Accept_connection())
-
-	err := http.ListenAndServe(":3333", mux)
-
-	if errors.Is(err, http.ErrServerClosed) {
-		fmt.Printf("server closed\n")
-	} else if err != nil {
-		fmt.Printf("error starting server: %s\n", err)
+	if err := run(ctx, os.Stdout, os.Args); err != nil {
+		fmt.Fprintf(os.Stderr, "%s\n", err)
 		os.Exit(1)
 	}
+
+	os.Exit(0)
 }

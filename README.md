@@ -5,12 +5,12 @@ To run:
 
 ```bash
 $ cd main
-$ go run .
+$ go build main
+$ ./main <port> <node_name> <father_name> <children_name...>
 ```
 
 To test:
 
 ```bash
-$ curl "http://localhost:3333"
-$ curl "http://localhost:3333/hello"
+$ curl "http://localhost:<port>/info"
 ```

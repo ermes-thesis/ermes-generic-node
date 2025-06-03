@@ -22,6 +22,16 @@ func NewServerInfo(
 	}
 }
 
+func GetServerInfoName(infoptr *Serverinfo) string {
+	return infoptr.name
+}
+func GetServerInfoFather(infoptr *Serverinfo) string {
+	return infoptr.father
+}
+func GetServerInfoChildren(infoptr *Serverinfo) []string {
+	return infoptr.children
+}
+
 func StringifyInfo(infoptr *Serverinfo) string {
 	var sb strings.Builder
 

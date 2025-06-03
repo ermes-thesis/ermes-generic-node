@@ -48,11 +48,11 @@ func NewServer(args []string, logger io.Writer) (*Server, error) {
 	parent := args[3]
 	children := args[4:]
 
-	serverinfo := info.NewServerInfo(
-		name,
-		parent,
-		children,
-	)
+	serverinfo := info.Serverinfo{
+		Name:     name,
+		Father:   parent,
+		Children: children,
+	}
 
 	fmt.Fprintf(logger, "done \n")
 

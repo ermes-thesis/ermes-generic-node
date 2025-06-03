@@ -14,3 +14,7 @@ To test:
 ```bash
 $ curl "http://localhost:<port>/info"
 ```
+
+### DOCUMENTATION
+
+Refer to [godoc](https://go.dev/blog/godoc).

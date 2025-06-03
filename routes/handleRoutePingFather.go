@@ -13,7 +13,7 @@ func handleRoutePingFather(logger *io.Writer, serverinfo *info.Serverinfo) http.
 		func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(*logger, "got /pingFather \n")
 
-			fathername := info.GetServerInfoFather(serverinfo)
+			fathername := serverinfo.Father
 
 			reqUrl := fmt.Sprintf("http://localhost:%s", fathername)
 

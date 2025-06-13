@@ -1,6 +1,7 @@
 package main
 
 import (
+	"clientrepo"
 	"errors"
 	"fmt"
 	"info"
@@ -15,6 +16,7 @@ type Server struct {
 	port       string
 	logger     io.Writer
 	handler    http.Handler
+	clientRepo *clientrepo.ClientRepo
 }
 
 func NewServer(args []string, logger io.Writer) (*Server, error) {
@@ -63,13 +65,14 @@ func NewServer(args []string, logger io.Writer) (*Server, error) {
 		port:       args[1],
 		logger:     logger,
 		handler:    mux,
+		clientRepo: clientrepo.CreateClientRepo(),
 	}
 
 	fmt.Fprintf(logger, "done \n")
 
 	fmt.Fprintf(logger, "Adding correct routes to the server... ")
 
-	routes.AddRoutes(mux, &logger, &serverinfo)
+	routes.AddRoutes(mux, &logger, &ser.serverinfo, ser.clientRepo)
 
 	fmt.Fprintf(logger, "done \n")
 

@@ -4,13 +4,10 @@ import (
 	"clientrepo"
 	"encoding/json"
 	"fmt"
+	"info"
 	"io"
 	"net/http"
 )
-
-type AddClientResponse struct {
-	userId int
-}
 
 func handleRouteAddClient(logger *io.Writer, repo *clientrepo.ClientRepo) http.Handler {
 	return http.HandlerFunc(
@@ -33,9 +30,7 @@ func handleRouteAddClient(logger *io.Writer, repo *clientrepo.ClientRepo) http.H
 
 			w.Header().Set("Content-Type", "application/json")
 
-			response := AddClientResponse{
-				userId: userId,
-			}
+			response := info.CreateSimpleClientIdRequest(userId)
 
 			w.WriteHeader(http.StatusOK)
 			json.NewEncoder(w).Encode(response)

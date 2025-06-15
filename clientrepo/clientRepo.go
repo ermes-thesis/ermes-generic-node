@@ -40,6 +40,18 @@ func CreateUser(repo *ClientRepo) (int, error) {
 
 }
 
+func AddUser(repo *ClientRepo, userId int) error {
+
+	repo.mux.Lock()
+
+	// If the user was already present do nothing for the moment.
+	repo.clients[userId] = 1
+
+	repo.mux.Unlock()
+
+	return nil
+}
+
 func DeleteUser(repo *ClientRepo, userId int) error {
 
 	repo.mux.Lock()
@@ -55,5 +67,6 @@ func DeleteUser(repo *ClientRepo, userId int) error {
 }
 
 func IsUserPresent(repo *ClientRepo, userId int) bool {
+	// TODO: make this an atomic function (maybe its not needed)
 	return repo.clients[userId] == 1
 }

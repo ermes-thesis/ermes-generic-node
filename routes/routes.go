@@ -18,6 +18,6 @@ func AddRoutes(
 	mux.Handle("/accept", handleRouteAccept(logger))
 	mux.Handle("/info", handleRouteInfo(logger, sinfo))
 	mux.Handle("/pingFather", handleRoutePingFather(logger, sinfo))
-	mux.Handle("/addclient", handleRouteAddClient(logger, clientRepo))
+	mux.Handle("/add-client", handleRouteAddClient(logger, sinfo, clientRepo))
 	mux.Handle("/ask-client-exists", handleRouteAskClientExists(logger, sinfo, clientRepo))
 }

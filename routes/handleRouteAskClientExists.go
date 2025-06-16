@@ -1,6 +1,7 @@
 package routes
 
 import (
+	"bytes"
 	"clientrepo"
 	"encoding/json"
 	"errors"
@@ -27,7 +28,7 @@ func handleRouteAskClientExists(logger *io.Writer, serverinfo *info.Serverinfo, 
 
 			var body info.SimpleClientIdRequest
 
-			err := helper.DecodeJSONPrintlnBody(w, r, &body)
+			err := helper.DecodeJSONRequestBody(w, r, &body)
 
 			if err != nil {
 				var mr *helper.MalformedRequest
@@ -62,7 +63,7 @@ func handleRouteAskClientExists(logger *io.Writer, serverinfo *info.Serverinfo, 
 
 			if fathername == "nil" {
 
-				fmt.Fprintf(*logger, "Father is at the top of the network. The client is not present. Return an error")
+				fmt.Fprintf(*logger, "Father is at the top of the network. The client is not present. Return an error\n")
 
 				w.WriteHeader(http.StatusForbidden)
 
@@ -75,7 +76,18 @@ func handleRouteAskClientExists(logger *io.Writer, serverinfo *info.Serverinfo, 
 
 			fmt.Fprintf(*logger, "Sending a request to the father, located at %s \n", reqUrl)
 
-			req, err := http.NewRequest(http.MethodGet, reqUrl, nil)
+			jsonBody, err := json.Marshal(body)
+
+			// TODO: all these ifs can be maybe refactored in a function to make the code cleaner
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error when marshalling the body of the request: %s \n", err)
+
+				w.WriteHeader(http.StatusInternalServerError)
+
+				return
+			}
+
+			req, err := http.NewRequest(http.MethodPost, reqUrl, bytes.NewBuffer(jsonBody))
 
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error when creating the http request: %s \n", err)
@@ -86,7 +98,6 @@ func handleRouteAskClientExists(logger *io.Writer, serverinfo *info.Serverinfo, 
 			}
 
 			req.Header.Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(body)
 
 			res, err := http.DefaultClient.Do(req)
 

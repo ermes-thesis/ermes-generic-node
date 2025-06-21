@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/http/httputil"
 	"os"
 	"server/clientrepo"
 	"server/helper"
@@ -55,7 +54,7 @@ func HandleRoutePvtAddClient(logger *io.Writer, serverinfo *info.Serverinfo, rep
 
 		// If the client has a father contact him with the same request.
 
-		reqUrl := fmt.Sprintf("http://localhost:%s/add-client", fathername)
+		reqUrl := fmt.Sprintf("http://localhost:%s/pvt-add-client", fathername)
 
 		fmt.Fprintf(*logger, "Sending a request to the father, located at %s \n", reqUrl)
 
@@ -69,6 +68,8 @@ func HandleRoutePvtAddClient(logger *io.Writer, serverinfo *info.Serverinfo, rep
 			return
 		}
 
+		req.Header.Set("X-ERMES-SECRET", serverinfo.Secret)
+
 		res, err := http.DefaultClient.Do(req)
 
 		if err != nil {
@@ -81,13 +82,13 @@ func HandleRoutePvtAddClient(logger *io.Writer, serverinfo *info.Serverinfo, rep
 
 		fmt.Fprintf(*logger, "Got a response from the father! \n")
 
-		reqDump, err := httputil.DumpResponse(res, true)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error when dumping the request: %s", err)
-			return
-		}
+		// reqDump, err := httputil.DumpResponse(res, true)
+		// if err != nil {
+		// 	fmt.Fprintf(os.Stderr, "Error when dumping the request: %s", err)
+		// 	return
+		// }
 
-		fmt.Printf("REQUEST:\n%s", string(reqDump))
+		// fmt.Printf("REQUEST:\n%s", string(reqDump))
 
 		// The father will contain in its body the user id, so we need to deserialize it
 

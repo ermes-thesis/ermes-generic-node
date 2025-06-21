@@ -62,7 +62,7 @@ func HandleRouteAskClientExists(logger *io.Writer, serverinfo *info.Serverinfo, 
 
 		if fathername == "nil" {
 
-			fmt.Fprintf(*logger, "Father is at the top of the network. The client is not present. Return an error\n")
+			fmt.Fprintf(*logger, "We are at the top of the network. The client is not present. Return an error\n")
 
 			w.WriteHeader(http.StatusForbidden)
 
@@ -71,7 +71,7 @@ func HandleRouteAskClientExists(logger *io.Writer, serverinfo *info.Serverinfo, 
 
 		// If the client has a father contact him with the same request.
 
-		reqUrl := fmt.Sprintf("http://localhost:%s/ask-client-exists", fathername)
+		reqUrl := fmt.Sprintf("http://localhost:%s/pvt-ask-client-exists", fathername)
 
 		fmt.Fprintf(*logger, "Sending a request to the father, located at %s \n", reqUrl)
 
@@ -97,6 +97,7 @@ func HandleRouteAskClientExists(logger *io.Writer, serverinfo *info.Serverinfo, 
 		}
 
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-ERMES-SECRET", serverinfo.Secret)
 
 		res, err := http.DefaultClient.Do(req)
 

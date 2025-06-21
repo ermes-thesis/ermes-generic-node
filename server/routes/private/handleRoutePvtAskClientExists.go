@@ -19,7 +19,7 @@ import (
 // IF also the top of the network does not know it then return an error response.
 func HandleRoutePvtAskClientExists(logger *io.Writer, serverinfo *info.Serverinfo, repo *clientrepo.ClientRepo) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(*logger, "got /ask-father-client-exists \n")
+		fmt.Fprintf(*logger, "got /pvt-ask-father-client-exists \n")
 
 		// Read the body of the request
 
@@ -62,7 +62,7 @@ func HandleRoutePvtAskClientExists(logger *io.Writer, serverinfo *info.Serverinf
 
 		if fathername == "nil" {
 
-			fmt.Fprintf(*logger, "Father is at the top of the network. The client is not present. Return an error\n")
+			fmt.Fprintf(*logger, "We are at the top of the network. The client is not present. Return an error\n")
 
 			w.WriteHeader(http.StatusForbidden)
 
@@ -71,7 +71,7 @@ func HandleRoutePvtAskClientExists(logger *io.Writer, serverinfo *info.Serverinf
 
 		// If the client has a father contact him with the same request.
 
-		reqUrl := fmt.Sprintf("http://localhost:%s/ask-client-exists", fathername)
+		reqUrl := fmt.Sprintf("http://localhost:%s/pvt-ask-client-exists", fathername)
 
 		fmt.Fprintf(*logger, "Sending a request to the father, located at %s \n", reqUrl)
 
@@ -97,6 +97,7 @@ func HandleRoutePvtAskClientExists(logger *io.Writer, serverinfo *info.Serverinf
 		}
 
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("X-ERMES-SECRET", serverinfo.Secret)
 
 		res, err := http.DefaultClient.Do(req)
 

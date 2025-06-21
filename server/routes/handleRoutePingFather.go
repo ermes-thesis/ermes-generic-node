@@ -2,10 +2,10 @@ package routes
 
 import (
 	"fmt"
-	"info"
 	"io"
 	"net/http"
 	"os"
+	"server/info"
 )
 
 func handleRoutePingFather(logger *io.Writer, serverinfo *info.Serverinfo) http.Handler {

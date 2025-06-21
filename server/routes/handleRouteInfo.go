@@ -2,9 +2,9 @@ package routes
 
 import (
 	"fmt"
-	"info"
 	"io"
 	"net/http"
+	"server/info"
 )
 
 func handleRouteInfo(logger *io.Writer, serverinfo *info.Serverinfo) http.Handler {

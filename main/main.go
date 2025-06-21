@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"server"
 	"sync"
 	"time"
 )
@@ -17,19 +18,19 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	defer cancel()
 
 	//Run server
-	ser, err := NewServer(args, w)
+	ser, err := server.NewServer(args, w)
 
 	if err != nil {
 		return err
 	}
 
 	httpServer := &http.Server{
-		Addr:    net.JoinHostPort("localhost", ser.port),
-		Handler: ser.handler,
+		Addr:    net.JoinHostPort("localhost", ser.Port),
+		Handler: ser.Handler,
 	}
 
 	go func() {
-		fmt.Fprintf(w, "Server correctly created and listening on port %s \n", ser.port)
+		fmt.Fprintf(w, "Server correctly created and listening on port %s \n", ser.Port)
 
 		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			fmt.Fprintf(os.Stderr, "error listening and serving: %s\n", err)

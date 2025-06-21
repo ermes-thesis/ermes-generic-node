@@ -30,6 +30,9 @@ type Serverinfo struct {
 	//
 	// If the node is a leaf, a special 'nil' value should be used.
 	Children []string
+	// The secret is the private header value with which the ermes nodes can communicate.
+	// For privacy reasons it must not be exposed to the user.
+	Secret string
 }
 
 // StringifyInfo returns a pretty-formatted string of the input Serverinfo.

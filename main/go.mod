@@ -2,18 +2,6 @@ module main
 
 go 1.24.2
 
-replace routes => ../routes
+replace server => ../server
 
-replace info => ../info
-
-replace clientrepo => ../clientrepo
-
-replace helper => ../helper
-
-require (
-	clientrepo v0.0.0-00010101000000-000000000000
-	info v0.0.0-00010101000000-000000000000
-	routes v0.0.0-00010101000000-000000000000
-)
-
-require helper v0.0.0-00010101000000-000000000000 // indirect
+require server v0.0.0-00010101000000-000000000000

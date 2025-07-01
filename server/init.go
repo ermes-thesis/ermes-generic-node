@@ -1,20 +1,21 @@
-package main
+package server
 
 import (
 	"errors"
 	"fmt"
-	"info"
 	"io"
 	"net/http"
-	"routes"
+	"server/clientrepo"
+	"server/info"
 	"strconv"
 )
 
 type Server struct {
-	serverinfo info.Serverinfo
-	port       string
-	logger     io.Writer
-	handler    http.Handler
+	Serverinfo info.Serverinfo
+	Port       string
+	Logger     io.Writer
+	Handler    *http.ServeMux
+	ClientRepo *clientrepo.ClientRepo
 }
 
 func NewServer(args []string, logger io.Writer) (*Server, error) {
@@ -48,28 +49,30 @@ func NewServer(args []string, logger io.Writer) (*Server, error) {
 	parent := args[3]
 	children := args[4:]
 
-	serverinfo := info.NewServerInfo(
-		name,
-		parent,
-		children,
-	)
+	serverinfo := info.Serverinfo{
+		Name:     name,
+		Father:   parent,
+		Children: children,
+		Secret:   "ermes-secret", // For the moment leave it hardcoded
+	}
 
 	fmt.Fprintf(logger, "done \n")
 
 	fmt.Fprintf(logger, "Creating server data structure... ")
 
 	ser := &Server{
-		serverinfo: serverinfo,
-		port:       args[1],
-		logger:     logger,
-		handler:    mux,
+		Serverinfo: serverinfo,
+		Port:       args[1],
+		Logger:     logger,
+		Handler:    mux,
+		ClientRepo: clientrepo.CreateClientRepo(),
 	}
 
 	fmt.Fprintf(logger, "done \n")
 
 	fmt.Fprintf(logger, "Adding correct routes to the server... ")
 
-	routes.AddRoutes(mux, &logger, &serverinfo)
+	ser.compileRoutes()
 
 	fmt.Fprintf(logger, "done \n")
 

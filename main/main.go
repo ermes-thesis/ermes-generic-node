@@ -17,6 +17,9 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
+	//TODO
+	//migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
+
 	//Run server
 	ser, err := server.NewServer(args, w)
 

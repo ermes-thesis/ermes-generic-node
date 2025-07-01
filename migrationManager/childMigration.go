@@ -19,22 +19,22 @@ type childResourceUsage struct {
 	read  resourceUsage
 }
 type resourceUsage struct {
-	cumulativeLatency int
+	CumulativeLatency int
 	TotalRequests     int
 }
 
-func newChildResourceUsage() childResourceUsage {
-	return childResourceUsage{
-		write: resourceUsage{cumulativeLatency: 0, TotalRequests: 0},
-		read:  resourceUsage{cumulativeLatency: 0, TotalRequests: 0},
+func newChildResourceUsage() *childResourceUsage {
+	return &childResourceUsage{
+		write: resourceUsage{CumulativeLatency: 0, TotalRequests: 0},
+		read:  resourceUsage{CumulativeLatency: 0, TotalRequests: 0},
 	}
 }
 
-func manageNewRequest(cr resourceUsage, requestLatency int) {
+func manageNewRequest(cr *resourceUsage, requestLatency int) {
 	cr.TotalRequests++
-	cr.cumulativeLatency += requestLatency
+	cr.CumulativeLatency += requestLatency
 }
 
 func getElasticReadForce(cr resourceUsage) int {
-	return cr.cumulativeLatency * cr.TotalRequests
+	return cr.CumulativeLatency * cr.TotalRequests
 }

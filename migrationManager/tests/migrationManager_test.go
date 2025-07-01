@@ -19,6 +19,10 @@ func TestSingletonInstance(t *testing.T) {
 	if instance1 != instance2 {
 		t.Error("Expected the same instance for both calls, but got different ones")
 	}
+
+	t.Cleanup(func() {
+		migrationManager.ResetSingleton()
+	})
 }
 
 func TestManageNewStrongRequest(t *testing.T) {
@@ -54,4 +58,28 @@ func TestManageNewStrongRequest(t *testing.T) {
 		equilibrium["repoId1"]["childName1"].GetRead().CumulativeLatency != 0 {
 		t.Error("wrong latency values")
 	}
+
+	t.Cleanup(func() {
+		migrationManager.ResetSingleton()
+	})
+}
+
+func TestManageNewStrongRequestComputeForces(t *testing.T) {
+	instance1 := migrationManager.GetMigrationManagerInstance()
+	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
+	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
+	instance1.ManageNewStrongRequest("repoId", "childName", false, 3)
+
+	var equilibrium = instance1.GetUnstableEquilibriumState()
+
+	if migrationManager.GetElasticReadForce(equilibrium["repoId"]["childName"].GetWrite()) != 26 {
+		t.Error("wrong write force")
+	}
+	if migrationManager.GetElasticReadForce(equilibrium["repoId"]["childName"].GetRead()) != 3 {
+		t.Error("wrong read force")
+	}
+
+	t.Cleanup(func() {
+		migrationManager.ResetSingleton()
+	})
 }

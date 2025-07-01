@@ -14,3 +14,7 @@ func (s *childResourceUsage) GetWrite() resourceUsage {
 func (s *childResourceUsage) GetRead() resourceUsage {
 	return s.read
 }
+
+func ResetSingleton() {
+	migrationManagareInstance = nil
+}

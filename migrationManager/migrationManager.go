@@ -1,6 +1,7 @@
 package migrationManager
 
 import (
+	"fmt"
 	"sync"
 )
 
@@ -33,6 +34,7 @@ func GetMigrationManagerInstance() *MigrationManagerImp {
 		lock.Lock()
 		defer lock.Unlock()
 		if migrationManagareInstance == nil {
+			fmt.Println("Creating single instance now.")
 			migrationManagareInstance = &MigrationManagerImp{}
 			migrationManagareInstance.init()
 		}
@@ -68,7 +70,6 @@ func (m *MigrationManagerImp) ManageNewStrongRequest(repoId string, childName st
 	} else {
 		manageNewRequest(&resUsage.read, requestLatency)
 	}
-
 	//take decisions
 	//TODO -> QUI O NEL GOSSIP?
 }

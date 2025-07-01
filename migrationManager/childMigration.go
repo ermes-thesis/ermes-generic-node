@@ -35,6 +35,6 @@ func manageNewRequest(cr *resourceUsage, requestLatency int) {
 	cr.CumulativeLatency += requestLatency
 }
 
-func getElasticReadForce(cr resourceUsage) int {
+func GetElasticReadForce(cr resourceUsage) int {
 	return cr.CumulativeLatency * cr.TotalRequests
 }

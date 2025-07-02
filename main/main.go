@@ -22,11 +22,11 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 
 	//node set up
 	collections := &dataManagerShared.CollectionPartialView{
-		KnowedCollections: make(map[string]*dataManagerShared.Collection),
+		KnowedCollections: make(map[string]dataManagerShared.Collection),
 	}
 	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
 	migrationManagerIstance.Init(collections)
-	lookupManagerIstance := lookupmanager.GetLokupManagerMigrationManagerImp()
+	lookupManagerIstance := lookupmanager.GetLookupManagerInstance()
 	lookupManagerIstance.Init(collections)
 
 	//Run server

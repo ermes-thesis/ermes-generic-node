@@ -21,7 +21,7 @@ type LookupManagerImp struct {
 var lookupManagerInstance *LookupManagerImp
 var lock = &sync.Mutex{}
 
-func GetLokupManagerMigrationManagerImp() *LookupManagerImp {
+func GetLookupManagerInstance() *LookupManagerImp {
 	if lookupManagerInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()

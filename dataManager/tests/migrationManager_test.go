@@ -1,7 +1,7 @@
 //go:build test
 // +build test
 
-package migrationManager_test
+package tests
 
 import (
 	migrationManager "dataManager/migrationManager"
@@ -11,7 +11,7 @@ import (
 
 func TestSingletonInstance(t *testing.T) {
 	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]*shared.Collection),
+		KnowedCollections: make(map[string]shared.Collection),
 	}
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
@@ -34,7 +34,7 @@ func TestSingletonInstance(t *testing.T) {
 
 func TestManageNewStrongRequest(t *testing.T) {
 	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]*shared.Collection),
+		KnowedCollections: make(map[string]shared.Collection),
 	}
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
@@ -71,6 +71,10 @@ func TestManageNewStrongRequest(t *testing.T) {
 		t.Error("wrong latency values")
 	}
 
+	if collections.KnowedCollections["repoId"] == nil || collections.KnowedCollections["repoId1"] == nil {
+		t.Fatal("collection not initialized")
+	}
+
 	t.Cleanup(func() {
 		migrationManager.ResetSingleton()
 	})
@@ -78,7 +82,7 @@ func TestManageNewStrongRequest(t *testing.T) {
 
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
 	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]*shared.Collection),
+		KnowedCollections: make(map[string]shared.Collection),
 	}
 
 	instance1 := migrationManager.GetMigrationManagerInstance()

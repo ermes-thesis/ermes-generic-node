@@ -5,14 +5,19 @@ package migrationManager_test
 
 import (
 	migrationManager "dataManager/migrationManager"
+	shared "dataManager/shared"
 	"testing"
 )
 
 func TestSingletonInstance(t *testing.T) {
+	collections := &shared.CollectionPartialView{
+		KnowedCollections: make(map[string]*shared.Collection),
+	}
+
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init()
+	instance1.Init(collections)
 	instance2 := migrationManager.GetMigrationManagerInstance()
-	instance2.Init()
+	instance2.Init(collections)
 
 	if instance1 == nil {
 		t.Fatal("Expected non-nil instance from GetMigrationManagerIstance")
@@ -28,8 +33,12 @@ func TestSingletonInstance(t *testing.T) {
 }
 
 func TestManageNewStrongRequest(t *testing.T) {
+	collections := &shared.CollectionPartialView{
+		KnowedCollections: make(map[string]*shared.Collection),
+	}
+
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init()
+	instance1.Init(collections)
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
 
 	if instance1.GetUnstableEquilibriumState()["repoId"]["childName"] == nil {
@@ -68,8 +77,12 @@ func TestManageNewStrongRequest(t *testing.T) {
 }
 
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
+	collections := &shared.CollectionPartialView{
+		KnowedCollections: make(map[string]*shared.Collection),
+	}
+
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init()
+	instance1.Init(collections)
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
 	instance1.ManageNewStrongRequest("repoId", "childName", false, 3)

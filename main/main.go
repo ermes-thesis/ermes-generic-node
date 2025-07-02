@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
-	"dataManager/migrationManager"
+	lookupmanager "dataManager/lookupManager"
+	migrationManager "dataManager/migrationManager"
+	dataManagerShared "dataManager/shared"
 	"fmt"
 	"io"
 	"net"
@@ -18,9 +20,14 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	//TODO
+	//node set up
+	collections := &dataManagerShared.CollectionPartialView{
+		KnowedCollections: make(map[string]*dataManagerShared.Collection),
+	}
 	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
-	migrationManagerIstance.Init()
+	migrationManagerIstance.Init(collections)
+	lookupManagerIstance := lookupmanager.GetLokupManagerMigrationManagerImp()
+	lookupManagerIstance.Init(collections)
 
 	//Run server
 	ser, err := server.NewServer(args, w)

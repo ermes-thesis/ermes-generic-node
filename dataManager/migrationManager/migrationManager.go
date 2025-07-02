@@ -17,9 +17,6 @@ type MigrationManager interface {
 }
 
 type MigrationManagerImp struct {
-	//sync
-	mutex sync.Mutex
-	//data
 	adjacentNodes            map[string]nodeData                       //TODO maybe can be removed ~ sharing something with http
 	unstableEquilibriumState map[string]map[string]*childResourceUsage //mapping resource - child
 	collectionsPartialView   *shared.CollectionPartialView             //set of local and remotes collections
@@ -47,8 +44,8 @@ func GetMigrationManagerInstance() *MigrationManagerImp {
 
 func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView) {
 	//sync
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	lock.Lock()
+	defer lock.Unlock()
 	//imp
 	if m.collectionsPartialView != nil { //if singleton allready inizialized
 		return
@@ -61,8 +58,8 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView) {
 // methods
 func (m *MigrationManagerImp) ManageNewStrongRequest(repoId string, childName string, isWrite bool, requestLatency int) {
 	//sync
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
+	m.collectionsPartialView.Mutex.Lock()
+	defer m.collectionsPartialView.Mutex.Unlock()
 	//imp
 	if m.unstableEquilibriumState[repoId] == nil { //first time accessing resource in general
 		m.unstableEquilibriumState[repoId] = make(map[string]*childResourceUsage)

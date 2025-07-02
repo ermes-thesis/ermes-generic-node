@@ -1,5 +1,7 @@
 package dataManagerShared
 
+import "sync"
+
 // collection Info
 type Collection interface {
 	CollectionId() string //duplicated?
@@ -38,5 +40,9 @@ func (l *RemoteCollection) HostsId() []string {
 
 // partialView
 type CollectionPartialView struct {
-	KnowedCollections map[string]*Collection //maps collectionID to info related to that collection
+	//sync
+	Mutex sync.Mutex
+	//data
+	KnowedCollections map[string]Collection //maps collectionID to info related to that collection
+
 }

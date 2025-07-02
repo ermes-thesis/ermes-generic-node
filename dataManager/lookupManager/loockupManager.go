@@ -7,12 +7,12 @@ import (
 )
 
 type LookupManager interface {
-	//TODO
+	IsCollectionLocallyPresent(collectionId string) (bool, shared.Collection)
 }
 
 type LookupManagerImp struct {
 	//sync
-	mutex sync.Mutex
+
 	//data
 	collectionsPartialView *shared.CollectionPartialView
 }
@@ -35,12 +35,27 @@ func GetLokupManagerMigrationManagerImp() *LookupManagerImp {
 
 func (m *LookupManagerImp) Init(collections *shared.CollectionPartialView) {
 	//sync
-	m.mutex.Lock()
-	defer m.mutex.Unlock()
-	//imp
+	lock.Lock()
+	defer lock.Unlock()
 	//imp
 	if m.collectionsPartialView != nil { //if singleton allready inizialized
 		return
 	}
 	m.collectionsPartialView = collections
+}
+
+// methods
+func (m *LookupManagerImp) IsCollectionLocallyPresent(collectionId string) (bool, shared.Collection) {
+	//sync
+	m.collectionsPartialView.Mutex.Lock()
+	defer m.collectionsPartialView.Mutex.Unlock()
+	//imp
+	collection, exists := m.collectionsPartialView.KnowedCollections[collectionId]
+	if !exists {
+		return false, nil
+	}
+	if !collection.IsLocal() {
+		return false, collection
+	}
+	return true, collection
 }

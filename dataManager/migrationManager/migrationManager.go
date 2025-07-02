@@ -11,14 +11,16 @@ type MigrationManager interface {
 	//used to update forces in real time (repoId, childName, write?, request cumulative latency)
 	ManageNewStrongRequest(string, string, bool, int)
 	//used to update non real time info
-	ManageGossipMessage() //TODO
+	ManageChildGossipMessage()     //TODO
+	ManageAnchestorGossipMessage() //TODO
 }
 
 type MigrationManagerImp struct {
-	adjacentNodes map[string]nodeData
-	resourcesData map[string]resourceData
-	//mapping resource - child
-	unstableEquilibriumState map[string]map[string]*childResourceUsage
+	//sync
+	mutex sync.Mutex
+	//data
+	adjacentNodes            map[string]nodeData
+	unstableEquilibriumState map[string]map[string]*childResourceUsage //mapping resource - child
 }
 
 // configurable parameters
@@ -36,36 +38,42 @@ func GetMigrationManagerInstance() *MigrationManagerImp {
 		if migrationManagareInstance == nil {
 			fmt.Println("Creating single instance now.")
 			migrationManagareInstance = &MigrationManagerImp{}
-			migrationManagareInstance.init()
 		}
 	}
 	return migrationManagareInstance
 }
 
-func (m *MigrationManagerImp) init() {
+func (m *MigrationManagerImp) Init() {
+	//sync
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	//imp
 	//if map is not initialized
 	if m.unstableEquilibriumState == nil {
 		m.unstableEquilibriumState = make(map[string]map[string]*childResourceUsage)
 	}
-	//TODO inizialize maps
+	if m.adjacentNodes == nil {
+		m.adjacentNodes = make(map[string]nodeData)
+	}
 }
 
 // methods
 func (m *MigrationManagerImp) ManageNewStrongRequest(repoId string, childName string, isWrite bool, requestLatency int) {
-	//first time accessing resource in general
-	if m.unstableEquilibriumState[repoId] == nil {
+	//sync
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+	//imp
+	if m.unstableEquilibriumState[repoId] == nil { //first time accessing resource in general
 		m.unstableEquilibriumState[repoId] = make(map[string]*childResourceUsage)
 	}
 
 	resUsage, exists := m.unstableEquilibriumState[repoId][childName]
-	//first time accessing resource from a child
-	if !exists {
+	if !exists { //first time accessing resource from a child
 		resUsage = newChildResourceUsage()
 		m.unstableEquilibriumState[repoId][childName] = resUsage
 	}
 
-	//update saved info
-	if isWrite {
+	if isWrite { //update saved info
 		manageNewRequest(&resUsage.write, requestLatency)
 	} else {
 		manageNewRequest(&resUsage.read, requestLatency)

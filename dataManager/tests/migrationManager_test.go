@@ -4,13 +4,15 @@
 package migrationManager_test
 
 import (
-	migrationManager "migrationManager"
+	migrationManager "dataManager/migrationManager"
 	"testing"
 )
 
 func TestSingletonInstance(t *testing.T) {
 	instance1 := migrationManager.GetMigrationManagerInstance()
+	instance1.Init()
 	instance2 := migrationManager.GetMigrationManagerInstance()
+	instance2.Init()
 
 	if instance1 == nil {
 		t.Fatal("Expected non-nil instance from GetMigrationManagerIstance")
@@ -27,6 +29,7 @@ func TestSingletonInstance(t *testing.T) {
 
 func TestManageNewStrongRequest(t *testing.T) {
 	instance1 := migrationManager.GetMigrationManagerInstance()
+	instance1.Init()
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
 
 	if instance1.GetUnstableEquilibriumState()["repoId"]["childName"] == nil {
@@ -66,16 +69,17 @@ func TestManageNewStrongRequest(t *testing.T) {
 
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
 	instance1 := migrationManager.GetMigrationManagerInstance()
+	instance1.Init()
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
 	instance1.ManageNewStrongRequest("repoId", "childName", false, 3)
 
 	var equilibrium = instance1.GetUnstableEquilibriumState()
 
-	if migrationManager.GetElasticReadForce(equilibrium["repoId"]["childName"].GetWrite()) != 26 {
+	if migrationManager.GetElasticForce(equilibrium["repoId"]["childName"].GetWrite()) != 26 {
 		t.Error("wrong write force")
 	}
-	if migrationManager.GetElasticReadForce(equilibrium["repoId"]["childName"].GetRead()) != 3 {
+	if migrationManager.GetElasticForce(equilibrium["repoId"]["childName"].GetRead()) != 3 {
 		t.Error("wrong read force")
 	}
 

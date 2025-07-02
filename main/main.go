@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"dataManager/migrationManager"
 	"fmt"
 	"io"
 	"net"
@@ -18,7 +19,8 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	defer cancel()
 
 	//TODO
-	//migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
+	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
+	migrationManagerIstance.Init()
 
 	//Run server
 	ser, err := server.NewServer(args, w)

@@ -2,14 +2,15 @@ package migrationManager
 
 // child data
 type nodeData struct {
-	latency float32 //geografical distance
+	latency     float32 //geografical distance
+	memFreeSize float32
 }
 
 func newChildData(latency float32) nodeData {
 	return nodeData{latency: latency}
 }
 
-func (c nodeData) Latency() float32 {
+func (c nodeData) GetLatency() float32 {
 	return c.latency
 }
 
@@ -35,6 +36,6 @@ func manageNewRequest(cr *resourceUsage, requestLatency int) {
 	cr.CumulativeLatency += requestLatency
 }
 
-func GetElasticReadForce(cr resourceUsage) int {
+func GetElasticForce(cr resourceUsage) int {
 	return cr.CumulativeLatency * cr.TotalRequests
 }

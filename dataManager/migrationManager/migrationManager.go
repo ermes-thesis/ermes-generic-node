@@ -6,6 +6,11 @@ import (
 	"sync"
 )
 
+// configurable parameters
+const leaderThreshold = 0
+const followerThreshold = 1
+const viewSize = 3
+
 type MigrationManager interface {
 	//used to update lru in real time (collectionID, childName, request cumulative latency)
 	ManageNewRequestanageNewWeekRequest(string, string, int)
@@ -20,14 +25,17 @@ type MigrationManager interface {
 }
 
 type MigrationManagerImp struct {
+	//state
+	currentState MigrationManagerState
+
+	idleState     MigrationManagerState
+	gossipState   MigrationManagerState
+	decisionState MigrationManagerState
+	//impl
 	adjacentNodes            map[string]nodeData                       //TODO maybe can be removed ~ sharing something with http
 	unstableEquilibriumState map[string]map[string]*childResourceUsage //mapping resource - child
 	collectionsPartialView   *shared.CollectionPartialView             //set of local and remotes collections
 }
-
-// configurable parameters
-const leaderThreshold = 0
-const followerThreshold = 1
 
 // singleton pattern
 var migrationManagareInstance *MigrationManagerImp
@@ -53,37 +61,18 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView) {
 	if m.collectionsPartialView != nil { //if singleton allready inizialized
 		return
 	}
+	m.idleState = &MigrationManagerIdleState{m}
+	m.gossipState = &MigrationManagerGossipState{m}
+	m.decisionState = &MigrationManagerDecisionState{m}
+	//TODO -> inizializzo gli altri due stati
+	m.currentState = m.idleState
+
 	m.collectionsPartialView = collections
 	m.unstableEquilibriumState = make(map[string]map[string]*childResourceUsage)
 	m.adjacentNodes = make(map[string]nodeData)
 }
 
 // methods
-func (m *MigrationManagerImp) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	//sync
-	m.collectionsPartialView.Mutex.Lock()
-	defer m.collectionsPartialView.Mutex.Unlock()
-	//imp
-	if m.unstableEquilibriumState[collectionId] == nil { //first time accessing resource in general
-		m.unstableEquilibriumState[collectionId] = make(map[string]*childResourceUsage)
-		m.addNewRemoteCollection(collectionId, "fatherName") //TODO: change with real name
-	}
-
-	resUsage, exists := m.unstableEquilibriumState[collectionId][childName]
-	if !exists { //first time accessing resource from a child
-		resUsage = newChildResourceUsage()
-		m.unstableEquilibriumState[collectionId][childName] = resUsage
-	}
-
-	if isWrite { //update saved info
-		manageNewRequest(&resUsage.write, requestLatency)
-	} else {
-		manageNewRequest(&resUsage.read, requestLatency)
-	}
-	//take decisions
-	//TODO -> QUI O NEL GOSSIP? -> meglio nel gossip
-}
-
 func (m *MigrationManagerImp) addNewRemoteCollection(collectionId string, hostId string) {
 	hosts := make(map[string]struct{})
 	hosts[hostId] = struct{}{}
@@ -105,4 +94,67 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, collect
 	}
 	m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewLocalCollection(collectionId, collectionSize, make(map[string]struct{}))
 	return false
+}
+
+func (m *MigrationManagerImp) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
+	m.currentState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
+}
+
+// statePattern
+type MigrationManagerState interface {
+	//ManageNewRequestanageNewWeekRequest(string, string, int) TODO
+	ManageNewStrongRequest(string, string, bool, int)
+	//ManageChildGossipMessage()     //TODO
+	//ManageAnchestorGossipMessage() //TODO
+}
+
+// - Idel state -> in this state the Migration manager can receive collection requests; ignore gossip messages
+type MigrationManagerIdleState struct {
+	MigrationManagerImp *MigrationManagerImp
+}
+
+// methods
+func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
+	//sync
+	m.MigrationManagerImp.collectionsPartialView.Mutex.Lock()
+	defer m.MigrationManagerImp.collectionsPartialView.Mutex.Unlock()
+	//imp
+	if m.MigrationManagerImp.unstableEquilibriumState[collectionId] == nil { //first time accessing resource in general
+		m.MigrationManagerImp.unstableEquilibriumState[collectionId] = make(map[string]*childResourceUsage)
+		m.MigrationManagerImp.addNewRemoteCollection(collectionId, "fatherName") //TODO: change with real name
+	}
+
+	resUsage, exists := m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName]
+	if !exists { //first time accessing resource from a child
+		resUsage = newChildResourceUsage()
+		m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName] = resUsage
+	}
+
+	if isWrite { //update saved info
+		manageNewRequest(&resUsage.write, requestLatency)
+	} else {
+		manageNewRequest(&resUsage.read, requestLatency)
+	}
+	//take decisions
+	//TODO -> QUI O NEL GOSSIP? -> meglio nel gossip
+}
+
+// - Gossip state -> in this state the Migration manager can receive gossip messages and place in a stack collection requests
+type MigrationManagerGossipState struct {
+	MigrationManagerImp *MigrationManagerImp
+}
+
+// methods
+func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
+	//TODO
+}
+
+// - Decision state -> in this state the Migration manager ingore all the messages, take decisions on collection migration; consume the stack
+type MigrationManagerDecisionState struct {
+	MigrationManagerImp *MigrationManagerImp
+}
+
+// methods
+func (m *MigrationManagerDecisionState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
+	//TODO
 }

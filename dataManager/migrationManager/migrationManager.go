@@ -32,9 +32,9 @@ type MigrationManagerImp struct {
 	gossipState   MigrationManagerState
 	decisionState MigrationManagerState
 	//impl
-	adjacentNodes            map[string]nodeData                       //TODO maybe can be removed ~ sharing something with http
-	unstableEquilibriumState map[string]map[string]*childResourceUsage //mapping resource - child
-	collectionsPartialView   *shared.CollectionPartialView             //set of local and remotes collections
+	adjacentNodes            map[string]nodeData                   //TODO maybe can be removed ~ sharing something with http
+	unstableEquilibriumState map[string]map[string]*CircularBuffer //mapping resource - child
+	collectionsPartialView   *shared.CollectionPartialView         //set of local and remotes collections
 }
 
 // singleton pattern
@@ -68,7 +68,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView) {
 	m.currentState = m.idleState
 
 	m.collectionsPartialView = collections
-	m.unstableEquilibriumState = make(map[string]map[string]*childResourceUsage)
+	m.unstableEquilibriumState = make(map[string]map[string]*CircularBuffer)
 	m.adjacentNodes = make(map[string]nodeData)
 }
 
@@ -120,23 +120,24 @@ func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, 
 	defer m.MigrationManagerImp.collectionsPartialView.Mutex.Unlock()
 	//imp
 	if m.MigrationManagerImp.unstableEquilibriumState[collectionId] == nil { //first time accessing resource in general
-		m.MigrationManagerImp.unstableEquilibriumState[collectionId] = make(map[string]*childResourceUsage)
+		m.MigrationManagerImp.unstableEquilibriumState[collectionId] = make(map[string]*CircularBuffer)
 		m.MigrationManagerImp.addNewRemoteCollection(collectionId, "fatherName") //TODO: change with real name
 	}
 
 	resUsage, exists := m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName]
 	if !exists { //first time accessing resource from a child
-		resUsage = newChildResourceUsage()
+		newChildUsage := NewChildResourceUsage()
+		print(newChildUsage)
+		resUsage = NewCircularBuffer(viewSize)
 		m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName] = resUsage
+		resUsage.Add(newChildUsage)
 	}
 
 	if isWrite { //update saved info
-		manageNewRequest(&resUsage.write, requestLatency)
+		manageNewRequest(&resUsage.Data[resUsage.Head].write, requestLatency)
 	} else {
-		manageNewRequest(&resUsage.read, requestLatency)
+		manageNewRequest(&resUsage.Data[resUsage.Head].read, requestLatency)
 	}
-	//take decisions
-	//TODO -> QUI O NEL GOSSIP? -> meglio nel gossip
 }
 
 // - Gossip state -> in this state the Migration manager can receive gossip messages and place in a stack collection requests

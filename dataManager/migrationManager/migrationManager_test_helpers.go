@@ -3,7 +3,7 @@
 
 package migrationManager
 
-func (m *MigrationManagerImp) GetUnstableEquilibriumState() map[string]map[string]*childResourceUsage {
+func (m *MigrationManagerImp) GetUnstableEquilibriumState() map[string]map[string]*CircularBuffer {
 	return m.unstableEquilibriumState
 }
 

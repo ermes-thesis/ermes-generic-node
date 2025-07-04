@@ -24,7 +24,7 @@ type resourceUsage struct {
 	TotalRequests     int
 }
 
-func newChildResourceUsage() *childResourceUsage {
+func NewChildResourceUsage() *childResourceUsage {
 	return &childResourceUsage{
 		write: resourceUsage{CumulativeLatency: 0, TotalRequests: 0},
 		read:  resourceUsage{CumulativeLatency: 0, TotalRequests: 0},

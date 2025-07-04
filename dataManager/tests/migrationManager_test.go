@@ -61,13 +61,12 @@ func TestManageNewStrongRequest(t *testing.T) {
 	}
 
 	var equilibrium = instance1.GetUnstableEquilibriumState()
-
-	if equilibrium["repoId"]["childName"].GetWrite().CumulativeLatency != 13 ||
-		equilibrium["repoId"]["childName"].GetRead().CumulativeLatency != 3 ||
-		equilibrium["repoId"]["childName1"].GetWrite().CumulativeLatency != 0 ||
-		equilibrium["repoId"]["childName1"].GetRead().CumulativeLatency != 7 ||
-		equilibrium["repoId1"]["childName1"].GetWrite().CumulativeLatency != 7 ||
-		equilibrium["repoId1"]["childName1"].GetRead().CumulativeLatency != 0 {
+	if equilibrium["repoId"]["childName"].Data[0].GetWrite().CumulativeLatency != 13 ||
+		equilibrium["repoId"]["childName"].Data[0].GetRead().CumulativeLatency != 3 ||
+		equilibrium["repoId"]["childName1"].Data[0].GetWrite().CumulativeLatency != 0 ||
+		equilibrium["repoId"]["childName1"].Data[0].GetRead().CumulativeLatency != 7 ||
+		equilibrium["repoId1"]["childName1"].Data[0].GetWrite().CumulativeLatency != 7 ||
+		equilibrium["repoId1"]["childName1"].Data[0].GetRead().CumulativeLatency != 0 {
 		t.Error("wrong latency values")
 	}
 
@@ -93,10 +92,10 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 
 	var equilibrium = instance1.GetUnstableEquilibriumState()
 
-	if migrationManager.GetElasticForce(equilibrium["repoId"]["childName"].GetWrite()) != 26 {
+	if migrationManager.GetElasticForce(equilibrium["repoId"]["childName"].Data[0].GetWrite()) != 26 {
 		t.Error("wrong write force")
 	}
-	if migrationManager.GetElasticForce(equilibrium["repoId"]["childName"].GetRead()) != 3 {
+	if migrationManager.GetElasticForce(equilibrium["repoId"]["childName"].Data[0].GetRead()) != 3 {
 		t.Error("wrong read force")
 	}
 

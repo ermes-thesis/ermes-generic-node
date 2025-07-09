@@ -6,11 +6,12 @@ import (
 	"sync"
 )
 
-// configurable parameters
+// configurable parameters  --> TODO config
 const leaderThreshold = 0
 const followerThreshold = 1
 const viewSize = 3
 
+type PenalityFunc func(int, int) int //must be overwritten
 type MigrationManager interface {
 	//used to update lru in real time (collectionID, childName, request cumulative latency)
 	ManageNewRequestanageNewWeekRequest(string, string, int)
@@ -35,6 +36,9 @@ type MigrationManagerImp struct {
 	adjacentNodes            map[string]nodeData                   //TODO maybe can be removed ~ sharing something with http
 	unstableEquilibriumState map[string]map[string]*CircularBuffer //mapping resource - child
 	collectionsPartialView   *shared.CollectionPartialView         //set of local and remotes collections
+
+	//used to define a penalization factor for past data -> func(bufferPos int, currentValue int)
+	penalityFunc PenalityFunc
 }
 
 // singleton pattern
@@ -53,7 +57,7 @@ func GetMigrationManagerInstance() *MigrationManagerImp {
 	return migrationManagareInstance
 }
 
-func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView) {
+func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc PenalityFunc) {
 	//sync
 	lock.Lock()
 	defer lock.Unlock()
@@ -61,12 +65,14 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView) {
 	if m.collectionsPartialView != nil { //if singleton allready inizialized
 		return
 	}
+	m.penalityFunc = penalityFunc
+	//init states
 	m.idleState = &MigrationManagerIdleState{m}
 	m.gossipState = &MigrationManagerGossipState{m}
 	m.decisionState = &MigrationManagerDecisionState{m}
 	//TODO -> inizializzo gli altri due stati
 	m.currentState = m.idleState
-
+	//init data
 	m.collectionsPartialView = collections
 	m.unstableEquilibriumState = make(map[string]map[string]*CircularBuffer)
 	m.adjacentNodes = make(map[string]nodeData)
@@ -108,6 +114,10 @@ type MigrationManagerState interface {
 	//ManageAnchestorGossipMessage() //TODO
 }
 
+func (m *MigrationManagerImp) setState(s MigrationManagerState) {
+	m.currentState = s
+}
+
 // - Idel state -> in this state the Migration manager can receive collection requests; ignore gossip messages
 type MigrationManagerIdleState struct {
 	MigrationManagerImp *MigrationManagerImp
@@ -115,6 +125,7 @@ type MigrationManagerIdleState struct {
 
 // methods
 func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
+
 	//sync
 	m.MigrationManagerImp.collectionsPartialView.Mutex.Lock()
 	defer m.MigrationManagerImp.collectionsPartialView.Mutex.Unlock()
@@ -126,11 +137,12 @@ func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, 
 
 	resUsage, exists := m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName]
 	if !exists { //first time accessing resource from a child
-		newChildUsage := NewChildResourceUsage()
-		print(newChildUsage)
 		resUsage = NewCircularBuffer(viewSize)
 		m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName] = resUsage
-		resUsage.Add(newChildUsage)
+		resUsage.Add(NewChildResourceUsage())
+	}
+	if resUsage.Data[resUsage.Head] == nil {
+		resUsage.Add(NewChildResourceUsage())
 	}
 
 	if isWrite { //update saved info
@@ -138,6 +150,7 @@ func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, 
 	} else {
 		manageNewRequest(&resUsage.Data[resUsage.Head].read, requestLatency)
 	}
+
 }
 
 // - Gossip state -> in this state the Migration manager can receive gossip messages and place in a stack collection requests
@@ -158,4 +171,32 @@ type MigrationManagerDecisionState struct {
 // methods
 func (m *MigrationManagerDecisionState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
 	//TODO
+}
+
+func (m *MigrationManagerDecisionState) computeReadElasticForce(cb *CircularBuffer) int {
+	var feR = 0
+
+	for i := 0; i < cb.capacity; i++ {
+		idx := (cb.Head - i + cb.capacity) % cb.capacity
+		if cb.Data[idx] == nil {
+			break
+		}
+		feR += m.MigrationManagerImp.penalityFunc(i, GetElasticForce(cb.Data[idx].read))
+	}
+
+	return feR
+}
+
+func (m *MigrationManagerDecisionState) computeWriteElasticForce(cb *CircularBuffer) int {
+	var feW = 0
+
+	for i := 0; i < cb.capacity; i++ {
+		idx := (cb.Head - i + cb.capacity) % cb.capacity
+		if cb.Data[idx] == nil {
+			break
+		}
+		feW += m.MigrationManagerImp.penalityFunc(i, GetElasticForce(cb.Data[idx].write))
+	}
+
+	return feW
 }

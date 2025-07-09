@@ -18,3 +18,22 @@ func (s *childResourceUsage) GetRead() resourceUsage {
 func ResetSingleton() {
 	migrationManagareInstance = nil
 }
+
+func GetBuffer(collection string, child string) *CircularBuffer {
+	return migrationManagareInstance.unstableEquilibriumState[collection][child]
+}
+
+func (m *MigrationManagerImp) SetState(s MigrationManagerState) {
+	m.setState(s)
+}
+func (m *MigrationManagerImp) GetDecisionState() MigrationManagerState {
+	return m.decisionState
+}
+
+func (m *MigrationManagerDecisionState) ComputeReadElasticForce(cb *CircularBuffer) int {
+	return m.computeReadElasticForce(cb)
+}
+
+func (m *MigrationManagerDecisionState) ComputeWriteElasticForce(cb *CircularBuffer) int {
+	return m.computeWriteElasticForce(cb)
+}

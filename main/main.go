@@ -16,6 +16,11 @@ import (
 	"time"
 )
 
+// TODO replace
+func myPenalityFunc(bufferPos int, currentValue int) int {
+	return currentValue
+}
+
 func run(ctx context.Context, w io.Writer, args []string) error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
@@ -25,7 +30,7 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 		KnowedCollections: make(map[string]dataManagerShared.Collection),
 	}
 	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
-	migrationManagerIstance.Init(collections)
+	migrationManagerIstance.Init(collections, myPenalityFunc)
 	lookupManagerIstance := lookupmanager.GetLookupManagerInstance()
 	lookupManagerIstance.Init(collections)
 

@@ -10,13 +10,17 @@ import (
 	"testing"
 )
 
+func myTPenalityFunc(bufferPos int, currentValue int) int {
+	return currentValue
+}
+
 func TestFromRemoteToLocalCollection(t *testing.T) {
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
 
 	mig := migrationManager.GetMigrationManagerInstance()
-	mig.Init(collections)
+	mig.Init(collections, myTPenalityFunc)
 	loock := loockupManager.GetLookupManagerInstance()
 	loock.Init(collections)
 	mig.ManageNewStrongRequest("repoId", "childName", true, 3)

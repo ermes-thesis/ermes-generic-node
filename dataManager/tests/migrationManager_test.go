@@ -6,8 +6,13 @@ package tests
 import (
 	migrationManager "dataManager/migrationManager"
 	shared "dataManager/shared"
+	"fmt"
 	"testing"
 )
+
+func myT1PenalityFunc(bufferPos int, currentValue int) int {
+	return currentValue - bufferPos
+}
 
 func TestSingletonInstance(t *testing.T) {
 	collections := &shared.CollectionPartialView{
@@ -15,9 +20,9 @@ func TestSingletonInstance(t *testing.T) {
 	}
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections)
+	instance1.Init(collections, myT1PenalityFunc)
 	instance2 := migrationManager.GetMigrationManagerInstance()
-	instance2.Init(collections)
+	instance2.Init(collections, myT1PenalityFunc)
 
 	if instance1 == nil {
 		t.Fatal("Expected non-nil instance from GetMigrationManagerIstance")
@@ -38,7 +43,7 @@ func TestManageNewStrongRequest(t *testing.T) {
 	}
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections)
+	instance1.Init(collections, myT1PenalityFunc)
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
 
 	if instance1.GetUnstableEquilibriumState()["repoId"]["childName"] == nil {
@@ -85,7 +90,7 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 	}
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections)
+	instance1.Init(collections, myT1PenalityFunc)
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
 	instance1.ManageNewStrongRequest("repoId", "childName", false, 3)
@@ -102,4 +107,40 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 	t.Cleanup(func() {
 		migrationManager.ResetSingleton()
 	})
+}
+
+func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
+	fmt.Println("start")
+	collections := &shared.CollectionPartialView{
+		KnowedCollections: make(map[string]shared.Collection),
+	}
+
+	instance1 := migrationManager.GetMigrationManagerInstance()
+	instance1.Init(collections, myT1PenalityFunc)
+
+	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
+	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
+	instance1.ManageNewStrongRequest("repoId", "childName", false, 7)
+
+	migrationManager.GetBuffer("repoId", "childName").Movehead() //skip to next window
+
+	instance1.ManageNewStrongRequest("repoId", "childName", true, 14)
+	instance1.ManageNewStrongRequest("repoId", "childName", false, 9)
+	//fmt.Println(migrationManager.GetBuffer("repoId", "childName"))
+
+	instance1.SetState(instance1.GetDecisionState())
+	if decisionImpl, ok := instance1.GetDecisionState().(*migrationManager.MigrationManagerDecisionState); ok {
+		feR := decisionImpl.ComputeReadElasticForce(migrationManager.GetBuffer("repoId", "childName"))
+		feW := decisionImpl.ComputeWriteElasticForce(migrationManager.GetBuffer("repoId", "childName"))
+		if feW != 39 {
+			t.Error("wrong write elastic force")
+		}
+		if feR != 15 {
+			t.Error("wrong read elastic force")
+		}
+	} else {
+		t.Fatal("wrong state type")
+	}
+
+	fmt.Println("end")
 }

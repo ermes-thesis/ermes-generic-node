@@ -173,7 +173,7 @@ func (m *MigrationManagerDecisionState) ManageNewStrongRequest(collectionId stri
 	//TODO
 }
 
-func (m *MigrationManagerDecisionState) computeReadElasticForce(cb *CircularBuffer) int {
+func (m *MigrationManagerDecisionState) computeElasticForce(cb *CircularBuffer, data getUsage) int {
 	var feR = 0
 
 	for i := 0; i < cb.capacity; i++ {
@@ -181,22 +181,17 @@ func (m *MigrationManagerDecisionState) computeReadElasticForce(cb *CircularBuff
 		if cb.Data[idx] == nil {
 			break
 		}
-		feR += m.MigrationManagerImp.penalityFunc(i, GetElasticForce(cb.Data[idx].read))
+		feR += m.MigrationManagerImp.penalityFunc(i, GetElasticForce(data(cb, idx)))
 	}
 
 	return feR
 }
 
-func (m *MigrationManagerDecisionState) computeWriteElasticForce(cb *CircularBuffer) int {
-	var feW = 0
+type getUsage func(*CircularBuffer, int) resourceUsage
 
-	for i := 0; i < cb.capacity; i++ {
-		idx := (cb.Head - i + cb.capacity) % cb.capacity
-		if cb.Data[idx] == nil {
-			break
-		}
-		feW += m.MigrationManagerImp.penalityFunc(i, GetElasticForce(cb.Data[idx].write))
-	}
-
-	return feW
+func getRead(cb *CircularBuffer, idx int) resourceUsage {
+	return cb.Data[idx].read
+}
+func getWrite(cb *CircularBuffer, idx int) resourceUsage {
+	return cb.Data[idx].write
 }

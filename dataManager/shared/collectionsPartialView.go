@@ -2,11 +2,13 @@ package dataManagerShared
 
 import "sync"
 
-// collection Info
-type Collection interface {
-	CollectionId() string //duplicated?
+// collection types
+
+type CollectionState interface {
+	CollectionId() string //TODO -> refacotr and move up in Collection type only
 	IsLocal() bool
 	HostsId() map[string]struct{}
+	AddHost(hostId string)
 }
 
 type LocalCollection struct {
@@ -16,14 +18,16 @@ type LocalCollection struct {
 	//a collection can be stored locally and on children simultaneously
 }
 
-func NewLocalCollection(collectionId string, size int, childNames map[string]struct{}) Collection {
+func NewLocalCollection(collectionId string, size int, hostNames map[string]struct{}) CollectionState {
 	return &LocalCollection{
 		collectionId: collectionId,
 		size:         size,
-		hostsId:      childNames,
+		hostsId:      hostNames,
 	}
 }
-
+func (l *LocalCollection) AddHost(hostId string) {
+	l.hostsId[hostId] = struct{}{}
+}
 func (l *LocalCollection) CollectionId() string {
 	return l.collectionId
 }
@@ -43,10 +47,10 @@ type RemoteCollection struct {
 	//TODO maybe insert latency with host or maybe not idk
 }
 
-func NewRemoteCollection(collectionId string, childNames map[string]struct{}) Collection {
+func NewRemoteCollection(collectionId string, hostNames map[string]struct{}) CollectionState {
 	return &RemoteCollection{
 		collectionId: collectionId,
-		hostsId:      childNames,
+		hostsId:      hostNames,
 	}
 }
 
@@ -55,6 +59,9 @@ func (l *RemoteCollection) CollectionId() string {
 }
 func (l *RemoteCollection) IsLocal() bool {
 	return false
+}
+func (l *RemoteCollection) AddHost(hostId string) {
+	l.hostsId[hostId] = struct{}{}
 }
 func (l *RemoteCollection) HostsId() map[string]struct{} {
 	return l.hostsId

@@ -79,26 +79,25 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 }
 
 // methods
-func (m *MigrationManagerImp) addNewRemoteCollection(collectionId string, hostId string) {
-	hosts := make(map[string]struct{})
-	hosts[hostId] = struct{}{}
-	remote := shared.NewRemoteCollection(collectionId, hosts)
-	m.collectionsPartialView.KnowedCollections[collectionId] = remote
+func (m *MigrationManagerImp) addNewRemoteCollection(collectionId string, hostId string, isStrong bool) {
+	//TODO
 }
 
-func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, collectionSize int) bool {
+func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, collectionSize int, isStrong bool) bool {
 	collection := m.collectionsPartialView.KnowedCollections[collectionId]
 	if collection != nil {
 		if collection.IsLocal() {
 			return true
 			//TODO probably for weak collections conflict must be solved in this case
 		}
-		hostsId := collection.HostsId()
-		delete(hostsId, "fatherName") //TODO: change with real name
-		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewLocalCollection(collectionId, collectionSize, hostsId)
+		collection.SetToLocal(collectionSize)
 		return false
 	}
-	m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewLocalCollection(collectionId, collectionSize, make(map[string]struct{}))
+	if isStrong {
+		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false) //TODO leader?
+	} else {
+		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewWeakCollection(collectionId, collectionSize, false)
+	}
 	return false
 }
 
@@ -132,7 +131,7 @@ func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, 
 	//imp
 	if m.MigrationManagerImp.unstableEquilibriumState[collectionId] == nil { //first time accessing resource in general
 		m.MigrationManagerImp.unstableEquilibriumState[collectionId] = make(map[string]*CircularBuffer)
-		m.MigrationManagerImp.addNewRemoteCollection(collectionId, "fatherName") //TODO: change with real name
+		//m.MigrationManagerImp.addNewRemoteCollection(collectionId, "fatherName") //TODO: change with real name
 	}
 
 	resUsage, exists := m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName]

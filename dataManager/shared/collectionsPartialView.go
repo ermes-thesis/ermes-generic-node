@@ -5,31 +5,25 @@ import "sync"
 // collection types
 
 type CollectionState interface {
-	CollectionId() string //TODO -> refacotr and move up in Collection type only
 	IsLocal() bool
 	HostsId() map[string]struct{}
 	AddHost(hostId string)
 }
 
 type LocalCollection struct {
-	collectionId string
-	size         int
-	hostsId      map[string]struct{} //map to guarantee univocity
+	size    int
+	hostsId map[string]struct{} //map to guarantee univocity
 	//a collection can be stored locally and on children simultaneously
 }
 
-func NewLocalCollection(collectionId string, size int, hostNames map[string]struct{}) CollectionState {
+func NewLocalCollection(size int, hostNames map[string]struct{}) CollectionState {
 	return &LocalCollection{
-		collectionId: collectionId,
-		size:         size,
-		hostsId:      hostNames,
+		size:    size,
+		hostsId: hostNames,
 	}
 }
 func (l *LocalCollection) AddHost(hostId string) {
 	l.hostsId[hostId] = struct{}{}
-}
-func (l *LocalCollection) CollectionId() string {
-	return l.collectionId
 }
 func (l *LocalCollection) IsLocal() bool {
 	return true
@@ -42,21 +36,16 @@ func (l *LocalCollection) HostsId() map[string]struct{} {
 }
 
 type RemoteCollection struct {
-	collectionId string
-	hostsId      map[string]struct{} //map to guarantee univocity
+	hostsId map[string]struct{} //map to guarantee univocity
 	//TODO maybe insert latency with host or maybe not idk
 }
 
-func NewRemoteCollection(collectionId string, hostNames map[string]struct{}) CollectionState {
+func NewRemoteCollection(hostNames map[string]struct{}) CollectionState {
 	return &RemoteCollection{
-		collectionId: collectionId,
-		hostsId:      hostNames,
+		hostsId: hostNames,
 	}
 }
 
-func (l *RemoteCollection) CollectionId() string {
-	return l.collectionId
-}
 func (l *RemoteCollection) IsLocal() bool {
 	return false
 }

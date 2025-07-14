@@ -14,6 +14,7 @@ type Collection interface {
 // consistency levels
 // strong collection
 type StrongCollection struct {
+	collectionId    string
 	collectionState CollectionState
 	IsLeader        bool
 	LeaderId        string
@@ -23,11 +24,11 @@ func NewStrongCollection(collectionId string, size int, isRemote bool) Collectio
 	hosts := make(map[string]struct{})
 	if isRemote {
 		return &StrongCollection{
-			collectionState: NewRemoteCollection(collectionId, hosts),
+			collectionState: NewRemoteCollection(hosts),
 		}
 	}
 	return &StrongCollection{
-		collectionState: NewLocalCollection(collectionId, size, hosts),
+		collectionState: NewLocalCollection(size, hosts),
 	}
 }
 
@@ -35,16 +36,26 @@ func (s *StrongCollection) SetToLocal(size int) {
 	if s.collectionState.IsLocal() {
 		return
 	}
-	collectionState := NewLocalCollection(s.collectionState.CollectionId(), size, s.collectionState.HostsId())
+	collectionState := NewLocalCollection(size, s.collectionState.HostsId())
 	s.collectionState = collectionState
 }
 
 func (s *StrongCollection) SetToRemote(hostNames map[string]struct{}) {
-	panic("unimplemented") //TODO
+	if !s.collectionState.IsLocal() {
+		return
+	}
+
+	// Merge additionalHosts
+	for host := range hostNames {
+		s.collectionState.AddHost(host)
+	}
+
+	collectionState := NewRemoteCollection(s.collectionState.HostsId())
+	s.collectionState = collectionState
 }
 
 func (s *StrongCollection) CollectionId() string {
-	return s.collectionState.CollectionId()
+	return s.collectionId
 }
 func (s *StrongCollection) AddHost(hostId string) {
 	s.collectionState.AddHost(hostId)
@@ -61,6 +72,7 @@ func (s *StrongCollection) HostsId() map[string]struct{} {
 
 // weak collection
 type WeakCollection struct {
+	collectionId    string
 	collectionState CollectionState
 }
 
@@ -68,11 +80,11 @@ func NewWeakCollection(collectionId string, size int, isRemote bool) Collection 
 	hosts := make(map[string]struct{})
 	if isRemote {
 		return &WeakCollection{
-			collectionState: NewRemoteCollection(collectionId, hosts),
+			collectionState: NewRemoteCollection(hosts),
 		}
 	}
 	return &WeakCollection{
-		collectionState: NewLocalCollection(collectionId, size, hosts),
+		collectionState: NewLocalCollection(size, hosts),
 	}
 }
 
@@ -80,16 +92,26 @@ func (s *WeakCollection) SetToLocal(size int) {
 	if s.collectionState.IsLocal() {
 		return
 	}
-	collectionState := NewLocalCollection(s.collectionState.CollectionId(), size, s.collectionState.HostsId())
+	collectionState := NewLocalCollection(size, s.collectionState.HostsId())
 	s.collectionState = collectionState
 }
 
 func (w *WeakCollection) SetToRemote(hostNames map[string]struct{}) {
-	panic("unimplemented") //TODO
+	if !w.collectionState.IsLocal() {
+		return
+	}
+
+	// Merge additionalHosts
+	for host := range hostNames {
+		w.collectionState.AddHost(host)
+	}
+
+	collectionState := NewRemoteCollection(w.collectionState.HostsId())
+	w.collectionState = collectionState
 }
 
 func (w *WeakCollection) CollectionId() string {
-	return w.collectionState.CollectionId()
+	return w.collectionId
 }
 func (s *WeakCollection) AddHost(hostId string) {
 	s.collectionState.AddHost(hostId)

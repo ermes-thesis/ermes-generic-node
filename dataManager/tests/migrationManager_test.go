@@ -6,7 +6,6 @@ package tests
 import (
 	migrationManager "dataManager/migrationManager"
 	shared "dataManager/shared"
-	"fmt"
 	"testing"
 )
 
@@ -44,6 +43,9 @@ func TestManageNewStrongRequest(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, myT1PenalityFunc)
+	instance1.NewCollectionReceived("repoId", 10, true)
+	instance1.NewCollectionReceived("repoId1", 10, true)
+
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
 
 	if instance1.GetUnstableEquilibriumState()["repoId"]["childName"] == nil {
@@ -85,12 +87,16 @@ func TestManageNewStrongRequest(t *testing.T) {
 }
 
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
+
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, myT1PenalityFunc)
+	instance1.NewCollectionReceived("repoId", 10, true)
+	instance1.NewCollectionReceived("repoId1", 10, true)
+
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
 	instance1.ManageNewStrongRequest("repoId", "childName", false, 3)
@@ -110,13 +116,14 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 }
 
 func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
-	fmt.Println("start")
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, myT1PenalityFunc)
+	instance1.NewCollectionReceived("repoId", 10, true)
+	instance1.NewCollectionReceived("repoId1", 10, true)
 
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
 	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
@@ -141,6 +148,4 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 	} else {
 		t.Fatal("wrong state type")
 	}
-
-	fmt.Println("end")
 }

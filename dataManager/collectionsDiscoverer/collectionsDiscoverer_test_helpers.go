@@ -1,7 +1,7 @@
 //go:build test
 // +build test
 
-package lookupmanager
+package collectionsDiscoverer
 
 func ResetSingleton() {
 	lookupManagerInstance = nil

@@ -1,4 +1,4 @@
-package lookupmanager
+package collectionsDiscoverer
 
 import (
 	shared "dataManager/shared"

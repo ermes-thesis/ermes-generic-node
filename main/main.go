@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	lookupmanager "dataManager/lookupManager"
+	clDiscoverer "dataManager/collectionsDiscoverer"
 	migrationManager "dataManager/migrationManager"
 	dataManagerShared "dataManager/shared"
 	"fmt"
@@ -31,8 +31,8 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	}
 	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
 	migrationManagerIstance.Init(collections, myPenalityFunc)
-	lookupManagerIstance := lookupmanager.GetLookupManagerInstance()
-	lookupManagerIstance.Init(collections)
+	clDiscovererIstance := clDiscoverer.GetLookupManagerInstance()
+	clDiscovererIstance.Init(collections)
 
 	//Run server
 	ser, err := server.NewServer(args, w)

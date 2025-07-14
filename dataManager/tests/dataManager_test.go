@@ -4,7 +4,7 @@
 package tests
 
 import (
-	loockupManager "dataManager/lookupManager"
+	clDiscoverer "dataManager/collectionsDiscoverer"
 	migrationManager "dataManager/migrationManager"
 	shared "dataManager/shared"
 	"testing"
@@ -21,21 +21,18 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 
 	mig := migrationManager.GetMigrationManagerInstance()
 	mig.Init(collections, myTPenalityFunc)
-	loock := loockupManager.GetLookupManagerInstance()
-	loock.Init(collections)
+	clDiscoverer := clDiscoverer.GetLookupManagerInstance()
+	clDiscoverer.Init(collections)
 	mig.ManageNewStrongRequest("repoId", "childName", true, 3)
 
-	b, c := loock.IsCollectionLocallyPresent("repoId")
+	b, c := clDiscoverer.IsCollectionLocallyPresent("repoId")
 
-	if c == nil {
-		t.Fatal("unexpected null collection")
-	}
-	if b {
-		t.Error("unexpected local collection")
+	if c != nil {
+		t.Fatal("unexpected non null collection")
 	}
 
-	mig.NewCollectionReceived("repoId", 10)
-	b, c = loock.IsCollectionLocallyPresent("repoId")
+	mig.NewCollectionReceived("repoId", 10, true)
+	b, c = clDiscoverer.IsCollectionLocallyPresent("repoId")
 	if c == nil {
 		t.Fatal("unexpected null collection")
 	}
@@ -45,6 +42,6 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 
 	t.Cleanup(func() {
 		migrationManager.ResetSingleton()
-		loockupManager.ResetSingleton()
+		//clDiscoverer.ResetSingleton()
 	})
 }

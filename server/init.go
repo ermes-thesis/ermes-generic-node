@@ -47,13 +47,17 @@ func NewServer(args []string, logger io.Writer) (*Server, error) {
 	// NB: these operations just copy the references !
 	name := args[2]
 	parent := args[3]
-	children := args[4:]
+	domain := args[4]
+	cloudNode := args[5]
+	children := args[6:]
 
 	serverinfo := info.Serverinfo{
-		Name:     name,
-		Father:   parent,
-		Children: children,
-		Secret:   "ermes-secret", // For the moment leave it hardcoded
+		Name:           name,
+		Father:         parent,
+		Children:       children,
+		Secret:         "ermes-secret", // For the moment leave it hardcoded
+		MetadataDomain: domain,
+		CloudNode:      cloudNode,
 	}
 
 	fmt.Fprintf(logger, "done \n")

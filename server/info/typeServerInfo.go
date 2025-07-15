@@ -33,6 +33,10 @@ type Serverinfo struct {
 	// The secret is the private header value with which the ermes nodes can communicate.
 	// For privacy reasons it must not be exposed to the user.
 	Secret string
+
+	MetadataDomain string
+
+	CloudNode string
 }
 
 // StringifyInfo returns a pretty-formatted string of the input Serverinfo.

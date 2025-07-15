@@ -64,8 +64,7 @@ func HandleRoutePvtAskClientExists(logger *io.Writer, serverinfo *info.Serverinf
 
 			fmt.Fprintf(*logger, "We are at the top of the network. The client is not present. Return an error\n")
 
-			w.WriteHeader(http.StatusForbidden)
-
+			http.NotFound(w, r)
 			return
 		}
 

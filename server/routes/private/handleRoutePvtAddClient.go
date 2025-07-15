@@ -128,6 +128,9 @@ func HandleRoutePvtAddClient(logger *io.Writer, serverinfo *info.Serverinfo, rep
 
 		w.WriteHeader(http.StatusOK)
 
-		json.NewEncoder(w).Encode(body)
+		err = json.NewEncoder(w).Encode(body)
+		if err != nil {
+			fmt.Printf("error encoding response body: %s", err)
+		}
 	}
 }

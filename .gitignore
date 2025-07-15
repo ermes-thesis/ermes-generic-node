@@ -13,6 +13,7 @@
 !*.go
 !go.sum
 !go.mod
+!docker-compose.yml
 
 # Any md file can be added
 !*.md

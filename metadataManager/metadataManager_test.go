@@ -1,9 +1,10 @@
-package lookupManager
+package metadataManager
 
 import (
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"os"
+	"server/info"
 	"testing"
 )
 
@@ -19,21 +20,25 @@ func TestLookupManager(t *testing.T) {
 		Protocol: 2,
 	})
 
-	// Create a new LookupManager instance
-	manager := NewLookupManager(rdb, logger)
+	srvInfo := &info.Serverinfo{}
+
+	// Create a new MetadataManager instance
+	manager := NewMetadataManager(rdb, srvInfo, logger)
 
 	queryParams := map[string]map[string]any{
 		"private_data_query": {
 			"ownerID": "12345",
 		},
+		"gt_data_query": {},
 	}
 
 	// Execute the query
-	result, err := manager.ExecuteQueries(queryParams)
+	groups := []string{"groupA", "groupB", "groupC"}
+	result, err := manager.ExecuteQueries(queryParams, groups)
 	assert.NoError(t, err, "Expected no error when executing queries")
 
 	assert.NotEmpty(t, result, "Expected result to be non-empty")
-	assert.Equal(t, len(result), 1, "Expected result to be non-empty")
+	assert.Equal(t, 2, len(result), "Expected result to be non-empty")
 	assert.Contains(t, result, "private_data", "Expected result to contain 'private_data' key")
 	assert.NotEmpty(t, result["private_data"], "Expected 'private_data' to have non-empty results")
 	for _, collection := range result["private_data"] {

@@ -3,6 +3,8 @@
 package info
 
 import (
+	"errors"
+	"strconv"
 	"strings"
 )
 
@@ -37,6 +39,41 @@ type Serverinfo struct {
 	MetadataDomain string
 
 	CloudNode string
+}
+
+func NewServerinfo(args []string) (*Serverinfo, error) {
+	// Extract the information of port, name, parent, children in this order
+	if len(args) < 6 {
+		return nil, errors.New("too few arguments in the program, cannot launch correctly")
+	}
+
+	// Parse first argument
+	port, err := strconv.Atoi(args[1])
+
+	if err != nil || port < 1 {
+		return nil, errors.New("first argument of the program must be a non-negative integer")
+	}
+
+	// Parse info about the name, parent and children
+	// TODO: check if convention on names is respected (which we do not have yet)
+
+	// NB: these operations just copy the references !
+	name := args[2]
+	parent := args[3]
+	domain := args[4]
+	cloudNode := args[5]
+	children := args[6:]
+
+	serverinfo := &Serverinfo{
+		Name:           name,
+		Father:         parent,
+		Children:       children,
+		Secret:         "ermes-secret", // For the moment leave it hardcoded
+		MetadataDomain: domain,
+		CloudNode:      cloudNode,
+	}
+
+	return serverinfo, nil
 }
 
 // StringifyInfo returns a pretty-formatted string of the input Serverinfo.

@@ -6,12 +6,15 @@ import (
 	migrationManager "dataManager/migrationManager"
 	dataManagerShared "dataManager/shared"
 	"fmt"
+	"github.com/redis/go-redis/v9"
 	"io"
+	"metadataManager"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"server"
+	"server/info"
 	"sync"
 	"time"
 )
@@ -34,8 +37,21 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	clDiscovererIstance := clDiscoverer.GetLookupManagerInstance()
 	clDiscovererIstance.Init(collections)
 
+	serverInfo, err := info.NewServerinfo(args)
+	if err != nil {
+		return fmt.Errorf("error creating server info: %w", err)
+	}
+
+	redisClient := redis.NewClient(&redis.Options{
+		Addr:     "localhost:6379",
+		Password: "eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81",
+		DB:       0,
+		Protocol: 2,
+	})
+	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w)
+
 	//Run server
-	ser, err := server.NewServer(args, w)
+	ser, err := server.NewServer(w, serverInfo, redisClient, metadataLookup)
 
 	if err != nil {
 		return err

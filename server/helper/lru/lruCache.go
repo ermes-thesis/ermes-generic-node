@@ -1,6 +1,7 @@
 package lru
 
 import (
+	"container/list"
 	"errors"
 )
 
@@ -8,6 +9,7 @@ import (
 // We will hold an object of the type and the size of the element.
 
 type lruCacheType[T any] struct {
+	key  string
 	obj  T
 	size uint
 }
@@ -18,29 +20,20 @@ type lruCacheType[T any] struct {
 
 // TODO: make this atomic
 
-type LinkedList[T any] struct {
-	key  string
-	val  lruCacheType[T]
-	next *LinkedList[T]
-	prev *LinkedList[T]
-}
-
 type LRUCache[T any] struct {
-	current  uint
-	capacity uint
-	cache    map[string]*LinkedList[T]
-	head     *LinkedList[T]
-	tail     *LinkedList[T]
+	current    uint
+	capacity   uint
+	cache      map[string]*list.Element
+	linkedlist *list.List
 }
 
 func LRUCacheConstructor[T any](capacity uint) LRUCache[T] {
 
 	return LRUCache[T]{
-		current:  0,
-		capacity: capacity,
-		cache:    make(map[string]*LinkedList[T]),
-		head:     nil,
-		tail:     nil,
+		current:    0,
+		capacity:   capacity,
+		cache:      make(map[string]*list.Element),
+		linkedlist: list.New(),
 	}
 }
 
@@ -57,64 +50,35 @@ func (this *LRUCache[T]) Get(key string) (T, error) {
 
 	// Push ahead in LRU
 
-	// If the element is first then do nothing
-
-	if get != this.head {
-
-		// Save next and prev
-		next := get.next
-		prev := get.prev
-
-		// Remove get from list
-		prev.next = next
-
-		// If it is in the middle then fix also reverse
-		if next != nil {
-			next.prev = prev
-		}
-
-		// If the element was the tail fix the tail
-
-		if get == this.tail {
-			this.tail = prev
-		}
-
-		// get now becomes the head
-		get.next = this.head
-		get.prev = nil
-
-		// Fix the previous of the head
-		this.head.prev = get
-
-		// Attach the get to the head
-		this.head = get
-
-	}
+	// This I think should be O(1)
+	this.linkedlist.MoveToFront(get)
 
 	// TODO: decide if returning also the size is important
-	return get.val.obj, nil
+
+	asserted, ok := get.Value.(lruCacheType[T])
+
+	if ok {
+		return asserted.obj, nil
+	} else {
+		var zeroVal T
+		return zeroVal, errors.New("assertion error. The value in the LRU Cache is not the correct type. It should not be possible to arrive here")
+	}
 
 }
 
 // Update the value of the key if the key exists. Otherwise, add the key-value pair to the cache.
 // If the number of keys exceeds the capacity from this operation, return an error (TODO: decide)
-func (this *LRUCache[T]) Put(key string, value T, size uint) {
+func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 
 	get := this.cache[key]
-
-	lruCacheTypeObj := lruCacheType[T]{
-		obj:  value,
-		size: size,
-	}
 
 	// If the item is not present then create it, else update it
 	if get == nil {
 
-		get = &LinkedList[T]{
+		lruCacheTypeObj := lruCacheType[T]{
 			key:  key,
-			val:  lruCacheTypeObj,
-			next: nil,
-			prev: nil,
+			obj:  value,
+			size: size,
 		}
 
 		// Check the capacity. If it is full TODO: decide, we should initiate a deletion procedure
@@ -122,75 +86,64 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) {
 
 			// Do nothing
 
-			return
-
+			return errors.New("not enough space in the list")
 		}
-
-		// Add the item
 
 		// Update the size
 		this.current += size
 
-		this.cache[key] = get
+		// Add the item on top
+		elem := this.linkedlist.PushFront(lruCacheTypeObj)
 
-		// Put the item in first position
-		if this.head == nil {
-			this.head = get
-			this.tail = get
+		// Add the list element to the map
+		this.cache[key] = elem
 
-			return
-		}
-
-		get.next = this.head
-		this.head.prev = get
-
-		this.head = get
-
-		return
-
+		return nil
 	}
+
 	// Else update and put on top of LRU
 
-	get.val = lruCacheTypeObj
+	this.linkedlist.MoveToFront(get)
 
-	// Update the size
-	this.current += size
+	return nil
+}
 
-	// Update the item in the linked list (same stuff as before)
+// Utility function in order to obtain capacity-current>=sizeGoal.
+// This function returns a list of removed items
+func (this *LRUCache[T]) freeToAchieveSize(sizeGoal uint) *list.List {
 
-	// If the element is first then do nothing
+	returnList := list.New()
 
-	if get != this.head {
+	// Start removing elements from the back until the condition is satisfied
+	for this.capacity-this.current < sizeGoal {
 
-		// Save next and prev
-		next := get.next
-		prev := get.prev
+		// Pop the last element
 
-		// Remove get from list
-		prev.next = next
+		// Convert the last element to an object
 
-		// If it is in the middle then fix also reverse
-		if next != nil {
-			next.prev = prev
+		converted, ok := this.linkedlist.Back().Value.(lruCacheType[T])
+
+		if !ok { // This should never happen
+			return returnList
 		}
 
-		// If the element was the tail fix the tail
+		// NB: this is a "transfer of ownership" operation.
+		this.linkedlist.Remove(this.linkedlist.Back())
 
-		if get == this.tail {
-			this.tail = prev
-		}
+		// Move the object to the returned list
+		returnList.PushFront(converted.obj)
 
-		// get now becomes the head
-		get.next = this.head
-		get.prev = nil
+		// The removed element will be garbage collected (brrrr)
 
-		// Fix the previous of the head
-		this.head.prev = get
+		// But we need to delete the key from the map
+		delete(this.cache, converted.key)
 
-		// Attach the get to the head
-		this.head = get
+		// Update the capacity
+		this.current += converted.size
 
 	}
+
+	return returnList
 }
 
 func (this *LRUCache[T]) GetCurrentSize() uint {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+
 	"net/http"
 	"os"
 	"os/signal"
@@ -22,6 +23,8 @@ func myPenalityFunc(bufferPos int, currentValue int) int {
 }
 
 func run(ctx context.Context, w io.Writer, args []string) error {
+	loadConfig("../config/config.yaml")
+
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 

@@ -4,12 +4,9 @@ import (
 	shared "dataManager/shared"
 	"fmt"
 	"sync"
-)
 
-// configurable parameters  --> TODO config
-const leaderThreshold = 0
-const followerThreshold = 1
-const viewSize = 3
+	"config"
+)
 
 type PenalityFunc func(int, int) int //must be overwritten
 type MigrationManager interface {
@@ -26,6 +23,9 @@ type MigrationManager interface {
 }
 
 type MigrationManagerImp struct {
+	//config
+	config config.MigrationManagerConfig
+
 	//state
 	currentState MigrationManagerState
 
@@ -57,7 +57,7 @@ func GetMigrationManagerInstance() *MigrationManagerImp {
 	return migrationManagareInstance
 }
 
-func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc PenalityFunc) {
+func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc PenalityFunc, config config.MigrationManagerConfig) {
 	//sync
 	lock.Lock()
 	defer lock.Unlock()
@@ -65,6 +65,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	if m.collectionsPartialView != nil { //if singleton allready inizialized
 		return
 	}
+	m.config = config
 	m.penalityFunc = penalityFunc
 	//init states
 	m.idleState = &MigrationManagerIdleState{m}
@@ -141,7 +142,7 @@ func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, 
 
 	resUsage, exists := m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName]
 	if !exists { //first time accessing resource from a child
-		resUsage = NewCircularBuffer(viewSize)
+		resUsage = NewCircularBuffer(m.MigrationManagerImp.config.ViewSize)
 		m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName] = resUsage
 		resUsage.Add(NewChildResourceUsage())
 	}

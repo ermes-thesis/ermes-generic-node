@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"log"
@@ -18,7 +18,7 @@ type MigrationManagerConfig struct {
 	ViewSize          int `yaml:"viewSize"`
 }
 
-func loadConfig(filename string) Config {
+func LoadConfig(filename string) Config {
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		log.Fatalf("Errore nella lettura del file: %v", err)

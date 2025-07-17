@@ -6,7 +6,10 @@ replace server => ../server
 
 replace dataManager => ../dataManager
 
+replace config => ../config
+
 require (
+	config v0.0.0-00010101000000-000000000000
 	dataManager v0.0.0-00010101000000-000000000000
 	server v0.0.0-00010101000000-000000000000
 )

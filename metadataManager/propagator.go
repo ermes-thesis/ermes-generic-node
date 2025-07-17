@@ -10,11 +10,11 @@ import (
 )
 
 type QueryPropagator struct {
-	serverInfo *info.Serverinfo
+	serverInfo *info.ServerInfo
 	logger     *io.Writer
 }
 
-func NewQueryPropagator(serverInfo *info.Serverinfo, logger *io.Writer) *QueryPropagator {
+func NewQueryPropagator(serverInfo *info.ServerInfo, logger *io.Writer) *QueryPropagator {
 	return &QueryPropagator{
 		serverInfo: serverInfo,
 		logger:     logger,
@@ -25,12 +25,12 @@ func (p *QueryPropagator) Propagate(queryParams string, groupToken string, geolo
 	fmt.Fprintf(*p.logger, "No geolocation provided in the request header.\n")
 
 	var receiver string
-	if p.serverInfo.CloudNode == "" {
+	if p.serverInfo.CloudNode == nil {
 		fmt.Fprintf(*p.logger, "No cloud node configured, forwarding to parent node.\n")
-		receiver = p.serverInfo.Father
+		receiver = p.serverInfo.Father.Address
 	} else {
 		fmt.Fprintf(*p.logger, "Using cloud node %s for the request.\n", p.serverInfo.CloudNode)
-		receiver = p.serverInfo.CloudNode
+		receiver = p.serverInfo.CloudNode.Address
 	}
 
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%s/lookup", receiver), nil)
@@ -70,10 +70,10 @@ func (p *QueryPropagator) Propagate(queryParams string, groupToken string, geolo
 }
 
 type MetadataPropagator struct {
-	serverInfo *info.Serverinfo
+	serverInfo *info.ServerInfo
 }
 
-func NewMetadataPropagator(serverInfo *info.Serverinfo) *MetadataPropagator {
+func NewMetadataPropagator(serverInfo *info.ServerInfo) *MetadataPropagator {
 	return &MetadataPropagator{
 		serverInfo: serverInfo,
 	}

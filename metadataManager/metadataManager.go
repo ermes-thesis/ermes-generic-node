@@ -24,11 +24,11 @@ type MetadataManagerImpl struct {
 	logger          io.Writer
 	templateCache   map[string]string
 	redisIndex      string
-	serverInfo      *info.Serverinfo
+	serverInfo      *info.ServerInfo
 	queryPropagator *QueryPropagator
 }
 
-func NewMetadataManager(redis *redis.Client, serverInfo *info.Serverinfo, logger io.Writer) MetadataManager {
+func NewMetadataManager(redis *redis.Client, serverInfo *info.ServerInfo, logger io.Writer) MetadataManager {
 	return &MetadataManagerImpl{
 		redis:  redis,
 		logger: logger,
@@ -119,7 +119,7 @@ func (l MetadataManagerImpl) CreateMetadata(collectionId string, metadata map[st
 func (l MetadataManagerImpl) ExecuteQueries(queryParams string, groupToken string, geolocation string) (map[string][]CollectionInfo, error) {
 	// Execute the query locally if the server's metadata domain match the geolocation, it is its prefix or if the local node is a cloud node.
 	//Otherwise, propagate the query to the cloud node or the father node.
-	if strings.HasPrefix(geolocation, l.serverInfo.MetadataDomain) || l.serverInfo.Father == "" {
+	if strings.HasPrefix(geolocation, l.serverInfo.MetadataDomain) || l.serverInfo.Father == nil {
 		result := make(map[string][]CollectionInfo)
 
 		var queryMap map[string]map[string]any

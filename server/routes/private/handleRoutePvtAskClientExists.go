@@ -17,7 +17,7 @@ import (
 // This method checks if the client exists in the memory of the current node,
 // if the client does not exist ask his father.
 // IF also the top of the network does not know it then return an error response.
-func HandleRoutePvtAskClientExists(logger *io.Writer, serverinfo *info.Serverinfo, repo *clientrepo.ClientRepo) http.HandlerFunc {
+func HandleRoutePvtAskClientExists(logger *io.Writer, serverinfo *info.ServerInfo, repo *clientrepo.ClientRepo) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(*logger, "got /pvt-ask-father-client-exists \n")
 
@@ -60,7 +60,7 @@ func HandleRoutePvtAskClientExists(logger *io.Writer, serverinfo *info.Serverinf
 
 		fathername := serverinfo.Father
 
-		if fathername == "nil" {
+		if fathername == nil {
 
 			fmt.Fprintf(*logger, "We are at the top of the network. The client is not present. Return an error\n")
 

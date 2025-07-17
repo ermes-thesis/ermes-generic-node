@@ -11,7 +11,7 @@ import (
 )
 
 type Server struct {
-	Serverinfo      *info.Serverinfo
+	Serverinfo      *info.ServerInfo
 	Port            string
 	Logger          io.Writer
 	Handler         *http.ServeMux
@@ -20,7 +20,7 @@ type Server struct {
 	MetadataManager metadataManager.MetadataManager
 }
 
-func NewServer(logger io.Writer, serverInfo *info.Serverinfo, redisClient *redis.Client, metadataManager metadataManager.MetadataManager) (*Server, error) {
+func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient *redis.Client, metadataManager metadataManager.MetadataManager) (*Server, error) {
 
 	fmt.Fprintf(logger, "Creating a new Server instance... \n")
 
@@ -32,7 +32,7 @@ func NewServer(logger io.Writer, serverInfo *info.Serverinfo, redisClient *redis
 
 	ser := &Server{
 		Serverinfo:      serverInfo,
-		Port:            serverInfo.Name,
+		Port:            serverInfo.Address,
 		Logger:          logger,
 		Handler:         mux,
 		ClientRepo:      clientrepo.CreateClientRepo(),

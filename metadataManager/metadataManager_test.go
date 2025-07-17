@@ -18,7 +18,7 @@ func TestLookupManager(t *testing.T) {
 	defer shutdownFun()
 	defer redisClient.Close()
 
-	srvInfo := &info.Serverinfo{}
+	srvInfo := &info.ServerInfo{}
 
 	// Create a new MetadataManager instance
 	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger)

@@ -37,7 +37,7 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	clDiscovererIstance := clDiscoverer.GetLookupManagerInstance()
 	clDiscovererIstance.Init(collections)
 
-	serverInfo, err := info.NewServerinfo(args)
+	serverInfo, err := info.NewServerInfo(args)
 	if err != nil {
 		return fmt.Errorf("error creating server info: %w", err)
 	}

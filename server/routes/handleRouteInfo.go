@@ -7,7 +7,7 @@ import (
 	"server/info"
 )
 
-func handleRouteInfo(logger *io.Writer, serverinfo *info.Serverinfo) http.Handler {
+func handleRouteInfo(logger *io.Writer, serverinfo *info.ServerInfo) http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(*logger, "got /info \n")

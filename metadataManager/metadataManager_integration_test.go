@@ -28,11 +28,13 @@ func TestLookupManagerIntegration(t *testing.T) {
 	defer shutdownFunc2()
 	defer redisClient2.Close()
 
-	serverinfo1 := &info.Serverinfo{
-		Father:         "",
-		CloudNode:      "",
-		MetadataDomain: "IT",
-		Secret:         "secret",
+	serverinfo1 := &info.ServerInfo{
+		Father:    nil,
+		CloudNode: nil,
+		Node: info.Node{
+			MetadataDomain: "IT",
+		},
+		Secret: "secret",
 	}
 	metadataManager1 := metadataManager.NewMetadataManager(redisClient1, serverinfo1, os.Stdout)
 
@@ -42,11 +44,15 @@ func TestLookupManagerIntegration(t *testing.T) {
 	srv1 := httptest.NewServer(ser1.Handler)
 	defer srv1.Close()
 
-	serverinfo2 := &info.Serverinfo{
-		Father:         strings.Split(srv1.URL, ":")[2],
-		Children:       []string{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
+	serverinfo2 := &info.ServerInfo{
+		Father: &info.Node{
+			Address: strings.Split(srv1.URL, ":")[2],
+		},
+		Children: []info.Node{},
+		Node: info.Node{
+			MetadataDomain: "IT/Milan",
+		},
+		Secret: "secret",
 	}
 	metadataManager2 := metadataManager.NewMetadataManager(redisClient2, serverinfo2, os.Stdout)
 
@@ -56,7 +62,11 @@ func TestLookupManagerIntegration(t *testing.T) {
 	srv2 := httptest.NewServer(ser2.Handler)
 	defer srv2.Close()
 
-	serverinfo1.Children = []string{strings.Split(srv2.URL, ":")[2]}
+	serverinfo1.Children = []info.Node{
+		{
+			Address: strings.Split(srv2.URL, ":")[2],
+		},
+	}
 
 	req, err := http.NewRequest(http.MethodPost, srv2.URL+"/lookup", nil)
 	assert.NoError(t, err, "Expected no error when creating request")

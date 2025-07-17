@@ -12,7 +12,7 @@ import (
 	"server/info"
 )
 
-func HandleRoutePvtAddClient(logger *io.Writer, serverinfo *info.Serverinfo, repo *clientrepo.ClientRepo) http.HandlerFunc {
+func HandleRoutePvtAddClient(logger *io.Writer, serverinfo *info.ServerInfo, repo *clientrepo.ClientRepo) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(*logger, "got /add-client \n")
 
@@ -23,7 +23,7 @@ func HandleRoutePvtAddClient(logger *io.Writer, serverinfo *info.Serverinfo, rep
 
 		fathername := serverinfo.Father
 
-		if fathername == "nil" {
+		if fathername == nil {
 
 			fmt.Fprintf(*logger, "Father is at the top of the network. The user will be created and the result returned.\n")
 

@@ -76,12 +76,28 @@ func TestLookupManagerIntegration(t *testing.T) {
 	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status code 200 OK")
 	bodyResp, err := io.ReadAll(res.Body)
 
-	fmt.Println("AAAAAAAAAAAAAAAAAAAAAAAAAAAA" + string(bodyResp))
+	fmt.Println("Response: " + string(bodyResp))
 
 	assert.NoError(t, err, "Expected no error when reading response body")
-	var response map[string]any
+	var response map[string][]metadataManager.CollectionInfo
 	err = json.Unmarshal(bodyResp, &response)
 	assert.NoError(t, err, "Expected valid JSON response, got error: %v", err)
+
+	assert.Len(t, response, 1, "Expected one collection in response")
+	assert.Contains(t, response, "private_data", "Expected response to contain 'private_data' key")
+	assert.Len(t, response["private_data"], 1, "Expected 'private_data' to have one collection")
+	collection := response["private_data"][0]
+
+	assert.Equal(t, "1111", collection.Id, "Expected collection ID to be 1111")
+	assert.NotEmpty(t, collection.Metadata, "Expected collection metadata to be non-empty")
+	assert.Contains(t, collection.Metadata, "owner", "Expected metadata to contain 'owner' key")
+	assert.Equal(t, "12345", collection.Metadata["owner"], "Expected owner to match query parameter")
+	assert.Contains(t, collection.Metadata, "name", "Expected metadata to contain 'name' key")
+	assert.Equal(t, "collectionNameFather", collection.Metadata["name"], "Expected name to be 'collectionNameFather'")
+	assert.Contains(t, collection.Metadata, "groups", "Expected metadata to contain 'groups' key")
+	assert.Equal(t, "groupC", collection.Metadata["groups"], "Expected groups to be 'groupC'")
+
+	fmt.Println(response)
 
 }
 
@@ -107,11 +123,11 @@ func startRedisContainer(t *testing.T, child bool) (*redis.Client, func()) {
 		Protocol: 2,
 	})
 
-	client.HSet(ctx, "meta:12345", "name", "collectionName", "owner", 12345, "created_at", 1745748000, "groups", "groupA,groupB,groupC")
-	client.HSet(ctx, "meta:54321", "name", "collectionName2", "owner", 12345, "created_at", 1745748000, "groups", "groupC")
+	client.HSet(ctx, "meta:12345", "name", "collectionName", "owner", "12345", "created_at", 1745748000, "groups", "groupA,groupB,groupC")
+	client.HSet(ctx, "meta:54321", "name", "collectionName2", "owner", "12345", "created_at", 1745748000, "groups", "groupC")
 
 	if !child {
-		client.HSet(ctx, "meta:1111", "name", "collectionNameFather", "owner", 12345, "created_at", 1745749000, "groups", "groupC")
+		client.HSet(ctx, "meta:1111", "name", "collectionNameFather", "owner", "12345", "created_at", 1745749000, "groups", "groupC")
 	}
 
 	client.Set(ctx, "data:12345:record_name", "{\"temperature\":22.5,\"humidity\":55}", 0)

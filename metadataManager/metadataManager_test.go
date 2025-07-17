@@ -1,8 +1,9 @@
-package metadataManager
+package metadataManager_test
 
 import (
-	"github.com/redis/go-redis/v9"
+	"encoding/json"
 	"github.com/stretchr/testify/assert"
+	"metadataManager"
 	"os"
 	"server/info"
 	"testing"
@@ -13,40 +14,36 @@ func TestLookupManager(t *testing.T) {
 	// Create a logger
 	logger := os.Stdout
 
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81",
-		DB:       0,
-		Protocol: 2,
-	})
+	redisClient, shutdownFun := startRedisContainer(t, false)
+	defer shutdownFun()
+	defer redisClient.Close()
 
 	srvInfo := &info.Serverinfo{}
 
 	// Create a new MetadataManager instance
-	manager := NewMetadataManager(rdb, srvInfo, logger)
+	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger)
 
-	queryParams := map[string]map[string]any{
+	queryParams, _ := json.Marshal(map[string]map[string]any{
 		"private_data_query": {
-			"ownerID": "12345",
+			"name": "collectionNameFather",
 		},
 		"gt_data_query": {},
-	}
+	})
 
 	// Execute the query
-	groups := []string{"groupA", "groupB", "groupC"}
-	result, err := manager.ExecuteQueries(queryParams, groups)
+	result, err := manager.ExecuteQueries(string(queryParams), "bohhh", "IT/Milan")
 	assert.NoError(t, err, "Expected no error when executing queries")
 
-	assert.NotEmpty(t, result, "Expected result to be non-empty")
-	assert.Equal(t, 2, len(result), "Expected result to be non-empty")
+	assert.Len(t, result, 1, "Expected result to be non-empty")
 	assert.Contains(t, result, "private_data", "Expected result to contain 'private_data' key")
-	assert.NotEmpty(t, result["private_data"], "Expected 'private_data' to have non-empty results")
-	for _, collection := range result["private_data"] {
-		assert.Equal(t, "12345", collection.Id, "Expected collection ID to be 12345")
-		assert.NotEmpty(t, collection.Metadata, "Expected collection metadata to be non-empty")
-		assert.Contains(t, collection.Metadata, "owner", "Expected metadata to contain 'owner' key")
-		assert.Equal(t, collection.Metadata["owner"], "12345", "Expected owner to match query parameter")
-		assert.Contains(t, collection.Metadata, "name", "Expected metadata to contain 'name' key")
-		assert.Equal(t, collection.Metadata["name"], "DATI_PRIVATE", "Expected name to be 'DATI_PRIVATE'")
-	}
+
+	assert.Len(t, result["private_data"], 1, "Expected 'private_data' to have one collection")
+	collection := result["private_data"][0]
+
+	assert.Equal(t, "1111", collection.Id, "Expected collection ID to be 1111")
+	assert.NotEmpty(t, collection.Metadata, "Expected collection metadata to be non-empty")
+	assert.Contains(t, collection.Metadata, "owner", "Expected metadata to contain 'owner' key")
+	assert.Equal(t, "12345", collection.Metadata["owner"], "Expected owner to match query parameter")
+	assert.Contains(t, collection.Metadata, "name", "Expected metadata to contain 'name' key")
+	assert.Equal(t, "collectionNameFather", collection.Metadata["name"], "Expected name to be 'collectionNameFather'")
 }

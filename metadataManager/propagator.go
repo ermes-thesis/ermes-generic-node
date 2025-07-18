@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"server/info"
+	"strings"
 )
 
 type QueryPropagator struct {
@@ -25,7 +26,7 @@ func (p *QueryPropagator) Propagate(queryParams string, groupToken string, geolo
 	fmt.Fprintf(*p.logger, "No geolocation provided in the request header.\n")
 
 	var receiver string
-	if p.serverInfo.CloudNode == nil {
+	if p.serverInfo.CloudNode == nil || strings.HasPrefix(p.serverInfo.MetadataDomain, geolocation) {
 		fmt.Fprintf(*p.logger, "No cloud node configured, forwarding to parent node.\n")
 		receiver = p.serverInfo.Father.Address
 	} else {

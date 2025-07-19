@@ -35,7 +35,7 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	}
 	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
 	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager)
-	clDiscovererIstance := clDiscoverer.GetLookupManagerInstance()
+	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscovererIstance.Init(collections)
 
 	//Run server

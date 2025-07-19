@@ -23,7 +23,7 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 
 	mig := migrationManager.GetMigrationManagerInstance()
 	mig.Init(collections, myTPenalityFunc, config.MigrationManager)
-	clDiscoverer := clDiscoverer.GetLookupManagerInstance()
+	clDiscoverer := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscoverer.Init(collections)
 	mig.ManageNewStrongRequest("repoId", "childName", true, 3)
 

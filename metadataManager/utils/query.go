@@ -111,7 +111,7 @@ func (a *AndCondition) ReplacePlaceholder(vars map[string]any) error {
 }
 
 func (a *AndCondition) MarshalJSON() ([]byte, error) {
-	return Marshal(map[string]any{"AND": a.Conditions})
+	return MarshalJSONUnescaped(map[string]any{"AND": a.Conditions})
 }
 
 type OrCondition struct {
@@ -152,7 +152,7 @@ func (o *OrCondition) ReplacePlaceholder(vars map[string]any) error {
 }
 
 func (o *OrCondition) MarshalJSON() ([]byte, error) {
-	return Marshal(map[string]any{"OR": o.Conditions})
+	return MarshalJSONUnescaped(map[string]any{"OR": o.Conditions})
 }
 
 type NotCondition struct {
@@ -182,7 +182,7 @@ func (n *NotCondition) ReplacePlaceholder(vars map[string]any) error {
 }
 
 func (n *NotCondition) MarshalJSON() ([]byte, error) {
-	return Marshal(map[string]any{"NOT": n.Condition})
+	return MarshalJSONUnescaped(map[string]any{"NOT": n.Condition})
 }
 
 type EqCondition struct {
@@ -195,6 +195,13 @@ func (e *EqCondition) Validate() error {
 		return errors.New("eq condition requires a field")
 	}
 	return nil
+}
+
+func (e *EqCondition) MarshalJSON() ([]byte, error) {
+	return MarshalJSONUnescaped(map[string]any{
+		"field": e.Field,
+		"eq":    e.Value,
+	})
 }
 
 func (e *EqCondition) ToRedisQuery() (string, error) {
@@ -230,6 +237,14 @@ func (g *GtCondition) Validate() error {
 	}
 	return nil
 }
+
+func (g *GtCondition) MarshalJSON() ([]byte, error) {
+	return MarshalJSONUnescaped(map[string]any{
+		"field": g.Field,
+		"gt":    g.Value,
+	})
+}
+
 func (g *GtCondition) ToRedisQuery() (string, error) {
 	switch v := g.Value.(type) {
 	case float64, int:
@@ -345,22 +360,8 @@ func (cw *ConditionWrapper) MarshalJSON() ([]byte, error) {
 	}
 
 	switch cond := cw.Condition.(type) {
-	case *AndCondition:
-		return Marshal(map[string]any{"AND": cond.Conditions})
-	case *OrCondition:
-		return Marshal(map[string]any{"OR": cond.Conditions})
-	case *NotCondition:
-		return Marshal(map[string]any{"NOT": cond.Condition})
-	case *EqCondition:
-		return Marshal(map[string]any{
-			"field": cond.Field,
-			"eq":    cond.Value,
-		})
-	case *GtCondition:
-		return Marshal(map[string]any{
-			"field": cond.Field,
-			"gt":    cond.Value,
-		})
+	case *AndCondition, *OrCondition, *NotCondition, *EqCondition, *GtCondition:
+		return json.Marshal(cond)
 	default:
 		return nil, errors.New("unsupported condition type")
 	}

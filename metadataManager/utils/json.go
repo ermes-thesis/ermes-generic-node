@@ -7,7 +7,7 @@ import (
 )
 
 // Marshal https://stackoverflow.com/a/69502657
-func Marshal(i any) ([]byte, error) {
+func MarshalJSONUnescaped(i any) ([]byte, error) {
 	buffer := &bytes.Buffer{}
 	encoder := json.NewEncoder(buffer)
 	encoder.SetEscapeHTML(false)

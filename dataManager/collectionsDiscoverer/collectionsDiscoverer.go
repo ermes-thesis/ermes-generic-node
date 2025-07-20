@@ -6,11 +6,11 @@ import (
 	"sync"
 )
 
-type LookupManager interface {
+type CollectionsDiscoverer interface {
 	IsCollectionLocallyPresent(collectionId string) (bool, shared.Collection)
 }
 
-type LookupManagerImp struct {
+type CollectionsDiscovererImp struct {
 	//sync
 
 	//data
@@ -18,22 +18,22 @@ type LookupManagerImp struct {
 }
 
 // singleton pattern
-var lookupManagerInstance *LookupManagerImp
+var collectionsDiscovererInstance *CollectionsDiscovererImp
 var lock = &sync.Mutex{}
 
-func GetLookupManagerInstance() *LookupManagerImp {
-	if lookupManagerInstance == nil {
+func GetCollectionsDiscovererInstance() *CollectionsDiscovererImp {
+	if collectionsDiscovererInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()
-		if lookupManagerInstance == nil {
+		if collectionsDiscovererInstance == nil {
 			fmt.Println("Creating single instance now.")
-			lookupManagerInstance = &LookupManagerImp{}
+			collectionsDiscovererInstance = &CollectionsDiscovererImp{}
 		}
 	}
-	return lookupManagerInstance
+	return collectionsDiscovererInstance
 }
 
-func (m *LookupManagerImp) Init(collections *shared.CollectionPartialView) {
+func (m *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView) {
 	//sync
 	lock.Lock()
 	defer lock.Unlock()
@@ -45,7 +45,7 @@ func (m *LookupManagerImp) Init(collections *shared.CollectionPartialView) {
 }
 
 // methods
-func (m *LookupManagerImp) IsCollectionLocallyPresent(collectionId string) (bool, shared.Collection) {
+func (m *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId string) (bool, shared.Collection) {
 	//sync
 	m.collectionsPartialView.Mutex.Lock()
 	defer m.collectionsPartialView.Mutex.Unlock()

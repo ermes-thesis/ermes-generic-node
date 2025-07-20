@@ -4,6 +4,7 @@
 package tests
 
 import (
+	"config"
 	clDiscoverer "dataManager/collectionsDiscoverer"
 	migrationManager "dataManager/migrationManager"
 	shared "dataManager/shared"
@@ -15,13 +16,14 @@ func myTPenalityFunc(bufferPos int, currentValue int) int {
 }
 
 func TestFromRemoteToLocalCollection(t *testing.T) {
+	config := config.LoadConfig("../../config/config.yaml")
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
 
 	mig := migrationManager.GetMigrationManagerInstance()
-	mig.Init(collections, myTPenalityFunc)
-	clDiscoverer := clDiscoverer.GetLookupManagerInstance()
+	mig.Init(collections, myTPenalityFunc, config.MigrationManager)
+	clDiscoverer := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscoverer.Init(collections)
 	mig.ManageNewStrongRequest("repoId", "childName", true, 3)
 

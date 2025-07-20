@@ -1,6 +1,7 @@
 package main
 
 import (
+	"config"
 	"context"
 	clDiscoverer "dataManager/collectionsDiscoverer"
 	migrationManager "dataManager/migrationManager"
@@ -10,6 +11,7 @@ import (
 	"io"
 	"metadataManager"
 	"net"
+
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,6 +27,8 @@ func myPenalityFunc(bufferPos int, currentValue int) int {
 }
 
 func run(ctx context.Context, w io.Writer, args []string) error {
+	config := config.LoadConfig("../config/config.yaml")
+
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
@@ -33,8 +37,8 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 		KnowedCollections: make(map[string]dataManagerShared.Collection),
 	}
 	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
-	migrationManagerIstance.Init(collections, myPenalityFunc)
-	clDiscovererIstance := clDiscoverer.GetLookupManagerInstance()
+	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager)
+	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscovererIstance.Init(collections)
 
 	serverInfo, err := info.NewServerInfo(args)

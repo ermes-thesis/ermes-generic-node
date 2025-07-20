@@ -4,5 +4,5 @@
 package collectionsDiscoverer
 
 func ResetSingleton() {
-	lookupManagerInstance = nil
+	collectionsDiscovererInstance = nil
 }

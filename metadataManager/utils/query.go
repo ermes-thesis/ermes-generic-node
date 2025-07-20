@@ -110,10 +110,6 @@ func (a *AndCondition) ReplacePlaceholder(vars map[string]any) error {
 	return nil
 }
 
-func (a *AndCondition) MarshalJSON() ([]byte, error) {
-	return MarshalJSONUnescaped(map[string]any{"AND": a.Conditions})
-}
-
 type OrCondition struct {
 	Conditions []Condition `json:"OR"`
 }
@@ -151,10 +147,6 @@ func (o *OrCondition) ReplacePlaceholder(vars map[string]any) error {
 	return nil
 }
 
-func (o *OrCondition) MarshalJSON() ([]byte, error) {
-	return MarshalJSONUnescaped(map[string]any{"OR": o.Conditions})
-}
-
 type NotCondition struct {
 	Condition Condition `json:"NOT"`
 }
@@ -181,10 +173,6 @@ func (n *NotCondition) ReplacePlaceholder(vars map[string]any) error {
 	return nil
 }
 
-func (n *NotCondition) MarshalJSON() ([]byte, error) {
-	return MarshalJSONUnescaped(map[string]any{"NOT": n.Condition})
-}
-
 type EqCondition struct {
 	Field string `json:"field"`
 	Value any    `json:"eq"`
@@ -195,13 +183,6 @@ func (e *EqCondition) Validate() error {
 		return errors.New("eq condition requires a field")
 	}
 	return nil
-}
-
-func (e *EqCondition) MarshalJSON() ([]byte, error) {
-	return MarshalJSONUnescaped(map[string]any{
-		"field": e.Field,
-		"eq":    e.Value,
-	})
 }
 
 func (e *EqCondition) ToRedisQuery() (string, error) {
@@ -236,13 +217,6 @@ func (g *GtCondition) Validate() error {
 		return errors.New("gt condition requires a field")
 	}
 	return nil
-}
-
-func (g *GtCondition) MarshalJSON() ([]byte, error) {
-	return MarshalJSONUnescaped(map[string]any{
-		"field": g.Field,
-		"gt":    g.Value,
-	})
 }
 
 func (g *GtCondition) ToRedisQuery() (string, error) {
@@ -361,7 +335,7 @@ func (cw *ConditionWrapper) MarshalJSON() ([]byte, error) {
 
 	switch cond := cw.Condition.(type) {
 	case *AndCondition, *OrCondition, *NotCondition, *EqCondition, *GtCondition:
-		return json.Marshal(cond)
+		return MarshalJSONUnescaped(cond)
 	default:
 		return nil, errors.New("unsupported condition type")
 	}

@@ -2,33 +2,33 @@ package metadataManager
 
 import (
 	"bytes"
-	"context"
+	"db"
 	"encoding/json"
 	"fmt"
-	"github.com/redis/go-redis/v9"
 	"io"
 	"metadataManager/utils"
 	"net/http"
 	"os"
 	"server/info"
+	"slices"
 	"strings"
 )
 
 type MetadataManager interface {
-	CreateMetadata(collectionId string, metadata map[string]any) error
-	ExecuteQueries(query string, groups string, geolocation string) (map[string][]CollectionInfo, error)
+	CreateMetadata(collectionId string, metadata db.Metadata) error
+	ExecuteQueries(query string, groups string, geolocation string) (map[string][]db.CollectionInfo, error)
 }
 
 type MetadataManagerImpl struct {
-	redis           *redis.Client
-	logger          io.Writer
-	templateCache   map[string]string
-	redisIndex      string
-	serverInfo      *info.ServerInfo
-	queryPropagator *QueryPropagator
+	redis              db.GenericDB
+	logger             io.Writer
+	templateCache      map[string]string
+	serverInfo         *info.ServerInfo
+	queryPropagator    *QueryPropagator
+	customMetadataKeys []string
 }
 
-func NewMetadataManager(redis *redis.Client, serverInfo *info.ServerInfo, logger io.Writer) MetadataManager {
+func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, logger io.Writer) MetadataManager {
 	return &MetadataManagerImpl{
 		redis:  redis,
 		logger: logger,
@@ -74,24 +74,34 @@ func NewMetadataManager(redis *redis.Client, serverInfo *info.ServerInfo, logger
 				}
 		`,
 		},
-		redisIndex:      "metadata_index",
-		serverInfo:      serverInfo,
-		queryPropagator: NewQueryPropagator(serverInfo, &logger),
+		serverInfo:         serverInfo,
+		queryPropagator:    NewQueryPropagator(serverInfo, &logger),
+		customMetadataKeys: []string{},
 	}
 }
 
-type CollectionInfo struct {
-	Id       string
-	Metadata map[string]string
-}
+func (l MetadataManagerImpl) CreateMetadata(collectionId string, metadata db.Metadata) error {
+	if metadata.Geolocation == l.serverInfo.MetadataDomain {
+		var newMetadata []string
+		for key, value := range metadata.CustomMetadata {
+			if !slices.Contains(l.customMetadataKeys, key) {
+				newMetadata = append(newMetadata, key, value)
+			}
+		}
+		if len(newMetadata) > 0 {
+			err := l.redis.AlterIndex(newMetadata...)
+			if err != nil {
+				fmt.Fprintf(l.logger, "Error altering index in Redis: %v\n", err)
+				return err
+			}
+			l.customMetadataKeys = append(l.customMetadataKeys, newMetadata...)
+		}
 
-func (l MetadataManagerImpl) CreateMetadata(collectionId string, metadata map[string]any) error {
-	geolcation := metadata["geolocation"]
-
-	if geolcation == l.serverInfo.MetadataDomain {
-		//TODO: check if there are new types of custom metadata
-		// and eventually call FT.ALTER INDEX to add them
-		l.redis.HSet(context.Background(), "meta:"+collectionId, "name", metadata["name"], "owner", metadata["owner"], "created_at", metadata["created_at"], "groups", strings.Join(metadata["groups"].([]string), ","), "geolocation", geolcation)
+		err := l.redis.SetMetadata(collectionId, metadata)
+		if err != nil {
+			fmt.Fprintf(l.logger, "Error setting metadata in Redis: %v\n", err)
+			return err
+		}
 	}
 	body, err := json.Marshal(metadata)
 	if err != nil {
@@ -116,11 +126,11 @@ func (l MetadataManagerImpl) CreateMetadata(collectionId string, metadata map[st
 	return nil
 }
 
-func (l MetadataManagerImpl) ExecuteQueries(queryParams string, groupToken string, geolocation string) (map[string][]CollectionInfo, error) {
+func (l MetadataManagerImpl) ExecuteQueries(queryParams string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error) {
 	// Execute the query locally if the server's metadata domain match the geolocation, it is its prefix or if the local node is a cloud node.
 	//Otherwise, propagate the query to the cloud node or the father node.
 	if strings.HasPrefix(geolocation, l.serverInfo.MetadataDomain) || l.serverInfo.Father == nil {
-		result := make(map[string][]CollectionInfo)
+		result := make(map[string][]db.CollectionInfo)
 
 		var queryMap map[string]map[string]any
 		err := json.Unmarshal([]byte(queryParams), &queryMap)
@@ -151,30 +161,13 @@ func (l MetadataManagerImpl) ExecuteQueries(queryParams string, groupToken strin
 					return nil, err
 				}
 
-				redisQuery, err := query.ToRedisSearchCommand()
-				redisQuery = redisQuery + " @groups:{" + strings.Join(groups, " | ") + "}"
+				collInfo, err := l.redis.SearchOnMetadata(query, groups)
 				if err != nil {
-					fmt.Fprintf(l.logger, "Error converting queryParams to Redis command: %v\n", err)
+					fmt.Fprintf(l.logger, "Error executing queryParams: %v\n", err)
 					return nil, err
 				}
-				fmt.Fprintf(l.logger, "Executing Redis command: %s\n", redisQuery)
-
-				res, err := l.redis.FTSearch(context.Background(), l.redisIndex, redisQuery).Result()
-				if err != nil {
-					fmt.Fprintf(l.logger, "Error executing Redis command: %v\n", err)
-					return nil, err
-				}
-				fmt.Fprintf(l.logger, "Redis command result: %v\n", res)
-
-				for _, doc := range res.Docs {
-					collId, _ := strings.CutPrefix(doc.ID, "meta:")
-
-					collectionInfo := CollectionInfo{
-						Id:       collId,
-						Metadata: doc.Fields,
-					}
-
-					result[query.As] = append(result[query.As], collectionInfo)
+				if len(collInfo) > 0 {
+					result[query.As] = append(result[query.As], collInfo...)
 				}
 			}
 		}

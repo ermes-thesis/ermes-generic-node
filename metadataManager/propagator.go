@@ -1,6 +1,7 @@
 package metadataManager
 
 import (
+	"db"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,7 +23,7 @@ func NewQueryPropagator(serverInfo *info.ServerInfo, logger *io.Writer) *QueryPr
 	}
 }
 
-func (p *QueryPropagator) Propagate(queryParams string, groupToken string, geolocation string) (map[string][]CollectionInfo, error) {
+func (p *QueryPropagator) Propagate(queryParams string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error) {
 	fmt.Fprintf(*p.logger, "No geolocation provided in the request header.\n")
 
 	var receiver string
@@ -61,7 +62,7 @@ func (p *QueryPropagator) Propagate(queryParams string, groupToken string, geolo
 		return nil, err
 	}
 
-	var result map[string][]CollectionInfo
+	var result map[string][]db.CollectionInfo
 	if err := json.Unmarshal(body, &result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error when unmarshalling the response body: %s \n", err)
 		return nil, err

@@ -41,9 +41,6 @@ func TestLookupManager(t *testing.T) {
 	collection := result["private_data"][0]
 
 	assert.Equal(t, "1111", collection.Id, "Expected collection ID to be 1111")
-	assert.NotEmpty(t, collection.Metadata, "Expected collection metadata to be non-empty")
-	assert.Contains(t, collection.Metadata, "owner", "Expected metadata to contain 'owner' key")
-	assert.Equal(t, "12345", collection.Metadata["owner"], "Expected owner to match query parameter")
-	assert.Contains(t, collection.Metadata, "name", "Expected metadata to contain 'name' key")
-	assert.Equal(t, "collectionNameFather", collection.Metadata["name"], "Expected name to be 'collectionNameFather'")
+	assert.Equal(t, "12345", collection.Metadata.Owner, "Expected owner to match query parameter")
+	assert.Equal(t, "collectionNameFather", collection.Metadata.Name, "Expected name to be 'collectionNameFather'")
 }

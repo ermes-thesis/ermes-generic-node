@@ -6,4 +6,5 @@ use (
 	dataManager
 	metadataManager
 	config
+	db
 )

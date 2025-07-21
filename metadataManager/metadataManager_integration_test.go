@@ -1,10 +1,11 @@
 package metadataManager_test
 
 import (
+	"config"
 	"context"
+	"db"
 	"encoding/json"
 	"fmt"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
@@ -12,11 +13,13 @@ import (
 	"metadataManager"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"server"
 	"server/info"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLookupManagerIntegration(t *testing.T) {
@@ -89,7 +92,7 @@ func TestLookupManagerIntegration(t *testing.T) {
 	fmt.Println("Response: " + string(bodyResp))
 
 	assert.NoError(t, err, "Expected no error when reading response body")
-	var response map[string][]metadataManager.CollectionInfo
+	var response map[string][]db.CollectionInfo
 	err = json.Unmarshal(bodyResp, &response)
 	assert.NoError(t, err, "Expected valid JSON response, got error: %v", err)
 
@@ -99,19 +102,15 @@ func TestLookupManagerIntegration(t *testing.T) {
 	collection := response["private_data"][0]
 
 	assert.Equal(t, "1111", collection.Id, "Expected collection ID to be 1111")
-	assert.NotEmpty(t, collection.Metadata, "Expected collection metadata to be non-empty")
-	assert.Contains(t, collection.Metadata, "owner", "Expected metadata to contain 'owner' key")
-	assert.Equal(t, "12345", collection.Metadata["owner"], "Expected owner to match query parameter")
-	assert.Contains(t, collection.Metadata, "name", "Expected metadata to contain 'name' key")
-	assert.Equal(t, "collectionNameFather", collection.Metadata["name"], "Expected name to be 'collectionNameFather'")
-	assert.Contains(t, collection.Metadata, "groups", "Expected metadata to contain 'groups' key")
-	assert.Equal(t, "groupC", collection.Metadata["groups"], "Expected groups to be 'groupC'")
+	assert.Equal(t, "12345", collection.Metadata.Owner, "Expected owner to match query parameter")
+	assert.Equal(t, "collectionNameFather", collection.Metadata.Name, "Expected name to be 'collectionNameFather'")
+	assert.Contains(t, collection.Metadata.Groups, "groupC", "Expected groups to be 'groupC'")
 
 	fmt.Println(response)
 
 }
 
-func startRedisContainer(t *testing.T, child bool) (*redis.Client, func()) {
+func startRedisContainer(t *testing.T, child bool) (db.GenericDB, func()) {
 	ctx := context.Background()
 	redisContainer, err := tcredis.Run(ctx,
 		"redis/redis-stack:latest",
@@ -127,41 +126,49 @@ func startRedisContainer(t *testing.T, child bool) (*redis.Client, func()) {
 	}
 
 	connectionString, _ := redisContainer.ConnectionString(ctx)
+	parsedUrl, _ := url.Parse(connectionString)
 
-	client := redis.NewClient(&redis.Options{
-		Addr:     strings.Split(connectionString, "//")[1],
+	client := db.NewRedisClient(config.RedisConfig{
+		Address:  parsedUrl.Hostname(),
+		Port:     parsedUrl.Port(),
+		Password: "",
+		DB:       0,
 		Protocol: 2,
-	})
+	}, ctx)
 
-	client.HSet(ctx, "meta:12345", "name", "collectionName", "owner", "12345", "created_at", 1745748000, "groups", "groupA,groupB,groupC")
-	client.HSet(ctx, "meta:54321", "name", "collectionName2", "owner", "12345", "created_at", 1745748000, "groups", "groupC")
+	err = client.SetMetadata("12345", db.Metadata{
+		Name:        "collectionName",
+		Owner:       "12345",
+		CreatedAt:   time.Unix(1745748000, 0),
+		Groups:      []string{"groupA", "groupB", "groupC"},
+		Consistency: db.EVENTUAL_CONSISTENT,
+		Geolocation: "IT/Como",
+	})
+	assert.NoError(t, err, "Expected no error when setting metadata for collection 12345")
+
+	err = client.SetMetadata("54321", db.Metadata{
+		Name:        "collectionName2",
+		Owner:       "12345",
+		CreatedAt:   time.Unix(745748000, 0),
+		Groups:      []string{"groupC"},
+		Consistency: db.EVENTUAL_CONSISTENT,
+		Geolocation: "IT/Milan",
+	})
+	assert.NoError(t, err, "Expected no error when setting metadata for collection 54321")
 
 	if !child {
-		client.HSet(ctx, "meta:1111", "name", "collectionNameFather", "owner", "12345", "created_at", 1745749000, "groups", "groupC")
+		err = client.SetMetadata("1111", db.Metadata{
+			Name:        "collectionNameFather",
+			Owner:       "12345",
+			CreatedAt:   time.Unix(1745749000, 0),
+			Groups:      []string{"groupC"},
+			Consistency: db.EVENTUAL_CONSISTENT,
+			Geolocation: "IT",
+		})
+		assert.NoError(t, err, "Expected no error when setting metadata for collection 1111")
 	}
 
-	client.Set(ctx, "data:12345:record_name", "{\"temperature\":22.5,\"humidity\":55}", 0)
-	client.Set(ctx, "data:54321:record_name", "HELLO_WORLD", 0)
-
-	client.SAdd(ctx, "data:12345:groups", "groupA", "groupB", "groupC")
-	client.SAdd(ctx, "data:54321:groups", "groupC")
-
-	client.FTCreate(ctx, "metadata_index", &redis.FTCreateOptions{
-		OnHash: true,
-		Prefix: []any{1, "meta:"},
-	}, &redis.FieldSchema{
-		FieldName: "name",
-		FieldType: redis.SearchFieldTypeText,
-	}, &redis.FieldSchema{
-		FieldName: "owner",
-		FieldType: redis.SearchFieldTypeText,
-	}, &redis.FieldSchema{
-		FieldName: "created_at",
-		FieldType: redis.SearchFieldTypeNumeric,
-	}, &redis.FieldSchema{
-		FieldName: "groups",
-		FieldType: redis.SearchFieldTypeTag,
-	})
+	client.CreateIndex()
 
 	return client, func() {
 		if err := redisContainer.Terminate(ctx); err != nil {

@@ -1,8 +1,8 @@
 package server
 
 import (
+	"db"
 	"fmt"
-	"github.com/redis/go-redis/v9"
 	"io"
 	"metadataManager"
 	"net/http"
@@ -16,11 +16,11 @@ type Server struct {
 	Logger          io.Writer
 	Handler         *http.ServeMux
 	ClientRepo      *clientrepo.ClientRepo
-	RedisClient     *redis.Client
+	RedisClient     db.GenericDB
 	MetadataManager metadataManager.MetadataManager
 }
 
-func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient *redis.Client, metadataManager metadataManager.MetadataManager) (*Server, error) {
+func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.GenericDB, metadataManager metadataManager.MetadataManager) (*Server, error) {
 
 	fmt.Fprintf(logger, "Creating a new Server instance... \n")
 

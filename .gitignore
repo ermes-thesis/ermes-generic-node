@@ -16,6 +16,9 @@
 !docker-compose.yml
 !go.work*
 
+#Include config file
+!config/config.yaml
+
 # Any md file can be added
 !*.md
 !LICENSE

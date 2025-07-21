@@ -19,6 +19,8 @@
 #Include config file
 !config/config.yaml
 
+!.github/**
+
 # Any md file can be added
 !*.md
 !LICENSE

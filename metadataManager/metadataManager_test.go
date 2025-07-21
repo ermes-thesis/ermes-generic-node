@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestLookupManager(t *testing.T) {
+func TestMetadataManager(t *testing.T) {
 
 	// Create a logger
 	logger := os.Stdout

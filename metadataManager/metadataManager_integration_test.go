@@ -22,7 +22,7 @@ import (
 	"time"
 )
 
-func TestLookupManagerIntegration(t *testing.T) {
+func TestMetadataManagerIntegration(t *testing.T) {
 	redisClient1, shutdownFunc1 := startRedisContainer(t, false)
 	defer shutdownFunc1()
 	defer redisClient1.Close()

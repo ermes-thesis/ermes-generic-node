@@ -50,7 +50,6 @@ func (m Metadata) toList() []any {
 	for k, v := range m.CustomMetadata {
 		res = append(res, k, v)
 	}
-
 	return res
 }
 

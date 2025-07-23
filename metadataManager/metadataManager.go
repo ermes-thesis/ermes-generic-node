@@ -1,13 +1,11 @@
 package metadataManager
 
 import (
-	"bytes"
 	"db"
 	"encoding/json"
 	"fmt"
 	"io"
 	"metadataManager/utils"
-	"net/http"
 	"os"
 	"server/info"
 	"slices"
@@ -15,7 +13,7 @@ import (
 )
 
 type MetadataManager interface {
-	CreateMetadata(collectionId string, metadata db.Metadata) error
+	CreateMetadata(collectionId string, metadata db.Metadata, reqOrigin PropagationOrigin) error
 	ExecuteQueries(query string, groups string, geolocation string) (map[string][]db.CollectionInfo, error)
 }
 
@@ -24,7 +22,8 @@ type MetadataManagerImpl struct {
 	logger             io.Writer
 	templateCache      map[string]string
 	serverInfo         *info.ServerInfo
-	queryPropagator    *QueryPropagator
+	queryPropagator    QueryPropagator
+	metadataPropagator MetadataPropagator
 	customMetadataKeys []string
 }
 
@@ -76,12 +75,13 @@ func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, logger 
 		},
 		serverInfo:         serverInfo,
 		queryPropagator:    NewQueryPropagator(serverInfo, &logger),
+		metadataPropagator: NewMetadataPropagator(serverInfo, &logger),
 		customMetadataKeys: []string{},
 	}
 }
 
-func (l MetadataManagerImpl) CreateMetadata(collectionId string, metadata db.Metadata) error {
-	if metadata.Geolocation == l.serverInfo.MetadataDomain {
+func (l MetadataManagerImpl) CreateMetadata(collectionId string, metadata db.Metadata, reqOrigin PropagationOrigin) error {
+	if strings.HasPrefix(metadata.Geolocation, l.serverInfo.MetadataDomain) {
 		var newMetadata []string
 		for key, value := range metadata.CustomMetadata {
 			if !slices.Contains(l.customMetadataKeys, key) {
@@ -103,25 +103,12 @@ func (l MetadataManagerImpl) CreateMetadata(collectionId string, metadata db.Met
 			return err
 		}
 	}
-	body, err := json.Marshal(metadata)
-	if err != nil {
-		fmt.Fprintf(l.logger, "Error marshalling metadata: %v\n", err)
-		return err
-	}
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%s/create_metadata/%s", l.serverInfo.Father, collectionId), bytes.NewReader(body))
-	if err != nil {
-		fmt.Fprintf(l.logger, "Error creating request: %v\n", err)
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-ERMES-SECRET", l.serverInfo.Secret)
 
-	resp, err := http.DefaultClient.Do(req)
+	err := l.metadataPropagator.Propagate(collectionId, metadata, reqOrigin)
 	if err != nil {
-		fmt.Fprintf(l.logger, "Error sending request: %v\n", err)
+		fmt.Fprintf(l.logger, "Error propagating metadata: %v\n", err)
 		return err
 	}
-	defer resp.Body.Close()
 
 	return nil
 }

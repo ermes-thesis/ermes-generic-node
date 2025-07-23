@@ -11,4 +11,5 @@ func (s *Server) compileRoutes() {
 	s.Handler.Handle("/pvt-add-client", s.checkSecret(private.HandleRoutePvtAddClient(&s.Logger, s.Serverinfo, s.ClientRepo)))
 	s.Handler.Handle("/pvt-ask-client-exists", s.checkSecret(private.HandleRoutePvtAskClientExists(&s.Logger, s.Serverinfo, s.ClientRepo)))
 	s.Handler.Handle("/lookup", s.checkSecret(private.HandleRouteLookup(&s.Logger, s.MetadataManager)))
+	s.Handler.Handle("/create_metadata/{collection_id}", s.checkSecret(private.HandleRouteCreateMetadata(&s.Logger, s.MetadataManager, s.Serverinfo)))
 }

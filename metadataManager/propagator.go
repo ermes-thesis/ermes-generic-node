@@ -1,6 +1,7 @@
 package metadataManager
 
 import (
+	"bytes"
 	"db"
 	"encoding/json"
 	"fmt"
@@ -11,19 +12,31 @@ import (
 	"strings"
 )
 
-type QueryPropagator struct {
+type PropagationOrigin int
+
+const (
+	FROM_FATHER PropagationOrigin = iota
+	FROM_CHILD
+	FROM_LOCAL
+)
+
+type QueryPropagator interface {
+	Propagate(queryParams string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error)
+}
+
+type QueryPropagatorImpl struct {
 	serverInfo *info.ServerInfo
 	logger     *io.Writer
 }
 
-func NewQueryPropagator(serverInfo *info.ServerInfo, logger *io.Writer) *QueryPropagator {
-	return &QueryPropagator{
+func NewQueryPropagator(serverInfo *info.ServerInfo, logger *io.Writer) QueryPropagator {
+	return &QueryPropagatorImpl{
 		serverInfo: serverInfo,
 		logger:     logger,
 	}
 }
 
-func (p *QueryPropagator) Propagate(queryParams string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error) {
+func (p *QueryPropagatorImpl) Propagate(queryParams string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error) {
 	fmt.Fprintf(*p.logger, "No geolocation provided in the request header.\n")
 
 	var receiver string
@@ -71,16 +84,88 @@ func (p *QueryPropagator) Propagate(queryParams string, groupToken string, geolo
 	return result, nil
 }
 
-type MetadataPropagator struct {
-	serverInfo *info.ServerInfo
+type MetadataPropagator interface {
+	Propagate(collectionId string, metadata db.Metadata, reqOrigin PropagationOrigin) error
 }
 
-func NewMetadataPropagator(serverInfo *info.ServerInfo) *MetadataPropagator {
-	return &MetadataPropagator{
+type MetadataPropagatorImpl struct {
+	serverInfo *info.ServerInfo
+	logger     *io.Writer
+}
+
+func NewMetadataPropagator(serverInfo *info.ServerInfo, logger *io.Writer) *MetadataPropagatorImpl {
+	return &MetadataPropagatorImpl{
 		serverInfo: serverInfo,
+		logger:     logger,
 	}
 }
 
-func (p *MetadataPropagator) Propagate() {
+func (p *MetadataPropagatorImpl) Propagate(collectionId string, metadata db.Metadata, reqOrigin PropagationOrigin) error {
+	fmt.Fprintf(*p.logger, "Starting to propagating metadata...")
 
+	body, err := json.Marshal(metadata)
+	if err != nil {
+		fmt.Fprintf(*p.logger, "Error marshalling metadata: %v\n", err)
+		return err
+	}
+
+	switch reqOrigin {
+	case FROM_FATHER:
+		for _, child := range p.serverInfo.Children {
+			if strings.HasPrefix(metadata.Geolocation, child.MetadataDomain) {
+				err = p.sendHttpReqToDest(child.Address, collectionId, body)
+				if err != nil {
+					fmt.Fprintf(*p.logger, "Error sending request to child : %v\n", err)
+					return err
+				}
+
+				break
+			}
+		}
+	case FROM_CHILD:
+		err = p.sendHttpReqToDest(p.serverInfo.Father.Address, collectionId, body)
+		if err != nil {
+			fmt.Fprintf(*p.logger, "Error sending request to father : %v\n", err)
+			return err
+		}
+	case FROM_LOCAL:
+		err = p.sendHttpReqToDest(p.serverInfo.Father.Address, collectionId, body)
+		if err != nil {
+			fmt.Fprintf(*p.logger, "Error sending request to father : %v\n", err)
+			return err
+		}
+
+		for _, child := range p.serverInfo.Children {
+			if strings.HasPrefix(metadata.Geolocation, child.MetadataDomain) {
+				err = p.sendHttpReqToDest(child.Address, collectionId, body)
+				if err != nil {
+					fmt.Fprintf(*p.logger, "Error sending request to child : %v\n", err)
+					return err
+				}
+
+				break
+			}
+		}
+	}
+	return nil
+}
+
+func (p *MetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, body []byte) error {
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%s/create_metadata/%s", dest, collectionId), bytes.NewReader(body))
+	if err != nil {
+		fmt.Fprintf(*p.logger, "Error creating request: %v\n", err)
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-ERMES-SECRET", p.serverInfo.Secret)
+	req.Header.Set("X-ERMES-METADATA-DOMAIN", p.serverInfo.MetadataDomain)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		fmt.Fprintf(*p.logger, "Error sending request: %v\n", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	return nil
 }

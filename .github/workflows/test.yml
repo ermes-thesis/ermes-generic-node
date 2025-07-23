@@ -22,6 +22,16 @@ jobs:
           go-version: "1.24.4"
           cache-dependency-path: go.sum
 
+      - name: Install mockery
+        run: go install github.com/vektra/mockery/v3@latest
+
+
+      - name: Generate mocks
+        run: |
+          cd dataManager
+          mockery
+          cd ..
+
       - name: Install Go CTRF Reporter
         run: go install github.com/ctrf-io/go-ctrf-json-reporter/cmd/go-ctrf-json-reporter@latest
 

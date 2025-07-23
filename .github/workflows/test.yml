@@ -28,7 +28,7 @@ jobs:
 
       - name: Generate mocks
         run: |
-          cd dataManager
+          cd metadataManager
           mockery
           cd ..
 

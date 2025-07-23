@@ -29,3 +29,6 @@
 
 # ...even if they are in subdirectories
 !*/
+
+# Include mockery file
+!.mockery.yml

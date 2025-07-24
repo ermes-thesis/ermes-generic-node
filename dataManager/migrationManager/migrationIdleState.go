@@ -10,6 +10,8 @@ type MigrationManagerIdleState struct {
 	MigrationManagerImp *MigrationManagerImp
 }
 
+func (s *MigrationManagerIdleState) Setup(args ...any) {}
+
 // methods
 func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
 	if m.MigrationManagerImp.collectionsPartialView.KnowedCollections[collectionId] == nil || !m.MigrationManagerImp.collectionsPartialView.KnowedCollections[collectionId].IsStrong() {

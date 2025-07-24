@@ -42,7 +42,6 @@ type MigrationManagerImp struct {
 	timerMutex       sync.Mutex
 
 	//impl
-	adjacentNodes            map[string]nodeData                   //TODO maybe can be removed ~ sharing something with http
 	unstableEquilibriumState map[string]map[string]*CircularBuffer //mapping resource - child
 	collectionsPartialView   *shared.CollectionPartialView         //set of local and remotes collections
 
@@ -79,7 +78,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	m.penalityFunc = penalityFunc
 	//init states
 	m.idleState = &MigrationManagerIdleState{m}
-	m.gossipState = &MigrationManagerGossipState{m}
+	m.gossipState = &MigrationManagerGossipState{m, 0}
 	m.decisionState = &MigrationManagerDecisionState{m}
 
 	m.currentState = m.idleState
@@ -90,7 +89,6 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	//init data
 	m.collectionsPartialView = collections
 	m.unstableEquilibriumState = make(map[string]map[string]*CircularBuffer)
-	m.adjacentNodes = make(map[string]nodeData)
 }
 
 // methods

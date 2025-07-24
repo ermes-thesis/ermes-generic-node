@@ -10,6 +10,7 @@ type MigrationManagerState interface {
 	//ManageNewRequestanageNewWeekRequest(string, string, int) TODO
 	ManageNewStrongRequest(string, string, bool, int)
 	ManageGossipMessage(msg gossip.GossipMessage)
+	Setup(args ...any)
 }
 
 func (m *MigrationManagerImp) setState(s MigrationManagerState) {
@@ -24,9 +25,18 @@ func (m *MigrationManagerImp) transitionToGossip() {
 
 	// Only transition if still in idle state
 	if _, isIdle := m.currentState.(*MigrationManagerIdleState); isIdle {
-		//fmt.Println("Auto-transitioning from idle to gossip state")
+		// fmt.Println("Auto-transitioning from idle to gossip state")
+		m.gossipState.Setup(len(m.serverInfo.Children)) //TODO: add downstream message count (LeaderDelegaMessage)
 		m.setState(m.gossipState)
 		m.stopIdleTimer()
+	}
+}
+
+func (m *MigrationManagerImp) transitionToDecision() {
+	// Only transition if still in gossip state
+	if _, isGossip := m.currentState.(*MigrationManagerGossipState); isGossip {
+		//fmt.Println("Auto-transitioning from gossip to decision state")
+		m.setState(m.decisionState)
 	}
 }
 

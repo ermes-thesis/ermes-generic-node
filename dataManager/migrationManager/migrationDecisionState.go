@@ -8,6 +8,9 @@ type MigrationManagerDecisionState struct {
 }
 
 // methods
+
+func (s *MigrationManagerDecisionState) Setup(args ...any) {}
+
 func (m *MigrationManagerDecisionState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
 	//TODO
 }

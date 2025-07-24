@@ -18,37 +18,23 @@ func (b *BaseGossipMessage) GetSenderID() string {
 	return b.SenderID
 }
 
-// HwStateMessage represents the hardware state of a node
-type HwStateMessage struct {
+// HwStaChildStateMessageteMessage represents the hardware state of a node + contains info of a new collection created in the child node.
+type ChildStateMessage struct {
 	BaseGossipMessage
 	//CPUUsage          float64 `json:"cpuUsage"`
 	MemoryUsage float64 `json:"memoryUsage"`
 	DiskUsage   float64 `json:"diskUsage"`
+	//boh ci vanno i metadati delle collezioni create nel mentre -> fare dopo merge pr
 }
 
-func NewHwStateMessage(senderID string, memoryUsage float64, diskUsage float64) *HwStateMessage {
-	return &HwStateMessage{
+func NewChildStateMessage(senderID string, memoryUsage float64, diskUsage float64) *ChildStateMessage {
+	return &ChildStateMessage{
 		BaseGossipMessage: BaseGossipMessage{
 			MessageType: "HW_STATE",
 			SenderID:    senderID,
 		},
 		MemoryUsage: memoryUsage,
 		DiskUsage:   diskUsage,
-	}
-}
-
-// NewCollectionsMessage represents information about new collections
-type NewCollectionsMessage struct {
-	BaseGossipMessage
-	//boh ci vanno i metadati delle collezioni create nel mentre -> fare dopo merge pr
-}
-
-func NewNewCollectionsMessage(senderID string) *NewCollectionsMessage {
-	return &NewCollectionsMessage{
-		BaseGossipMessage: BaseGossipMessage{
-			MessageType: "NEW_COLLECTIONS",
-			SenderID:    senderID,
-		},
 	}
 }
 

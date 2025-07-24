@@ -171,7 +171,7 @@ func TestMigrationFromIdleToGossipAfterReceiveAMessage(t *testing.T) {
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo)
 
-	msg := gossip.NewHwStateMessage("senderId", 0.0, 0.0)
+	msg := gossip.NewChildStateMessage("senderId", 0.0, 0.0)
 	instance1.ManageGossipMessage(msg)
 
 	if _, isIdle := instance1.GetCurrentState().(*migrationManager.MigrationManagerIdleState); isIdle {

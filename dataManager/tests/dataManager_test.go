@@ -16,13 +16,17 @@ func myTPenalityFunc(bufferPos int, currentValue int) int {
 }
 
 func TestFromRemoteToLocalCollection(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
+	migrationManagerConfig := config.MigrationManagerConfig{
+		LeaderThreshold:   0,
+		FollowerThreshold: 1,
+		ViewSize:          3,
+	}
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
 
 	mig := migrationManager.GetMigrationManagerInstance()
-	mig.Init(collections, myTPenalityFunc, config.MigrationManager)
+	mig.Init(collections, myTPenalityFunc, migrationManagerConfig)
 	clDiscoverer := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscoverer.Init(collections)
 	mig.ManageNewStrongRequest("repoId", "childName", true, 3)

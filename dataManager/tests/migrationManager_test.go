@@ -15,16 +15,20 @@ func myT1PenalityFunc(bufferPos int, currentValue int) int {
 }
 
 func TestSingletonInstance(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
+	migrationManagerConfig := config.MigrationManagerConfig{
+		LeaderThreshold:   0,
+		FollowerThreshold: 1,
+		ViewSize:          3,
+	}
 
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, config.MigrationManager)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig)
 	instance2 := migrationManager.GetMigrationManagerInstance()
-	instance2.Init(collections, myT1PenalityFunc, config.MigrationManager)
+	instance2.Init(collections, myT1PenalityFunc, migrationManagerConfig)
 
 	if instance1 == nil {
 		t.Fatal("Expected non-nil instance from GetMigrationManagerIstance")
@@ -40,13 +44,17 @@ func TestSingletonInstance(t *testing.T) {
 }
 
 func TestManageNewStrongRequest(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
+	migrationManagerConfig := config.MigrationManagerConfig{
+		LeaderThreshold:   0,
+		FollowerThreshold: 1,
+		ViewSize:          3,
+	}
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, config.MigrationManager)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig)
 	instance1.NewCollectionReceived("repoId", 10, true)
 	instance1.NewCollectionReceived("repoId1", 10, true)
 
@@ -91,13 +99,17 @@ func TestManageNewStrongRequest(t *testing.T) {
 }
 
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
+	migrationManagerConfig := config.MigrationManagerConfig{
+		LeaderThreshold:   0,
+		FollowerThreshold: 1,
+		ViewSize:          3,
+	}
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, config.MigrationManager)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig)
 	instance1.NewCollectionReceived("repoId", 10, true)
 	instance1.NewCollectionReceived("repoId1", 10, true)
 
@@ -120,13 +132,17 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 }
 
 func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
+	migrationManagerConfig := config.MigrationManagerConfig{
+		LeaderThreshold:   0,
+		FollowerThreshold: 1,
+		ViewSize:          3,
+	}
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, config.MigrationManager)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig)
 	instance1.NewCollectionReceived("repoId", 10, true)
 	instance1.NewCollectionReceived("repoId1", 10, true)
 

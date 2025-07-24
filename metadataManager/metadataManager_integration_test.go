@@ -136,6 +136,10 @@ func startRedisContainer(t *testing.T, child bool) (db.GenericDB, func()) {
 		Protocol: 2,
 	}, ctx)
 
+	//https://redis.io/docs/latest/develop/ai/search-and-query/indexing/#index-limitations:~:text=After%20you%20create,modify%20command%20finishes
+	err = client.CreateIndex()
+	assert.NoError(t, err, "Expected no error when creating index")
+
 	err = client.SetMetadata("12345", db.Metadata{
 		Name:        "collectionName",
 		Owner:       "12345",
@@ -167,8 +171,6 @@ func startRedisContainer(t *testing.T, child bool) (db.GenericDB, func()) {
 		})
 		assert.NoError(t, err, "Expected no error when setting metadata for collection 1111")
 	}
-
-	client.CreateIndex()
 
 	return client, func() {
 		if err := redisContainer.Terminate(ctx); err != nil {

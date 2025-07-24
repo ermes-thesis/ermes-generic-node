@@ -21,7 +21,11 @@ func TestExecuteQueries(t *testing.T) {
 	defer shutdownFun()
 	defer redisClient.Close()
 
-	srvInfo := &info.ServerInfo{}
+	srvInfo := &info.ServerInfo{
+		Node: info.Node{
+			MetadataDomain: "IT",
+		},
+	}
 
 	// Create a new MetadataManager instance
 	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger)

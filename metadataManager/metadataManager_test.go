@@ -82,7 +82,7 @@ func TestCreateMetadata(t *testing.T) {
 	err := manager.CreateMetadata("collection_id_test", metadata, metadataManager.FROM_LOCAL)
 	require.NoError(t, err, "Expected no error when creating metadata")
 
-	metaFromRedis, err := redisClient.GetAllMetadata("collection_id_test")
+	metaFromRedis, err := redisClient.GetMetadata("collection_id_test")
 	require.NoError(t, err, "Expected no error when getting metadata from redis")
 
 	require.Equal(t, metadata, *metaFromRedis, "Expected metadata to be equal to created metadata")

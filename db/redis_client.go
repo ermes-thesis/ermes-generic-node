@@ -13,45 +13,143 @@ type RedisClient struct {
 	ctx    context.Context
 }
 
-func (r *RedisClient) Get(key string) (string, error) {
-	return r.client.Get(r.ctx, key).Result()
+func (r *RedisClient) GetRecord(collectionId string, recordName string) (string, error) {
+	return r.client.Get(r.ctx, buildKey(collectionId, recordName)).Result()
 }
 
-func (r *RedisClient) Set(key string, value string) error {
-	return r.client.Set(r.ctx, key, value, 0).Err()
+func (r *RedisClient) SetRecord(collectionId string, recordName string, value string) error {
+	err := r.client.SAdd(r.ctx, "info:"+collectionId+":keys", recordName).Err()
+	if err != nil {
+		return err
+	}
+	return r.client.Set(r.ctx, buildKey(collectionId, recordName), value, 0).Err()
 }
 
-func (r *RedisClient) MGet(keys ...string) ([]any, error) {
-	return r.client.MGet(r.ctx, keys...).Result()
+func (r *RedisClient) GetRecords(collectionId string, recordNames ...string) ([]any, error) {
+	return r.client.MGet(r.ctx, buildKeys(collectionId, recordNames)...).Result()
 }
 
-func (r *RedisClient) Exists(key string) (bool, error) {
-	res, err := r.client.Exists(r.ctx, key).Result()
+func (r *RedisClient) RecordExists(collectionId string, recordName string) (bool, error) {
+	res, err := r.client.Exists(r.ctx, buildKey(collectionId, recordName)).Result()
 	return res > 0, err
 }
 
-func (r *RedisClient) Del(key ...string) error {
-	return r.client.Del(r.ctx, key...).Err()
+func (r *RedisClient) DeleteRecords(collectionId string, recordNames ...string) error {
+	for _, recordName := range recordNames {
+		err := r.client.SRem(r.ctx, "info:"+collectionId+":keys", recordName).Err()
+		if err != nil {
+			return err
+		}
+		err = r.client.Del(r.ctx, buildKey(collectionId, recordName)).Err()
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []string, error) {
+	//TODO: capire come usare le pipeline/transaction (probabilmente con LUA script)
+	keys, err := r.client.SMembers(r.ctx, "info:"+collectionId+":keys").Result()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	values, err := r.client.MGet(r.ctx, buildKeys(collectionId, keys)...).Result()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	res := make(map[string]string, len(keys))
+	for i, key := range keys {
+		res[key] = values[i].(string)
+	}
+
+	groups, err := r.client.SMembers(r.ctx, "info:"+collectionId+":groups").Result()
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return res, groups, nil
+}
+
+func (r *RedisClient) SetCollection(collectionId string, records map[string]string, groups []string) error {
+	err := r.client.Set(r.ctx, "info:"+collectionId, "", 0).Err()
+	if err != nil {
+		return err
+	}
+
+	for key, value := range records {
+		err := r.client.Set(r.ctx, buildKey(collectionId, key), value, 0).Err()
+		if err != nil {
+			return err
+		}
+
+		err = r.client.SAdd(r.ctx, "info:"+collectionId+":keys", key).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, g := range groups {
+		err := r.client.SAdd(r.ctx, "info:"+collectionId+":groups", g).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (r *RedisClient) CollectionExists(collectionId string) (bool, error) {
+	res, err := r.client.Exists(r.ctx, "info:"+collectionId).Result()
+	if err != nil {
+		return false, err
+	}
+	return res > 0, nil
+}
+
+func (r *RedisClient) DeleteCollection(collectionId string) error {
+	keys, err := r.client.SMembers(r.ctx, "info:"+collectionId+":keys").Result()
+	if err != nil {
+		return err
+	}
+
+	if len(keys) > 0 {
+		err = r.client.Del(r.ctx, buildKeys(collectionId, keys)...).Err()
+		if err != nil {
+			return err
+		}
+	}
+
+	err = r.client.Del(r.ctx, "info:"+collectionId, "info:"+collectionId+":keys", "info:"+collectionId+":groups").Err()
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (r *RedisClient) SetMetadata(collectionId string, metadata Metadata) error {
 	return r.client.HSet(r.ctx, "meta:"+collectionId, metadata.toList()...).Err()
-
 }
 
-func (r *RedisClient) GetMetadata(collectionId string, field string) (string, error) {
-	return r.client.HGet(r.ctx, "meta:"+collectionId, field).Result()
-}
-
-func (r *RedisClient) GetAllMetadata(key string) (*Metadata, error) {
+func (r *RedisClient) GetMetadata(key string) (*Metadata, error) {
 	res, err := r.client.HGetAll(r.ctx, "meta:"+key).Result()
 	if err != nil {
 		return nil, err
 	}
+	if len(res) == 0 {
+		return nil, nil
+	}
 	return fromMap(res)
 }
 
-func (r *RedisClient) AddGroup(collectionId string, members ...string) error {
+func (r *RedisClient) DeleteMetadata(collectionId string) error {
+	return r.client.Del(r.ctx, "meta:"+collectionId).Err()
+}
+
+func (r *RedisClient) AddGroups(collectionId string, members ...string) error {
 	if len(members) == 0 {
 		return nil
 	}
@@ -61,7 +159,7 @@ func (r *RedisClient) AddGroup(collectionId string, members ...string) error {
 		m[i] = member
 	}
 
-	return r.client.SAdd(r.ctx, "data:"+collectionId+":groups", m...).Err()
+	return r.client.SAdd(r.ctx, "info:"+collectionId+":groups", m...).Err()
 }
 
 func (r *RedisClient) IsInGroups(key string, members ...string) (bool, error) {
@@ -74,12 +172,12 @@ func (r *RedisClient) IsInGroups(key string, members ...string) (bool, error) {
 		m[i] = member
 	}
 
-	res, err := r.client.SMIsMember(r.ctx, "data:"+key+":groups", m...).Result()
+	res, err := r.client.SMIsMember(r.ctx, "info:"+key+":groups", m...).Result()
 
 	return slices.Contains(res, true), err
 }
 
-func (r *RedisClient) RemoveGroup(key string, members ...string) error {
+func (r *RedisClient) RemoveGroups(key string, members ...string) error {
 	if len(members) == 0 {
 		return nil
 	}
@@ -89,7 +187,7 @@ func (r *RedisClient) RemoveGroup(key string, members ...string) error {
 		m[i] = member
 	}
 
-	return r.client.SRem(r.ctx, "data:"+key+":groups", m...).Err()
+	return r.client.SRem(r.ctx, "info:"+key+":groups", m...).Err()
 }
 
 func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
@@ -101,7 +199,7 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 		}
 	}
 
-	r.client.FTCreate(r.ctx, "metadata_index", &redis.FTCreateOptions{
+	return r.client.FTCreate(r.ctx, "metadata_index", &redis.FTCreateOptions{
 		OnHash: true,
 		Prefix: []any{1, "meta:"},
 	}, append([]*redis.FieldSchema{{
@@ -116,8 +214,7 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 	}, {
 		FieldName: "groups",
 		FieldType: redis.SearchFieldTypeTag,
-	}}, fields...)...)
-	return nil
+	}}, fields...)...).Err()
 }
 
 func (r *RedisClient) SearchOnMetadata(query utils.Query, userGroups []string) ([]CollectionInfo, error) {
@@ -163,9 +260,21 @@ func (r *RedisClient) AlterIndex(customMetadataKeys ...string) error {
 		fields[i+1] = "TEXT"
 	}
 
-	return r.client.FTAlter(r.ctx, "metadata_index", true, append([]any{"SCHEMA", "ADD"}, fields...)).Err()
+	return r.client.FTAlter(r.ctx, "metadata_index", true, fields).Err()
 }
 
 func (r *RedisClient) Close() error {
 	return r.client.Close()
+}
+
+func buildKey(collectionId string, recordName string) string {
+	return "data:" + collectionId + ":" + recordName
+}
+
+func buildKeys(collectionId string, recordNames []string) []string {
+	keys := slices.Clone(recordNames)
+	for i, name := range keys {
+		keys[i] = buildKey(collectionId, name)
+	}
+	return keys
 }

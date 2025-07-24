@@ -6,7 +6,9 @@ package tests
 import (
 	"config"
 	migrationManager "dataManager/migrationManager"
+	gossip "dataManager/migrationManager/gossipMessages"
 	shared "dataManager/shared"
+	"server/info"
 	"testing"
 )
 
@@ -14,21 +16,34 @@ func myT1PenalityFunc(bufferPos int, currentValue int) int {
 	return currentValue - bufferPos
 }
 
-func TestSingletonInstance(t *testing.T) {
+func migTestSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, info.Serverinfo) {
+	migrationManager.ResetSingleton()
 	migrationManagerConfig := config.MigrationManagerConfig{
 		LeaderThreshold:   0,
 		FollowerThreshold: 1,
 		ViewSize:          3,
+		IdleTimeoutMs:     100000000000,
 	}
-
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
+	serverinfo := info.Serverinfo{
+		Name:     "Name",
+		Father:   "fName",
+		Children: []string{},
+		Secret:   "ermes-secret",
+	}
+
+	return migrationManagerConfig, collections, serverinfo
+}
+
+func TestSingletonInstance(t *testing.T) {
+	migrationManagerConfig, collections, serverinfo := migTestSetUp()
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo)
 	instance2 := migrationManager.GetMigrationManagerInstance()
-	instance2.Init(collections, myT1PenalityFunc, migrationManagerConfig)
+	instance2.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo)
 
 	if instance1 == nil {
 		t.Fatal("Expected non-nil instance from GetMigrationManagerIstance")
@@ -44,17 +59,10 @@ func TestSingletonInstance(t *testing.T) {
 }
 
 func TestManageNewStrongRequest(t *testing.T) {
-	migrationManagerConfig := config.MigrationManagerConfig{
-		LeaderThreshold:   0,
-		FollowerThreshold: 1,
-		ViewSize:          3,
-	}
-	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
-	}
+	migrationManagerConfig, collections, serverinfo := migTestSetUp()
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo)
 	instance1.NewCollectionReceived("repoId", 10, true)
 	instance1.NewCollectionReceived("repoId1", 10, true)
 
@@ -99,17 +107,10 @@ func TestManageNewStrongRequest(t *testing.T) {
 }
 
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
-	migrationManagerConfig := config.MigrationManagerConfig{
-		LeaderThreshold:   0,
-		FollowerThreshold: 1,
-		ViewSize:          3,
-	}
-	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
-	}
+	migrationManagerConfig, collections, serverinfo := migTestSetUp()
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo)
 	instance1.NewCollectionReceived("repoId", 10, true)
 	instance1.NewCollectionReceived("repoId1", 10, true)
 
@@ -132,17 +133,10 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 }
 
 func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
-	migrationManagerConfig := config.MigrationManagerConfig{
-		LeaderThreshold:   0,
-		FollowerThreshold: 1,
-		ViewSize:          3,
-	}
-	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
-	}
+	migrationManagerConfig, collections, serverinfo := migTestSetUp()
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo)
 	instance1.NewCollectionReceived("repoId", 10, true)
 	instance1.NewCollectionReceived("repoId1", 10, true)
 
@@ -168,5 +162,27 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 		}
 	} else {
 		t.Fatal("wrong state type")
+	}
+}
+
+func TestMigrationFromIdleToGossipAfterReceiveAMessage(t *testing.T) {
+	migrationManagerConfig, collections, serverinfo := migTestSetUp()
+
+	instance1 := migrationManager.GetMigrationManagerInstance()
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo)
+
+	msg := gossip.NewHwStateMessage("senderId", 0.0, 0.0)
+	instance1.ManageGossipMessage(msg)
+
+	if _, isIdle := instance1.GetCurrentState().(*migrationManager.MigrationManagerIdleState); isIdle {
+		t.Error("unexpected idle state")
+	}
+
+	if _, isDecision := instance1.GetCurrentState().(*migrationManager.MigrationManagerDecisionState); isDecision {
+		t.Error("unexpected decision state")
+	}
+
+	if _, isGossip := instance1.GetCurrentState().(*migrationManager.MigrationManagerGossipState); !isGossip {
+		t.Error("must be in gossip state")
 	}
 }

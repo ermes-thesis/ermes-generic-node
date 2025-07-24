@@ -23,6 +23,10 @@ func GetBuffer(collection string, child string) *CircularBuffer {
 	return migrationManagareInstance.unstableEquilibriumState[collection][child]
 }
 
+func (m *MigrationManagerImp) GetCurrentState() MigrationManagerState {
+	return m.currentState
+}
+
 func (m *MigrationManagerImp) SetState(s MigrationManagerState) {
 	m.setState(s)
 }

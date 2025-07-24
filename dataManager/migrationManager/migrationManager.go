@@ -1,9 +1,11 @@
 package migrationManager
 
 import (
+	gossip "dataManager/migrationManager/gossipMessages"
 	shared "dataManager/shared"
-	"fmt"
+	"server/info"
 	"sync"
+	"time"
 
 	"config"
 )
@@ -24,7 +26,8 @@ type MigrationManager interface {
 
 type MigrationManagerImp struct {
 	//config
-	config config.MigrationManagerConfig
+	config     config.MigrationManagerConfig
+	serverInfo info.Serverinfo
 
 	//state
 	currentState MigrationManagerState
@@ -32,6 +35,12 @@ type MigrationManagerImp struct {
 	idleState     MigrationManagerState
 	gossipState   MigrationManagerState
 	decisionState MigrationManagerState
+
+	//timing for auto transition
+	lastActivityTime time.Time
+	stateTimer       *time.Timer
+	timerMutex       sync.Mutex
+
 	//impl
 	adjacentNodes            map[string]nodeData                   //TODO maybe can be removed ~ sharing something with http
 	unstableEquilibriumState map[string]map[string]*CircularBuffer //mapping resource - child
@@ -50,14 +59,14 @@ func GetMigrationManagerInstance() *MigrationManagerImp {
 		lock.Lock()
 		defer lock.Unlock()
 		if migrationManagareInstance == nil {
-			fmt.Println("Creating single instance now.")
+			//fmt.Println("Creating single instance now.")
 			migrationManagareInstance = &MigrationManagerImp{}
 		}
 	}
 	return migrationManagareInstance
 }
 
-func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc PenalityFunc, config config.MigrationManagerConfig) {
+func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc PenalityFunc, config config.MigrationManagerConfig, serverInfo info.Serverinfo) {
 	//sync
 	lock.Lock()
 	defer lock.Unlock()
@@ -65,14 +74,19 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	if m.collectionsPartialView != nil { //if singleton allready inizialized
 		return
 	}
+	m.serverInfo = serverInfo
 	m.config = config
 	m.penalityFunc = penalityFunc
 	//init states
 	m.idleState = &MigrationManagerIdleState{m}
 	m.gossipState = &MigrationManagerGossipState{m}
 	m.decisionState = &MigrationManagerDecisionState{m}
-	//TODO -> inizializzo gli altri due stati
+
 	m.currentState = m.idleState
+
+	//start timer
+	m.startIdleTimer()
+
 	//init data
 	m.collectionsPartialView = collections
 	m.unstableEquilibriumState = make(map[string]map[string]*CircularBuffer)
@@ -106,97 +120,6 @@ func (m *MigrationManagerImp) ManageNewStrongRequest(collectionId string, childN
 	m.currentState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
 }
 
-// statePattern
-type MigrationManagerState interface {
-	//ManageNewRequestanageNewWeekRequest(string, string, int) TODO
-	ManageNewStrongRequest(string, string, bool, int)
-	//ManageChildGossipMessage()     //TODO
-	//ManageAnchestorGossipMessage() //TODO
-}
-
-func (m *MigrationManagerImp) setState(s MigrationManagerState) {
-	m.currentState = s
-}
-
-// - Idel state -> in this state the Migration manager can receive collection requests; ignore gossip messages
-type MigrationManagerIdleState struct {
-	MigrationManagerImp *MigrationManagerImp
-}
-
-// methods
-func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	if m.MigrationManagerImp.collectionsPartialView.KnowedCollections[collectionId] == nil || !m.MigrationManagerImp.collectionsPartialView.KnowedCollections[collectionId].IsStrong() {
-		//if no local info on the collection of if the collection is not of strong type
-		return
-	}
-
-	//sync
-	m.MigrationManagerImp.collectionsPartialView.Mutex.Lock()
-	defer m.MigrationManagerImp.collectionsPartialView.Mutex.Unlock()
-
-	//imp
-	if m.MigrationManagerImp.unstableEquilibriumState[collectionId] == nil { //first time accessing resource in general
-		m.MigrationManagerImp.unstableEquilibriumState[collectionId] = make(map[string]*CircularBuffer)
-		//m.MigrationManagerImp.addNewRemoteCollection(collectionId, "fatherName") //TODO: change with real name
-	}
-
-	resUsage, exists := m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName]
-	if !exists { //first time accessing resource from a child
-		resUsage = NewCircularBuffer(m.MigrationManagerImp.config.ViewSize)
-		m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName] = resUsage
-		resUsage.Add(NewChildResourceUsage())
-	}
-	if resUsage.Data[resUsage.Head] == nil {
-		resUsage.Add(NewChildResourceUsage())
-	}
-
-	if isWrite { //update saved info
-		manageNewRequest(&resUsage.Data[resUsage.Head].write, requestLatency)
-	} else {
-		manageNewRequest(&resUsage.Data[resUsage.Head].read, requestLatency)
-	}
-
-}
-
-// - Gossip state -> in this state the Migration manager can receive gossip messages and place in a stack collection requests
-type MigrationManagerGossipState struct {
-	MigrationManagerImp *MigrationManagerImp
-}
-
-// methods
-func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	//TODO
-}
-
-// - Decision state -> in this state the Migration manager ingore all the messages, take decisions on collection migration; consume the stack
-type MigrationManagerDecisionState struct {
-	MigrationManagerImp *MigrationManagerImp
-}
-
-// methods
-func (m *MigrationManagerDecisionState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	//TODO
-}
-
-func (m *MigrationManagerDecisionState) computeElasticForce(cb *CircularBuffer, data getUsage) int {
-	var feR = 0
-
-	for i := 0; i < cb.capacity; i++ {
-		idx := (cb.Head - i + cb.capacity) % cb.capacity
-		if cb.Data[idx] == nil {
-			break
-		}
-		feR += m.MigrationManagerImp.penalityFunc(i, GetElasticForce(data(cb, idx)))
-	}
-
-	return feR
-}
-
-type getUsage func(*CircularBuffer, int) resourceUsage
-
-func getRead(cb *CircularBuffer, idx int) resourceUsage {
-	return cb.Data[idx].read
-}
-func getWrite(cb *CircularBuffer, idx int) resourceUsage {
-	return cb.Data[idx].write
+func (m *MigrationManagerImp) ManageGossipMessage(msg gossip.GossipMessage) {
+	m.currentState.ManageGossipMessage(msg)
 }

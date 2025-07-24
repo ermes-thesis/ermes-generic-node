@@ -8,6 +8,7 @@ import (
 	clDiscoverer "dataManager/collectionsDiscoverer"
 	migrationManager "dataManager/migrationManager"
 	shared "dataManager/shared"
+	"server/info"
 	"testing"
 )
 
@@ -15,7 +16,7 @@ func myTPenalityFunc(bufferPos int, currentValue int) int {
 	return currentValue
 }
 
-func TestFromRemoteToLocalCollection(t *testing.T) {
+func testSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, info.Serverinfo) {
 	migrationManagerConfig := config.MigrationManagerConfig{
 		LeaderThreshold:   0,
 		FollowerThreshold: 1,
@@ -24,9 +25,21 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
+	serverinfo := info.Serverinfo{
+		Name:     "Name",
+		Father:   "fName",
+		Children: []string{},
+		Secret:   "ermes-secret",
+	}
+
+	return migrationManagerConfig, collections, serverinfo
+}
+
+func TestFromRemoteToLocalCollection(t *testing.T) {
+	migrationManagerConfig, collections, serverinfo := testSetUp()
 
 	mig := migrationManager.GetMigrationManagerInstance()
-	mig.Init(collections, myTPenalityFunc, migrationManagerConfig)
+	mig.Init(collections, myTPenalityFunc, migrationManagerConfig, serverinfo)
 	clDiscoverer := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscoverer.Init(collections)
 	mig.ManageNewStrongRequest("repoId", "childName", true, 3)

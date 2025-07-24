@@ -16,6 +16,7 @@ type MigrationManagerConfig struct {
 	LeaderThreshold   int `yaml:"leaderThreshold"`
 	FollowerThreshold int `yaml:"followerThreshold"`
 	ViewSize          int `yaml:"viewSize"`
+	IdleTimeoutMs     int `yaml:"idleTimeoutMs"`
 }
 
 func LoadConfig(filename string) Config {

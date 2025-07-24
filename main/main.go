@@ -29,15 +29,6 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	//node set up
-	collections := &dataManagerShared.CollectionPartialView{
-		KnowedCollections: make(map[string]dataManagerShared.Collection),
-	}
-	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
-	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager)
-	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
-	clDiscovererIstance.Init(collections)
-
 	//Run server
 	ser, err := server.NewServer(args, w)
 
@@ -57,6 +48,15 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 			fmt.Fprintf(os.Stderr, "error listening and serving: %s\n", err)
 		}
 	}()
+
+	//node set up
+	collections := &dataManagerShared.CollectionPartialView{
+		KnowedCollections: make(map[string]dataManagerShared.Collection),
+	}
+	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
+	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, ser.Serverinfo)
+	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
+	clDiscovererIstance.Init(collections)
 
 	// TODO: understand these lines of code
 	// I think it should be some synchronization method when the server shuts down

@@ -14,7 +14,6 @@ type MigrationManagerState interface {
 }
 
 func (m *MigrationManagerImp) setState(s MigrationManagerState) {
-	fmt.Println("set to a new state")
 	m.currentState = s
 }
 
@@ -25,17 +24,17 @@ func (m *MigrationManagerImp) transitionToGossip() {
 
 	// Only transition if still in idle state
 	if _, isIdle := m.currentState.(*MigrationManagerIdleState); isIdle {
-		// fmt.Println("Auto-transitioning from idle to gossip state")
-		m.gossipState.Setup(len(m.serverInfo.Children)) //TODO: add downstream message count (LeaderDelegaMessage)
+		fmt.Println("Auto-transitioning from idle to gossip state")
+		m.gossipState.Setup(len(m.serverInfo.Children) + 1) //number of adjacent nodes
 		m.setState(m.gossipState)
 		m.stopIdleTimer()
 	}
 }
 
-func (m *MigrationManagerImp) transitionToDecision() {
+func (m *MigrationManagerImp) transitionToDecision(childrenResourceUsage []childStateInfo) {
 	// Only transition if still in gossip state
 	if _, isGossip := m.currentState.(*MigrationManagerGossipState); isGossip {
-		//fmt.Println("Auto-transitioning from gossip to decision state")
+		fmt.Println("Auto-transitioning from gossip to decision state")
 		m.setState(m.decisionState)
 	}
 }
@@ -46,7 +45,7 @@ func (m *MigrationManagerImp) transitionToIdle() {
 	// Only transition if still in decision state
 
 	if _, isDecision := m.currentState.(*MigrationManagerDecisionState); isDecision {
-		//fmt.Println("Auto-transitioning from decision to idle state")
+		fmt.Println("Auto-transitioning from decision to idle state")
 		m.setState(m.idleState)
 		m.startIdleTimer()
 	}

@@ -44,7 +44,6 @@ func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, 
 	} else {
 		manageNewRequest(&resUsage.Data[resUsage.Head].read, requestLatency)
 	}
-
 }
 
 // if receive a gossip message during idle state directly migrate to gossip state and forward the message to that state

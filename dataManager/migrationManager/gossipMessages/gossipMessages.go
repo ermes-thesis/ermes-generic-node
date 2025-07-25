@@ -41,17 +41,14 @@ func NewChildStateMessage(senderID string, memoryUsage float64, diskUsage float6
 // LeaderDelegaMessage represents a leadership delegation message include info to update forces
 type LeaderDelegaMessage struct {
 	BaseGossipMessage
-	CollectionID      string  `json:"collectionId"`
-	AggregatedTension float64 `json:"aggregatedTension"`
+	//TODO
 }
 
-func NewLeaderDelegaMessage(senderID string, collectionID string, aggregatedTension float64) *LeaderDelegaMessage {
+func NewLeaderDelegaMessage(senderID string) *LeaderDelegaMessage {
 	return &LeaderDelegaMessage{
 		BaseGossipMessage: BaseGossipMessage{
 			MessageType: "LEADER_DELEGA",
 			SenderID:    senderID,
 		},
-		CollectionID:      collectionID,
-		AggregatedTension: aggregatedTension,
 	}
 }

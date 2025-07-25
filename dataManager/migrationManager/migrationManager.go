@@ -78,7 +78,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	m.penalityFunc = penalityFunc
 	//init states
 	m.idleState = &MigrationManagerIdleState{m}
-	m.gossipState = &MigrationManagerGossipState{m, 0}
+	m.gossipState = &MigrationManagerGossipState{m, 0, make([]childStateInfo, 0)}
 	m.decisionState = &MigrationManagerDecisionState{m}
 
 	m.currentState = m.idleState

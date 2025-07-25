@@ -30,7 +30,7 @@ func migTestSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialVie
 	serverinfo := info.Serverinfo{
 		Name:     "Name",
 		Father:   "fName",
-		Children: []string{},
+		Children: []string{"child1", "child2"},
 		Secret:   "ermes-secret",
 	}
 

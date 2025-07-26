@@ -2,6 +2,8 @@ migrationManager:
   leaderThreshold: 5
   followerThreshold: 5
   viewSize: 5
+  idleTimeoutMs: 1000
+  gravityConstant: 9.81
 
 redis:
   host: "localhost"

@@ -16,7 +16,7 @@ func myTPenalityFunc(bufferPos int, currentValue int) int {
 	return currentValue
 }
 
-func testSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, info.Serverinfo) {
+func testSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo) {
 	migrationManagerConfig := config.MigrationManagerConfig{
 		LeaderThreshold:   0,
 		FollowerThreshold: 1,
@@ -25,11 +25,14 @@ func testSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, 
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
-	serverinfo := info.Serverinfo{
-		Name:     "Name",
-		Father:   "fName",
-		Children: []string{},
-		Secret:   "ermes-secret",
+	serverinfo := info.ServerInfo{
+		Node:   info.Node{Address: "Name", MetadataDomain: "Domain"},
+		Father: &info.Node{Address: "fName", MetadataDomain: "fDomain"},
+		Children: []info.Node{
+			{Address: "child1", MetadataDomain: "Domain"},
+			{Address: "child2", MetadataDomain: "Domain"},
+		},
+		Secret: "ermes-secret",
 	}
 
 	return migrationManagerConfig, collections, serverinfo

@@ -16,7 +16,7 @@ func myT1PenalityFunc(bufferPos int, currentValue int) int {
 	return currentValue - bufferPos
 }
 
-func migTestSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, info.Serverinfo) {
+func migTestSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo) {
 	migrationManager.ResetSingleton()
 	migrationManagerConfig := config.MigrationManagerConfig{
 		LeaderThreshold:   0,
@@ -27,11 +27,15 @@ func migTestSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialVie
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
-	serverinfo := info.Serverinfo{
-		Name:     "Name",
-		Father:   "fName",
-		Children: []string{"child1", "child2"},
-		Secret:   "ermes-secret",
+
+	serverinfo := info.ServerInfo{
+		Node:   info.Node{Address: "Name", MetadataDomain: "Domain"},
+		Father: &info.Node{Address: "fName", MetadataDomain: "fDomain"},
+		Children: []info.Node{
+			{Address: "child1", MetadataDomain: "Domain"},
+			{Address: "child2", MetadataDomain: "Domain"},
+		},
+		Secret: "ermes-secret",
 	}
 
 	return migrationManagerConfig, collections, serverinfo

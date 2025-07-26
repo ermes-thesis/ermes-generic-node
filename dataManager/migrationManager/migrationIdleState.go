@@ -77,6 +77,5 @@ func (m *MigrationManagerImp) stopIdleTimer() {
 
 // resetIdleTimer resets the idle timer when activity occurs
 func (m *MigrationManagerImp) resetIdleTimer() {
-	m.lastActivityTime = time.Now()
 	m.startIdleTimer()
 }

@@ -26,12 +26,12 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 	fmt.Println("Auto-transitioning from decision to idle state")
 
 	for value := range m.MigrationManagerImp.serverInfo.Children {
-		msgToChild := gossip.NewLeaderDelegaMessage(m.MigrationManagerImp.serverInfo.Name)
+		msgToChild := gossip.NewLeaderDelegaMessage(m.MigrationManagerImp.serverInfo.Address)
 		fmt.Println(value, msgToChild)
 		//TODO:= send message to child
 	}
 
-	if m.MigrationManagerImp.serverInfo.Father != "nil" {
+	if m.MigrationManagerImp.serverInfo.Father != nil {
 		//TODO:= measure mem. state and send to father
 		//msgToFather := gossip.NewChildStateMessage(m.MigrationManagerImp.serverInfo.Name, )
 	}

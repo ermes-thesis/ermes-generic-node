@@ -3,7 +3,7 @@ package migrationManager
 import (
 	gossip "dataManager/migrationManager/gossipMessages"
 	shared "dataManager/shared"
-	"server/info"
+	info "server/info"
 	"sync"
 	"time"
 
@@ -27,7 +27,7 @@ type MigrationManager interface {
 type MigrationManagerImp struct {
 	//config
 	config     config.MigrationManagerConfig
-	serverInfo info.Serverinfo
+	serverInfo info.ServerInfo
 
 	//state
 	currentState MigrationManagerState
@@ -37,9 +37,9 @@ type MigrationManagerImp struct {
 	decisionState MigrationManagerState
 
 	//timing for auto transition
-	lastActivityTime time.Time
-	stateTimer       *time.Timer
-	timerMutex       sync.Mutex
+	//lastActivityTime time.Time
+	stateTimer *time.Timer
+	timerMutex sync.Mutex
 
 	//impl
 	unstableEquilibriumState map[string]map[string]*CircularBuffer //mapping resource - child
@@ -65,7 +65,7 @@ func GetMigrationManagerInstance() *MigrationManagerImp {
 	return migrationManagareInstance
 }
 
-func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc PenalityFunc, config config.MigrationManagerConfig, serverInfo info.Serverinfo) {
+func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc PenalityFunc, config config.MigrationManagerConfig, serverInfo info.ServerInfo) {
 	//sync
 	lock.Lock()
 	defer lock.Unlock()

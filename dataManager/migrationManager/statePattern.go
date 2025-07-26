@@ -30,7 +30,7 @@ func (m *MigrationManagerImp) transitionToGossip() {
 	// Only transition if still in idle state
 	if _, isIdle := m.currentState.(*MigrationManagerIdleState); isIdle {
 		fmt.Println("Auto-transitioning from idle to gossip state")
-		m.gossipState.Setup(len(m.serverInfo.Children) + 1) //number of adjacent nodes
+		m.gossipState.Setup(len(m.serverInfo.Children) + 1) //number of adjacent nodes - TODO: manage cloud nodes.
 		m.setState(m.gossipState)
 		m.stopIdleTimer()
 	}

@@ -32,17 +32,6 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-<<<<<<< HEAD
-=======
-	//node set up
-	collections := &dataManagerShared.CollectionPartialView{
-		KnowedCollections: make(map[string]dataManagerShared.Collection),
-	}
-	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
-	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager)
-	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
-	clDiscovererIstance.Init(collections)
-
 	serverInfo, err := info.NewServerInfo(args)
 	if err != nil {
 		return fmt.Errorf("error creating server info: %w", err)
@@ -51,7 +40,6 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	redisClient := db.NewRedisClient(config.Redis, ctx)
 	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w)
 
->>>>>>> origin/main
 	//Run server
 	ser, err := server.NewServer(w, serverInfo, redisClient, metadataLookup)
 
@@ -77,7 +65,7 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 		KnowedCollections: make(map[string]dataManagerShared.Collection),
 	}
 	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
-	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, ser.Serverinfo)
+	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, *ser.Serverinfo)
 	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscovererIstance.Init(collections)
 

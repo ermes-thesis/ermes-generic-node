@@ -35,9 +35,11 @@ func (m *MigrationManagerImp) GetDecisionState() MigrationManagerState {
 }
 
 func (m *MigrationManagerDecisionState) ComputeReadElasticForce(cb *CircularBuffer) int {
-	return m.computeElasticForce(cb, getRead)
+	res, _ := m.computeElasticForce(cb, getRead)
+	return res
 }
 
 func (m *MigrationManagerDecisionState) ComputeWriteElasticForce(cb *CircularBuffer) int {
-	return m.computeElasticForce(cb, getWrite)
+	res, _ := m.computeElasticForce(cb, getWrite)
+	return res
 }

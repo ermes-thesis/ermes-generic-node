@@ -85,7 +85,7 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 
 		for innerKey, buffer := range innerMap {
 			if strongCollection.IsLeader && !leaderDelega {
-				leaderDelega = m.leaderDecision(innerKey, buffer, strongCollection, totalForce)
+				leaderDelega = m.leaderDecision(innerKey, buffer, strongCollection, totalForce, totalReqNumber)
 			}
 			m.replicDecision(innerKey, buffer, strongCollection)
 		}

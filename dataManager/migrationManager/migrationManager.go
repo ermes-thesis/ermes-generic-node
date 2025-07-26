@@ -78,8 +78,8 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	m.penalityFunc = penalityFunc
 	//init states
 	m.idleState = &MigrationManagerIdleState{m}
-	m.gossipState = &MigrationManagerGossipState{m, 0, make([]childStateInfo, 0)}
-	m.decisionState = &MigrationManagerDecisionState{m}
+	m.gossipState = &MigrationManagerGossipState{m, 0, make(map[string]childStateInfo, 0)}
+	m.decisionState = &MigrationManagerDecisionState{m, make(map[string]childStateInfo, 0)}
 
 	m.currentState = m.idleState
 
@@ -114,8 +114,8 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, collect
 	return false
 }
 
-func (m *MigrationManagerImp) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	m.currentState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
+func (m *MigrationManagerImp) ManageNewStrongRequest(collectionId string, nodeName string, isWrite bool, requestLatency int) {
+	m.currentState.ManageNewStrongRequest(collectionId, nodeName, isWrite, requestLatency)
 }
 
 func (m *MigrationManagerImp) ManageGossipMessage(msg gossip.GossipMessage) {

@@ -13,6 +13,11 @@ type MigrationManagerState interface {
 	Setup(args ...any)
 }
 
+type childStateInfo struct {
+	MemoryUsage float64
+	DiskUsage   float64
+}
+
 func (m *MigrationManagerImp) setState(s MigrationManagerState) {
 	m.currentState = s
 }
@@ -31,10 +36,11 @@ func (m *MigrationManagerImp) transitionToGossip() {
 	}
 }
 
-func (m *MigrationManagerImp) transitionToDecision(childrenResourceUsage []childStateInfo) {
+func (m *MigrationManagerImp) transitionToDecision(childrenResourceUsage map[string]childStateInfo) {
 	// Only transition if still in gossip state
 	if _, isGossip := m.currentState.(*MigrationManagerGossipState); isGossip {
 		fmt.Println("Auto-transitioning from gossip to decision state")
+		m.decisionState.Setup(childrenResourceUsage)
 		m.setState(m.decisionState)
 	}
 }

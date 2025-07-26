@@ -9,13 +9,7 @@ import (
 type MigrationManagerGossipState struct {
 	MigrationManagerImp   *MigrationManagerImp
 	missingMessageCounter int
-	childrenResourceUsage []childStateInfo
-}
-
-type childStateInfo struct {
-	childName   string
-	MemoryUsage float64
-	DiskUsage   float64
+	childrenResourceUsage map[string]childStateInfo
 }
 
 func (m *MigrationManagerGossipState) Setup(args ...any) {
@@ -27,7 +21,7 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 		panic("expected int for counter")
 	}
 	m.missingMessageCounter = counter
-	m.childrenResourceUsage = make([]childStateInfo, 0)
+	m.childrenResourceUsage = make(map[string]childStateInfo, 0)
 
 	fmt.Println("Auto-transitioning from decision to idle state")
 
@@ -101,11 +95,11 @@ func (m *MigrationManagerGossipState) ManageGossipMessage(msg gossip.GossipMessa
 // save memory and state info from the child in order to take further decisions
 func (m *MigrationManagerGossipState) manageChildGossipMessage(msg gossip.ChildStateMessage) {
 	childStateInfo := childStateInfo{
-		childName:   msg.GetSenderID(),
+		//childName:   msg.GetSenderID(),
 		MemoryUsage: msg.MemoryUsage,
 		DiskUsage:   msg.DiskUsage,
 	}
-	m.childrenResourceUsage = append(m.childrenResourceUsage, childStateInfo)
+	m.childrenResourceUsage[msg.GetSenderID()] = childStateInfo
 }
 
 func (m *MigrationManagerGossipState) manageAnchestorGossipMessage(msg gossip.LeaderDelegaMessage) {

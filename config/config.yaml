@@ -1,0 +1,11 @@
+migrationManager:
+  leaderThreshold: 5
+  followerThreshold: 5
+  viewSize: 5
+
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+  protocol: 2

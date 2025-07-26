@@ -10,12 +10,21 @@ import (
 // config data structures
 type Config struct {
 	MigrationManager MigrationManagerConfig `yaml:"migrationManager"`
+	Redis            RedisConfig            `yaml:"redis"`
 }
 
 type MigrationManagerConfig struct {
 	LeaderThreshold   int `yaml:"leaderThreshold"`
 	FollowerThreshold int `yaml:"followerThreshold"`
 	ViewSize          int `yaml:"viewSize"`
+}
+
+type RedisConfig struct {
+	Address  string `yaml:"address"`
+	Port     string `yaml:"port"`
+	Password string `yaml:"password"`
+	DB       int    `yaml:"db"`
+	Protocol int    `yaml:"protocol"`
 }
 
 func LoadConfig(filename string) Config {

@@ -6,14 +6,17 @@ import (
 	clDiscoverer "dataManager/collectionsDiscoverer"
 	migrationManager "dataManager/migrationManager"
 	dataManagerShared "dataManager/shared"
+	"db"
 	"fmt"
 	"io"
+	"metadataManager"
 	"net"
 
 	"net/http"
 	"os"
 	"os/signal"
 	"server"
+	"server/info"
 	"sync"
 	"time"
 )
@@ -38,8 +41,16 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscovererIstance.Init(collections)
 
+	serverInfo, err := info.NewServerInfo(args)
+	if err != nil {
+		return fmt.Errorf("error creating server info: %w", err)
+	}
+
+	redisClient := db.NewRedisClient(config.Redis, ctx)
+	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w)
+
 	//Run server
-	ser, err := server.NewServer(args, w)
+	ser, err := server.NewServer(w, serverInfo, redisClient, metadataLookup)
 
 	if err != nil {
 		return err

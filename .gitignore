@@ -13,6 +13,13 @@
 !*.go
 !go.sum
 !go.mod
+!docker-compose.yml
+!go.work*
+
+#Include config file
+!config/config.yaml
+
+!.github/**
 
 # Any md file can be added
 !*.md
@@ -22,3 +29,6 @@
 
 # ...even if they are in subdirectories
 !*/
+
+# Include mockery file
+!.mockery.yml

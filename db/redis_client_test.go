@@ -310,6 +310,7 @@ func TestMemoryStress(t *testing.T) {
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
+	err := redisClient.SetCollection("collection1", nil, nil)
 	fmt.Println("Starting...")
 	for i := 5; i < 1000; i++ {
 		names := make([]string, 1000)

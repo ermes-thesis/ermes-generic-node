@@ -25,10 +25,12 @@ jobs:
       - name: Install mockery
         run: go install github.com/vektra/mockery/v3@latest
 
-
       - name: Generate mocks
         run: |
           cd metadataManager
+          mockery
+          cd ..
+          cd db
           mockery
           cd ..
 

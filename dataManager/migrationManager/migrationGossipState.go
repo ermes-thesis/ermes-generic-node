@@ -45,8 +45,8 @@ func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string
 
 func (m *MigrationManagerGossipState) ManageGossipMessage(msg gossip.GossipMessage) {
 	//sync
-	m.MigrationManagerImp.timerMutex.Lock()
-	defer m.MigrationManagerImp.timerMutex.Unlock()
+	lock.Lock()
+	defer lock.Unlock()
 
 	//imp
 	switch parsed := msg.(type) {

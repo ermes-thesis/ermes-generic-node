@@ -9,6 +9,7 @@ import (
 	migrationManager "dataManager/migrationManager"
 	gossip "dataManager/migrationManager/gossipMessages"
 	shared "dataManager/shared"
+	mockDb "db/mocks"
 	"server/info"
 	"testing"
 )
@@ -17,13 +18,14 @@ func myT1PenalityFunc(bufferPos int, currentValue int) int {
 	return currentValue - bufferPos
 }
 
-func migTestSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection]) {
+func migTestSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB) {
 	migrationManagerConfig := config.MigrationManagerConfig{
 		LeaderThreshold:   0,
 		FollowerThreshold: 1,
 		ViewSize:          3,
 		IdleTimeoutMs:     100000000000,
 	}
+	db := mockDb.NewGenericDB(t)
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
@@ -38,16 +40,16 @@ func migTestSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialVie
 		Secret: "ermes-secret",
 	}
 	migrationManager.ResetSingleton()
-	return migrationManagerConfig, collections, serverinfo, &lruCache
+	return migrationManagerConfig, collections, serverinfo, &lruCache, db
 }
 
 func TestSingletonInstance(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache := testSetUp()
+	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 	instance2 := migrationManager.GetMigrationManagerInstance()
-	instance2.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache)
+	instance2.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 
 	if instance1 == nil {
 		t.Fatal("Expected non-nil instance from GetMigrationManagerIstance")
@@ -63,10 +65,10 @@ func TestSingletonInstance(t *testing.T) {
 }
 
 func TestManageNewStrongRequest(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache := testSetUp()
+	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 	instance1.NewCollectionReceived("repoId", 10, true)
 	instance1.NewCollectionReceived("repoId1", 10, true)
 
@@ -111,10 +113,10 @@ func TestManageNewStrongRequest(t *testing.T) {
 }
 
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache := testSetUp()
+	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 	instance1.NewCollectionReceived("repoId", 10, true)
 	instance1.NewCollectionReceived("repoId1", 10, true)
 
@@ -137,10 +139,10 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 }
 
 func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache := testSetUp()
+	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 	instance1.NewCollectionReceived("repoId", 10, true)
 	instance1.NewCollectionReceived("repoId1", 10, true)
 
@@ -174,10 +176,10 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 }
 
 func TestMigrationFromIdleToGossipAfterReceiveAMessage(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache := testSetUp()
+	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 
 	msg := gossip.NewChildStateMessage("senderId", 0.0, 0.0)
 	instance1.ManageGossipMessage(msg)

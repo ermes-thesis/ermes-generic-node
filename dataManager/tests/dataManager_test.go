@@ -9,6 +9,7 @@ import (
 	lru "dataManager/lru"
 	migrationManager "dataManager/migrationManager"
 	shared "dataManager/shared"
+	mockDb "db/mocks"
 	"server/info"
 	"testing"
 )
@@ -17,12 +18,13 @@ func myTPenalityFunc(bufferPos int, currentValue int) int {
 	return currentValue
 }
 
-func testSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection]) {
+func testSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB) {
 	migrationManagerConfig := config.MigrationManagerConfig{
 		LeaderThreshold:   0,
 		FollowerThreshold: 1,
 		ViewSize:          3,
 	}
+	db := mockDb.NewGenericDB(t)
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
@@ -37,14 +39,14 @@ func testSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, 
 		Secret: "ermes-secret",
 	}
 
-	return migrationManagerConfig, collections, serverinfo, &lruCache
+	return migrationManagerConfig, collections, serverinfo, &lruCache, db
 }
 
 func TestFromRemoteToLocalCollection(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache := testSetUp()
+	migrationManagerConfig, collections, serverinfo, lruCache, db := testSetUp(t)
 
 	mig := migrationManager.GetMigrationManagerInstance()
-	mig.Init(collections, myTPenalityFunc, migrationManagerConfig, serverinfo, lruCache)
+	mig.Init(collections, myTPenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 	clDiscoverer := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscoverer.Init(collections)
 	mig.ManageNewRequest("repoId", "childName", true, 3)

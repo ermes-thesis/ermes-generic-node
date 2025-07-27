@@ -3,6 +3,7 @@ package migrationManager
 import (
 	gossip "dataManager/migrationManager/gossipMessages"
 	shared "dataManager/shared"
+	"sync"
 )
 
 // - Decision state -> in this state the Migration manager ingore all the messages, take decisions on collection migration; consume the stack
@@ -29,8 +30,8 @@ func (m *MigrationManagerDecisionState) Setup(args ...any) {
 // TODO: valutare se ha senso inserire in stack senza lock e poi parsare stack dopo
 func (m *MigrationManagerDecisionState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
 	//sync -> all op in MigrationManagerDecisionState are sync => lock == wait until all decsion are taken
-	m.MigrationManagerImp.timerMutex.Lock()
-	defer m.MigrationManagerImp.timerMutex.Unlock()
+	lock.Lock()
+	defer lock.Unlock()
 
 	//imp
 	m.MigrationManagerImp.idleState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
@@ -66,6 +67,14 @@ func getWrite(cb *CircularBuffer, idx int) resourceUsage {
 }
 
 func (m *MigrationManagerDecisionState) computeEqState() {
+	//sync
+	m.MigrationManagerImp.collectionsPartialView.Mutex.Lock()
+	defer m.MigrationManagerImp.collectionsPartialView.Mutex.Unlock()
+
+	//imp
+	var wg sync.WaitGroup
+	wg.Add(len(m.MigrationManagerImp.unstableEquilibriumState))
+
 	for outerKey, innerMap := range m.MigrationManagerImp.unstableEquilibriumState {
 		//apply decision only on strong local collections
 		if m.MigrationManagerImp.collectionsPartialView.KnowedCollections[outerKey] == nil ||
@@ -74,48 +83,79 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 			continue
 		}
 
-		strongCollection := m.MigrationManagerImp.collectionsPartialView.KnowedCollections[outerKey].(*shared.StrongCollection)
-		leaderDelega := false
+		//take decision on a secondary thread
+		go m.innerKeyDecision(outerKey, innerMap, &wg)
 
-		//compute total forces sum -> value that must be outclassed to delegate the leader
-		var totalForce = 0
-		var totalReqNumber = 0
+	}
+
+	//wait for all the decision to ends
+	wg.Wait()
+}
+
+func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerMap map[string]*CircularBuffer, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	strongCollection := m.MigrationManagerImp.collectionsPartialView.KnowedCollections[outerKey].(*shared.StrongCollection)
+
+	//compute total forces sum -> value that must be outclassed to delegate the leader
+	var totalForce = 0
+	var totalReqNumber = 0
+	if strongCollection.IsLeader {
+		for _, buffer := range innerMap {
+			force, req := m.computeElasticForce(buffer, getWrite)
+			totalForce += force
+			totalReqNumber += req
+		}
+		totalForce += m.MigrationManagerImp.config.LeaderThreshold
+	}
+
+	for innerKey, buffer := range innerMap {
 		if strongCollection.IsLeader {
-			for _, buffer := range innerMap {
-				force, req := m.computeElasticForce(buffer, getWrite)
-				totalForce += force
-				totalReqNumber += req
-			}
-			totalForce += m.MigrationManagerImp.config.LeaderThreshold
-		}
-
-		for innerKey, buffer := range innerMap {
-			if strongCollection.IsLeader && !leaderDelega {
-				leaderDelega = m.leaderDecision(innerKey, buffer, strongCollection, totalForce, totalReqNumber)
-			}
-			m.replicDecision(innerKey, buffer, strongCollection)
-
-			//after taking all the decision skip to next round for this buffer
-			//if the collection is still locally present
-			if !leaderDelega {
-				buffer.Movehead()
+			//if the collection has been moved and removed locally
+			if m.leaderDecision(outerKey, innerKey, buffer, strongCollection, totalForce, totalReqNumber) {
+				break
 			}
 		}
+
+		m.replicDecision(outerKey, innerKey, buffer, strongCollection)
+
+		//after taking all the decision skip to next round for this buffer
+		buffer.Movehead()
 
 	}
 }
 
 // return true if the leader has been moved (only 1 direction can return true)
-func (m *MigrationManagerDecisionState) leaderDecision(innerKey string, buffer *CircularBuffer, strongCollection *shared.StrongCollection, totalForce int, totalReq int) bool {
+func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey string, buffer *CircularBuffer, strongCollection *shared.StrongCollection, totalForce int, totalReq int) bool {
+	//compute decision
 	feW, _ := m.computeElasticForce(buffer, getWrite)
 	var driverForce = float64(2*feW) - (m.childResourceUsage[innerKey].MemoryUsage * m.MigrationManagerImp.config.GravityConstant) - float64(totalReq) //TODO: moltiplicaremper distanza geografica
 
-	//TODO: inviare la collection e rimuovere localmente.
+	//evaluate decision
+	if driverForce <= float64(totalForce) {
+		return false
+	}
 
-	return driverForce > float64(totalForce)
+	//react to positive decision
+	//get collection from redis instance
+	res, groups, err := m.MigrationManagerImp.dbInterface.GetCollection(outerKey)
+	if err != nil {
+		panic(err)
+	}
+	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
+	m.MigrationManagerImp.sendRemoteCollectionTo(innerKey, strongCollection, res, groups)
+
+	//remove collection from redis instance
+	m.MigrationManagerImp.dbInterface.DeleteCollection(outerKey)
+
+	//set the collection as remote only in the node partial view
+	strongCollection.SetToRemote()
+
+	return true
 }
 
-func (m *MigrationManagerDecisionState) replicDecision(innerKey string, buffer *CircularBuffer, strongCollection *shared.StrongCollection) bool {
+func (m *MigrationManagerDecisionState) replicDecision(outerKey string, innerKey string, buffer *CircularBuffer, strongCollection *shared.StrongCollection) bool {
+	//compute decision
 	feR, _ := m.computeElasticForce(buffer, getRead)
 	resistance := (m.childResourceUsage[innerKey].MemoryUsage * m.MigrationManagerImp.config.GravityConstant) + float64(m.MigrationManagerImp.config.FollowerThreshold)
 

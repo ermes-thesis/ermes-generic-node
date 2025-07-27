@@ -5,6 +5,7 @@ import (
 	lru "dataManager/lru"
 	gossip "dataManager/migrationManager/gossipMessages"
 	shared "dataManager/shared"
+	db "db"
 	info "server/info"
 	"sync"
 	"time"
@@ -39,13 +40,13 @@ type MigrationManagerImp struct {
 
 	//timing for auto transition
 	stateTimer *time.Timer
-	timerMutex sync.Mutex
 
 	//impl
-	unstableEquilibriumState map[string]map[string]*CircularBuffer //mapping resource - child
+	unstableEquilibriumState map[string]map[string]*CircularBuffer //mapping resource - nodeName
 	collectionsPartialView   *shared.CollectionPartialView         //set of local and remotes collections
 
-	lruCache *lru.LRUCache[shared.Collection]
+	lruCache    *lru.LRUCache[shared.Collection]
+	dbInterface db.GenericDB
 
 	//used to define a penalization factor for past data -> func(bufferPos int, currentValue int)
 	penalityFunc PenalityFunc
@@ -69,7 +70,7 @@ func GetMigrationManagerInstance() *MigrationManagerImp {
 	return migrationManagareInstance
 }
 
-func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc PenalityFunc, config config.MigrationManagerConfig, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection]) {
+func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc PenalityFunc, config config.MigrationManagerConfig, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB) {
 	//sync
 	lock.Lock()
 	defer lock.Unlock()
@@ -78,6 +79,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		return
 	}
 	m.serverInfo = serverInfo
+	m.dbInterface = dbInterface
 	m.lruCache = lruCache
 	m.config = config
 	m.penalityFunc = penalityFunc
@@ -132,4 +134,14 @@ func (m *MigrationManagerImp) ManageNewRequest(collectionId string, nodeName str
 	if m.collectionsPartialView.KnowedCollections[collectionId].IsStrong() {
 		m.currentState.ManageNewStrongRequest(collectionId, nodeName, isWrite, requestLatency)
 	}
+}
+
+func (m *MigrationManagerImp) sendRemoteCollectionTo(nodeName string, collection shared.Collection, res map[string]string, groups []string) {
+	//sync -> avoid send a collection if used
+	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+
+	//imp
+	collection.AddHost(nodeName)
+	//TODO send to node
 }

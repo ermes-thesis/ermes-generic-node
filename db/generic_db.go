@@ -50,6 +50,27 @@ type GenericDB interface {
 	//			 Non-existent records will have nil values in the returned slice.
 	//	- error: non-nil if the operation fails
 	GetRecords(collectionId string, recordNames ...string) ([]any, error)
+	// SetRecords stores multiple records in the specified collection in a single operation.
+	// The record keys are automatically tracked in the collection's information.
+	//
+	// Parameters:
+	//	- collectionId: the unique identifier of the collection
+	//	- recordNames: slice of record names/keys to store
+	//	- recordValues: slice of record values to store (must match recordNames length)
+	//
+	// Returns:
+	//	- error: non-nil if the operation fails or if recordNames and recordValues
+	//			 have different lengths or if the collection does not exist
+	SetRecords(collectionId string, recordNames []string, recordValues []string) error
+	// RecordExists checks whether a specific record exists in the given collection.
+	//
+	// Parameters:
+	//	- collectionId: the unique identifier of the collection
+	//	- recordName: the name/key of the record to check
+	//
+	// Returns:
+	//	- bool: true if the record exists, false if the record or collection doesn't exist
+	//	- error: non-nil if the check operation fails
 	RecordExists(collectionId string, recordName string) (bool, error)
 	// DeleteRecords removes the specified records from a collection.
 	// The operation automatically updates the collection's key tracking information.
@@ -203,6 +224,42 @@ type GenericDB interface {
 	// Existing indexed fields remain unchanged.
 	AlterIndex(customMetadataKeys ...string) error
 
+	// GetMemoryStats retrieves detailed memory usage statistics from the underlying
+	// database system. The exact statistics returned depend on the implementation.
+	//
+	// Returns:
+	//	- *MemStats: pointer to memory statistics object
+	//	- error: non-nil if the statistics retrieval fails
+	GetMemoryStats() (*MemStats, error)
+	// GetCollectionMemoryUsage calculates the total memory usage of a collection
+	// including all its records and associated information (keys tracking, groups, and
+	// collection existence).
+	//
+	// Parameters:
+	//	- collectionId: the unique identifier of the collection
+	//
+	// Returns:
+	//	- uint64: total memory usage in bytes (0 if collection doesn't exist)
+	//	- error: non-nil if the memory calculation operation fails
+	GetCollectionMemoryUsage(collectionId string) (uint64, error)
+	// GetRecordMemoryUsage calculates the memory usage of a specific record
+	// within a collection.
+	//
+	// Parameters:
+	//	- collectionId: the unique identifier of the collection
+	//	- recordName: the name/key of the record to measure
+	//
+	// Returns:
+	//	- uint64: memory usage of the record in bytes (0 if record doesn't exist)
+	//	- error: non-nil if the memory calculation operation fails
+	GetRecordMemoryUsage(collectionId string, recordName string) (uint64, error)
+
+	// Close closes the database connection and releases all associated resources.
+	// The GenericDB instance should not be used after calling Close.
+	// Multiple calls to Close should be safe and idempotent.
+	//
+	// Returns:
+	//	- error: non-nil if the close operation fails
 	Close() error
 }
 

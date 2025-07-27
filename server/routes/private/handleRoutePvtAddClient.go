@@ -68,7 +68,7 @@ func HandleRoutePvtAddClient(logger *io.Writer, serverinfo *info.ServerInfo, rep
 			return
 		}
 
-		req.Header.Set("X-ERMES-SECRET", serverinfo.Secret)
+		req.Header.Set("X-ERMES-SECET", serverinfo.Secret)
 
 		res, err := http.DefaultClient.Do(req)
 

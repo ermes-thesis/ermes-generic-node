@@ -2,27 +2,29 @@ package server
 
 import (
 	"bytes"
+	"db"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"metadataManager"
 	"net/http"
 	"os"
 	"server/clientrepo"
 	"server/info"
-	"slices"
-	"strconv"
 )
 
 type Server struct {
-	Serverinfo info.Serverinfo
-	Port       string
-	Logger     io.Writer
-	Handler    *http.ServeMux
-	ClientRepo *clientrepo.ClientRepo
+	Serverinfo      *info.ServerInfo
+	Port            string
+	Logger          io.Writer
+	Handler         *http.ServeMux
+	ClientRepo      *clientrepo.ClientRepo
+	RedisClient     db.GenericDB
+	MetadataManager metadataManager.MetadataManager
 }
 
-func NewServer(args []string, logger io.Writer) (*Server, error) {
+func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.GenericDB, metadataManager metadataManager.MetadataManager) (*Server, error) {
 
 	fmt.Fprintf(logger, "Creating a new Server instance... \n")
 
@@ -30,46 +32,16 @@ func NewServer(args []string, logger io.Writer) (*Server, error) {
 
 	fmt.Fprintf(logger, "Mux created correctly \n")
 
-	fmt.Fprintf(logger, "Parsing input arguments... ")
-
-	// Extract the information of port, name, parent, children in this order
-
-	if len(args) < 5 {
-		return nil, errors.New("too few arguments in the program, cannot launch correctly")
-	}
-
-	// Parse first argument
-	port, err := strconv.Atoi(args[1])
-
-	if err != nil || port < 1 {
-		return nil, errors.New("first argument of the program must be a non-negative integer")
-	}
-
-	// Parse info about the name, parent and children
-	// TODO: check if convention on names is respected (which we do not have yet)
-
-	// NB: these operations just copy the references !
-	name := args[2]
-	parent := args[3]
-	children := args[4:]
-
-	serverinfo := info.Serverinfo{
-		Name:     name,
-		Father:   parent,
-		Children: children,
-		Secret:   "ermes-secret", // For the moment leave it hardcoded
-	}
-
-	fmt.Fprintf(logger, "done \n")
-
 	fmt.Fprintf(logger, "Creating server data structure... ")
 
 	ser := &Server{
-		Serverinfo: serverinfo,
-		Port:       args[1],
-		Logger:     logger,
-		Handler:    mux,
-		ClientRepo: clientrepo.CreateClientRepo(),
+		Serverinfo:      serverInfo,
+		Port:            serverInfo.Address,
+		Logger:          logger,
+		Handler:         mux,
+		ClientRepo:      clientrepo.CreateClientRepo(),
+		RedisClient:     redisClient,
+		MetadataManager: metadataManager,
 	}
 
 	fmt.Fprintf(logger, "done \n")
@@ -92,7 +64,17 @@ func (this *Server) CreateDataMovementHTTPRequest(nodeTo string, key string, val
 
 	fmt.Fprintf(this.Logger, "got a request to send the data to another node \n")
 
-	if this.Serverinfo.Father != nodeTo && !slices.Contains(this.Serverinfo.Children, nodeTo) {
+	// Check if the node is valid TODO: refactor with slices if possible
+
+	ok := false
+
+	for _, elem := range this.Serverinfo.Children {
+		if elem.Address == nodeTo {
+			ok = true
+		}
+	}
+
+	if this.Serverinfo.Father.Address != nodeTo && !ok {
 
 		fmt.Fprintf(this.Logger, "request should be sent to %s , which is not a known node. \n", nodeTo)
 
@@ -105,7 +87,7 @@ func (this *Server) CreateDataMovementHTTPRequest(nodeTo string, key string, val
 
 	// Wrap the information in the serializable type
 
-	reqBody := info.DataMovementRequestConstructor(nodeTo, this.Serverinfo.Name, key, value)
+	reqBody := info.DataMovementRequestConstructor(nodeTo, this.Serverinfo.Address, key, value)
 
 	// Convert to json
 
@@ -130,7 +112,7 @@ func (this *Server) CreateDataMovementHTTPRequest(nodeTo string, key string, val
 	// Prepare the headers
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-ERMES-SECRET", this.Serverinfo.Father)
+	req.Header.Set("X-ERMES-SECRET", this.Serverinfo.Father.Address)
 
 	fmt.Fprintf(this.Logger, "Request is ready, now sending it ...\n")
 

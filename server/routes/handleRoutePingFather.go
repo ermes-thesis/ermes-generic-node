@@ -8,7 +8,7 @@ import (
 	"server/info"
 )
 
-func handleRoutePingFather(logger *io.Writer, serverinfo *info.Serverinfo) http.Handler {
+func handleRoutePingFather(logger *io.Writer, serverinfo *info.ServerInfo) http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(*logger, "got /pingFather \n")

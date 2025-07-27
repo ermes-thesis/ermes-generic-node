@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httputil"
 	"os"
 	"server/clientrepo"
 	"server/helper"
 	"server/info"
 )
 
-func HandleRouteAddClient(logger *io.Writer, serverinfo *info.Serverinfo, repo *clientrepo.ClientRepo) http.HandlerFunc {
+func HandleRouteAddClient(logger *io.Writer, serverinfo *info.ServerInfo, repo *clientrepo.ClientRepo) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(*logger, "got /add-client \n")
 
@@ -23,7 +24,7 @@ func HandleRouteAddClient(logger *io.Writer, serverinfo *info.Serverinfo, repo *
 
 		fathername := serverinfo.Father
 
-		if fathername == "nil" {
+		if fathername == nil {
 
 			fmt.Fprintf(*logger, "We are at the top of the network. The user will be created and the result returned.\n")
 
@@ -59,6 +60,7 @@ func HandleRouteAddClient(logger *io.Writer, serverinfo *info.Serverinfo, repo *
 		fmt.Fprintf(*logger, "Sending a request to the father, located at %s \n", reqUrl)
 
 		req, err := http.NewRequest(http.MethodGet, reqUrl, nil)
+		req.Header.Set("X-ERMES-SECRET", serverinfo.Secret)
 
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when creating the http request: %s \n", err)
@@ -80,13 +82,13 @@ func HandleRouteAddClient(logger *io.Writer, serverinfo *info.Serverinfo, repo *
 
 		fmt.Fprintf(*logger, "Got a response from the father! \n")
 
-		// reqDump, err := httputil.DumpResponse(res, true)
-		// if err != nil {
-		// 	fmt.Fprintf(os.Stderr, "Error when dumping the request: %s", err)
-		// 	return
-		// }
+		reqDump, err := httputil.DumpResponse(res, true)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error when dumping the request: %s", err)
+			return
+		}
 
-		// fmt.Printf("REQUEST:\n%s", string(reqDump))
+		fmt.Printf("REQUEST:\n%s", string(reqDump))
 
 		// The father will contain in its body the user id, so we need to deserialize it
 

@@ -1,24 +1,56 @@
 package main
 
 import (
+	"config"
 	"context"
+	clDiscoverer "dataManager/collectionsDiscoverer"
+	migrationManager "dataManager/migrationManager"
+	dataManagerShared "dataManager/shared"
+	"db"
 	"fmt"
 	"io"
+	"metadataManager"
 	"net"
+
 	"net/http"
 	"os"
 	"os/signal"
 	"server"
+	"server/info"
 	"sync"
 	"time"
 )
 
+// TODO replace
+func myPenalityFunc(bufferPos int, currentValue int) int {
+	return currentValue
+}
+
 func run(ctx context.Context, w io.Writer, args []string) error {
+	config := config.LoadConfig("../config/config.yaml")
+
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
+	//node set up
+	collections := &dataManagerShared.CollectionPartialView{
+		KnowedCollections: make(map[string]dataManagerShared.Collection),
+	}
+	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
+	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager)
+	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
+	clDiscovererIstance.Init(collections)
+
+	serverInfo, err := info.NewServerInfo(args)
+	if err != nil {
+		return fmt.Errorf("error creating server info: %w", err)
+	}
+
+	redisClient := db.NewRedisClient(config.Redis, ctx)
+	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w)
+
 	//Run server
-	ser, err := server.NewServer(args, w)
+	ser, err := server.NewServer(w, serverInfo, redisClient, metadataLookup)
 
 	if err != nil {
 		return err

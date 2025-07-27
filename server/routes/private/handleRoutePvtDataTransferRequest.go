@@ -9,7 +9,7 @@ import (
 	"server/info"
 )
 
-func HandleRoutePvtDataTransferRequest(logger *io.Writer, serverinfo *info.Serverinfo) http.HandlerFunc {
+func HandleRoutePvtDataTransferRequest(logger *io.Writer, serverInfo *info.ServerInfo) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		fmt.Fprintf(*logger, "got /data-transfer-request")

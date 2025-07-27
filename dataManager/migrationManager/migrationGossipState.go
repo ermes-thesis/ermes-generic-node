@@ -40,42 +40,15 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 
 // methods
 func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	if m.MigrationManagerImp.collectionsPartialView.KnowedCollections[collectionId] == nil || !m.MigrationManagerImp.collectionsPartialView.KnowedCollections[collectionId].IsStrong() {
-		//if no local info on the collection of if the collection is not of strong type
-		return
-	}
-
-	//sync
-	m.MigrationManagerImp.collectionsPartialView.Mutex.Lock()
-	defer m.MigrationManagerImp.collectionsPartialView.Mutex.Unlock()
-
-	//imp
-	if m.MigrationManagerImp.unstableEquilibriumState[collectionId] == nil { //first time accessing resource in general
-		m.MigrationManagerImp.unstableEquilibriumState[collectionId] = make(map[string]*CircularBuffer)
-		//m.MigrationManagerImp.addNewRemoteCollection(collectionId, "fatherName") //TODO: change with real name
-	}
-
-	resUsage, exists := m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName]
-	if !exists { //first time accessing resource from a child
-		resUsage = NewCircularBuffer(m.MigrationManagerImp.config.ViewSize)
-		m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName] = resUsage
-		resUsage.Add(NewChildResourceUsage())
-	}
-	if resUsage.Data[resUsage.Head] == nil {
-		resUsage.Add(NewChildResourceUsage())
-	}
-
-	if isWrite { //update saved info
-		manageNewRequest(&resUsage.Data[resUsage.Head].write, requestLatency)
-	} else {
-		manageNewRequest(&resUsage.Data[resUsage.Head].read, requestLatency)
-	}
+	m.MigrationManagerImp.idleState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
 }
 
 func (m *MigrationManagerGossipState) ManageGossipMessage(msg gossip.GossipMessage) {
+	//sync
 	m.MigrationManagerImp.timerMutex.Lock()
 	defer m.MigrationManagerImp.timerMutex.Unlock()
 
+	//imp
 	switch parsed := msg.(type) {
 	case *gossip.ChildStateMessage:
 		m.manageChildGossipMessage(*parsed)

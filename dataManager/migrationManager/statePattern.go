@@ -24,9 +24,11 @@ func (m *MigrationManagerImp) setState(s MigrationManagerState) {
 
 // transitionToGossip handles automatic transition from idle to gossip
 func (m *MigrationManagerImp) transitionToGossip() {
+	//sync
 	m.timerMutex.Lock()
 	defer m.timerMutex.Unlock()
 
+	//imp
 	// Only transition if still in idle state
 	if _, isIdle := m.currentState.(*MigrationManagerIdleState); isIdle {
 		fmt.Println("Auto-transitioning from idle to gossip state")
@@ -46,10 +48,12 @@ func (m *MigrationManagerImp) transitionToDecision(childrenResourceUsage map[str
 }
 
 func (m *MigrationManagerImp) transitionToIdle() {
+	//sync
 	m.timerMutex.Lock()
 	defer m.timerMutex.Unlock()
-	// Only transition if still in decision state
 
+	//imp
+	// Only transition if still in decision state
 	if _, isDecision := m.currentState.(*MigrationManagerDecisionState); isDecision {
 		fmt.Println("Auto-transitioning from decision to idle state")
 		m.setState(m.idleState)

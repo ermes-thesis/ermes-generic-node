@@ -9,6 +9,7 @@ type Collection interface {
 	HostsId() map[string]struct{}
 	SetToLocal(int)
 	SetToRemote(map[string]struct{})
+	GetCollectionState() CollectionState
 }
 
 // consistency levels
@@ -30,6 +31,10 @@ func NewStrongCollection(collectionId string, size int, isRemote bool) Collectio
 	return &StrongCollection{
 		collectionState: NewLocalCollection(size, hosts),
 	}
+}
+
+func (s *StrongCollection) GetCollectionState() CollectionState {
+	return s.collectionState
 }
 
 func (s *StrongCollection) SetToLocal(size int) {
@@ -88,12 +93,16 @@ func NewWeakCollection(collectionId string, size int, isRemote bool) Collection 
 	}
 }
 
-func (s *WeakCollection) SetToLocal(size int) {
-	if s.collectionState.IsLocal() {
+func (w *WeakCollection) GetCollectionState() CollectionState {
+	return w.collectionState
+}
+
+func (w *WeakCollection) SetToLocal(size int) {
+	if w.collectionState.IsLocal() {
 		return
 	}
-	collectionState := NewLocalCollection(size, s.collectionState.HostsId())
-	s.collectionState = collectionState
+	collectionState := NewLocalCollection(size, w.collectionState.HostsId())
+	w.collectionState = collectionState
 }
 
 func (w *WeakCollection) SetToRemote(hostNames map[string]struct{}) {

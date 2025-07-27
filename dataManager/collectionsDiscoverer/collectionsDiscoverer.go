@@ -7,11 +7,10 @@ import (
 
 type CollectionsDiscoverer interface {
 	IsCollectionLocallyPresent(collectionId string) (bool, shared.Collection)
+	Init(*shared.CollectionPartialView)
 }
 
 type CollectionsDiscovererImp struct {
-	//sync
-
 	//data
 	collectionsPartialView *shared.CollectionPartialView
 }

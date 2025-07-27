@@ -12,7 +12,6 @@ type MigrationManagerDecisionState struct {
 }
 
 // methods
-
 func (m *MigrationManagerDecisionState) Setup(args ...any) {
 	if len(args) != 1 {
 		panic("invalid arguments for Setup in DecisionState")
@@ -24,10 +23,17 @@ func (m *MigrationManagerDecisionState) Setup(args ...any) {
 	m.childResourceUsage = childrenResourceUsage
 
 	m.computeEqState()
+
 }
 
+// TODO: valutare se ha senso inserire in stack senza lock e poi parsare stack dopo
 func (m *MigrationManagerDecisionState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	//TODO
+	//sync -> all op in MigrationManagerDecisionState are sync => lock == wait until all decsion are taken
+	m.MigrationManagerImp.timerMutex.Lock()
+	defer m.MigrationManagerImp.timerMutex.Unlock()
+
+	//imp
+	m.MigrationManagerImp.idleState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
 }
 
 func (m *MigrationManagerDecisionState) ManageGossipMessage(msg gossip.GossipMessage) {
@@ -88,6 +94,12 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 				leaderDelega = m.leaderDecision(innerKey, buffer, strongCollection, totalForce, totalReqNumber)
 			}
 			m.replicDecision(innerKey, buffer, strongCollection)
+
+			//after taking all the decision skip to next round for this buffer
+			//if the collection is still locally present
+			if !leaderDelega {
+				buffer.Movehead()
+			}
 		}
 
 	}
@@ -106,6 +118,7 @@ func (m *MigrationManagerDecisionState) leaderDecision(innerKey string, buffer *
 func (m *MigrationManagerDecisionState) replicDecision(innerKey string, buffer *CircularBuffer, strongCollection *shared.StrongCollection) bool {
 	feR, _ := m.computeElasticForce(buffer, getRead)
 	resistance := (m.childResourceUsage[innerKey].MemoryUsage * m.MigrationManagerImp.config.GravityConstant) + float64(m.MigrationManagerImp.config.FollowerThreshold)
+
 	//TODO: inviare la collection in copia senza rimuovere localemente
 
 	return float64(feR) > resistance

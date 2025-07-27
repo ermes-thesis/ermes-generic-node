@@ -14,11 +14,6 @@ func (s *MigrationManagerIdleState) Setup(args ...any) {}
 
 // methods
 func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	if m.MigrationManagerImp.collectionsPartialView.KnowedCollections[collectionId] == nil || !m.MigrationManagerImp.collectionsPartialView.KnowedCollections[collectionId].IsStrong() {
-		//if no local info on the collection of if the collection is not of strong type
-		return
-	}
-
 	//sync
 	m.MigrationManagerImp.collectionsPartialView.Mutex.Lock()
 	defer m.MigrationManagerImp.collectionsPartialView.Mutex.Unlock()

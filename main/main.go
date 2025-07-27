@@ -4,6 +4,7 @@ import (
 	"config"
 	"context"
 	clDiscoverer "dataManager/collectionsDiscoverer"
+	lru "dataManager/lru"
 	migrationManager "dataManager/migrationManager"
 	dataManagerShared "dataManager/shared"
 	"db"
@@ -28,6 +29,7 @@ func myPenalityFunc(bufferPos int, currentValue int) int {
 
 func run(ctx context.Context, w io.Writer, args []string) error {
 	config := config.LoadConfig("../config/config.yaml")
+	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](config.Lru.Size)
 
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
@@ -65,7 +67,7 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 		KnowedCollections: make(map[string]dataManagerShared.Collection),
 	}
 	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
-	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, *ser.Serverinfo)
+	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, *ser.Serverinfo, &lruCache)
 	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscovererIstance.Init(collections)
 

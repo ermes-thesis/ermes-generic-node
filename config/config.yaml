@@ -5,6 +5,9 @@ migrationManager:
   idleTimeoutMs: 1000
   gravityConstant: 9.81
 
+lru:
+  size: 2000
+
 redis:
   host: "localhost"
   port: 6379

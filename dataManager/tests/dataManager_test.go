@@ -6,6 +6,7 @@ package tests
 import (
 	"config"
 	clDiscoverer "dataManager/collectionsDiscoverer"
+	lru "dataManager/lru"
 	migrationManager "dataManager/migrationManager"
 	shared "dataManager/shared"
 	"server/info"
@@ -16,7 +17,7 @@ func myTPenalityFunc(bufferPos int, currentValue int) int {
 	return currentValue
 }
 
-func testSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo) {
+func testSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection]) {
 	migrationManagerConfig := config.MigrationManagerConfig{
 		LeaderThreshold:   0,
 		FollowerThreshold: 1,
@@ -25,6 +26,7 @@ func testSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, 
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
+	lruCache := lru.LRUCacheConstructor[shared.Collection](1000)
 	serverinfo := info.ServerInfo{
 		Node:   info.Node{Address: "Name", MetadataDomain: "Domain"},
 		Father: &info.Node{Address: "fName", MetadataDomain: "fDomain"},
@@ -35,17 +37,17 @@ func testSetUp() (config.MigrationManagerConfig, *shared.CollectionPartialView, 
 		Secret: "ermes-secret",
 	}
 
-	return migrationManagerConfig, collections, serverinfo
+	return migrationManagerConfig, collections, serverinfo, &lruCache
 }
 
 func TestFromRemoteToLocalCollection(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo := testSetUp()
+	migrationManagerConfig, collections, serverinfo, lruCache := testSetUp()
 
 	mig := migrationManager.GetMigrationManagerInstance()
-	mig.Init(collections, myTPenalityFunc, migrationManagerConfig, serverinfo)
+	mig.Init(collections, myTPenalityFunc, migrationManagerConfig, serverinfo, lruCache)
 	clDiscoverer := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscoverer.Init(collections)
-	mig.ManageNewStrongRequest("repoId", "childName", true, 3)
+	mig.ManageNewRequest("repoId", "childName", true, 3)
 
 	b, c := clDiscoverer.IsCollectionLocallyPresent("repoId")
 

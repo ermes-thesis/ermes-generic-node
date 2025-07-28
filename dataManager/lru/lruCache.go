@@ -3,11 +3,11 @@ package lru
 import (
 	"container/list"
 	"errors"
+	"sync"
 )
 
 // We need to create a generic LRU cache.
 // We will hold an object of the type and the size of the element.
-
 type lruCacheType[T any] struct {
 	key  string
 	obj  T
@@ -16,17 +16,16 @@ type lruCacheType[T any] struct {
 
 // We just need to decide what is the key type. For the moment a string should be fine ? Another possibility is to be more generic and use comparable ?
 
-// TODO: there already exists a double linked list type.
-
-// TODO: make this atomic
-
+// This data structure is atomic.
 type LRUCache[T any] struct {
 	current    uint
 	capacity   uint
 	cache      map[string]*list.Element
 	linkedlist *list.List
+	mux        sync.Mutex
 }
 
+// Method to construct a generic LRU cache with given capacity and element type T.
 func LRUCacheConstructor[T any](capacity uint) LRUCache[T] {
 
 	return LRUCache[T]{
@@ -34,11 +33,16 @@ func LRUCacheConstructor[T any](capacity uint) LRUCache[T] {
 		capacity:   capacity,
 		cache:      make(map[string]*list.Element),
 		linkedlist: list.New(),
+		mux:        sync.Mutex{},
 	}
 }
 
-// Return the value of the key if the key exists, otherwise return an error.
+// Return the value of the key if the key exists, otherwise return an error. This operation is atomic
 func (this *LRUCache[T]) Get(key string) (T, error) {
+
+	this.mux.Lock()
+
+	defer this.mux.Unlock()
 
 	get := this.cache[key]
 
@@ -68,7 +72,12 @@ func (this *LRUCache[T]) Get(key string) (T, error) {
 
 // Update the value of the key if the key exists. Otherwise, add the key-value pair to the cache.
 // If the number of keys exceeds the capacity from this operation, return an error (TODO: decide)
+// This operation is thread safe.
 func (this *LRUCache[T]) Put(key string, value T, size uint) error {
+
+	this.mux.Lock()
+
+	defer this.mux.Unlock()
 
 	get := this.cache[key]
 
@@ -111,6 +120,10 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 // Utility function in order to obtain capacity-current>=sizeGoal.
 // This function returns a list of removed items
 func (this *LRUCache[T]) freeToAchieveSize(sizeGoal uint) *list.List {
+
+	this.mux.Lock()
+
+	defer this.mux.Unlock()
 
 	returnList := list.New()
 
@@ -159,8 +172,7 @@ func (this *LRUCache[T]) GetAvailableSize() uint {
 }
 
 // Potentially useful for debug, but tricky to manage with generics
-
-// func (this *LRUCache) PrintLRU() {
+// func (this *LRUCach (TODO: decide)e) PrintLRU() {
 
 // 	fmt.Println("LRU:")
 // 	fmt.Println("head: %d", this.head.key)

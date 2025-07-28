@@ -84,7 +84,7 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 		}
 
 		//take decision on a secondary thread
-		go m.innerKeyDecision(outerKey, innerMap, &wg)
+		go m.innerKeyDecision(outerKey, innerMap, &wg, len(innerMap))
 
 	}
 
@@ -92,7 +92,7 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 	wg.Wait()
 }
 
-func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerMap map[string]*CircularBuffer, wg *sync.WaitGroup) {
+func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerMap map[string]*CircularBuffer, wg *sync.WaitGroup, interestedNodeCounter int) {
 	defer wg.Done()
 
 	strongCollection := m.MigrationManagerImp.collectionsPartialView.KnowedCollections[outerKey].(*shared.StrongCollection)
@@ -117,7 +117,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 			}
 		}
 
-		m.replicDecision(outerKey, innerKey, buffer, strongCollection)
+		m.replicaDecision(outerKey, innerKey, buffer, strongCollection, interestedNodeCounter)
 
 		//after taking all the decision skip to next round for this buffer
 		buffer.Movehead()
@@ -154,12 +154,33 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 	return true
 }
 
-func (m *MigrationManagerDecisionState) replicDecision(outerKey string, innerKey string, buffer *CircularBuffer, strongCollection *shared.StrongCollection) bool {
+func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKey string, buffer *CircularBuffer, strongCollection *shared.StrongCollection, interestedNodeCounter int) bool {
 	//compute decision
 	feR, _ := m.computeElasticForce(buffer, getRead)
 	resistance := (m.childResourceUsage[innerKey].MemoryUsage * m.MigrationManagerImp.config.GravityConstant) + float64(m.MigrationManagerImp.config.FollowerThreshold)
 
-	//TODO: inviare la collection in copia senza rimuovere localemente
+	//evaluate decision
+	if float64(feR) <= resistance {
+		return false
+	}
 
-	return float64(feR) > resistance
+	//react to positive decision
+	//get collection from redis instance
+	res, groups, err := m.MigrationManagerImp.dbInterface.GetCollection(outerKey)
+	if err != nil {
+		panic(err)
+	}
+	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
+	m.MigrationManagerImp.sendRemoteCollectionTo(innerKey, strongCollection, res, groups)
+
+	//if all the interest adjacent node has been satisfied
+	if interestedNodeCounter-len(strongCollection.HostsId()) <= 0 {
+		//remove collection from redis instance
+		m.MigrationManagerImp.dbInterface.DeleteCollection(outerKey)
+
+		//set the collection as remote only in the node partial view
+		strongCollection.SetToRemote()
+	}
+
+	return true
 }

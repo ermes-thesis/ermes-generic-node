@@ -2,7 +2,6 @@ package migrationManager
 
 import (
 	gossip "dataManager/migrationManager/gossipMessages"
-	"fmt"
 )
 
 // statePattern
@@ -31,8 +30,12 @@ func (m *MigrationManagerImp) transitionToGossip() {
 	//imp
 	// Only transition if still in idle state
 	if _, isIdle := m.currentState.(*MigrationManagerIdleState); isIdle {
-		fmt.Println("Auto-transitioning from idle to gossip state")
-		m.gossipState.Setup(len(m.serverInfo.Children) + 1) //number of adjacent nodes - TODO: manage cloud nodes.
+		//fmt.Println("Auto-transitioning from idle to gossip state")
+		if m.serverInfo.Father != nil {
+			m.gossipState.Setup(len(m.serverInfo.Children) + 1)
+		} else {
+			m.gossipState.Setup(len(m.serverInfo.Children)) //number of adjacent nodes - TODO: manage cloud nodes.
+		}
 		m.setState(m.gossipState)
 		m.stopIdleTimer()
 	}
@@ -41,7 +44,7 @@ func (m *MigrationManagerImp) transitionToGossip() {
 func (m *MigrationManagerImp) transitionToDecision(childrenResourceUsage map[string]childStateInfo) {
 	// Only transition if still in gossip state
 	if _, isGossip := m.currentState.(*MigrationManagerGossipState); isGossip {
-		fmt.Println("Auto-transitioning from gossip to decision state")
+		//fmt.Println("Auto-transitioning from gossip to decision state")
 		m.decisionState.Setup(childrenResourceUsage)
 		m.setState(m.decisionState)
 	}
@@ -55,7 +58,7 @@ func (m *MigrationManagerImp) transitionToIdle() {
 	//imp
 	// Only transition if still in decision state
 	if _, isDecision := m.currentState.(*MigrationManagerDecisionState); isDecision {
-		fmt.Println("Auto-transitioning from decision to idle state")
+		//fmt.Println("Auto-transitioning from decision to idle state")
 		m.setState(m.idleState)
 		m.startIdleTimer()
 	}

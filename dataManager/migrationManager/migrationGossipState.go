@@ -23,8 +23,6 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 	m.missingMessageCounter = counter
 	m.childrenResourceUsage = make(map[string]childStateInfo, 0)
 
-	fmt.Println("Auto-transitioning from decision to idle state")
-
 	for value := range m.MigrationManagerImp.serverInfo.Children {
 		msgToChild := gossip.NewLeaderDelegaMessage(m.MigrationManagerImp.serverInfo.Address)
 		fmt.Println(value, msgToChild)

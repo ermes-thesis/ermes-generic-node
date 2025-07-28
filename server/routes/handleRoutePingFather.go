@@ -15,7 +15,7 @@ func handleRoutePingFather(logger *io.Writer, serverinfo *info.ServerInfo) http.
 
 			fathername := serverinfo.Father
 
-			reqUrl := fmt.Sprintf("http://localhost:%s", fathername)
+			reqUrl := fmt.Sprintf("http://localhost:%s", fathername.Address)
 
 			fmt.Fprintf(*logger, "Sending a request to the father, located at %s \n", reqUrl)
 

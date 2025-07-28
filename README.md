@@ -3,7 +3,8 @@ Repository which contains the code to run an ermes node
 dependencies:
 
 ```bash
-go get gopkg.in/yaml.v3
+$ cd main
+$ go get gopkg.in/yaml.v3
 ```
 To compile:
 

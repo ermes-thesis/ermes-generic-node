@@ -5,8 +5,12 @@ package tests
 
 import (
 	"config"
+	lru "dataManager/lru"
 	migrationManager "dataManager/migrationManager"
+	gossip "dataManager/migrationManager/gossipMessages"
 	shared "dataManager/shared"
+	mockDb "db/mocks"
+	"server/info"
 	"testing"
 )
 
@@ -14,17 +18,38 @@ func myT1PenalityFunc(bufferPos int, currentValue int) int {
 	return currentValue - bufferPos
 }
 
-func TestSingletonInstance(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
-
+func migTestSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB) {
+	migrationManagerConfig := config.MigrationManagerConfig{
+		LeaderThreshold:   0,
+		FollowerThreshold: 1,
+		ViewSize:          3,
+		IdleTimeoutMs:     100000000000,
+	}
+	db := mockDb.NewGenericDB(t)
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
+	lruCache := lru.LRUCacheConstructor[shared.Collection](1000)
+	serverinfo := info.ServerInfo{
+		Node:   info.Node{Address: "Name", MetadataDomain: "Domain"},
+		Father: &info.Node{Address: "fName", MetadataDomain: "fDomain"},
+		Children: []info.Node{
+			{Address: "child1", MetadataDomain: "Domain"},
+			{Address: "child2", MetadataDomain: "Domain"},
+		},
+		Secret: "ermes-secret",
+	}
+	migrationManager.ResetSingleton()
+	return migrationManagerConfig, collections, serverinfo, &lruCache, db
+}
+
+func TestSingletonInstance(t *testing.T) {
+	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, config.MigrationManager)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 	instance2 := migrationManager.GetMigrationManagerInstance()
-	instance2.Init(collections, myT1PenalityFunc, config.MigrationManager)
+	instance2.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 
 	if instance1 == nil {
 		t.Fatal("Expected non-nil instance from GetMigrationManagerIstance")
@@ -40,32 +65,29 @@ func TestSingletonInstance(t *testing.T) {
 }
 
 func TestManageNewStrongRequest(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
-	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
-	}
+	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, config.MigrationManager)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 	instance1.NewCollectionReceived("repoId", 10, true)
 	instance1.NewCollectionReceived("repoId1", 10, true)
 
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
+	instance1.ManageNewRequest("repoId", "childName", true, 10)
 
 	if instance1.GetUnstableEquilibriumState()["repoId"]["childName"] == nil {
-		t.Fatal("Expected non-nil entry")
+		t.Fatal("Expected non-nil entry - 1")
 	}
 
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
-	instance1.ManageNewStrongRequest("repoId", "childName", false, 3)
-	instance1.ManageNewStrongRequest("repoId", "childName1", false, 7)
-	instance1.ManageNewStrongRequest("repoId1", "childName1", true, 7)
+	instance1.ManageNewRequest("repoId", "childName", true, 3)
+	instance1.ManageNewRequest("repoId", "childName", false, 3)
+	instance1.ManageNewRequest("repoId", "childName1", false, 7)
+	instance1.ManageNewRequest("repoId1", "childName1", true, 7)
 
 	if instance1.GetUnstableEquilibriumState()["repoId"]["childName1"] == nil {
-		t.Fatal("Expected non-nil entry")
+		t.Fatal("Expected non-nil entry - 2")
 	}
 	if instance1.GetUnstableEquilibriumState()["repoId1"]["childName1"] == nil {
-		t.Fatal("Expected non-nil entry")
+		t.Fatal("Expected non-nil entry - 3")
 	}
 	if instance1.GetUnstableEquilibriumState()["repoId1"]["childName"] != nil {
 		t.Fatal("Expected nil entry")
@@ -91,19 +113,16 @@ func TestManageNewStrongRequest(t *testing.T) {
 }
 
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
-	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
-	}
+	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, config.MigrationManager)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 	instance1.NewCollectionReceived("repoId", 10, true)
 	instance1.NewCollectionReceived("repoId1", 10, true)
 
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
-	instance1.ManageNewStrongRequest("repoId", "childName", false, 3)
+	instance1.ManageNewRequest("repoId", "childName", true, 10)
+	instance1.ManageNewRequest("repoId", "childName", true, 3)
+	instance1.ManageNewRequest("repoId", "childName", false, 3)
 
 	var equilibrium = instance1.GetUnstableEquilibriumState()
 
@@ -120,24 +139,21 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 }
 
 func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
-	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
-	}
+	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, config.MigrationManager)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 	instance1.NewCollectionReceived("repoId", 10, true)
 	instance1.NewCollectionReceived("repoId1", 10, true)
 
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
-	instance1.ManageNewStrongRequest("repoId", "childName", false, 7)
+	instance1.ManageNewRequest("repoId", "childName", true, 10)
+	instance1.ManageNewRequest("repoId", "childName", true, 3)
+	instance1.ManageNewRequest("repoId", "childName", false, 7)
 
 	migrationManager.GetBuffer("repoId", "childName").Movehead() //skip to next window
 
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 14)
-	instance1.ManageNewStrongRequest("repoId", "childName", false, 9)
+	instance1.ManageNewRequest("repoId", "childName", true, 14)
+	instance1.ManageNewRequest("repoId", "childName", false, 9)
 	//fmt.Println(migrationManager.GetBuffer("repoId", "childName"))
 
 	instance1.SetState(instance1.GetDecisionState())
@@ -153,4 +169,34 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 	} else {
 		t.Fatal("wrong state type")
 	}
+
+	t.Cleanup(func() {
+		migrationManager.ResetSingleton()
+	})
+}
+
+func TestMigrationFromIdleToGossipAfterReceiveAMessage(t *testing.T) {
+	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
+
+	instance1 := migrationManager.GetMigrationManagerInstance()
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
+
+	msg := gossip.NewChildStateMessage("senderId", 0.0, 0.0)
+	instance1.ManageGossipMessage(msg)
+
+	if _, isIdle := instance1.GetCurrentState().(*migrationManager.MigrationManagerIdleState); isIdle {
+		t.Error("unexpected idle state")
+	}
+
+	if _, isDecision := instance1.GetCurrentState().(*migrationManager.MigrationManagerDecisionState); isDecision {
+		t.Error("unexpected decision state")
+	}
+
+	if _, isGossip := instance1.GetCurrentState().(*migrationManager.MigrationManagerGossipState); !isGossip {
+		t.Error("must be in gossip state")
+	}
+
+	t.Cleanup(func() {
+		migrationManager.ResetSingleton()
+	})
 }

@@ -1,19 +1,5 @@
 package migrationManager
 
-// child data
-type nodeData struct {
-	latency     float32 //geografical distance
-	memFreeSize float32
-}
-
-func newChildData(latency float32) nodeData {
-	return nodeData{latency: latency}
-}
-
-func (c nodeData) GetLatency() float32 {
-	return c.latency
-}
-
 // keep update forces for each child on each resources
 type childResourceUsage struct {
 	write resourceUsage

@@ -20,4 +20,5 @@ func (cb *CircularBuffer) Add(data *childResourceUsage) {
 
 func (cb *CircularBuffer) Movehead() {
 	cb.Head = (cb.Head + 1) % cb.capacity
+	cb.Data[cb.Head] = NewChildResourceUsage() //avoid nil values
 }

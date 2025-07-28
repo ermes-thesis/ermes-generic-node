@@ -2,17 +2,15 @@ package collectionsDiscoverer
 
 import (
 	shared "dataManager/shared"
-	"fmt"
 	"sync"
 )
 
 type CollectionsDiscoverer interface {
 	IsCollectionLocallyPresent(collectionId string) (bool, shared.Collection)
+	Init(*shared.CollectionPartialView)
 }
 
 type CollectionsDiscovererImp struct {
-	//sync
-
 	//data
 	collectionsPartialView *shared.CollectionPartialView
 }
@@ -26,7 +24,7 @@ func GetCollectionsDiscovererInstance() *CollectionsDiscovererImp {
 		lock.Lock()
 		defer lock.Unlock()
 		if collectionsDiscovererInstance == nil {
-			fmt.Println("Creating single instance now.")
+			//fmt.Println("Creating single instance now.")
 			collectionsDiscovererInstance = &CollectionsDiscovererImp{}
 		}
 	}

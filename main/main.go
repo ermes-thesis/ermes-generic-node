@@ -4,6 +4,7 @@ import (
 	"config"
 	"context"
 	clDiscoverer "dataManager/collectionsDiscoverer"
+	lru "dataManager/lru"
 	migrationManager "dataManager/migrationManager"
 	dataManagerShared "dataManager/shared"
 	"db"
@@ -28,18 +29,10 @@ func myPenalityFunc(bufferPos int, currentValue int) int {
 
 func run(ctx context.Context, w io.Writer, args []string) error {
 	config := config.LoadConfig("../config/config.yaml")
+	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](config.Lru.Size)
 
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
-
-	//node set up
-	collections := &dataManagerShared.CollectionPartialView{
-		KnowedCollections: make(map[string]dataManagerShared.Collection),
-	}
-	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
-	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager)
-	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
-	clDiscovererIstance.Init(collections)
 
 	serverInfo, err := info.NewServerInfo(args)
 	if err != nil {
@@ -68,6 +61,15 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 			fmt.Fprintf(os.Stderr, "error listening and serving: %s\n", err)
 		}
 	}()
+
+	//node set up
+	collections := &dataManagerShared.CollectionPartialView{
+		KnowedCollections: make(map[string]dataManagerShared.Collection),
+	}
+	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
+	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, *ser.Serverinfo, &lruCache, redisClient)
+	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
+	clDiscovererIstance.Init(collections)
 
 	// TODO: understand these lines of code
 	// I think it should be some synchronization method when the server shuts down

@@ -11,12 +11,19 @@ import (
 type Config struct {
 	MigrationManager MigrationManagerConfig `yaml:"migrationManager"`
 	Redis            RedisConfig            `yaml:"redis"`
+	Lru              LruConfig              `yaml:"lru"`
 }
 
 type MigrationManagerConfig struct {
-	LeaderThreshold   int `yaml:"leaderThreshold"`
-	FollowerThreshold int `yaml:"followerThreshold"`
-	ViewSize          int `yaml:"viewSize"`
+	LeaderThreshold   int     `yaml:"leaderThreshold"`
+	FollowerThreshold int     `yaml:"followerThreshold"`
+	ViewSize          int     `yaml:"viewSize"`
+	IdleTimeoutMs     int     `yaml:"idleTimeoutMs"`
+	GravityConstant   float64 `yaml:"gravityConstant"`
+}
+
+type LruConfig struct {
+	Size uint `yaml:"size"`
 }
 
 type RedisConfig struct {

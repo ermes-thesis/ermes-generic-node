@@ -1,30 +1,35 @@
 package migrationManager
 
 import (
-	shared "dataManager/shared"
-	"fmt"
-	"sync"
-
 	"config"
+	lru "dataManager/lru"
+	gossip "dataManager/migrationManager/gossipMessages"
+	shared "dataManager/shared"
+	db "db"
+	info "server/info"
+	"sync"
+	"time"
 )
 
 type PenalityFunc func(int, int) int //must be overwritten
 type MigrationManager interface {
-	//used to update lru in real time (collectionID, childName, request cumulative latency)
-	ManageNewRequestanageNewWeekRequest(string, string, int)
-	//used to update forces in real time (collectionID, childName, write?, request cumulative latency)
-	ManageNewStrongRequest(string, string, bool, int)
+	//inizialize thje singleto pattern
+	Init(*shared.CollectionPartialView, PenalityFunc, config.MigrationManagerConfig, info.ServerInfo, *lru.LRUCache[shared.Collection])
+	// used to update lru in real time (collectionID)
+	// if the collection is strong used to update forces in real time (collectionID, nodeName, write?, request cumulative latency).
+	// if the request comes from a user => nodeName = "user"
+	ManageNewRequest(string, string, bool, int)
 	//used to update non real time info
-	ManageChildGossipMessage()     //TODO
-	ManageAnchestorGossipMessage() //TODO
-	//used when the node receive  a collection from one of the directly connected nodes (collectionID,size)
+	ManageGossipMessage(gossip.GossipMessage)
+	//used when the node receive  a collection from one of the directly connected nodes (collectionID,size,isStrong)
 	//return True if the collection  is already stored locally and must not be stored in Redis
 	NewCollectionReceived(string, int, bool)
 }
 
 type MigrationManagerImp struct {
 	//config
-	config config.MigrationManagerConfig
+	config     config.MigrationManagerConfig
+	serverInfo info.ServerInfo
 
 	//state
 	currentState MigrationManagerState
@@ -32,10 +37,16 @@ type MigrationManagerImp struct {
 	idleState     MigrationManagerState
 	gossipState   MigrationManagerState
 	decisionState MigrationManagerState
+
+	//timing for auto transition
+	stateTimer *time.Timer
+
 	//impl
-	adjacentNodes            map[string]nodeData                   //TODO maybe can be removed ~ sharing something with http
-	unstableEquilibriumState map[string]map[string]*CircularBuffer //mapping resource - child
+	unstableEquilibriumState map[string]map[string]*CircularBuffer //mapping resource - nodeName
 	collectionsPartialView   *shared.CollectionPartialView         //set of local and remotes collections
+
+	lruCache    *lru.LRUCache[shared.Collection]
+	dbInterface db.GenericDB
 
 	//used to define a penalization factor for past data -> func(bufferPos int, currentValue int)
 	penalityFunc PenalityFunc
@@ -45,19 +56,21 @@ type MigrationManagerImp struct {
 var migrationManagareInstance *MigrationManagerImp
 var lock = &sync.Mutex{}
 
+//TODO: remove from global var
+
 func GetMigrationManagerInstance() *MigrationManagerImp {
 	if migrationManagareInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()
 		if migrationManagareInstance == nil {
-			fmt.Println("Creating single instance now.")
+			//fmt.Println("Creating single instance now.")
 			migrationManagareInstance = &MigrationManagerImp{}
 		}
 	}
 	return migrationManagareInstance
 }
 
-func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc PenalityFunc, config config.MigrationManagerConfig) {
+func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc PenalityFunc, config config.MigrationManagerConfig, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB) {
 	//sync
 	lock.Lock()
 	defer lock.Unlock()
@@ -65,25 +78,27 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	if m.collectionsPartialView != nil { //if singleton allready inizialized
 		return
 	}
+	m.serverInfo = serverInfo
+	m.dbInterface = dbInterface
+	m.lruCache = lruCache
 	m.config = config
 	m.penalityFunc = penalityFunc
 	//init states
 	m.idleState = &MigrationManagerIdleState{m}
-	m.gossipState = &MigrationManagerGossipState{m}
-	m.decisionState = &MigrationManagerDecisionState{m}
-	//TODO -> inizializzo gli altri due stati
+	m.gossipState = &MigrationManagerGossipState{m, 0, make(map[string]childStateInfo, 0)}
+	m.decisionState = &MigrationManagerDecisionState{m, make(map[string]childStateInfo, 0)}
+
 	m.currentState = m.idleState
+
+	//start timer
+	m.startIdleTimer()
+
 	//init data
 	m.collectionsPartialView = collections
 	m.unstableEquilibriumState = make(map[string]map[string]*CircularBuffer)
-	m.adjacentNodes = make(map[string]nodeData)
 }
 
 // methods
-func (m *MigrationManagerImp) addNewRemoteCollection(collectionId string, hostId string, isStrong bool) {
-	//TODO
-}
-
 func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, collectionSize int, isStrong bool) bool {
 	collection := m.collectionsPartialView.KnowedCollections[collectionId]
 	if collection != nil {
@@ -102,101 +117,31 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, collect
 	return false
 }
 
-func (m *MigrationManagerImp) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	m.currentState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
+func (m *MigrationManagerImp) ManageGossipMessage(msg gossip.GossipMessage) {
+	m.currentState.ManageGossipMessage(msg)
 }
 
-// statePattern
-type MigrationManagerState interface {
-	//ManageNewRequestanageNewWeekRequest(string, string, int) TODO
-	ManageNewStrongRequest(string, string, bool, int)
-	//ManageChildGossipMessage()     //TODO
-	//ManageAnchestorGossipMessage() //TODO
-}
-
-func (m *MigrationManagerImp) setState(s MigrationManagerState) {
-	m.currentState = s
-}
-
-// - Idel state -> in this state the Migration manager can receive collection requests; ignore gossip messages
-type MigrationManagerIdleState struct {
-	MigrationManagerImp *MigrationManagerImp
-}
-
-// methods
-func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	if m.MigrationManagerImp.collectionsPartialView.KnowedCollections[collectionId] == nil || !m.MigrationManagerImp.collectionsPartialView.KnowedCollections[collectionId].IsStrong() {
-		//if no local info on the collection of if the collection is not of strong type
-		return
+func (m *MigrationManagerImp) ManageNewRequest(collectionId string, nodeName string, isWrite bool, requestLatency int) { //error{
+	//if no local info on the collection
+	if m.collectionsPartialView.KnowedCollections[collectionId] == nil || !m.collectionsPartialView.KnowedCollections[collectionId].IsLocal() {
+		return //lancia errore
 	}
 
-	//sync
-	m.MigrationManagerImp.collectionsPartialView.Mutex.Lock()
-	defer m.MigrationManagerImp.collectionsPartialView.Mutex.Unlock()
+	//place on top in the LRU
+	m.lruCache.Put(collectionId, m.collectionsPartialView.KnowedCollections[collectionId], uint(m.collectionsPartialView.KnowedCollections[collectionId].GetCollectionState().(*shared.LocalCollection).Size()))
+
+	//if the collection is strong update forces
+	if m.collectionsPartialView.KnowedCollections[collectionId].IsStrong() {
+		m.currentState.ManageNewStrongRequest(collectionId, nodeName, isWrite, requestLatency)
+	}
+}
+
+func (m *MigrationManagerImp) sendRemoteCollectionTo(nodeName string, collection shared.Collection, res map[string]string, groups []string) {
+	//sync -> avoid send a collection if used
+	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 
 	//imp
-	if m.MigrationManagerImp.unstableEquilibriumState[collectionId] == nil { //first time accessing resource in general
-		m.MigrationManagerImp.unstableEquilibriumState[collectionId] = make(map[string]*CircularBuffer)
-		//m.MigrationManagerImp.addNewRemoteCollection(collectionId, "fatherName") //TODO: change with real name
-	}
-
-	resUsage, exists := m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName]
-	if !exists { //first time accessing resource from a child
-		resUsage = NewCircularBuffer(m.MigrationManagerImp.config.ViewSize)
-		m.MigrationManagerImp.unstableEquilibriumState[collectionId][childName] = resUsage
-		resUsage.Add(NewChildResourceUsage())
-	}
-	if resUsage.Data[resUsage.Head] == nil {
-		resUsage.Add(NewChildResourceUsage())
-	}
-
-	if isWrite { //update saved info
-		manageNewRequest(&resUsage.Data[resUsage.Head].write, requestLatency)
-	} else {
-		manageNewRequest(&resUsage.Data[resUsage.Head].read, requestLatency)
-	}
-
-}
-
-// - Gossip state -> in this state the Migration manager can receive gossip messages and place in a stack collection requests
-type MigrationManagerGossipState struct {
-	MigrationManagerImp *MigrationManagerImp
-}
-
-// methods
-func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	//TODO
-}
-
-// - Decision state -> in this state the Migration manager ingore all the messages, take decisions on collection migration; consume the stack
-type MigrationManagerDecisionState struct {
-	MigrationManagerImp *MigrationManagerImp
-}
-
-// methods
-func (m *MigrationManagerDecisionState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	//TODO
-}
-
-func (m *MigrationManagerDecisionState) computeElasticForce(cb *CircularBuffer, data getUsage) int {
-	var feR = 0
-
-	for i := 0; i < cb.capacity; i++ {
-		idx := (cb.Head - i + cb.capacity) % cb.capacity
-		if cb.Data[idx] == nil {
-			break
-		}
-		feR += m.MigrationManagerImp.penalityFunc(i, GetElasticForce(data(cb, idx)))
-	}
-
-	return feR
-}
-
-type getUsage func(*CircularBuffer, int) resourceUsage
-
-func getRead(cb *CircularBuffer, idx int) resourceUsage {
-	return cb.Data[idx].read
-}
-func getWrite(cb *CircularBuffer, idx int) resourceUsage {
-	return cb.Data[idx].write
+	collection.AddHost(nodeName)
+	//TODO send to node
 }

@@ -1,0 +1,38 @@
+node:
+  name: "Milan"
+  domain: "Milan"
+  port: "1111"
+  secret: "ermes-secret"
+
+hierarchy:
+  father:
+    - "nil"
+    - "nil"
+    - "0"
+  cloud:
+    - "1111"
+    - "Milan"
+  children:
+    - "2222"
+    - "Milan/POLIMI"
+    - "10"
+    - "5555"
+    - "Milan/UNIMI"
+    - "7"
+
+migrationManager:
+  leaderThreshold: 5
+  followerThreshold: 5
+  viewSize: 5
+  idleTimeoutMs: 1000
+  gravityConstant: 9.81
+
+lru:
+  size: 2000
+
+redis:
+  host: "localhost"
+  port: 6379
+  db: 0
+  password: eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+  protocol: 2

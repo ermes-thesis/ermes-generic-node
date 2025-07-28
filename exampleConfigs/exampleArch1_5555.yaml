@@ -1,3 +1,22 @@
+node:
+  name: "Milan/UNIMI"
+  domain: "Milan/UNIMI"
+  port: "5555"
+  secret: "ermes-secret"
+
+hierarchy:
+  father:
+    - "1111"
+    - "Milan"
+    - "7"
+  cloud:
+    - "1111"
+    - "Milan"
+  children:
+    - "6666"
+    - "Milan/UNIMI/inf"
+    - "1"
+
 migrationManager:
   leaderThreshold: 5
   followerThreshold: 5

@@ -5,12 +5,11 @@ dependencies:
 ```bash
 go get gopkg.in/yaml.v3
 ```
-To run:
+To compile:
 
 ```bash
 $ cd main
 $ go build main
-$ ./main <port> <node_name> <father_name> <children_name...>
 ```
 
 To test:
@@ -30,7 +29,15 @@ Milan
       -- Milan/UNIMI/inf
 ```
 
-can be deployed as:
+can be found in the folder [./exampleConfigs](./exampleConfigs/).
+
+Each file is uniquely identified by the port where the node is run, for instance file [exampleArch1_1111.yaml](./exampleConfigs/exampleArch1_1111.yaml) contains the information of node `Milan`.
+
+In order to run the architecture the command is simply:
+
+```bash
+./main ../exampleConfigs/exampleArch1_XXXX.yaml
+```
 
 ```bash
 ./main 1111 Milan nil 2222 5555

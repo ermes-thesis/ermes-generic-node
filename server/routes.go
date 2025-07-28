@@ -13,4 +13,5 @@ func (s *Server) compileRoutes() {
 	s.Handler.Handle("/pvt-data-transfer-request", s.checkSecret(private.HandleRoutePvtDataTransferRequest(&s.Logger, s.Serverinfo)))
 	s.Handler.Handle("/lookup", s.checkSecret(private.HandleRouteLookup(&s.Logger, s.MetadataManager)))
 	s.Handler.Handle("/create_metadata/{collection_id}", s.checkSecret(private.HandleRouteCreateMetadata(&s.Logger, s.MetadataManager, s.Serverinfo)))
+	s.Handler.Handle("/info", public.HandleRouteInfo(&s.Logger, s.Serverinfo))
 }

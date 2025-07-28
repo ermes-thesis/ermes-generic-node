@@ -1,4 +1,4 @@
-package routes
+package public
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"server/info"
 )
 
-func handleRouteInfo(logger *io.Writer, serverinfo *info.ServerInfo) http.Handler {
+func HandleRouteInfo(logger *io.Writer, serverinfo *info.ServerInfo) http.Handler {
 	return http.HandlerFunc(
 		func(w http.ResponseWriter, r *http.Request) {
 			fmt.Fprintf(*logger, "got /info \n")

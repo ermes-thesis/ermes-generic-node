@@ -3,7 +3,8 @@
 package info
 
 import (
-	"errors"
+	"config"
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -38,43 +39,37 @@ type ServerInfo struct {
 type Node struct {
 	Address        string
 	MetadataDomain string
+	Latency        uint64
 }
 
-func NewServerInfo(args []string) (*ServerInfo, error) {
-	// Extract the information of port, name, parent, children in this order
-	if len(args) < 6 {
-		return nil, errors.New("too few arguments in the program, cannot launch correctly")
-	}
-
-	// Parse first argument
-	port, err := strconv.Atoi(args[1])
-
-	if err != nil || port < 1 {
-		return nil, errors.New("first argument of the program must be a non-negative integer")
-	}
+func NewServerInfo(config config.Config) (*ServerInfo, error) {
 
 	// Parse info about the name, parent and children
 	// TODO: check if convention on names is respected (which we do not have yet)
 
 	// NB: these operations just copy the references !
-	name := args[2]
-	domain := args[3]
-	parent := args[4]
-	parentDomain := args[5]
-	cloudNode := args[6]
-	cloudNodeDomain := args[7]
-	childrenArgs := args[8:]
+	// TODO: careful for the moment we do not manage errors in the configuration
+	name := config.Node.Port
+	domain := config.Node.Domain
+	parent := config.Hierarchy.Father[0]
+	parentDomain := config.Hierarchy.Father[1]
+	parentLatency, _ := strconv.ParseUint(config.Hierarchy.Father[2], 10, 64)
+	cloudNode := config.Hierarchy.Cloud[0]
+	cloudNodeDomain := config.Hierarchy.Cloud[1]
+	childrenArgs := config.Hierarchy.Children
 
-	children := make([]Node, len(childrenArgs)/2)
-	for i := 0; i < len(children)/2; i++ {
+	children := make([]Node, len(childrenArgs)/3)
+	for i := 0; i < len(children); i++ {
+		childLatency, _ := strconv.ParseUint(childrenArgs[3*i+2], 10, 64)
 		children[i] = Node{
-			Address:        childrenArgs[2*i],
-			MetadataDomain: childrenArgs[2*i+1],
+			Address:        childrenArgs[3*i],
+			MetadataDomain: childrenArgs[3*i+1],
+			Latency:        childLatency,
 		}
 	}
 
 	serverinfo := &ServerInfo{
-		Secret: "ermes-secret", // For the moment leave it hardcoded
+		Secret: config.Node.Secret, // For the moment leave it hardcoded
 		CloudNode: &Node{
 			Address:        cloudNode,
 			MetadataDomain: cloudNodeDomain,
@@ -82,6 +77,7 @@ func NewServerInfo(args []string) (*ServerInfo, error) {
 		Father: &Node{
 			Address:        parent,
 			MetadataDomain: parentDomain,
+			Latency:        parentLatency,
 		},
 		Children: children,
 		Node: Node{
@@ -98,12 +94,19 @@ func StringifyInfo(infoptr *ServerInfo) string {
 	var sb strings.Builder
 
 	sb.WriteString("Name: " + infoptr.Address + "\n")
+	sb.WriteString("Domain: " + infoptr.MetadataDomain + "\n")
 	sb.WriteString("Father: " + infoptr.Father.Address + "\n")
+	sb.WriteString("FatherDomain: " + infoptr.Father.MetadataDomain + "\n")
+	sb.WriteString("FatherLatency: " + fmt.Sprint(infoptr.Father.Latency) + "\n")
 	sb.WriteString("Children: ")
 
 	for _, str := range infoptr.Children {
 		sb.WriteString(str.Address)
 		sb.WriteString(" ")
+		sb.WriteString(str.MetadataDomain)
+		sb.WriteString(" ")
+		sb.WriteString(fmt.Sprint(str.Latency))
+		sb.WriteString(" | ")
 	}
 	sb.WriteString("\n")
 

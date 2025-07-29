@@ -4,17 +4,17 @@ import (
 	"config"
 	lru "dataManager/lru"
 	gossip "dataManager/migrationManager/gossipMessages"
+	penality "dataManager/migrationManager/penalityFunction"
+	policy "dataManager/migrationManager/strongPolicy"
 	shared "dataManager/shared"
 	db "db"
 	info "server/info"
 	"sync"
-	"time"
 )
 
-type PenalityFunc func(int, int) int //must be overwritten
 type MigrationManager interface {
 	//inizialize thje singleto pattern
-	Init(*shared.CollectionPartialView, PenalityFunc, config.MigrationManagerConfig, info.ServerInfo, *lru.LRUCache[shared.Collection], db.GenericDB)
+	Init(*shared.CollectionPartialView, penality.PenalityFunc, config.MigrationManagerConfig, info.ServerInfo, *lru.LRUCache[shared.Collection], db.GenericDB)
 	// used to update lru in real time (collectionID)
 	// if the collection is strong used to update forces in real time (collectionID, nodeName, write?, request cumulative latency).
 	// if the request comes from a user => nodeName = "user"
@@ -24,6 +24,8 @@ type MigrationManager interface {
 	//used when the node receive  a collection from one of the directly connected nodes (collectionID,size,isStrong)
 	//return True if the collection  is already stored locally and must not be stored in Redis
 	NewCollectionReceived(string, int, bool, map[string]string, []string) bool
+
+	ChangeStrongCollectionPolicy(policy.CurrentPolicy)
 }
 
 type MigrationManagerImp struct {
@@ -31,37 +33,27 @@ type MigrationManagerImp struct {
 	config     config.MigrationManagerConfig
 	serverInfo info.ServerInfo
 
-	//state
-	currentState MigrationManagerState
-
-	idleState     MigrationManagerState
-	gossipState   MigrationManagerState
-	decisionState MigrationManagerState
-
-	//timing for auto transition
-	stateTimer *time.Timer
+	//policy
+	defaultPolicy          policy.StrongCollectionPolicy
+	StrongCollectionPolicy policy.StrongCollectionPolicy
 
 	//impl
-	unstableEquilibriumState map[string]map[string]*CircularBuffer //mapping resource - nodeName
-	collectionsPartialView   *shared.CollectionPartialView         //set of local and remotes collections
+	collectionsPartialView *shared.CollectionPartialView //set of local and remotes collections
 
 	lruCache    *lru.LRUCache[shared.Collection]
 	dbInterface db.GenericDB
-
-	//used to define a penalization factor for past data -> func(bufferPos int, currentValue int)
-	penalityFunc PenalityFunc
 }
 
 // singleton pattern
 var migrationManagareInstance MigrationManager
-var lock = &sync.Mutex{}
+var migLock = &sync.Mutex{}
 
 //TODO: remove from global var
 
 func GetMigrationManagerInstance() MigrationManager {
 	if migrationManagareInstance == nil {
-		lock.Lock()
-		defer lock.Unlock()
+		migLock.Lock()
+		defer migLock.Unlock()
 		if migrationManagareInstance == nil {
 			migrationManagareInstance = &MigrationManagerImp{}
 		}
@@ -69,10 +61,10 @@ func GetMigrationManagerInstance() MigrationManager {
 	return migrationManagareInstance
 }
 
-func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc PenalityFunc, config config.MigrationManagerConfig, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB) {
+func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB) {
 	//sync
-	lock.Lock()
-	defer lock.Unlock()
+	migLock.Lock()
+	defer migLock.Unlock()
 	//imp
 	if m.collectionsPartialView != nil { //if singleton allready inizialized
 		return
@@ -81,20 +73,14 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	m.dbInterface = dbInterface
 	m.lruCache = lruCache
 	m.config = config
-	m.penalityFunc = penalityFunc
-	//init states
-	m.idleState = &MigrationManagerIdleState{m}
-	m.gossipState = &MigrationManagerGossipState{m, 0, make(map[string]childStateInfo, 0)}
-	m.decisionState = &MigrationManagerDecisionState{m, make(map[string]childStateInfo, 0)}
 
-	m.currentState = m.idleState
-
-	//start timer
-	m.startIdleTimer()
+	//policy
+	m.defaultPolicy = policy.NewDefaultPolicy(config, collections, migLock, penalityFunc, dbInterface)
+	m.defaultPolicy.SetDefaultState()
+	m.StrongCollectionPolicy = m.defaultPolicy
 
 	//init data
 	m.collectionsPartialView = collections
-	m.unstableEquilibriumState = make(map[string]map[string]*CircularBuffer)
 }
 
 // methods
@@ -123,7 +109,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, collect
 }
 
 func (m *MigrationManagerImp) ManageGossipMessage(msg gossip.GossipMessage) {
-	m.currentState.ManageGossipMessage(msg)
+	m.StrongCollectionPolicy.ManageGossipMessage(msg)
 }
 
 func (m *MigrationManagerImp) ManageNewRequest(collectionId string, nodeName string, isWrite bool, requestLatency int) { //error{
@@ -137,16 +123,15 @@ func (m *MigrationManagerImp) ManageNewRequest(collectionId string, nodeName str
 
 	//if the collection is strong update forces
 	if m.collectionsPartialView.KnowedCollections[collectionId].IsStrong() {
-		m.currentState.ManageNewStrongRequest(collectionId, nodeName, isWrite, requestLatency)
+		m.StrongCollectionPolicy.ManageNewStrongRequest(collectionId, nodeName, isWrite, requestLatency)
 	}
 }
 
-func (m *MigrationManagerImp) sendRemoteCollectionTo(nodeName string, collection shared.Collection, res map[string]string, groups []string) {
-	//sync -> avoid send a collection if used
-	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
-	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
-
-	//imp
-	collection.AddHost(nodeName)
-	//TODO send to node
+func (m *MigrationManagerImp) ChangeStrongCollectionPolicy(newPolicy policy.CurrentPolicy) {
+	switch newPolicy {
+	case policy.DefaultPolicy:
+		m.StrongCollectionPolicy = m.defaultPolicy
+	default:
+		panic("unknown policy")
+	}
 }

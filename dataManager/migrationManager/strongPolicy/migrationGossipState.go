@@ -1,4 +1,4 @@
-package migrationManager
+package strongPolicy
 
 import (
 	gossip "dataManager/migrationManager/gossipMessages"
@@ -7,9 +7,9 @@ import (
 
 // - Gossip state -> in this state the Migration manager can receive gossip messages and place in a stack collection requests
 type MigrationManagerGossipState struct {
-	MigrationManagerImp   *MigrationManagerImp
-	missingMessageCounter int
-	childrenResourceUsage map[string]childStateInfo
+	policy                *DefaultStrongCollectionPolicy
+	MissingMessageCounter int
+	ChildrenResourceUsage map[string]ChildStateInfo
 }
 
 func (m *MigrationManagerGossipState) Setup(args ...any) {
@@ -20,16 +20,16 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 	if !ok {
 		panic("expected int for counter")
 	}
-	m.missingMessageCounter = counter
-	m.childrenResourceUsage = make(map[string]childStateInfo, 0)
+	m.MissingMessageCounter = counter
+	m.ChildrenResourceUsage = make(map[string]ChildStateInfo, 0)
 
-	for value := range m.MigrationManagerImp.serverInfo.Children {
-		msgToChild := gossip.NewLeaderDelegaMessage(m.MigrationManagerImp.serverInfo.Address)
+	for value := range m.policy.serverInfo.Children {
+		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.Address)
 		fmt.Println(value, msgToChild)
 		//TODO:= send message to child
 	}
 
-	if m.MigrationManagerImp.serverInfo.Father != nil {
+	if m.policy.serverInfo.Father != nil {
 		//TODO:= measure mem. state and send to father
 		//msgToFather := gossip.NewChildStateMessage(m.MigrationManagerImp.serverInfo.Name, )
 	}
@@ -38,13 +38,13 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 
 // methods
 func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	m.MigrationManagerImp.idleState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
+	m.policy.idleState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
 }
 
 func (m *MigrationManagerGossipState) ManageGossipMessage(msg gossip.GossipMessage) {
 	//sync
-	lock.Lock()
-	defer lock.Unlock()
+	m.policy.migLock.Lock()
+	defer m.policy.migLock.Unlock()
 
 	//imp
 	switch parsed := msg.(type) {
@@ -57,20 +57,20 @@ func (m *MigrationManagerGossipState) ManageGossipMessage(msg gossip.GossipMessa
 		return
 	}
 
-	m.missingMessageCounter -= 1
-	if m.missingMessageCounter <= 0 {
-		m.MigrationManagerImp.transitionToDecision(m.childrenResourceUsage)
+	m.MissingMessageCounter -= 1
+	if m.MissingMessageCounter <= 0 {
+		m.policy.transitionToDecision(m.ChildrenResourceUsage)
 	}
 }
 
 // save memory and state info from the child in order to take further decisions
 func (m *MigrationManagerGossipState) manageChildGossipMessage(msg gossip.ChildStateMessage) {
-	childStateInfo := childStateInfo{
+	childStateInfo := ChildStateInfo{
 		//childName:   msg.GetSenderID(),
 		MemoryUsage: msg.MemoryUsage,
 		DiskUsage:   msg.DiskUsage,
 	}
-	m.childrenResourceUsage[msg.GetSenderID()] = childStateInfo
+	m.ChildrenResourceUsage[msg.GetSenderID()] = childStateInfo
 }
 
 func (m *MigrationManagerGossipState) manageAnchestorGossipMessage(msg gossip.LeaderDelegaMessage) {

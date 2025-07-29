@@ -1,15 +1,15 @@
-package migrationManager
+package childUsage
 
 type CircularBuffer struct {
 	Data     []*childResourceUsage
-	capacity int
+	Capacity int
 	Head     int
 }
 
 func NewCircularBuffer(capacity int) *CircularBuffer {
 	return &CircularBuffer{
 		Data:     make([]*childResourceUsage, capacity),
-		capacity: capacity,
+		Capacity: capacity,
 		Head:     0,
 	}
 }
@@ -19,6 +19,6 @@ func (cb *CircularBuffer) Add(data *childResourceUsage) {
 }
 
 func (cb *CircularBuffer) Movehead() {
-	cb.Head = (cb.Head + 1) % cb.capacity
+	cb.Head = (cb.Head + 1) % cb.Capacity
 	cb.Data[cb.Head] = NewChildResourceUsage() //avoid nil values
 }

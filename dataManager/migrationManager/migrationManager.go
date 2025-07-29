@@ -14,7 +14,7 @@ import (
 type PenalityFunc func(int, int) int //must be overwritten
 type MigrationManager interface {
 	//inizialize thje singleto pattern
-	Init(*shared.CollectionPartialView, PenalityFunc, config.MigrationManagerConfig, info.ServerInfo, *lru.LRUCache[shared.Collection])
+	Init(*shared.CollectionPartialView, PenalityFunc, config.MigrationManagerConfig, info.ServerInfo, *lru.LRUCache[shared.Collection], db.GenericDB)
 	// used to update lru in real time (collectionID)
 	// if the collection is strong used to update forces in real time (collectionID, nodeName, write?, request cumulative latency).
 	// if the request comes from a user => nodeName = "user"
@@ -23,7 +23,7 @@ type MigrationManager interface {
 	ManageGossipMessage(gossip.GossipMessage)
 	//used when the node receive  a collection from one of the directly connected nodes (collectionID,size,isStrong)
 	//return True if the collection  is already stored locally and must not be stored in Redis
-	NewCollectionReceived(string, int, bool)
+	NewCollectionReceived(string, int, bool, map[string]string, []string) bool
 }
 
 type MigrationManagerImp struct {
@@ -53,17 +53,16 @@ type MigrationManagerImp struct {
 }
 
 // singleton pattern
-var migrationManagareInstance *MigrationManagerImp
+var migrationManagareInstance MigrationManager
 var lock = &sync.Mutex{}
 
 //TODO: remove from global var
 
-func GetMigrationManagerInstance() *MigrationManagerImp {
+func GetMigrationManagerInstance() MigrationManager {
 	if migrationManagareInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()
 		if migrationManagareInstance == nil {
-			//fmt.Println("Creating single instance now.")
 			migrationManagareInstance = &MigrationManagerImp{}
 		}
 	}
@@ -99,16 +98,22 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 }
 
 // methods
-func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, collectionSize int, isStrong bool) bool {
+func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, collectionSize int, isStrong bool, records map[string]string, groups []string) bool {
 	collection := m.collectionsPartialView.KnowedCollections[collectionId]
 	if collection != nil {
 		if collection.IsLocal() {
 			return true
 			//TODO probably for weak collections conflict must be solved in this case
 		}
+		err := m.dbInterface.SetCollection(collectionId, records, groups) //add collection to redis
+		if err != nil {
+			panic(err) //TODO: decide
+		}
+
 		collection.SetToLocal(collectionSize)
 		return false
 	}
+	m.dbInterface.SetCollection(collectionId, records, groups) //add collection to redis
 	if isStrong {
 		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false) //TODO leader?
 	} else {

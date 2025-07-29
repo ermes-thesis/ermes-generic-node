@@ -12,6 +12,8 @@ import (
 	mockDb "db/mocks"
 	"server/info"
 	"testing"
+
+	"github.com/stretchr/testify/mock"
 )
 
 func myTPenalityFunc(bufferPos int, currentValue int) int {
@@ -25,6 +27,8 @@ func testSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.CollectionP
 		ViewSize:          3,
 	}
 	db := mockDb.NewGenericDB(t)
+	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string")).Return(nil).Maybe()
+
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
@@ -57,7 +61,7 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 		t.Fatal("unexpected non null collection")
 	}
 
-	mig.NewCollectionReceived("repoId", 10, true)
+	mig.NewCollectionReceived("repoId", 10, true, make(map[string]string), []string{})
 	b, c = clDiscoverer.IsCollectionLocallyPresent("repoId")
 	if c == nil {
 		t.Fatal("unexpected null collection")

@@ -12,6 +12,8 @@ import (
 	mockDb "db/mocks"
 	"server/info"
 	"testing"
+
+	"github.com/stretchr/testify/mock"
 )
 
 func myT1PenalityFunc(bufferPos int, currentValue int) int {
@@ -26,6 +28,8 @@ func migTestSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.Collecti
 		IdleTimeoutMs:     100000000000,
 	}
 	db := mockDb.NewGenericDB(t)
+	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string")).Return(nil).Maybe()
+
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
 	}
@@ -69,12 +73,12 @@ func TestManageNewStrongRequest(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
-	instance1.NewCollectionReceived("repoId", 10, true)
-	instance1.NewCollectionReceived("repoId1", 10, true)
+	instance1.NewCollectionReceived("repoId", 10, true, make(map[string]string), []string{})
+	instance1.NewCollectionReceived("repoId1", 10, true, make(map[string]string), []string{})
 
 	instance1.ManageNewRequest("repoId", "childName", true, 10)
 
-	if instance1.GetUnstableEquilibriumState()["repoId"]["childName"] == nil {
+	if instance1.(*migrationManager.MigrationManagerImp).GetUnstableEquilibriumState()["repoId"]["childName"] == nil {
 		t.Fatal("Expected non-nil entry - 1")
 	}
 
@@ -83,17 +87,17 @@ func TestManageNewStrongRequest(t *testing.T) {
 	instance1.ManageNewRequest("repoId", "childName1", false, 7)
 	instance1.ManageNewRequest("repoId1", "childName1", true, 7)
 
-	if instance1.GetUnstableEquilibriumState()["repoId"]["childName1"] == nil {
+	if instance1.(*migrationManager.MigrationManagerImp).GetUnstableEquilibriumState()["repoId"]["childName1"] == nil {
 		t.Fatal("Expected non-nil entry - 2")
 	}
-	if instance1.GetUnstableEquilibriumState()["repoId1"]["childName1"] == nil {
+	if instance1.(*migrationManager.MigrationManagerImp).GetUnstableEquilibriumState()["repoId1"]["childName1"] == nil {
 		t.Fatal("Expected non-nil entry - 3")
 	}
-	if instance1.GetUnstableEquilibriumState()["repoId1"]["childName"] != nil {
+	if instance1.(*migrationManager.MigrationManagerImp).GetUnstableEquilibriumState()["repoId1"]["childName"] != nil {
 		t.Fatal("Expected nil entry")
 	}
 
-	var equilibrium = instance1.GetUnstableEquilibriumState()
+	var equilibrium = instance1.(*migrationManager.MigrationManagerImp).GetUnstableEquilibriumState()
 	if equilibrium["repoId"]["childName"].Data[0].GetWrite().CumulativeLatency != 13 ||
 		equilibrium["repoId"]["childName"].Data[0].GetRead().CumulativeLatency != 3 ||
 		equilibrium["repoId"]["childName1"].Data[0].GetWrite().CumulativeLatency != 0 ||
@@ -117,14 +121,14 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
-	instance1.NewCollectionReceived("repoId", 10, true)
-	instance1.NewCollectionReceived("repoId1", 10, true)
+	instance1.NewCollectionReceived("repoId", 10, true, make(map[string]string), []string{})
+	instance1.NewCollectionReceived("repoId1", 10, true, make(map[string]string), []string{})
 
 	instance1.ManageNewRequest("repoId", "childName", true, 10)
 	instance1.ManageNewRequest("repoId", "childName", true, 3)
 	instance1.ManageNewRequest("repoId", "childName", false, 3)
 
-	var equilibrium = instance1.GetUnstableEquilibriumState()
+	var equilibrium = instance1.(*migrationManager.MigrationManagerImp).GetUnstableEquilibriumState()
 
 	if migrationManager.GetElasticForce(equilibrium["repoId"]["childName"].Data[0].GetWrite()) != 26 {
 		t.Error("wrong write force")
@@ -143,23 +147,23 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
-	instance1.NewCollectionReceived("repoId", 10, true)
-	instance1.NewCollectionReceived("repoId1", 10, true)
+	instance1.NewCollectionReceived("repoId", 10, true, make(map[string]string), []string{})
+	instance1.NewCollectionReceived("repoId1", 10, true, make(map[string]string), []string{})
 
 	instance1.ManageNewRequest("repoId", "childName", true, 10)
 	instance1.ManageNewRequest("repoId", "childName", true, 3)
 	instance1.ManageNewRequest("repoId", "childName", false, 7)
 
-	migrationManager.GetBuffer("repoId", "childName").Movehead() //skip to next window
+	instance1.(*migrationManager.MigrationManagerImp).GetBuffer("repoId", "childName").Movehead() //skip to next window
 
 	instance1.ManageNewRequest("repoId", "childName", true, 14)
 	instance1.ManageNewRequest("repoId", "childName", false, 9)
 	//fmt.Println(migrationManager.GetBuffer("repoId", "childName"))
 
-	instance1.SetState(instance1.GetDecisionState())
-	if decisionImpl, ok := instance1.GetDecisionState().(*migrationManager.MigrationManagerDecisionState); ok {
-		feR := decisionImpl.ComputeReadElasticForce(migrationManager.GetBuffer("repoId", "childName"))
-		feW := decisionImpl.ComputeWriteElasticForce(migrationManager.GetBuffer("repoId", "childName"))
+	instance1.(*migrationManager.MigrationManagerImp).SetState(instance1.(*migrationManager.MigrationManagerImp).GetDecisionState())
+	if decisionImpl, ok := instance1.(*migrationManager.MigrationManagerImp).GetDecisionState().(*migrationManager.MigrationManagerDecisionState); ok {
+		feR := decisionImpl.ComputeReadElasticForce(instance1.(*migrationManager.MigrationManagerImp).GetBuffer("repoId", "childName"))
+		feW := decisionImpl.ComputeWriteElasticForce(instance1.(*migrationManager.MigrationManagerImp).GetBuffer("repoId", "childName"))
 		if feW != 39 {
 			t.Error("wrong write elastic force")
 		}
@@ -184,15 +188,15 @@ func TestMigrationFromIdleToGossipAfterReceiveAMessage(t *testing.T) {
 	msg := gossip.NewChildStateMessage("senderId", 0.0, 0.0)
 	instance1.ManageGossipMessage(msg)
 
-	if _, isIdle := instance1.GetCurrentState().(*migrationManager.MigrationManagerIdleState); isIdle {
+	if _, isIdle := instance1.(*migrationManager.MigrationManagerImp).GetCurrentState().(*migrationManager.MigrationManagerIdleState); isIdle {
 		t.Error("unexpected idle state")
 	}
 
-	if _, isDecision := instance1.GetCurrentState().(*migrationManager.MigrationManagerDecisionState); isDecision {
+	if _, isDecision := instance1.(*migrationManager.MigrationManagerImp).GetCurrentState().(*migrationManager.MigrationManagerDecisionState); isDecision {
 		t.Error("unexpected decision state")
 	}
 
-	if _, isGossip := instance1.GetCurrentState().(*migrationManager.MigrationManagerGossipState); !isGossip {
+	if _, isGossip := instance1.(*migrationManager.MigrationManagerImp).GetCurrentState().(*migrationManager.MigrationManagerGossipState); !isGossip {
 		t.Error("must be in gossip state")
 	}
 

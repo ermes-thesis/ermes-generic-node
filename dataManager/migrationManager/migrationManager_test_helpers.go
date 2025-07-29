@@ -19,8 +19,8 @@ func ResetSingleton() {
 	migrationManagareInstance = nil
 }
 
-func GetBuffer(collection string, child string) *CircularBuffer {
-	return migrationManagareInstance.unstableEquilibriumState[collection][child]
+func (m *MigrationManagerImp) GetBuffer(collection string, child string) *CircularBuffer {
+	return m.unstableEquilibriumState[collection][child]
 }
 
 func (m *MigrationManagerImp) GetCurrentState() MigrationManagerState {

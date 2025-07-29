@@ -140,7 +140,7 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 	//get collection from redis instance
 	res, groups, err := m.MigrationManagerImp.dbInterface.GetCollection(outerKey)
 	if err != nil {
-		panic(err)
+		panic(err) //TODO: decide
 	}
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	m.MigrationManagerImp.sendRemoteCollectionTo(innerKey, strongCollection, res, groups)
@@ -168,7 +168,7 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 	//get collection from redis instance
 	res, groups, err := m.MigrationManagerImp.dbInterface.GetCollection(outerKey)
 	if err != nil {
-		panic(err)
+		panic(err) //TODO: decide
 	}
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	m.MigrationManagerImp.sendRemoteCollectionTo(innerKey, strongCollection, res, groups)

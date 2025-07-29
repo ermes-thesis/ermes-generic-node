@@ -16,10 +16,10 @@ type CollectionsDiscovererImp struct {
 }
 
 // singleton pattern
-var collectionsDiscovererInstance *CollectionsDiscovererImp
+var collectionsDiscovererInstance CollectionsDiscoverer
 var lock = &sync.Mutex{}
 
-func GetCollectionsDiscovererInstance() *CollectionsDiscovererImp {
+func GetCollectionsDiscovererInstance() CollectionsDiscoverer {
 	if collectionsDiscovererInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()

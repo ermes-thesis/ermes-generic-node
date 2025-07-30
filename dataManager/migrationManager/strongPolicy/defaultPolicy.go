@@ -42,15 +42,20 @@ type DefaultStrongCollectionPolicy struct {
 	penalityFunc penality.PenalityFunc
 }
 
-func NewDefaultPolicy(config config.MigrationManagerConfig, collections *shared.CollectionPartialView, migLock *sync.Mutex, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB) StrongCollectionPolicy {
-	return &DefaultStrongCollectionPolicy{
+func NewDefaultPolicy(config config.MigrationManagerConfig, collections *shared.CollectionPartialView, migLock *sync.Mutex, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo) StrongCollectionPolicy {
+	policy := &DefaultStrongCollectionPolicy{
 		migLock:          migLock,
 		currentConfig:    config,
+		serverInfo:       serverInfo,
 		partialView:      collections,
 		equilibriumState: make(map[string]map[string]*usage.CircularBuffer),
 		penalityFunc:     penalityFunc,
 		dbInterface:      dbInterface,
 	}
+
+	policy.SetDefaultState()
+
+	return policy
 }
 
 //impl StrongCollectionPolicy
@@ -58,7 +63,7 @@ func NewDefaultPolicy(config config.MigrationManagerConfig, collections *shared.
 func (s *DefaultStrongCollectionPolicy) SetDefaultState() {
 	//state pattern
 	s.idleState = &MigrationManagerIdleState{policy: s}
-	//s.gossipState = &MigrationManagerGossipState{policy: s, MissingMessageCounter: 0, ChildrenResourceUsage: make(map[string]ChildStateInfo, 0)}
+	s.gossipState = &MigrationManagerGossipState{policy: s, MissingMessageCounter: 0, ChildrenResourceUsage: make(map[string]ChildStateInfo, 0)}
 	s.decisionState = &MigrationManagerDecisionState{policy: s, ChildStateInfo: make(map[string]ChildStateInfo, 0)}
 
 	s.currentState = s.idleState
@@ -68,11 +73,11 @@ func (s *DefaultStrongCollectionPolicy) SetDefaultState() {
 }
 
 func (s *DefaultStrongCollectionPolicy) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	panic("unimplemented")
+	s.currentState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
 }
 
 func (s *DefaultStrongCollectionPolicy) ManageGossipMessage(msg gossipmessages.GossipMessage) {
-	panic("unimplemented")
+	s.currentState.ManageGossipMessage(msg)
 }
 
 // methods

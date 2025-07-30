@@ -8,6 +8,7 @@ import (
 	clDiscoverer "dataManager/collectionsDiscoverer"
 	lru "dataManager/lru"
 	migrationManager "dataManager/migrationManager"
+	penality "dataManager/migrationManager/penalityFunction"
 	shared "dataManager/shared"
 	mockDb "db/mocks"
 	"server/info"
@@ -15,10 +16,6 @@ import (
 
 	"github.com/stretchr/testify/mock"
 )
-
-func myTPenalityFunc(bufferPos int, currentValue int) int {
-	return currentValue
-}
 
 func testSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB) {
 	migrationManagerConfig := config.MigrationManagerConfig{
@@ -50,7 +47,7 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 	migrationManagerConfig, collections, serverinfo, lruCache, db := testSetUp(t)
 
 	mig := migrationManager.GetMigrationManagerInstance()
-	mig.Init(collections, myTPenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
+	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
 	clDiscoverer := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscoverer.Init(collections)
 	mig.ManageNewRequest("repoId", "childName", true, 3)

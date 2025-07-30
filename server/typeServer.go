@@ -56,13 +56,11 @@ func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.Gen
 
 }
 
-// Add a new method to the server which is responsible for creating a new request to move data
-
-func (this *Server) CreateDataMovementHTTPRequest(nodeTo string, key string, value string) error {
-
+// Method to send a generic data transfer request. It returns both the status code of the response and the error.
+func (this *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageContent interface{}) (int, error) {
 	// Check if the node to is correctly formatted
 
-	fmt.Fprintf(this.Logger, "got a request to send the data to another node \n")
+	fmt.Fprintf(this.Logger, "got a generic request %s \n", pathTo)
 
 	// Check if the node is valid TODO: refactor with slices if possible
 
@@ -75,28 +73,21 @@ func (this *Server) CreateDataMovementHTTPRequest(nodeTo string, key string, val
 	}
 
 	if this.Serverinfo.Father.Address != nodeTo && !ok {
-
 		fmt.Fprintf(this.Logger, "request should be sent to %s , which is not a known node. \n", nodeTo)
 
-		return errors.New("node not in the hierarchy, cannot send request")
+		return -1, errors.New("node not in the hierarchy, cannot send request")
 	}
 
-	reqUrl := fmt.Sprintf("http://localhost:%s/pvt-data-transfer-request", nodeTo)
+	reqUrl := fmt.Sprintf("http://localhost:%s%s", nodeTo, pathTo)
 
 	fmt.Fprintf(this.Logger, "Sending request to node: %s \n", reqUrl)
 
-	// Wrap the information in the serializable type
-
-	reqBody := info.DataMovementRequestConstructor(nodeTo, this.Serverinfo.Address, key, value)
-
-	// Convert to json
-
-	jsonBody, err := json.Marshal(reqBody)
+	jsonBody, err := json.Marshal(messageContent)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when marshalling the body of the request: %s \n", err)
 
-		return err
+		return -1, err
 	}
 
 	// Create the request
@@ -106,7 +97,7 @@ func (this *Server) CreateDataMovementHTTPRequest(nodeTo string, key string, val
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when creating the http request: %s \n", err)
 
-		return err
+		return -1, err
 	}
 
 	// Prepare the headers
@@ -121,15 +112,9 @@ func (this *Server) CreateDataMovementHTTPRequest(nodeTo string, key string, val
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when contacting the node: %s \n", err)
 
-		return err
+		return -1, err
 	}
 
-	// TODO; what to do with the response? I should check if it was possible to perform it
-
-	if res.StatusCode == http.StatusInternalServerError {
-		// Not enough space
-		return errors.New("it was not possible to insert the data in the node as there was not enough space (i guess?)")
-	}
-
-	return nil
+	// If everything went well return the response status code.
+	return res.StatusCode, nil
 }

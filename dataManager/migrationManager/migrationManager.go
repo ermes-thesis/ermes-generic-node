@@ -8,6 +8,7 @@ import (
 	policy "dataManager/migrationManager/strongPolicy"
 	shared "dataManager/shared"
 	db "db"
+	"errors"
 	info "server/info"
 	"sync"
 )
@@ -18,7 +19,7 @@ type MigrationManager interface {
 	// used to update lru in real time (collectionID)
 	// if the collection is strong used to update forces in real time (collectionID, nodeName, write?, request cumulative latency).
 	// if the request comes from a user => nodeName = "user"
-	ManageNewRequest(string, string, bool, int)
+	ManageNewRequest(string, string, bool, int) error
 	//used to update non real time info
 	ManageGossipMessage(gossip.GossipMessage)
 	//used when the node receive  a collection from one of the directly connected nodes (collectionID,size,isStrong)
@@ -111,10 +112,10 @@ func (m *MigrationManagerImp) ManageGossipMessage(msg gossip.GossipMessage) {
 	m.StrongCollectionPolicy.ManageGossipMessage(msg)
 }
 
-func (m *MigrationManagerImp) ManageNewRequest(collectionId string, nodeName string, isWrite bool, requestLatency int) { //error{
+func (m *MigrationManagerImp) ManageNewRequest(collectionId string, nodeName string, isWrite bool, requestLatency int) error {
 	//if no local info on the collection
 	if m.collectionsPartialView.KnowedCollections[collectionId] == nil || !m.collectionsPartialView.KnowedCollections[collectionId].IsLocal() {
-		return //lancia errore
+		return errors.New("collection not found locally or not local")
 	}
 
 	//place on top in the LRU
@@ -124,6 +125,8 @@ func (m *MigrationManagerImp) ManageNewRequest(collectionId string, nodeName str
 	if m.collectionsPartialView.KnowedCollections[collectionId].IsStrong() {
 		m.StrongCollectionPolicy.ManageNewStrongRequest(collectionId, nodeName, isWrite, requestLatency)
 	}
+
+	return nil
 }
 
 func (m *MigrationManagerImp) ChangeStrongCollectionPolicy(newPolicy policy.CurrentPolicy) {

@@ -119,7 +119,7 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 
 // Utility function in order to obtain capacity-current>=sizeGoal.
 // This function returns a list of removed items
-func (this *LRUCache[T]) freeToAchieveSize(sizeGoal uint) *list.List {
+func (this *LRUCache[T]) FreeToAchieveSize(sizeGoal uint) *list.List {
 
 	this.mux.Lock()
 
@@ -152,11 +152,46 @@ func (this *LRUCache[T]) freeToAchieveSize(sizeGoal uint) *list.List {
 		delete(this.cache, converted.key)
 
 		// Update the capacity
-		this.current += converted.size
+		this.current -= converted.size
 
 	}
 
 	return returnList
+}
+
+// Function to remove a value given its key.
+// This operation is thread safe and O(1)
+func (this *LRUCache[T]) Remove(key string) error {
+
+	this.mux.Lock()
+
+	defer this.mux.Unlock()
+
+	get := this.cache[key]
+
+	if get == nil {
+		return errors.New("Trying to remove a non existing key")
+	}
+
+	// The returned element will be garbage collected (brrrr)
+	this.linkedlist.Remove(get)
+
+	// Delete the element from the map
+
+	delete(this.cache, key)
+
+	// Update the size
+
+	converted, ok := get.Value.(lruCacheType[T])
+
+	// Should never arrive here
+	if !ok {
+		return errors.New("Unknown error when converting element to type 'lruCacheType[T]'")
+	}
+
+	this.current -= converted.size
+
+	return nil
 }
 
 func (this *LRUCache[T]) GetCurrentSize() uint {

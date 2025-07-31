@@ -10,9 +10,9 @@ import (
 	"db"
 	"fmt"
 	"io"
+	logger "logger"
 	"metadataManager"
 	"net"
-
 	"net/http"
 	"os"
 	"os/signal"
@@ -28,6 +28,9 @@ func myPenalityFunc(bufferPos int, currentValue int) int {
 }
 
 func run(ctx context.Context, w io.Writer, configPath string) error {
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.INFO, &loggerFile)
+
 	config := config.LoadConfig(configPath)
 	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](config.Lru.Size)
 
@@ -66,9 +69,9 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	collections := &dataManagerShared.CollectionPartialView{
 		KnowedCollections: make(map[string]dataManagerShared.Collection),
 	}
-	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
-	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, *ser.Serverinfo, &lruCache, redisClient)
-	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
+	migrationManagerIstance := migrationManager.GetMigrationManagerInstance(*logger)
+	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, *ser.Serverinfo, &lruCache, redisClient, *logger)
+	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
 	clDiscovererIstance.Init(collections)
 
 	// TODO: understand these lines of code

@@ -8,6 +8,7 @@ import (
 	penality "dataManager/migrationManager/penalityFunction"
 	shared "dataManager/shared"
 	"db"
+	log "logger"
 	"server/info"
 	"sync"
 	"time"
@@ -20,6 +21,7 @@ type DefaultStrongCollectionPolicy struct {
 	//config
 	currentConfig config.MigrationManagerConfig
 	serverInfo    info.ServerInfo
+	logger        log.Logger
 
 	//state
 	currentState MigrationManagerState
@@ -42,8 +44,9 @@ type DefaultStrongCollectionPolicy struct {
 	penalityFunc penality.PenalityFunc
 }
 
-func NewDefaultPolicy(config config.MigrationManagerConfig, collections *shared.CollectionPartialView, migLock *sync.Mutex, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo) StrongCollectionPolicy {
+func NewDefaultPolicy(config config.MigrationManagerConfig, collections *shared.CollectionPartialView, migLock *sync.Mutex, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo, logger log.Logger) StrongCollectionPolicy {
 	policy := &DefaultStrongCollectionPolicy{
+		logger:           logger,
 		migLock:          migLock,
 		currentConfig:    config,
 		serverInfo:       serverInfo,
@@ -61,6 +64,7 @@ func NewDefaultPolicy(config config.MigrationManagerConfig, collections *shared.
 //impl StrongCollectionPolicy
 
 func (s *DefaultStrongCollectionPolicy) SetDefaultState() {
+	s.logger.Println("DEFAULT-STRONG-POLICY", "Setting default state", log.INFO)
 	//state pattern
 	s.idleState = &MigrationManagerIdleState{policy: s}
 	s.gossipState = &MigrationManagerGossipState{policy: s, MissingMessageCounter: 0, ChildrenResourceUsage: make(map[string]ChildStateInfo, 0)}
@@ -87,6 +91,7 @@ func (s *DefaultStrongCollectionPolicy) setState(state MigrationManagerState) {
 
 // transitionToGossip handles automatic transition from idle to gossip
 func (s *DefaultStrongCollectionPolicy) transitionToGossip() {
+	s.logger.Println("DEFAULT-STRONG-POLICY", "transition to gossip state", log.INFO)
 	//sync
 	s.migLock.Lock()
 	defer s.migLock.Unlock()
@@ -96,25 +101,33 @@ func (s *DefaultStrongCollectionPolicy) transitionToGossip() {
 	if _, isIdle := s.currentState.(*MigrationManagerIdleState); isIdle {
 		//fmt.Println("Auto-transitioning from idle to gossip state")
 		if s.serverInfo.Father != nil {
+			s.logger.Println("DEFAULT-STRONG-POLICY", "fog node setted in gossip state", log.INFO)
 			s.gossipState.Setup(len(s.serverInfo.Children) + 1)
 		} else {
+			s.logger.Println("DEFAULT-STRONG-POLICY", "cloud node setted in gossip state", log.INFO)
 			s.gossipState.Setup(len(s.serverInfo.Children)) //number of adjacent nodes - TODO: manage cloud nodes.
 		}
 		s.setState(s.gossipState)
 		s.stopIdleTimer()
+	} else {
+		s.logger.Println("DEFAULT-STRONG-POLICY", "can't translate to gossip state from a state different from idle", log.ERROR)
 	}
 }
 
 func (s *DefaultStrongCollectionPolicy) transitionToDecision(childrenResourceUsage map[string]ChildStateInfo) {
+	s.logger.Println("DEFAULT-STRONG-POLICY", "transition to decision state", log.INFO)
 	// Only transition if still in gossip state
 	if _, isGossip := s.currentState.(*MigrationManagerGossipState); isGossip {
 		//fmt.Println("Auto-transitioning from gossip to decision state")
 		s.decisionState.Setup(childrenResourceUsage)
 		s.setState(s.decisionState)
+	} else {
+		s.logger.Println("DEFAULT-STRONG-POLICY", "can't translate to decision state from a state different from gossip", log.ERROR)
 	}
 }
 
 func (s *DefaultStrongCollectionPolicy) transitionToIdle() {
+	s.logger.Println("DEFAULT-STRONG-POLICY", "transition to idle state", log.INFO)
 	//sync
 	s.migLock.Lock()
 	defer s.migLock.Unlock()
@@ -125,11 +138,14 @@ func (s *DefaultStrongCollectionPolicy) transitionToIdle() {
 		//fmt.Println("Auto-transitioning from decision to idle state")
 		s.setState(s.idleState)
 		s.startIdleTimer()
+	} else {
+		s.logger.Println("DEFAULT-STRONG-POLICY", "can't translate to idel state from a state different from decision", log.ERROR)
 	}
 }
 
 // startIdleTimer starts or restarts the timer for idle->gossip transition
 func (s *DefaultStrongCollectionPolicy) startIdleTimer() {
+	s.logger.Println("DEFAULT-STRONG-POLICY", "start idle timer", log.INFO)
 	// Cancel existing timer if any
 	if s.stateTimer != nil {
 		s.stateTimer.Stop()
@@ -146,6 +162,7 @@ func (s *DefaultStrongCollectionPolicy) startIdleTimer() {
 
 func (s *DefaultStrongCollectionPolicy) stopIdleTimer() {
 	if s.stateTimer != nil {
+		s.logger.Println("DEFAULT-STRONG-POLICY", "stop idle timer", log.INFO)
 		s.stateTimer.Stop()
 		s.stateTimer = nil
 	}

@@ -9,13 +9,14 @@ import (
 	shared "dataManager/shared"
 	db "db"
 	"errors"
+	log "logger"
 	info "server/info"
 	"sync"
 )
 
 type MigrationManager interface {
 	//inizialize thje singleto pattern
-	Init(*shared.CollectionPartialView, penality.PenalityFunc, config.MigrationManagerConfig, info.ServerInfo, *lru.LRUCache[shared.Collection], db.GenericDB)
+	Init(*shared.CollectionPartialView, penality.PenalityFunc, config.MigrationManagerConfig, info.ServerInfo, *lru.LRUCache[shared.Collection], db.GenericDB, log.Logger)
 	// used to update lru in real time (collectionID)
 	// if the collection is strong used to update forces in real time (collectionID, nodeName, write?, request cumulative latency).
 	// if the request comes from a user => nodeName = "user"
@@ -33,6 +34,7 @@ type MigrationManagerImp struct {
 	//config
 	config     config.MigrationManagerConfig
 	serverInfo info.ServerInfo
+	logger     log.Logger
 
 	//policy
 	defaultPolicy          policy.StrongCollectionPolicy
@@ -51,18 +53,19 @@ var migLock = &sync.Mutex{}
 
 //TODO: remove from global var
 
-func GetMigrationManagerInstance() MigrationManager {
+func GetMigrationManagerInstance(logger log.Logger) MigrationManager {
 	if migrationManagareInstance == nil {
 		migLock.Lock()
 		defer migLock.Unlock()
 		if migrationManagareInstance == nil {
 			migrationManagareInstance = &MigrationManagerImp{}
+			logger.Println("MIG-MANAGER", "create new migration manager instance", log.INFO)
 		}
 	}
 	return migrationManagareInstance
 }
 
-func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB) {
+func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger log.Logger) {
 	//sync
 	migLock.Lock()
 	defer migLock.Unlock()
@@ -71,59 +74,81 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		return
 	}
 	m.serverInfo = serverInfo
+	m.logger = logger
 	m.dbInterface = dbInterface
 	m.lruCache = lruCache
 	m.config = config
 
 	//policy
-	m.defaultPolicy = policy.NewDefaultPolicy(config, collections, migLock, penalityFunc, dbInterface, serverInfo)
+	m.defaultPolicy = policy.NewDefaultPolicy(config, collections, migLock, penalityFunc, dbInterface, serverInfo, m.logger)
 	m.StrongCollectionPolicy = m.defaultPolicy
 
 	//init data
 	m.collectionsPartialView = collections
+
+	logger.Println("MIG-MANAGER", "migration manager instance has been inizialized", log.INFO)
 }
 
 // methods
 func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, collectionSize int, isStrong bool, records map[string]string, groups []string) bool {
+	m.logger.Println("MIG-MANAGER", "new local collection received", log.INFO)
 	collection := m.collectionsPartialView.KnowedCollections[collectionId]
 	if collection != nil {
 		if collection.IsLocal() {
+			m.logger.Println("MIG-MANAGER", "new collection already present locally", log.WARNING)
 			return true
 			//TODO probably for weak collections conflict must be solved in this case
 		}
 		err := m.dbInterface.SetCollection(collectionId, records, groups) //add collection to redis
 		if err != nil {
+			m.logger.Println("MIG-MANAGER", "add collection in redis fails", log.ERROR)
 			panic(err) //TODO: decide
 		}
 
 		collection.SetToLocal(collectionSize)
+		m.logger.Println("MIG-MANAGER", "new collection setted to local", log.INFO)
 		return false
 	}
-	m.dbInterface.SetCollection(collectionId, records, groups) //add collection to redis
+	err := m.dbInterface.SetCollection(collectionId, records, groups) //add collection to redis
+	if err != nil {
+		m.logger.Println("MIG-MANAGER", "add collection in redis fails", log.INFO)
+		panic(err) //TODO: decide
+	}
+
 	if isStrong {
 		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false) //TODO leader?
 	} else {
 		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewWeakCollection(collectionId, collectionSize, false)
 	}
+	m.logger.Println("MIG-MANAGER", "new collection added to knowed collections", log.INFO)
 	return false
 }
 
 func (m *MigrationManagerImp) ManageGossipMessage(msg gossip.GossipMessage) {
+	m.logger.Println("MIG-MANAGER", "gossip message received", log.INFO)
 	m.StrongCollectionPolicy.ManageGossipMessage(msg)
 }
 
+// call this when wasm function has completed
 func (m *MigrationManagerImp) ManageNewRequest(collectionId string, nodeName string, isWrite bool, requestLatency int) error {
 	//if no local info on the collection
 	if m.collectionsPartialView.KnowedCollections[collectionId] == nil || !m.collectionsPartialView.KnowedCollections[collectionId].IsLocal() {
+		m.logger.Println("MIG-MANAGER", "collection not found locally or not local", log.ERROR)
 		return errors.New("collection not found locally or not local")
 	}
+	m.logger.Println("MIG-MANAGER", "new request for a local collection received", log.INFO)
 
 	//place on top in the LRU
 	m.lruCache.Put(collectionId, m.collectionsPartialView.KnowedCollections[collectionId], uint(m.collectionsPartialView.KnowedCollections[collectionId].GetCollectionState().(*shared.LocalCollection).Size()))
+	m.logger.Println("MIG-MANAGER", "collection placed on top in the LRU", log.INFO)
 
 	//if the collection is strong update forces
 	if m.collectionsPartialView.KnowedCollections[collectionId].IsStrong() {
+		m.logger.Println("MIG-MANAGER", "handle request for a strong collection", log.INFO)
 		m.StrongCollectionPolicy.ManageNewStrongRequest(collectionId, nodeName, isWrite, requestLatency)
+	} else {
+		m.logger.Println("MIG-MANAGER", "handle request for a week collection", log.INFO)
+		//TODO
 	}
 
 	return nil

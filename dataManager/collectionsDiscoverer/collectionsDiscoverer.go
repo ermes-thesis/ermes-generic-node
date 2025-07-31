@@ -2,6 +2,7 @@ package collectionsDiscoverer
 
 import (
 	shared "dataManager/shared"
+	log "logger"
 	"sync"
 )
 
@@ -19,12 +20,12 @@ type CollectionsDiscovererImp struct {
 var collectionsDiscovererInstance CollectionsDiscoverer
 var lock = &sync.Mutex{}
 
-func GetCollectionsDiscovererInstance() CollectionsDiscoverer {
+func GetCollectionsDiscovererInstance(logger log.Logger) CollectionsDiscoverer {
 	if collectionsDiscovererInstance == nil {
 		lock.Lock()
 		defer lock.Unlock()
 		if collectionsDiscovererInstance == nil {
-			//fmt.Println("Creating single instance now.")
+			logger.Println("COLLECTION-DISCOVERER", "create new collection discoverer instance", log.INFO)
 			collectionsDiscovererInstance = &CollectionsDiscovererImp{}
 		}
 	}

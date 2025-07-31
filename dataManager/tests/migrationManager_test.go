@@ -12,6 +12,9 @@ import (
 	policy "dataManager/migrationManager/strongPolicy"
 	shared "dataManager/shared"
 	mockDb "db/mocks"
+	"io"
+	logger "logger"
+	"os"
 	"server/info"
 	"testing"
 
@@ -51,11 +54,13 @@ func migTestSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.Collecti
 
 func TestSingletonInstance(t *testing.T) {
 	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
-	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
-	instance2 := migrationManager.GetMigrationManagerInstance()
-	instance2.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
+	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db, *logger)
+	instance2 := migrationManager.GetMigrationManagerInstance(*logger)
+	instance2.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db, *logger)
 
 	if instance1 == nil {
 		t.Fatal("Expected non-nil instance from GetMigrationManagerIstance")
@@ -72,9 +77,11 @@ func TestSingletonInstance(t *testing.T) {
 
 func TestManageNewStrongRequest(t *testing.T) {
 	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
-	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
+	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db, *logger)
 	instance1.NewCollectionReceived("repoId", 10, true, make(map[string]string), []string{})
 	instance1.NewCollectionReceived("repoId1", 10, true, make(map[string]string), []string{})
 
@@ -120,9 +127,11 @@ func TestManageNewStrongRequest(t *testing.T) {
 
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
 	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
-	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
+	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db, *logger)
 	instance1.NewCollectionReceived("repoId", 10, true, make(map[string]string), []string{})
 	instance1.NewCollectionReceived("repoId1", 10, true, make(map[string]string), []string{})
 
@@ -146,9 +155,11 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 
 func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
-	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
+	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db, *logger)
 	instance1.NewCollectionReceived("repoId", 10, true, make(map[string]string), []string{})
 	instance1.NewCollectionReceived("repoId1", 10, true, make(map[string]string), []string{})
 
@@ -183,9 +194,11 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 
 func TestMigrationFromIdleToGossipAfterReceiveAMessage(t *testing.T) {
 	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
-	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
+	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
+	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db, *logger)
 
 	msg := gossip.NewChildStateMessage("senderId", 0.0, 0.0)
 

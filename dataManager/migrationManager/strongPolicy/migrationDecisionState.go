@@ -121,7 +121,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, strongCollection *shared.StrongCollection, totalForce int, totalReq int) bool {
 	//compute decision
 	feW, _ := m.computeElasticForce(buffer, usage.GetWrite)
-	var driverForce = float64(2*feW) - (m.ChildStateInfo[innerKey].MemoryUsage * m.policy.currentConfig.GravityConstant) - float64(totalReq) //TODO: moltiplicaremper distanza geografica
+	var driverForce = float64(2*feW) - (m.ChildStateInfo[innerKey].MemoryUsage * m.policy.currentConfig.GravityConstant) - float64(totalReq*int(m.policy.serverInfo.Latency))
 
 	//evaluate decision
 	if driverForce <= float64(totalForce) {

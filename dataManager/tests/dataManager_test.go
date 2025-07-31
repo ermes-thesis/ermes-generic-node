@@ -11,6 +11,9 @@ import (
 	penality "dataManager/migrationManager/penalityFunction"
 	shared "dataManager/shared"
 	mockDb "db/mocks"
+	"io"
+	logger "logger"
+	"os"
 	"server/info"
 	"testing"
 
@@ -45,10 +48,12 @@ func testSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.CollectionP
 
 func TestFromRemoteToLocalCollection(t *testing.T) {
 	migrationManagerConfig, collections, serverinfo, lruCache, db := testSetUp(t)
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
-	mig := migrationManager.GetMigrationManagerInstance()
-	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, serverinfo, lruCache, db)
-	clDiscoverer := clDiscoverer.GetCollectionsDiscovererInstance()
+	mig := migrationManager.GetMigrationManagerInstance(*logger)
+	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, serverinfo, lruCache, db, *logger)
+	clDiscoverer := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
 	clDiscoverer.Init(collections)
 	mig.ManageNewRequest("repoId", "childName", true, 3)
 

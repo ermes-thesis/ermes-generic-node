@@ -39,10 +39,10 @@ func (_m *GenericDB) EXPECT() *GenericDB_Expecter {
 }
 
 // AddGroups provides a mock function for the type GenericDB
-func (_mock *GenericDB) AddGroups(collectionId string, members ...string) error {
+func (_mock *GenericDB) AddGroups(collectionId string, groups ...string) error {
 	var tmpRet mock.Arguments
-	if len(members) > 0 {
-		tmpRet = _mock.Called(collectionId, members)
+	if len(groups) > 0 {
+		tmpRet = _mock.Called(collectionId, groups)
 	} else {
 		tmpRet = _mock.Called(collectionId)
 	}
@@ -54,7 +54,7 @@ func (_mock *GenericDB) AddGroups(collectionId string, members ...string) error 
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(string, ...string) error); ok {
-		r0 = returnFunc(collectionId, members...)
+		r0 = returnFunc(collectionId, groups...)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -68,13 +68,13 @@ type GenericDB_AddGroups_Call struct {
 
 // AddGroups is a helper method to define mock.On call
 //   - collectionId string
-//   - members ...string
-func (_e *GenericDB_Expecter) AddGroups(collectionId interface{}, members ...interface{}) *GenericDB_AddGroups_Call {
+//   - groups ...string
+func (_e *GenericDB_Expecter) AddGroups(collectionId interface{}, groups ...interface{}) *GenericDB_AddGroups_Call {
 	return &GenericDB_AddGroups_Call{Call: _e.mock.On("AddGroups",
-		append([]interface{}{collectionId}, members...)...)}
+		append([]interface{}{collectionId}, groups...)...)}
 }
 
-func (_c *GenericDB_AddGroups_Call) Run(run func(collectionId string, members ...string)) *GenericDB_AddGroups_Call {
+func (_c *GenericDB_AddGroups_Call) Run(run func(collectionId string, groups ...string)) *GenericDB_AddGroups_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -99,7 +99,7 @@ func (_c *GenericDB_AddGroups_Call) Return(err error) *GenericDB_AddGroups_Call 
 	return _c
 }
 
-func (_c *GenericDB_AddGroups_Call) RunAndReturn(run func(collectionId string, members ...string) error) *GenericDB_AddGroups_Call {
+func (_c *GenericDB_AddGroups_Call) RunAndReturn(run func(collectionId string, groups ...string) error) *GenericDB_AddGroups_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -610,6 +610,121 @@ func (_c *GenericDB_GetCollection_Call) RunAndReturn(run func(collectionId strin
 	return _c
 }
 
+// GetCollectionMemoryUsage provides a mock function for the type GenericDB
+func (_mock *GenericDB) GetCollectionMemoryUsage(collectionId string) (uint64, error) {
+	ret := _mock.Called(collectionId)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetCollectionMemoryUsage")
+	}
+
+	var r0 uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string) (uint64, error)); ok {
+		return returnFunc(collectionId)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string) uint64); ok {
+		r0 = returnFunc(collectionId)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string) error); ok {
+		r1 = returnFunc(collectionId)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// GenericDB_GetCollectionMemoryUsage_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetCollectionMemoryUsage'
+type GenericDB_GetCollectionMemoryUsage_Call struct {
+	*mock.Call
+}
+
+// GetCollectionMemoryUsage is a helper method to define mock.On call
+//   - collectionId string
+func (_e *GenericDB_Expecter) GetCollectionMemoryUsage(collectionId interface{}) *GenericDB_GetCollectionMemoryUsage_Call {
+	return &GenericDB_GetCollectionMemoryUsage_Call{Call: _e.mock.On("GetCollectionMemoryUsage", collectionId)}
+}
+
+func (_c *GenericDB_GetCollectionMemoryUsage_Call) Run(run func(collectionId string)) *GenericDB_GetCollectionMemoryUsage_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		run(
+			arg0,
+		)
+	})
+	return _c
+}
+
+func (_c *GenericDB_GetCollectionMemoryUsage_Call) Return(v uint64, err error) *GenericDB_GetCollectionMemoryUsage_Call {
+	_c.Call.Return(v, err)
+	return _c
+}
+
+func (_c *GenericDB_GetCollectionMemoryUsage_Call) RunAndReturn(run func(collectionId string) (uint64, error)) *GenericDB_GetCollectionMemoryUsage_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// GetMemoryStats provides a mock function for the type GenericDB
+func (_mock *GenericDB) GetMemoryStats() (*db.MemStats, error) {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetMemoryStats")
+	}
+
+	var r0 *db.MemStats
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func() (*db.MemStats, error)); ok {
+		return returnFunc()
+	}
+	if returnFunc, ok := ret.Get(0).(func() *db.MemStats); ok {
+		r0 = returnFunc()
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*db.MemStats)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func() error); ok {
+		r1 = returnFunc()
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// GenericDB_GetMemoryStats_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetMemoryStats'
+type GenericDB_GetMemoryStats_Call struct {
+	*mock.Call
+}
+
+// GetMemoryStats is a helper method to define mock.On call
+func (_e *GenericDB_Expecter) GetMemoryStats() *GenericDB_GetMemoryStats_Call {
+	return &GenericDB_GetMemoryStats_Call{Call: _e.mock.On("GetMemoryStats")}
+}
+
+func (_c *GenericDB_GetMemoryStats_Call) Run(run func()) *GenericDB_GetMemoryStats_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *GenericDB_GetMemoryStats_Call) Return(memStats *db.MemStats, err error) *GenericDB_GetMemoryStats_Call {
+	_c.Call.Return(memStats, err)
+	return _c
+}
+
+func (_c *GenericDB_GetMemoryStats_Call) RunAndReturn(run func() (*db.MemStats, error)) *GenericDB_GetMemoryStats_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetMetadata provides a mock function for the type GenericDB
 func (_mock *GenericDB) GetMetadata(collectionId string) (*db.Metadata, error) {
 	ret := _mock.Called(collectionId)
@@ -738,6 +853,72 @@ func (_c *GenericDB_GetRecord_Call) RunAndReturn(run func(collectionId string, r
 	return _c
 }
 
+// GetRecordMemoryUsage provides a mock function for the type GenericDB
+func (_mock *GenericDB) GetRecordMemoryUsage(collectionId string, recordName string) (uint64, error) {
+	ret := _mock.Called(collectionId, recordName)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetRecordMemoryUsage")
+	}
+
+	var r0 uint64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string) (uint64, error)); ok {
+		return returnFunc(collectionId, recordName)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string) uint64); ok {
+		r0 = returnFunc(collectionId, recordName)
+	} else {
+		r0 = ret.Get(0).(uint64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string) error); ok {
+		r1 = returnFunc(collectionId, recordName)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// GenericDB_GetRecordMemoryUsage_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetRecordMemoryUsage'
+type GenericDB_GetRecordMemoryUsage_Call struct {
+	*mock.Call
+}
+
+// GetRecordMemoryUsage is a helper method to define mock.On call
+//   - collectionId string
+//   - recordName string
+func (_e *GenericDB_Expecter) GetRecordMemoryUsage(collectionId interface{}, recordName interface{}) *GenericDB_GetRecordMemoryUsage_Call {
+	return &GenericDB_GetRecordMemoryUsage_Call{Call: _e.mock.On("GetRecordMemoryUsage", collectionId, recordName)}
+}
+
+func (_c *GenericDB_GetRecordMemoryUsage_Call) Run(run func(collectionId string, recordName string)) *GenericDB_GetRecordMemoryUsage_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *GenericDB_GetRecordMemoryUsage_Call) Return(v uint64, err error) *GenericDB_GetRecordMemoryUsage_Call {
+	_c.Call.Return(v, err)
+	return _c
+}
+
+func (_c *GenericDB_GetRecordMemoryUsage_Call) RunAndReturn(run func(collectionId string, recordName string) (uint64, error)) *GenericDB_GetRecordMemoryUsage_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetRecords provides a mock function for the type GenericDB
 func (_mock *GenericDB) GetRecords(collectionId string, recordNames ...string) ([]any, error) {
 	var tmpRet mock.Arguments
@@ -816,10 +997,10 @@ func (_c *GenericDB_GetRecords_Call) RunAndReturn(run func(collectionId string, 
 }
 
 // IsInGroups provides a mock function for the type GenericDB
-func (_mock *GenericDB) IsInGroups(collectionId string, members ...string) (bool, error) {
+func (_mock *GenericDB) IsInGroups(collectionId string, groups ...string) (bool, error) {
 	var tmpRet mock.Arguments
-	if len(members) > 0 {
-		tmpRet = _mock.Called(collectionId, members)
+	if len(groups) > 0 {
+		tmpRet = _mock.Called(collectionId, groups)
 	} else {
 		tmpRet = _mock.Called(collectionId)
 	}
@@ -832,15 +1013,15 @@ func (_mock *GenericDB) IsInGroups(collectionId string, members ...string) (bool
 	var r0 bool
 	var r1 error
 	if returnFunc, ok := ret.Get(0).(func(string, ...string) (bool, error)); ok {
-		return returnFunc(collectionId, members...)
+		return returnFunc(collectionId, groups...)
 	}
 	if returnFunc, ok := ret.Get(0).(func(string, ...string) bool); ok {
-		r0 = returnFunc(collectionId, members...)
+		r0 = returnFunc(collectionId, groups...)
 	} else {
 		r0 = ret.Get(0).(bool)
 	}
 	if returnFunc, ok := ret.Get(1).(func(string, ...string) error); ok {
-		r1 = returnFunc(collectionId, members...)
+		r1 = returnFunc(collectionId, groups...)
 	} else {
 		r1 = ret.Error(1)
 	}
@@ -854,13 +1035,13 @@ type GenericDB_IsInGroups_Call struct {
 
 // IsInGroups is a helper method to define mock.On call
 //   - collectionId string
-//   - members ...string
-func (_e *GenericDB_Expecter) IsInGroups(collectionId interface{}, members ...interface{}) *GenericDB_IsInGroups_Call {
+//   - groups ...string
+func (_e *GenericDB_Expecter) IsInGroups(collectionId interface{}, groups ...interface{}) *GenericDB_IsInGroups_Call {
 	return &GenericDB_IsInGroups_Call{Call: _e.mock.On("IsInGroups",
-		append([]interface{}{collectionId}, members...)...)}
+		append([]interface{}{collectionId}, groups...)...)}
 }
 
-func (_c *GenericDB_IsInGroups_Call) Run(run func(collectionId string, members ...string)) *GenericDB_IsInGroups_Call {
+func (_c *GenericDB_IsInGroups_Call) Run(run func(collectionId string, groups ...string)) *GenericDB_IsInGroups_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -885,7 +1066,7 @@ func (_c *GenericDB_IsInGroups_Call) Return(b bool, err error) *GenericDB_IsInGr
 	return _c
 }
 
-func (_c *GenericDB_IsInGroups_Call) RunAndReturn(run func(collectionId string, members ...string) (bool, error)) *GenericDB_IsInGroups_Call {
+func (_c *GenericDB_IsInGroups_Call) RunAndReturn(run func(collectionId string, groups ...string) (bool, error)) *GenericDB_IsInGroups_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -957,10 +1138,10 @@ func (_c *GenericDB_RecordExists_Call) RunAndReturn(run func(collectionId string
 }
 
 // RemoveGroups provides a mock function for the type GenericDB
-func (_mock *GenericDB) RemoveGroups(collectionId string, members ...string) error {
+func (_mock *GenericDB) RemoveGroups(collectionId string, groups ...string) error {
 	var tmpRet mock.Arguments
-	if len(members) > 0 {
-		tmpRet = _mock.Called(collectionId, members)
+	if len(groups) > 0 {
+		tmpRet = _mock.Called(collectionId, groups)
 	} else {
 		tmpRet = _mock.Called(collectionId)
 	}
@@ -972,7 +1153,7 @@ func (_mock *GenericDB) RemoveGroups(collectionId string, members ...string) err
 
 	var r0 error
 	if returnFunc, ok := ret.Get(0).(func(string, ...string) error); ok {
-		r0 = returnFunc(collectionId, members...)
+		r0 = returnFunc(collectionId, groups...)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -986,13 +1167,13 @@ type GenericDB_RemoveGroups_Call struct {
 
 // RemoveGroups is a helper method to define mock.On call
 //   - collectionId string
-//   - members ...string
-func (_e *GenericDB_Expecter) RemoveGroups(collectionId interface{}, members ...interface{}) *GenericDB_RemoveGroups_Call {
+//   - groups ...string
+func (_e *GenericDB_Expecter) RemoveGroups(collectionId interface{}, groups ...interface{}) *GenericDB_RemoveGroups_Call {
 	return &GenericDB_RemoveGroups_Call{Call: _e.mock.On("RemoveGroups",
-		append([]interface{}{collectionId}, members...)...)}
+		append([]interface{}{collectionId}, groups...)...)}
 }
 
-func (_c *GenericDB_RemoveGroups_Call) Run(run func(collectionId string, members ...string)) *GenericDB_RemoveGroups_Call {
+func (_c *GenericDB_RemoveGroups_Call) Run(run func(collectionId string, groups ...string)) *GenericDB_RemoveGroups_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 string
 		if args[0] != nil {
@@ -1017,7 +1198,7 @@ func (_c *GenericDB_RemoveGroups_Call) Return(err error) *GenericDB_RemoveGroups
 	return _c
 }
 
-func (_c *GenericDB_RemoveGroups_Call) RunAndReturn(run func(collectionId string, members ...string) error) *GenericDB_RemoveGroups_Call {
+func (_c *GenericDB_RemoveGroups_Call) RunAndReturn(run func(collectionId string, groups ...string) error) *GenericDB_RemoveGroups_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1269,6 +1450,69 @@ func (_c *GenericDB_SetRecord_Call) Return(err error) *GenericDB_SetRecord_Call 
 }
 
 func (_c *GenericDB_SetRecord_Call) RunAndReturn(run func(collectionId string, recordName string, value string) error) *GenericDB_SetRecord_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// SetRecords provides a mock function for the type GenericDB
+func (_mock *GenericDB) SetRecords(collectionId string, recordNames []string, recordValues []string) error {
+	ret := _mock.Called(collectionId, recordNames, recordValues)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SetRecords")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(string, []string, []string) error); ok {
+		r0 = returnFunc(collectionId, recordNames, recordValues)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// GenericDB_SetRecords_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SetRecords'
+type GenericDB_SetRecords_Call struct {
+	*mock.Call
+}
+
+// SetRecords is a helper method to define mock.On call
+//   - collectionId string
+//   - recordNames []string
+//   - recordValues []string
+func (_e *GenericDB_Expecter) SetRecords(collectionId interface{}, recordNames interface{}, recordValues interface{}) *GenericDB_SetRecords_Call {
+	return &GenericDB_SetRecords_Call{Call: _e.mock.On("SetRecords", collectionId, recordNames, recordValues)}
+}
+
+func (_c *GenericDB_SetRecords_Call) Run(run func(collectionId string, recordNames []string, recordValues []string)) *GenericDB_SetRecords_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 []string
+		if args[1] != nil {
+			arg1 = args[1].([]string)
+		}
+		var arg2 []string
+		if args[2] != nil {
+			arg2 = args[2].([]string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *GenericDB_SetRecords_Call) Return(err error) *GenericDB_SetRecords_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *GenericDB_SetRecords_Call) RunAndReturn(run func(collectionId string, recordNames []string, recordValues []string) error) *GenericDB_SetRecords_Call {
 	_c.Call.Return(run)
 	return _c
 }

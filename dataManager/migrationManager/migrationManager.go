@@ -7,18 +7,20 @@ import (
 	sender "dataManager/migrationManager/migrationSender"
 	penality "dataManager/migrationManager/penalityFunction"
 	policy "dataManager/migrationManager/strongPolicy"
+	weakpolicy "dataManager/migrationManager/weakPolicy"
 	shared "dataManager/shared"
 	db "db"
 	"errors"
 	"fmt"
 	log "logger"
+	"server"
 	info "server/info"
 	"sync"
 )
 
 type MigrationManager interface {
 	//inizialize thje singleto pattern
-	Init(*shared.CollectionPartialView, penality.PenalityFunc, config.MigrationManagerConfig, info.ServerInfo, *lru.LRUCache[shared.Collection], db.GenericDB, log.Logger)
+	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger log.Logger)
 	// used to update lru in real time (collectionID)
 	// if the collection is strong used to update forces in real time (collectionID, nodeName, write?, request cumulative latency).
 	// if the request comes from a user => nodeName = "user"
@@ -41,6 +43,9 @@ type MigrationManagerImp struct {
 	//policy
 	defaultPolicy          policy.StrongCollectionPolicy
 	StrongCollectionPolicy policy.StrongCollectionPolicy
+
+	alwaysCopyPolicy     weakpolicy.WeakCollectionPolicy
+	WeakCollectionPolicy weakpolicy.WeakCollectionPolicy
 
 	//impl
 	collectionsPartialView *shared.CollectionPartialView //set of local and remotes collections
@@ -67,7 +72,7 @@ func GetMigrationManagerInstance(logger log.Logger) MigrationManager {
 	return migrationManagareInstance
 }
 
-func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger log.Logger) {
+func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger log.Logger) {
 	//sync
 	migLock.Lock()
 	defer migLock.Unlock()
@@ -82,8 +87,13 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	m.config = config
 
 	//policy
-	m.defaultPolicy = policy.NewDefaultPolicy(config, collections, migLock, penalityFunc, dbInterface, serverInfo, sender.NewSender(logger), m.lruCache, m.logger)
+	sender := sender.NewSender(m.logger, server)
+
+	m.defaultPolicy = policy.NewDefaultPolicy(config, collections, migLock, penalityFunc, dbInterface, serverInfo, sender, m.lruCache, m.logger)
 	m.StrongCollectionPolicy = m.defaultPolicy
+
+	m.alwaysCopyPolicy = weakpolicy.NewAlwayCopyPolicy(config, sender, logger)
+	m.WeakCollectionPolicy = m.alwaysCopyPolicy
 
 	//init data
 	m.collectionsPartialView = collections
@@ -150,7 +160,7 @@ func (m *MigrationManagerImp) ManageNewRequest(collectionId string, nodeName str
 		m.StrongCollectionPolicy.ManageNewStrongRequest(collectionId, nodeName, isWrite, requestLatency)
 	} else {
 		m.logger.Println("MIG-MANAGER", "handle request for a week collection", log.INFO)
-		//TODO
+		m.WeakCollectionPolicy.ManageNewWeakRequest(collectionId, nodeName, isWrite, requestLatency)
 	}
 
 	return nil

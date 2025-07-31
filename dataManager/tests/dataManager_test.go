@@ -14,12 +14,12 @@ import (
 )
 
 func TestFromRemoteToLocalCollection(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache, db := TestSetUp(t)
+	migrationManagerConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
 	var loggerFile io.Writer = os.Stdout //TODO replace with file
 	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
 	mig := migrationManager.GetMigrationManagerInstance(*logger)
-	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, serverinfo, lruCache, db, *logger)
+	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, ser, serverinfo, lruCache, db, *logger)
 	clDiscoverer := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
 	clDiscoverer.Init(collections)
 	mig.ManageNewRequest("repoId", "childName", true, 3)

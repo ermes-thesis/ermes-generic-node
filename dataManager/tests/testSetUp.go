@@ -10,12 +10,13 @@ import (
 	"db"
 	mockDb "db/mocks"
 	"server/info"
+	mockServer "server/mocks"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
 )
 
-func SetupGetMemoryStatsMock(mockDB *mockDb.GenericDB) {
+func SetupGetMemoryStatsMock(mockDB *mockDb.GenericDB, server *mockServer.ServerType) {
 	memStats := &db.MemStats{
 		AllocationStats: db.AllocationStats{
 			UsedMemoryPeak:              1024 * 1024 * 100, // 100MB
@@ -31,17 +32,20 @@ func SetupGetMemoryStatsMock(mockDB *mockDb.GenericDB) {
 		BytesKeysRatio:         512,        // 512 bytes per key average
 	}
 
-	mockDB.On("GetMemoryStats").Return(memStats, nil).Maybe()
+	mockDB.On("GetMemoryStats").Return(memStats, nil).Maybe() // This mock is for the DB
+	server.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
 }
 
-func TestSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB) {
+func TestSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
 		LeaderThreshold:   0,
-		FollowerThreshold: 1,
+		FollowerThreshold: 1, // This is the threshold for the follower to become a leader
 		ViewSize:          3,
 	}
 	db := mockDb.NewGenericDB(t)
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string")).Return(nil).Maybe()
+
+	server := mockServer.NewServerType(t)
 
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),
@@ -57,6 +61,6 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.CollectionP
 		Secret: "ermes-secret",
 	}
 
-	SetupGetMemoryStatsMock(db)
-	return migrationManagerConfig, collections, serverinfo, &lruCache, db
+	SetupGetMemoryStatsMock(db, server)
+	return migrationManagerConfig, collections, serverinfo, &lruCache, db, server
 }

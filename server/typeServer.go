@@ -16,7 +16,6 @@ import (
 
 type ServerType interface {
 	SendGenericHTTPRequest(nodeTo string, pathTo string, messageContent interface{}) (int, error)
-	compileRoutes()
 	AddCustomRoute(path string, isPrivate bool, handler http.HandlerFunc) error
 }
 

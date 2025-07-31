@@ -70,7 +70,7 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 		KnowedCollections: make(map[string]dataManagerShared.Collection),
 	}
 	migrationManagerIstance := migrationManager.GetMigrationManagerInstance(*logger)
-	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, *ser.Serverinfo, &lruCache, redisClient, *logger)
+	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, ser, *ser.Serverinfo, &lruCache, redisClient, *logger)
 	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
 	clDiscovererIstance.Init(collections)
 

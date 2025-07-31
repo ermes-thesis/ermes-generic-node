@@ -6,7 +6,6 @@ import (
 	shared "dataManager/shared"
 	"db"
 	log "logger"
-	"server/info"
 )
 
 type WeakCollectionPolicy interface {
@@ -31,8 +30,9 @@ type AlwayCopyPolicy struct {
 	sender      sender.Sender
 }
 
-func NewAlwayCopyPolicy(config config.MigrationManagerConfig, serverInfo info.ServerInfo, logger log.Logger) WeakCollectionPolicy {
+func NewAlwayCopyPolicy(config config.MigrationManagerConfig, sender sender.Sender, logger log.Logger) WeakCollectionPolicy {
 	policy := &AlwayCopyPolicy{
+		sender: sender,
 		logger: logger,
 	}
 

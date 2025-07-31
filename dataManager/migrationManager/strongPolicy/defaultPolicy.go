@@ -2,6 +2,7 @@ package strongPolicy
 
 import (
 	"config"
+	"dataManager/lru"
 	usage "dataManager/migrationManager/childUsage"
 	gossipmessages "dataManager/migrationManager/gossipMessages"
 	sender "dataManager/migrationManager/migrationSender"
@@ -30,6 +31,8 @@ type DefaultStrongCollectionPolicy struct {
 	gossipState   MigrationManagerState
 	decisionState MigrationManagerState
 
+	lruCache *lru.LRUCache[shared.Collection]
+
 	//timing for auto transition
 	stateTimer *time.Timer
 
@@ -44,8 +47,9 @@ type DefaultStrongCollectionPolicy struct {
 	penalityFunc penality.PenalityFunc
 }
 
-func NewDefaultPolicy(config config.MigrationManagerConfig, collections *shared.CollectionPartialView, migLock *sync.Mutex, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo, sender sender.Sender, logger log.Logger) StrongCollectionPolicy {
+func NewDefaultPolicy(config config.MigrationManagerConfig, collections *shared.CollectionPartialView, migLock *sync.Mutex, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo, sender sender.Sender, lruCache *lru.LRUCache[shared.Collection], logger log.Logger) StrongCollectionPolicy {
 	policy := &DefaultStrongCollectionPolicy{
+		lruCache:         lruCache,
 		sender:           sender,
 		logger:           logger,
 		migLock:          migLock,

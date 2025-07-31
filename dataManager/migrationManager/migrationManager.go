@@ -82,7 +82,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	m.config = config
 
 	//policy
-	m.defaultPolicy = policy.NewDefaultPolicy(config, collections, migLock, penalityFunc, dbInterface, serverInfo, sender.NewSender(logger), m.logger)
+	m.defaultPolicy = policy.NewDefaultPolicy(config, collections, migLock, penalityFunc, dbInterface, serverInfo, sender.NewSender(logger), m.lruCache, m.logger)
 	m.StrongCollectionPolicy = m.defaultPolicy
 
 	//init data

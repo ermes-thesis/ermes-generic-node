@@ -2,12 +2,15 @@ package strongPolicy
 
 import (
 	gossip "dataManager/migrationManager/gossipMessages"
+	"db"
 	"fmt"
+	"logger"
 )
 
 // - Gossip state -> in this state the Migration manager can receive gossip messages and place in a stack collection requests
 type MigrationManagerGossipState struct {
 	policy                *DefaultStrongCollectionPolicy
+	dbInterface           db.GenericDB
 	MissingMessageCounter int
 	ChildrenResourceUsage map[string]ChildStateInfo
 }
@@ -25,15 +28,18 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 
 	for value := range m.policy.serverInfo.Children {
 		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.Address)
-		fmt.Println(value, msgToChild)
-		//TODO:= send message to child
+		m.policy.sender.SendGosssipMessages(msgToChild, m.policy.serverInfo.Children[value].Address)
 	}
 
 	if m.policy.serverInfo.Father != nil {
-		//TODO:= measure mem. state and send to father
-		//msgToFather := gossip.NewChildStateMessage(m.MigrationManagerImp.serverInfo.Name, )
+		memStats, err := m.dbInterface.GetMemoryStats()
+		if err != nil {
+			m.policy.logger.Println("GOSSIP-STATE", fmt.Sprintf("failed to get memory stats: %v", err), logger.ERROR)
+		}
+		redisFreeSize := 1.0 - memStats.UsedMemoryDatasetPercentage
+		msgToFather := gossip.NewChildStateMessage(m.policy.serverInfo.Address, redisFreeSize)
+		m.policy.sender.SendGosssipMessages(msgToFather, m.policy.serverInfo.Father.Address)
 	}
-
 }
 
 // methods
@@ -67,8 +73,7 @@ func (m *MigrationManagerGossipState) ManageGossipMessage(msg gossip.GossipMessa
 func (m *MigrationManagerGossipState) manageChildGossipMessage(msg gossip.ChildStateMessage) {
 	childStateInfo := ChildStateInfo{
 		//childName:   msg.GetSenderID(),
-		MemoryUsage: msg.MemoryUsage,
-		DiskUsage:   msg.DiskUsage,
+		FreeRedisMemory: msg.FreeRedisMemory,
 	}
 	m.ChildrenResourceUsage[msg.GetSenderID()] = childStateInfo
 }

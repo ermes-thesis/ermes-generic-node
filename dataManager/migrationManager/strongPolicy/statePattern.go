@@ -13,6 +13,5 @@ type MigrationManagerState interface {
 }
 
 type ChildStateInfo struct {
-	MemoryUsage float64
-	DiskUsage   float64
+	FreeRedisMemory float64
 }

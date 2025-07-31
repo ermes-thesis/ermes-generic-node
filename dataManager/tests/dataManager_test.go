@@ -4,50 +4,17 @@
 package tests
 
 import (
-	"config"
 	clDiscoverer "dataManager/collectionsDiscoverer"
-	lru "dataManager/lru"
 	migrationManager "dataManager/migrationManager"
 	penality "dataManager/migrationManager/penalityFunction"
-	shared "dataManager/shared"
-	mockDb "db/mocks"
 	"io"
 	logger "logger"
 	"os"
-	"server/info"
 	"testing"
-
-	"github.com/stretchr/testify/mock"
 )
 
-func testSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB) {
-	migrationManagerConfig := config.MigrationManagerConfig{
-		LeaderThreshold:   0,
-		FollowerThreshold: 1,
-		ViewSize:          3,
-	}
-	db := mockDb.NewGenericDB(t)
-	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string")).Return(nil).Maybe()
-
-	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
-	}
-	lruCache := lru.LRUCacheConstructor[shared.Collection](1000)
-	serverinfo := info.ServerInfo{
-		Node:   info.Node{Address: "Name", MetadataDomain: "Domain"},
-		Father: &info.Node{Address: "fName", MetadataDomain: "fDomain"},
-		Children: []info.Node{
-			{Address: "child1", MetadataDomain: "Domain"},
-			{Address: "child2", MetadataDomain: "Domain"},
-		},
-		Secret: "ermes-secret",
-	}
-
-	return migrationManagerConfig, collections, serverinfo, &lruCache, db
-}
-
 func TestFromRemoteToLocalCollection(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache, db := testSetUp(t)
+	migrationManagerConfig, collections, serverinfo, lruCache, db := TestSetUp(t)
 	var loggerFile io.Writer = os.Stdout //TODO replace with file
 	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 

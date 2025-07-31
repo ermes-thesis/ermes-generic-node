@@ -1,8 +1,14 @@
 package gossipmessages
 
+import (
+	"encoding/json"
+)
+
 type GossipMessage interface {
 	GetMessageType() string
 	GetSenderID() string
+	ToJSON() ([]byte, error)
+	FromJSON(data []byte) error
 }
 
 type BaseGossipMessage struct {
@@ -18,23 +24,28 @@ func (b *BaseGossipMessage) GetSenderID() string {
 	return b.SenderID
 }
 
+func (c *ChildStateMessage) ToJSON() ([]byte, error) {
+	return json.Marshal(c)
+}
+
+func (c *ChildStateMessage) FromJSON(data []byte) error {
+	return json.Unmarshal(data, c)
+}
+
 // HwStaChildStateMessageteMessage represents the hardware state of a node + contains info of a new collection created in the child node.
 type ChildStateMessage struct {
 	BaseGossipMessage
 	//CPUUsage          float64 `json:"cpuUsage"`
-	MemoryUsage float64 `json:"memoryUsage"`
-	DiskUsage   float64 `json:"diskUsage"`
-	//boh ci vanno i metadati delle collezioni create nel mentre -> fare dopo merge pr
+	FreeRedisMemory float64 `json:"freeRedisMemory"`
 }
 
-func NewChildStateMessage(senderID string, memoryUsage float64, diskUsage float64) *ChildStateMessage {
+func NewChildStateMessage(senderID string, freeRedisMemory float64) *ChildStateMessage {
 	return &ChildStateMessage{
 		BaseGossipMessage: BaseGossipMessage{
 			MessageType: "HW_STATE",
 			SenderID:    senderID,
 		},
-		MemoryUsage: memoryUsage,
-		DiskUsage:   diskUsage,
+		FreeRedisMemory: freeRedisMemory,
 	}
 }
 
@@ -51,4 +62,12 @@ func NewLeaderDelegaMessage(senderID string) *LeaderDelegaMessage {
 			SenderID:    senderID,
 		},
 	}
+}
+
+func (l *LeaderDelegaMessage) ToJSON() ([]byte, error) {
+	return json.Marshal(l)
+}
+
+func (l *LeaderDelegaMessage) FromJSON(data []byte) error {
+	return json.Unmarshal(data, l)
 }

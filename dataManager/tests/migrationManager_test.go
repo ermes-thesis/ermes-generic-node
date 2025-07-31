@@ -4,56 +4,22 @@
 package tests
 
 import (
-	"config"
-	lru "dataManager/lru"
 	migrationManager "dataManager/migrationManager"
 	usage "dataManager/migrationManager/childUsage"
 	gossip "dataManager/migrationManager/gossipMessages"
 	policy "dataManager/migrationManager/strongPolicy"
-	shared "dataManager/shared"
-	mockDb "db/mocks"
 	"io"
 	logger "logger"
 	"os"
-	"server/info"
 	"testing"
-
-	"github.com/stretchr/testify/mock"
 )
 
 func myT1PenalityFunc(bufferPos int, currentValue int) int {
 	return currentValue - bufferPos
 }
 
-func migTestSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB) {
-	migrationManagerConfig := config.MigrationManagerConfig{
-		LeaderThreshold:   0,
-		FollowerThreshold: 1,
-		ViewSize:          3,
-		IdleTimeoutMs:     100000000000,
-	}
-	db := mockDb.NewGenericDB(t)
-	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string")).Return(nil).Maybe()
-
-	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
-	}
-	lruCache := lru.LRUCacheConstructor[shared.Collection](1000)
-	serverinfo := info.ServerInfo{
-		Node:   info.Node{Address: "Name", MetadataDomain: "Domain"},
-		Father: &info.Node{Address: "fName", MetadataDomain: "fDomain"},
-		Children: []info.Node{
-			{Address: "child1", MetadataDomain: "Domain"},
-			{Address: "child2", MetadataDomain: "Domain"},
-		},
-		Secret: "ermes-secret",
-	}
-	migrationManager.ResetSingleton()
-	return migrationManagerConfig, collections, serverinfo, &lruCache, db
-}
-
 func TestSingletonInstance(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
+	migrationManagerConfig, collections, serverinfo, lruCache, db := TestSetUp(t)
 	var loggerFile io.Writer = os.Stdout //TODO replace with file
 	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
@@ -76,7 +42,7 @@ func TestSingletonInstance(t *testing.T) {
 }
 
 func TestManageNewStrongRequest(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
+	migrationManagerConfig, collections, serverinfo, lruCache, db := TestSetUp(t)
 	var loggerFile io.Writer = os.Stdout //TODO replace with file
 	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
@@ -126,7 +92,7 @@ func TestManageNewStrongRequest(t *testing.T) {
 }
 
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
+	migrationManagerConfig, collections, serverinfo, lruCache, db := TestSetUp(t)
 	var loggerFile io.Writer = os.Stdout //TODO replace with file
 	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
@@ -154,7 +120,7 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 }
 
 func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
+	migrationManagerConfig, collections, serverinfo, lruCache, db := TestSetUp(t)
 	var loggerFile io.Writer = os.Stdout //TODO replace with file
 	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
@@ -193,14 +159,14 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 }
 
 func TestMigrationFromIdleToGossipAfterReceiveAMessage(t *testing.T) {
-	migrationManagerConfig, collections, serverinfo, lruCache, db := migTestSetUp(t)
+	migrationManagerConfig, collections, serverinfo, lruCache, db := TestSetUp(t)
 	var loggerFile io.Writer = os.Stdout //TODO replace with file
 	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
 	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
 	instance1.Init(collections, myT1PenalityFunc, migrationManagerConfig, serverinfo, lruCache, db, *logger)
 
-	msg := gossip.NewChildStateMessage("senderId", 0.0, 0.0)
+	msg := gossip.NewChildStateMessage("senderId", 0.0)
 
 	_, isIdle := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.DefaultStrongCollectionPolicy).GetCurrentState().(*policy.MigrationManagerIdleState)
 	print(isIdle)

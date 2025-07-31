@@ -44,8 +44,9 @@ type DefaultStrongCollectionPolicy struct {
 	penalityFunc penality.PenalityFunc
 }
 
-func NewDefaultPolicy(config config.MigrationManagerConfig, collections *shared.CollectionPartialView, migLock *sync.Mutex, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo, logger log.Logger) StrongCollectionPolicy {
+func NewDefaultPolicy(config config.MigrationManagerConfig, collections *shared.CollectionPartialView, migLock *sync.Mutex, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo, sender sender.Sender, logger log.Logger) StrongCollectionPolicy {
 	policy := &DefaultStrongCollectionPolicy{
+		sender:           sender,
 		logger:           logger,
 		migLock:          migLock,
 		currentConfig:    config,
@@ -67,7 +68,7 @@ func (s *DefaultStrongCollectionPolicy) SetDefaultState() {
 	s.logger.Println("DEFAULT-STRONG-POLICY", "Setting default state", log.INFO)
 	//state pattern
 	s.idleState = &MigrationManagerIdleState{policy: s}
-	s.gossipState = &MigrationManagerGossipState{policy: s, MissingMessageCounter: 0, ChildrenResourceUsage: make(map[string]ChildStateInfo, 0)}
+	s.gossipState = &MigrationManagerGossipState{policy: s, dbInterface: s.dbInterface, MissingMessageCounter: 0, ChildrenResourceUsage: make(map[string]ChildStateInfo, 0)}
 	s.decisionState = &MigrationManagerDecisionState{policy: s, ChildStateInfo: make(map[string]ChildStateInfo, 0)}
 
 	s.currentState = s.idleState

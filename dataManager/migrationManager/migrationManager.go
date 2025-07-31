@@ -4,11 +4,13 @@ import (
 	"config"
 	lru "dataManager/lru"
 	gossip "dataManager/migrationManager/gossipMessages"
+	sender "dataManager/migrationManager/migrationSender"
 	penality "dataManager/migrationManager/penalityFunction"
 	policy "dataManager/migrationManager/strongPolicy"
 	shared "dataManager/shared"
 	db "db"
 	"errors"
+	"fmt"
 	log "logger"
 	info "server/info"
 	"sync"
@@ -80,7 +82,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	m.config = config
 
 	//policy
-	m.defaultPolicy = policy.NewDefaultPolicy(config, collections, migLock, penalityFunc, dbInterface, serverInfo, m.logger)
+	m.defaultPolicy = policy.NewDefaultPolicy(config, collections, migLock, penalityFunc, dbInterface, serverInfo, sender.NewSender(logger), m.logger)
 	m.StrongCollectionPolicy = m.defaultPolicy
 
 	//init data
@@ -133,7 +135,7 @@ func (m *MigrationManagerImp) ManageGossipMessage(msg gossip.GossipMessage) {
 func (m *MigrationManagerImp) ManageNewRequest(collectionId string, nodeName string, isWrite bool, requestLatency int) error {
 	//if no local info on the collection
 	if m.collectionsPartialView.KnowedCollections[collectionId] == nil || !m.collectionsPartialView.KnowedCollections[collectionId].IsLocal() {
-		m.logger.Println("MIG-MANAGER", "collection not found locally or not local", log.ERROR)
+		m.logger.Println("MIG-MANAGER", fmt.Sprintf("collection %s not found locally or not local", collectionId), log.ERROR)
 		return errors.New("collection not found locally or not local")
 	}
 	m.logger.Println("MIG-MANAGER", "new request for a local collection received", log.INFO)

@@ -2,9 +2,11 @@ package db
 
 import (
 	"context"
+	"errors"
 	"github.com/redis/go-redis/v9"
 	"metadataManager/utils"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -18,7 +20,15 @@ func (r *RedisClient) GetRecord(collectionId string, recordName string) (string,
 }
 
 func (r *RedisClient) SetRecord(collectionId string, recordName string, value string) error {
-	err := r.client.SAdd(r.ctx, "info:"+collectionId+":keys", recordName).Err()
+	exists, err := r.CollectionExists(collectionId)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("collection does not exist")
+	}
+
+	err = r.client.SAdd(r.ctx, "info:"+collectionId+":keys", recordName).Err()
 	if err != nil {
 		return err
 	}
@@ -27,6 +37,34 @@ func (r *RedisClient) SetRecord(collectionId string, recordName string, value st
 
 func (r *RedisClient) GetRecords(collectionId string, recordNames ...string) ([]any, error) {
 	return r.client.MGet(r.ctx, buildKeys(collectionId, recordNames)...).Result()
+}
+
+func (r *RedisClient) SetRecords(collectionId string, recordNames []string, recordValues []string) error {
+	exists, err := r.CollectionExists(collectionId)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		return errors.New("collection does not exist")
+	}
+
+	if len(recordNames) != len(recordValues) {
+		return errors.New("recordNames and recordValue must be the same length")
+	}
+
+	anyConvertedNames := make([]any, len(recordNames))
+	inlineRecords := make([]any, len(recordNames)*2)
+	for i := 0; i < len(recordNames); i++ {
+		anyConvertedNames[i] = recordNames[i]
+		inlineRecords[i*2] = buildKey(collectionId, recordNames[i])
+		inlineRecords[i*2+1] = recordValues[i]
+	}
+
+	err = r.client.SAdd(r.ctx, "info:"+collectionId+":keys", anyConvertedNames...).Err()
+	if err != nil {
+		return err
+	}
+	return r.client.MSet(r.ctx, inlineRecords...).Err()
 }
 
 func (r *RedisClient) RecordExists(collectionId string, recordName string) (bool, error) {
@@ -101,14 +139,6 @@ func (r *RedisClient) SetCollection(collectionId string, records map[string]stri
 	return nil
 }
 
-func (r *RedisClient) CollectionExists(collectionId string) (bool, error) {
-	res, err := r.client.Exists(r.ctx, "info:"+collectionId).Result()
-	if err != nil {
-		return false, err
-	}
-	return res > 0, nil
-}
-
 func (r *RedisClient) DeleteCollection(collectionId string) error {
 	keys, err := r.client.SMembers(r.ctx, "info:"+collectionId+":keys").Result()
 	if err != nil {
@@ -130,12 +160,16 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 	return nil
 }
 
-func (r *RedisClient) SetMetadata(collectionId string, metadata Metadata) error {
-	return r.client.HSet(r.ctx, "meta:"+collectionId, metadata.toList()...).Err()
+func (r *RedisClient) CollectionExists(collectionId string) (bool, error) {
+	res, err := r.client.Exists(r.ctx, "info:"+collectionId).Result()
+	if err != nil {
+		return false, err
+	}
+	return res > 0, nil
 }
 
-func (r *RedisClient) GetMetadata(key string) (*Metadata, error) {
-	res, err := r.client.HGetAll(r.ctx, "meta:"+key).Result()
+func (r *RedisClient) GetMetadata(collectionId string) (*Metadata, error) {
+	res, err := r.client.HGetAll(r.ctx, "meta:"+collectionId).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -143,6 +177,10 @@ func (r *RedisClient) GetMetadata(key string) (*Metadata, error) {
 		return nil, nil
 	}
 	return fromMap(res)
+}
+
+func (r *RedisClient) SetMetadata(collectionId string, metadata Metadata) error {
+	return r.client.HSet(r.ctx, "meta:"+collectionId, metadata.toList()...).Err()
 }
 
 func (r *RedisClient) DeleteMetadata(collectionId string) error {
@@ -162,7 +200,7 @@ func (r *RedisClient) AddGroups(collectionId string, members ...string) error {
 	return r.client.SAdd(r.ctx, "info:"+collectionId+":groups", m...).Err()
 }
 
-func (r *RedisClient) IsInGroups(key string, members ...string) (bool, error) {
+func (r *RedisClient) IsInGroups(collectionId string, members ...string) (bool, error) {
 	if len(members) == 0 {
 		return false, nil
 	}
@@ -172,12 +210,12 @@ func (r *RedisClient) IsInGroups(key string, members ...string) (bool, error) {
 		m[i] = member
 	}
 
-	res, err := r.client.SMIsMember(r.ctx, "info:"+key+":groups", m...).Result()
+	res, err := r.client.SMIsMember(r.ctx, "info:"+collectionId+":groups", m...).Result()
 
 	return slices.Contains(res, true), err
 }
 
-func (r *RedisClient) RemoveGroups(key string, members ...string) error {
+func (r *RedisClient) RemoveGroups(collectionId string, members ...string) error {
 	if len(members) == 0 {
 		return nil
 	}
@@ -187,7 +225,7 @@ func (r *RedisClient) RemoveGroups(key string, members ...string) error {
 		m[i] = member
 	}
 
-	return r.client.SRem(r.ctx, "info:"+key+":groups", m...).Err()
+	return r.client.SRem(r.ctx, "info:"+collectionId+":groups", m...).Err()
 }
 
 func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
@@ -261,6 +299,81 @@ func (r *RedisClient) AlterIndex(customMetadataKeys ...string) error {
 	}
 
 	return r.client.FTAlter(r.ctx, "metadata_index", true, fields).Err()
+}
+
+func (r *RedisClient) GetMemoryStats() (*MemStats, error) {
+	stats, err := r.client.Do(r.ctx, "MEMORY", "STATS").Result()
+	if err != nil {
+		return nil, err
+	}
+
+	statsArr := stats.([]interface{})
+
+	statsMap := make(map[string]any)
+	for i := 0; i < len(statsArr); i += 2 {
+		key := statsArr[i].(string)
+		value := statsArr[i+1]
+		statsMap[key] = value
+	}
+
+	datasetPerc, err := strconv.ParseFloat(statsMap["dataset.percentage"].(string), 64)
+	if err != nil {
+		return nil, err
+	}
+	memStats := MemStats{
+		AllocationStats: AllocationStats{
+			UsedMemoryPeak:              uint64(statsMap["peak.allocated"].(int64)),
+			CurrentUsedMemory:           uint64(statsMap["total.allocated"].(int64)),
+			UsedMemoryOverhead:          uint64(statsMap["overhead.total"].(int64)),
+			UsedMemoryStartup:           uint64(statsMap["startup.allocated"].(int64)),
+			UsedMemoryDataset:           uint64(statsMap["dataset.bytes"].(int64)),
+			UsedMemoryDatasetPercentage: datasetPerc,
+		},
+		ReplicationBacklogSize: uint64(statsMap["replication.backlog"].(int64)),
+		LuaScriptsCacheSize:    uint64(statsMap["lua.caches"].(int64)),
+		KeysCount:              uint64(statsMap["keys.count"].(int64)),
+		BytesKeysRatio:         uint64(statsMap["keys.bytes-per-key"].(int64)),
+	}
+
+	return &memStats, nil
+}
+
+func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, error) {
+	keys, err := r.client.SMembers(r.ctx, "info:"+collectionId+":keys").Result()
+	if err != nil {
+		return 0, err
+	}
+
+	totalMemory := uint64(0)
+	for _, key := range keys {
+		memUsage, err := r.client.MemoryUsage(r.ctx, buildKey(collectionId, key)).Result()
+		if err != nil {
+			return 0, err
+		}
+
+		totalMemory += uint64(memUsage)
+	}
+
+	keysRecordSize, err := r.client.MemoryUsage(r.ctx, "info:"+collectionId+":keys").Result()
+	if err != nil {
+		return 0, err
+	}
+	groupsRecordSize, err := r.client.MemoryUsage(r.ctx, "info:"+collectionId+":groups").Result()
+	if err != nil {
+		return 0, err
+	}
+	existingRecordSize, err := r.client.MemoryUsage(r.ctx, "info:"+collectionId).Result()
+	if err != nil {
+		return 0, err
+	}
+	totalMemory += uint64(keysRecordSize) + uint64(groupsRecordSize) + uint64(existingRecordSize)
+
+	return totalMemory, nil
+}
+
+func (r *RedisClient) GetRecordMemoryUsage(collectionId string, recordName string) (uint64, error) {
+	memUsage, err := r.client.MemoryUsage(r.ctx, buildKey(collectionId, recordName)).Result()
+	return uint64(memUsage), err
 }
 
 func (r *RedisClient) Close() error {

@@ -14,6 +14,12 @@ import (
 	"server/info"
 )
 
+type ServerType interface {
+	SendGenericHTTPRequest(nodeTo string, pathTo string, messageContent interface{}) (int, error)
+	compileRoutes()
+	AddCustomRoute(path string, isPrivate bool, handler http.HandlerFunc) error
+}
+
 type Server struct {
 	Serverinfo      *info.ServerInfo
 	Port            string

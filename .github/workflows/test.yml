@@ -38,7 +38,7 @@ jobs:
         run: go install github.com/ctrf-io/go-ctrf-json-reporter/cmd/go-ctrf-json-reporter@latest
 
       - name: Run tests
-        run: go list -f '{{.Dir}}' -m | xargs -I {} go test -json {}/... --tags test | go-ctrf-json-reporter -output ctrf-report.json
+        run: go list -f '{{.Dir}}' -m | xargs -I {} go test -json {}/... --tags test | go-ctrf-json-reporter -output ctrf-report.json -v
 
       - name: Publish Test Report
         uses: ctrf-io/github-test-reporter@v1

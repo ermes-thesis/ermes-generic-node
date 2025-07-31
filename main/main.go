@@ -27,14 +27,14 @@ func myPenalityFunc(bufferPos int, currentValue int) int {
 	return currentValue
 }
 
-func run(ctx context.Context, w io.Writer, args []string) error {
-	config := config.LoadConfig("../config/config.yaml")
+func run(ctx context.Context, w io.Writer, configPath string) error {
+	config := config.LoadConfig(configPath)
 	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](config.Lru.Size)
 
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	serverInfo, err := info.NewServerInfo(args)
+	serverInfo, err := info.NewServerInfo(config)
 	if err != nil {
 		return fmt.Errorf("error creating server info: %w", err)
 	}
@@ -95,9 +95,14 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 
 func main() {
 
+	if len(os.Args) < 2 {
+		fmt.Fprintf(os.Stderr, "No path specified for config file as argument, node cannot start.\n")
+		os.Exit(0)
+	}
+
 	ctx := context.Background()
 
-	if err := run(ctx, os.Stdout, os.Args); err != nil {
+	if err := run(ctx, os.Stdout, os.Args[1]); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 		os.Exit(1)
 	}

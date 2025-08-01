@@ -49,8 +49,8 @@ func TestManageNewStrongRequest(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, ser, serverinfo, lruCache, db, *logger)
-	instance1.NewCollectionReceived("repoId", 10, true, make(map[string]string), []string{})
-	instance1.NewCollectionReceived("repoId1", 10, true, make(map[string]string), []string{})
+	instance1.NewCollectionReceived("repoId", true, make(map[string]string), []string{})
+	instance1.NewCollectionReceived("repoId1", true, make(map[string]string), []string{})
 
 	instance1.ManageNewRequest("repoId", "childName", true, 10)
 
@@ -99,8 +99,8 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, ser, serverinfo, lruCache, db, *logger)
-	instance1.NewCollectionReceived("repoId", 10, true, make(map[string]string), []string{})
-	instance1.NewCollectionReceived("repoId1", 10, true, make(map[string]string), []string{})
+	instance1.NewCollectionReceived("repoId", true, make(map[string]string), []string{})
+	instance1.NewCollectionReceived("repoId1", true, make(map[string]string), []string{})
 
 	instance1.ManageNewRequest("repoId", "childName", true, 10)
 	instance1.ManageNewRequest("repoId", "childName", true, 3)
@@ -127,8 +127,8 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, ser, serverinfo, lruCache, db, *logger)
-	instance1.NewCollectionReceived("repoId", 10, true, make(map[string]string), []string{})
-	instance1.NewCollectionReceived("repoId1", 10, true, make(map[string]string), []string{})
+	instance1.NewCollectionReceived("repoId", true, make(map[string]string), []string{})
+	instance1.NewCollectionReceived("repoId1", true, make(map[string]string), []string{})
 
 	instance1.ManageNewRequest("repoId", "childName", true, 10)
 	instance1.ManageNewRequest("repoId", "childName", true, 3)

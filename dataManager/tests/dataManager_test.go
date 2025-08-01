@@ -30,7 +30,7 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 		t.Fatal("unexpected non null collection")
 	}
 
-	mig.NewCollectionReceived("repoId", 10, true, make(map[string]string), []string{})
+	mig.NewCollectionReceived("repoId", true, make(map[string]string), []string{})
 	b, c = clDiscoverer.IsCollectionLocallyPresent("repoId")
 	if c == nil {
 		t.Fatal("unexpected null collection")

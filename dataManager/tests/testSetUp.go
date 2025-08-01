@@ -43,9 +43,11 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, *shared.CollectionP
 		ViewSize:          3,
 	}
 	db := mockDb.NewGenericDB(t)
+	db.On("GetCollectionMemoryUsage", mock.AnythingOfType("string")).Return(uint64(1024*1024), nil).Maybe()
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string")).Return(nil).Maybe()
 
 	server := mockServer.NewServerType(t)
+	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
 		KnowedCollections: make(map[string]shared.Collection),

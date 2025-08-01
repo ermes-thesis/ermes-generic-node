@@ -28,8 +28,11 @@ type MigrationManager interface {
 	//used to update non real time info
 	ManageGossipMessage(gossip.GossipMessage)
 	//used when the node receive  a collection from one of the directly connected nodes (collectionID,size,isStrong)
-	//return True if the collection  is already stored locally and must not be stored in Redis
+	//return True if the collection is already stored locally and must not be stored in Redis
 	NewCollectionReceived(string, bool, map[string]string, []string) bool
+	//used when user create a new collection in the local node (collectionID,size,isStrong)
+	//throw an error if the collection already exists locally
+	NewCollectionCreated(string, uint64, bool) error
 
 	ChangeStrongCollectionPolicy(policy.CurrentPolicy)
 }
@@ -151,6 +154,23 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	}
 	m.logger.Println("MIG-MANAGER", "new collection added to knowed collections", log.INFO)
 	return false
+}
+
+func (m *MigrationManagerImp) NewCollectionCreated(collectionId string, collectionSize uint64, isStrong bool) error {
+	m.logger.Println("MIG-MANAGER", "new local collection created", log.INFO)
+	collection := m.collectionsPartialView.KnowedCollections[collectionId]
+	if collection != nil {
+		m.logger.Println("MIG-MANAGER", fmt.Sprintf("can't create a collection if the id %s is already present", collectionId), log.ERROR)
+		return errors.New("can't create a collection if the id is already present")
+	}
+
+	if isStrong {
+		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false) //TODO leader?
+	} else {
+		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewWeakCollection(collectionId, collectionSize, false)
+	}
+	m.logger.Println("MIG-MANAGER", "new collection added to knowed collections", log.INFO)
+	return nil
 }
 
 func (m *MigrationManagerImp) ManageGossipMessage(msg gossip.GossipMessage) {

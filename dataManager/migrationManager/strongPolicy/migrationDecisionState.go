@@ -116,6 +116,9 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 	}
 
 	for innerKey, buffer := range innerMap {
+		if innerKey == "user" {
+			continue
+		}
 		if strongCollection.IsLeader {
 			//if the collection has been moved and removed locally
 			if m.leaderDecision(outerKey, innerKey, buffer, strongCollection, totalForce, totalReqNumber) {

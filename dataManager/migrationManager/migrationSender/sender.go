@@ -45,6 +45,12 @@ func (s *SendImpl) SendRemoteCollectionTo(destination string, collection shared.
 		Groups:       groups,
 		IsStrong:     collection.IsStrong(),
 	}
+	if collection.IsStrong() {
+		msg.IsLeader = collection.(*shared.StrongCollection).IsLeader
+	} else {
+		msg.IsLeader = false
+	}
+
 	s.server.SendGenericHTTPRequest(destination, repoPath, msg)
 }
 

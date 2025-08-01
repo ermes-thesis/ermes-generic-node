@@ -21,15 +21,17 @@ type StrongCollection struct {
 	LeaderId        string
 }
 
-func NewStrongCollection(collectionId string, size uint64, isRemote bool) Collection {
+func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLeader bool) Collection {
 	hosts := make(map[string]struct{})
 	if isRemote {
 		return &StrongCollection{
 			collectionState: NewRemoteCollection(hosts),
+			IsLeader:        false,
 		}
 	}
 	return &StrongCollection{
 		collectionState: NewLocalCollection(size, hosts),
+		IsLeader:        isLeader,
 	}
 }
 
@@ -49,6 +51,7 @@ func (s *StrongCollection) SetToRemote() {
 	if !s.collectionState.IsLocal() {
 		return
 	}
+	s.IsLeader = false
 	collectionState := NewRemoteCollection(s.collectionState.HostsId())
 	s.collectionState = collectionState
 }

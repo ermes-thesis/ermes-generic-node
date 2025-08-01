@@ -29,7 +29,7 @@ type MigrationManager interface {
 	ManageGossipMessage(gossip.GossipMessage)
 	//used when the node receive  a collection from one of the directly connected nodes (collectionID,size,isStrong)
 	//return True if the collection is already stored locally and must not be stored in Redis
-	NewCollectionReceived(string, bool, map[string]string, []string) bool
+	NewCollectionReceived(string, bool, bool, map[string]string, []string) bool
 	//used when user create a new collection in the local node (collectionID,size,isStrong)
 	//throw an error if the collection already exists locally
 	NewCollectionCreated(string, uint64, bool) error
@@ -113,7 +113,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 }
 
 // methods
-func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, records map[string]string, groups []string) bool {
+func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string) bool {
 	m.logger.Println("MIG-MANAGER", "new local collection received", log.INFO)
 	collection := m.collectionsPartialView.KnowedCollections[collectionId]
 	if collection != nil {
@@ -149,7 +149,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	}
 
 	if isStrong {
-		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false) //TODO leader?
+		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false, isLeader)
 	} else {
 		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewWeakCollection(collectionId, collectionSize, false)
 	}
@@ -166,7 +166,7 @@ func (m *MigrationManagerImp) NewCollectionCreated(collectionId string, collecti
 	}
 
 	if isStrong {
-		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false) //TODO leader?
+		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false, true) //when I create a strong collection I'm the leader
 	} else {
 		m.collectionsPartialView.KnowedCollections[collectionId] = shared.NewWeakCollection(collectionId, collectionSize, false)
 	}

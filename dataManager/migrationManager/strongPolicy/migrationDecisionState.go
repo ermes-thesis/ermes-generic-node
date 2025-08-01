@@ -159,6 +159,7 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 
 	//set the collection as remote only in the node partial view
 	strongCollection.SetToRemote()
+	strongCollection.LeaderId = innerKey
 
 	//remove the collection from the lru
 	m.policy.lruCache.Remove(outerKey)

@@ -5,4 +5,5 @@ type SendCollectionMessage struct {
 	Res          map[string]string `json:"res"`
 	Groups       []string          `json:"groups"`
 	IsStrong     bool              `json:"isStrong"`
+	IsLeader     bool              `json:"isLeader"`
 }

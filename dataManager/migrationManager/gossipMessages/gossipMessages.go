@@ -7,7 +7,6 @@ import (
 type GossipMessage interface {
 	GetMessageType() string
 	GetSenderID() string
-	ToJSON() ([]byte, error)
 	FromJSON(data []byte) error
 }
 
@@ -24,12 +23,8 @@ func (b *BaseGossipMessage) GetSenderID() string {
 	return b.SenderID
 }
 
-func (c *ChildStateMessage) ToJSON() ([]byte, error) {
-	return json.Marshal(c)
-}
-
-func (c *ChildStateMessage) FromJSON(data []byte) error {
-	return json.Unmarshal(data, c)
+func (b *BaseGossipMessage) FromJSON(data []byte) error {
+	return json.Unmarshal(data, b)
 }
 
 // HwStaChildStateMessageteMessage represents the hardware state of a node + contains info of a new collection created in the child node.
@@ -49,6 +44,10 @@ func NewChildStateMessage(senderID string, freeRedisMemory float64) *ChildStateM
 	}
 }
 
+func (c *ChildStateMessage) FromJSON(data []byte) error {
+	return json.Unmarshal(data, c)
+}
+
 // LeaderDelegaMessage represents a leadership delegation message include info to update forces
 type LeaderDelegaMessage struct {
 	BaseGossipMessage
@@ -62,10 +61,6 @@ func NewLeaderDelegaMessage(senderID string) *LeaderDelegaMessage {
 			SenderID:    senderID,
 		},
 	}
-}
-
-func (l *LeaderDelegaMessage) ToJSON() ([]byte, error) {
-	return json.Marshal(l)
 }
 
 func (l *LeaderDelegaMessage) FromJSON(data []byte) error {

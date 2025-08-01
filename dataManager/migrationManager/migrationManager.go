@@ -26,10 +26,10 @@ type MigrationManager interface {
 	// if the request comes from a user => nodeName = "user"
 	ManageNewRequest(string, string, bool, int) error
 	//used to update non real time info
-	ManageGossipMessage(gossip.GossipMessage)
+	manageGossipMessage(gossip.GossipMessage)
 	//used when the node receive  a collection from one of the directly connected nodes (collectionID,size,isStrong)
 	//return True if the collection  is already stored locally and must not be stored in Redis
-	NewCollectionReceived(string, int, bool, map[string]string, []string) bool
+	newCollectionReceived(string, int, bool, map[string]string, []string) bool
 
 	ChangeStrongCollectionPolicy(policy.CurrentPolicy)
 }
@@ -86,8 +86,12 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	m.lruCache = lruCache
 	m.config = config
 
-	//policy
+	//prepare server
 	sender := sender.NewSender(m.logger, server)
+	server.AddCustomRoute(sender.GossipPath(), true, m.handleIncommingGossipMessages(logger).ServeHTTP)
+	server.AddCustomRoute(sender.RepoPath(), true, m.handleIncommingCollection(logger).ServeHTTP)
+
+	//policy
 
 	m.defaultPolicy = policy.NewDefaultPolicy(config, collections, migLock, penalityFunc, dbInterface, serverInfo, sender, m.lruCache, m.logger)
 	m.StrongCollectionPolicy = m.defaultPolicy
@@ -99,10 +103,13 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	m.collectionsPartialView = collections
 
 	logger.Println("MIG-MANAGER", "migration manager instance has been inizialized", log.INFO)
+
+	//prepare server
+
 }
 
 // methods
-func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, collectionSize int, isStrong bool, records map[string]string, groups []string) bool {
+func (m *MigrationManagerImp) newCollectionReceived(collectionId string, collectionSize int, isStrong bool, records map[string]string, groups []string) bool {
 	m.logger.Println("MIG-MANAGER", "new local collection received", log.INFO)
 	collection := m.collectionsPartialView.KnowedCollections[collectionId]
 	if collection != nil {
@@ -136,7 +143,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, collect
 	return false
 }
 
-func (m *MigrationManagerImp) ManageGossipMessage(msg gossip.GossipMessage) {
+func (m *MigrationManagerImp) manageGossipMessage(msg gossip.GossipMessage) {
 	m.logger.Println("MIG-MANAGER", "gossip message received", log.INFO)
 	m.StrongCollectionPolicy.ManageGossipMessage(msg)
 }

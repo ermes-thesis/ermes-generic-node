@@ -15,6 +15,8 @@ const (
 type Sender interface {
 	SendRemoteCollectionTo(string, shared.Collection, map[string]string, []string)
 	SendGosssipMessages(gossip.GossipMessage, string)
+	GossipPath() string
+	RepoPath() string
 }
 
 type SendImpl struct {
@@ -47,4 +49,12 @@ func (s *SendImpl) SendRemoteCollectionTo(destination string, collection shared.
 
 func (s *SendImpl) SendGosssipMessages(msg gossip.GossipMessage, destination string) {
 	s.server.SendGenericHTTPRequest(destination, gossipPath, msg)
+}
+
+func (s *SendImpl) GossipPath() string {
+	return gossipPath
+}
+
+func (s *SendImpl) RepoPath() string {
+	return repoPath
 }

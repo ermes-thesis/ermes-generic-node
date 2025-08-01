@@ -26,10 +26,10 @@ type MigrationManager interface {
 	// if the request comes from a user => nodeName = "user"
 	ManageNewRequest(string, string, bool, int) error
 	//used to update non real time info
-	manageGossipMessage(gossip.GossipMessage)
+	ManageGossipMessage(gossip.GossipMessage)
 	//used when the node receive  a collection from one of the directly connected nodes (collectionID,size,isStrong)
 	//return True if the collection  is already stored locally and must not be stored in Redis
-	newCollectionReceived(string, int, bool, map[string]string, []string) bool
+	NewCollectionReceived(string, bool, map[string]string, []string) bool
 
 	ChangeStrongCollectionPolicy(policy.CurrentPolicy)
 }
@@ -109,7 +109,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 }
 
 // methods
-func (m *MigrationManagerImp) newCollectionReceived(collectionId string, collectionSize int, isStrong bool, records map[string]string, groups []string) bool {
+func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, records map[string]string, groups []string) bool {
 	m.logger.Println("MIG-MANAGER", "new local collection received", log.INFO)
 	collection := m.collectionsPartialView.KnowedCollections[collectionId]
 	if collection != nil {
@@ -123,6 +123,11 @@ func (m *MigrationManagerImp) newCollectionReceived(collectionId string, collect
 			m.logger.Println("MIG-MANAGER", "add collection in redis fails", log.ERROR)
 			panic(err) //TODO: decide
 		}
+		collectionSize, sizeError := m.dbInterface.GetCollectionMemoryUsage(collectionId)
+		if sizeError != nil {
+			m.logger.Println("MIG-MANAGER", "get collection size fails", log.ERROR)
+			panic(sizeError) //TODO: decide
+		}
 
 		collection.SetToLocal(collectionSize)
 		m.logger.Println("MIG-MANAGER", "new collection setted to local", log.INFO)
@@ -132,6 +137,11 @@ func (m *MigrationManagerImp) newCollectionReceived(collectionId string, collect
 	if err != nil {
 		m.logger.Println("MIG-MANAGER", "add collection in redis fails", log.INFO)
 		panic(err) //TODO: decide
+	}
+	collectionSize, sizeError := m.dbInterface.GetCollectionMemoryUsage(collectionId)
+	if sizeError != nil {
+		m.logger.Println("MIG-MANAGER", "get collection size fails", log.ERROR)
+		panic(sizeError) //TODO: decide
 	}
 
 	if isStrong {
@@ -143,7 +153,7 @@ func (m *MigrationManagerImp) newCollectionReceived(collectionId string, collect
 	return false
 }
 
-func (m *MigrationManagerImp) manageGossipMessage(msg gossip.GossipMessage) {
+func (m *MigrationManagerImp) ManageGossipMessage(msg gossip.GossipMessage) {
 	m.logger.Println("MIG-MANAGER", "gossip message received", log.INFO)
 	m.StrongCollectionPolicy.ManageGossipMessage(msg)
 }

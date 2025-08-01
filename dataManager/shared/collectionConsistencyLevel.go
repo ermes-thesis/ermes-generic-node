@@ -7,7 +7,7 @@ type Collection interface {
 	IsStrong() bool
 	AddHost(hostId string)
 	HostsId() map[string]struct{}
-	SetToLocal(int)
+	SetToLocal(uint64)
 	SetToRemote()
 	GetCollectionState() CollectionState
 }
@@ -21,7 +21,7 @@ type StrongCollection struct {
 	LeaderId        string
 }
 
-func NewStrongCollection(collectionId string, size int, isRemote bool) Collection {
+func NewStrongCollection(collectionId string, size uint64, isRemote bool) Collection {
 	hosts := make(map[string]struct{})
 	if isRemote {
 		return &StrongCollection{
@@ -37,7 +37,7 @@ func (s *StrongCollection) GetCollectionState() CollectionState {
 	return s.collectionState
 }
 
-func (s *StrongCollection) SetToLocal(size int) {
+func (s *StrongCollection) SetToLocal(size uint64) {
 	if s.collectionState.IsLocal() {
 		return
 	}
@@ -75,7 +75,7 @@ type WeakCollection struct {
 	collectionState CollectionState
 }
 
-func NewWeakCollection(collectionId string, size int, isRemote bool) Collection {
+func NewWeakCollection(collectionId string, size uint64, isRemote bool) Collection {
 	hosts := make(map[string]struct{})
 	if isRemote {
 		return &WeakCollection{
@@ -91,7 +91,7 @@ func (w *WeakCollection) GetCollectionState() CollectionState {
 	return w.collectionState
 }
 
-func (w *WeakCollection) SetToLocal(size int) {
+func (w *WeakCollection) SetToLocal(size uint64) {
 	if w.collectionState.IsLocal() {
 		return
 	}

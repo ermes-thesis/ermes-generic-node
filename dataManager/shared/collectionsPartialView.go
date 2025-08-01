@@ -11,13 +11,13 @@ type CollectionState interface {
 }
 
 type LocalCollection struct {
-	size int
+	size uint64
 	//a collection can be stored locally and on children simultaneously
 	hostsId        map[string]struct{} //map to guarantee univocity
 	CollectionLock sync.Mutex          //if  lock is taken, a collection can't be moved from this node => wasm functions that use a collection must take the lock
 }
 
-func NewLocalCollection(size int, hostNames map[string]struct{}) CollectionState {
+func NewLocalCollection(size uint64, hostNames map[string]struct{}) CollectionState {
 	return &LocalCollection{
 		size:    size,
 		hostsId: hostNames,
@@ -29,7 +29,7 @@ func (l *LocalCollection) AddHost(hostId string) {
 func (l *LocalCollection) IsLocal() bool {
 	return true
 }
-func (l *LocalCollection) Size() int {
+func (l *LocalCollection) Size() uint64 {
 	return l.size
 }
 func (l *LocalCollection) HostsId() map[string]struct{} {

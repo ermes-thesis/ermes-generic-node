@@ -55,7 +55,7 @@ func (m *MigrationManagerImp) handleIncommingGossipMessages(logger log.Logger) h
 			return
 		}
 
-		m.manageGossipMessage(concreteMsg)
+		m.ManageGossipMessage(concreteMsg)
 
 		w.WriteHeader(http.StatusOK)
 	})
@@ -82,7 +82,7 @@ func (m *MigrationManagerImp) handleIncommingCollection(logger log.Logger) http.
 		}
 
 		//TODO: capire come stimare dimensioni e come capire se strong o weak
-		m.newCollectionReceived(collection.CollectionId, len(collection.Res), true, collection.Res, collection.Groups)
+		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.Res, collection.Groups)
 
 		w.WriteHeader(http.StatusOK)
 	})

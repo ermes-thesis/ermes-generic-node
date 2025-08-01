@@ -43,6 +43,7 @@ func (s *SendImpl) SendRemoteCollectionTo(destination string, collection shared.
 		CollectionId: collection.CollectionId(),
 		Res:          res,
 		Groups:       groups,
+		IsStrong:     collection.IsStrong(),
 	}
 	s.server.SendGenericHTTPRequest(destination, repoPath, msg)
 }

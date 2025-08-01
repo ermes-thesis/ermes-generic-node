@@ -133,9 +133,6 @@ func (s *DefaultStrongCollectionPolicy) transitionToDecision(childrenResourceUsa
 
 func (s *DefaultStrongCollectionPolicy) transitionToIdle() {
 	s.logger.Println("DEFAULT-STRONG-POLICY", "transition to idle state", log.INFO)
-	//sync
-	s.migLock.Lock()
-	defer s.migLock.Unlock()
 
 	//imp
 	// Only transition if still in decision state

@@ -26,6 +26,15 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 	m.MissingMessageCounter = counter
 	m.ChildrenResourceUsage = make(map[string]ChildStateInfo, 0)
 
+	go m.SendGosssipMessages()
+}
+
+// methods
+func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
+	m.policy.idleState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
+}
+
+func (m *MigrationManagerGossipState) SendGosssipMessages() {
 	for value := range m.policy.serverInfo.Children {
 		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.Address)
 		m.policy.sender.SendGosssipMessages(msgToChild, m.policy.serverInfo.Children[value].Address)
@@ -40,11 +49,6 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 		msgToFather := gossip.NewChildStateMessage(m.policy.serverInfo.Address, redisFreeSize)
 		m.policy.sender.SendGosssipMessages(msgToFather, m.policy.serverInfo.Father.Address)
 	}
-}
-
-// methods
-func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	m.policy.idleState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
 }
 
 func (m *MigrationManagerGossipState) ManageGossipMessage(msg gossip.GossipMessage) {

@@ -1,9 +1,11 @@
 package strongPolicy
 
 import (
+	stack "dataManager/migrationManager/callbackStack"
 	usage "dataManager/migrationManager/childUsage"
 	gossip "dataManager/migrationManager/gossipMessages"
 	shared "dataManager/shared"
+	"logger"
 	"sync"
 )
 
@@ -11,6 +13,8 @@ import (
 type MigrationManagerDecisionState struct {
 	policy         *DefaultStrongCollectionPolicy
 	ChildStateInfo map[string]ChildStateInfo
+
+	requestStack stack.CallStack
 }
 
 // methods
@@ -22,24 +26,34 @@ func (m *MigrationManagerDecisionState) Setup(args ...any) {
 	if !ok {
 		panic("expected []ChildStateInfo for childrenResourceUsage")
 	}
+	m.requestStack = stack.NewCallStack()
+
 	m.ChildStateInfo = childrenResourceUsage
 
 	m.computeEqState()
 
+	go m.consumeStrongRequests()
+
+	//back in idel state
+	m.policy.transitionToIdle()
 }
 
-// TODO: valutare se ha senso inserire in stack senza lock e poi parsare stack dopo
+// save strong request in a buffer for future consumption
 func (m *MigrationManagerDecisionState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
 	//sync -> all op in MigrationManagerDecisionState are sync => lock == wait until all decsion are taken
-	m.policy.migLock.Lock()
-	defer m.policy.migLock.Unlock()
+	m.requestStack.Push(func() { m.policy.idleState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency) })
+}
 
-	//imp
-	m.policy.idleState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
+// after taking all the decisions strong request can be consumed => in the next idle round
+func (m *MigrationManagerDecisionState) consumeStrongRequests() {
+	for len(m.requestStack) > 0 {
+		call := m.requestStack.Pop()
+		call()
+	}
 }
 
 func (m *MigrationManagerDecisionState) ManageGossipMessage(msg gossip.GossipMessage) {
-	//TODO -> ignore messages
+	m.policy.logger.Println("DECISION-POLICY", "gossip message received in decision state => ignored", logger.WARNING)
 }
 
 func (m *MigrationManagerDecisionState) computeElasticForce(cb *usage.CircularBuffer, data usage.GetUsage) (int, int) {

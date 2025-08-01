@@ -35,6 +35,7 @@ type MigrationManager interface {
 	NewCollectionCreated(string, uint64, bool) error
 
 	ChangeStrongCollectionPolicy(policy.CurrentPolicy)
+	ChangeWeakCollectionPolicy(weakpolicy.CurrentPolicy)
 }
 
 type MigrationManagerImp struct {
@@ -207,6 +208,15 @@ func (m *MigrationManagerImp) ChangeStrongCollectionPolicy(newPolicy policy.Curr
 	switch newPolicy {
 	case policy.DefaultPolicy:
 		m.StrongCollectionPolicy = m.defaultPolicy
+	default:
+		panic("unknown policy")
+	}
+}
+
+func (m *MigrationManagerImp) ChangeWeakCollectionPolicy(newPolicy weakpolicy.CurrentPolicy) {
+	switch newPolicy {
+	case weakpolicy.ALWAYSCOPYPOLICY:
+		m.WeakCollectionPolicy = m.alwaysCopyPolicy
 	default:
 		panic("unknown policy")
 	}

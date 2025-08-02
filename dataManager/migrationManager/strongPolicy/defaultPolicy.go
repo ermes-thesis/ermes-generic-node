@@ -110,6 +110,8 @@ func (s *DefaultStrongCollectionPolicy) transitionToGossip() {
 	// Only transition if still in idle state
 	if _, isIdle := s.currentState.(*MigrationManagerIdleState); isIdle {
 		//fmt.Println("Auto-transitioning from idle to gossip state")
+		s.setState(s.gossipState)
+		s.stopIdleTimer()
 		if s.serverInfo.Father != nil {
 			s.logger.Println("DEFAULT-STRONG-POLICY", "fog node setted in gossip state", log.INFO)
 			s.gossipState.Setup(len(s.serverInfo.Children) + 1)
@@ -117,8 +119,6 @@ func (s *DefaultStrongCollectionPolicy) transitionToGossip() {
 			s.logger.Println("DEFAULT-STRONG-POLICY", "cloud node setted in gossip state", log.INFO)
 			s.gossipState.Setup(len(s.serverInfo.Children)) //number of adjacent nodes - TODO: manage cloud nodes.
 		}
-		s.setState(s.gossipState)
-		s.stopIdleTimer()
 	} else {
 		s.logger.Println("DEFAULT-STRONG-POLICY", "can't translate to gossip state from a state different from idle", log.ERROR)
 	}
@@ -129,8 +129,9 @@ func (s *DefaultStrongCollectionPolicy) transitionToDecision(childrenResourceUsa
 	// Only transition if still in gossip state
 	if _, isGossip := s.currentState.(*MigrationManagerGossipState); isGossip {
 		//fmt.Println("Auto-transitioning from gossip to decision state")
-		s.decisionState.Setup(childrenResourceUsage)
 		s.setState(s.decisionState)
+		s.decisionState.Setup(childrenResourceUsage)
+
 	} else {
 		s.logger.Println("DEFAULT-STRONG-POLICY", "can't translate to decision state from a state different from gossip", log.ERROR)
 	}

@@ -13,6 +13,7 @@ import (
 	logger "logger"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 )
@@ -98,6 +99,13 @@ func TestIterationModule(t *testing.T) {
 	mig.ManageGossipMessage(child2Gossip1)
 	// decisionState
 	mig.NewCollectionReceived("repoId3", true, false, make(map[string]string), []string{})
+
+	// verify first cycle
+	time.Sleep(1 * time.Second)
+	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
+	if !lru.CheckOrder([]string{"repoId3", "repoId0", "repoId1", "repoId2"}) {
+		t.Fatal("fail in first cycle")
+	}
 
 	t.Cleanup(func() {
 		migrationManager.ResetSingleton()

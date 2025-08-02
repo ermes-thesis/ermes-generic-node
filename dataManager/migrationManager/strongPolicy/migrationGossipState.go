@@ -12,7 +12,7 @@ type MigrationManagerGossipState struct {
 	policy                *DefaultStrongCollectionPolicy
 	dbInterface           db.GenericDB
 	MissingMessageCounter int
-	ChildrenResourceUsage map[string]ChildStateInfo
+	NodeResourceUsage     map[string]NodeStateInfo
 }
 
 func (m *MigrationManagerGossipState) Setup(args ...any) {
@@ -24,7 +24,7 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 		panic("expected int for counter")
 	}
 	m.MissingMessageCounter = counter
-	m.ChildrenResourceUsage = make(map[string]ChildStateInfo, 0)
+	m.NodeResourceUsage = make(map[string]NodeStateInfo, 0)
 
 	go m.SendGosssipMessages()
 }
@@ -35,17 +35,18 @@ func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string
 }
 
 func (m *MigrationManagerGossipState) SendGosssipMessages() {
+	memStats, err := m.dbInterface.GetMemoryStats()
+	if err != nil {
+		m.policy.logger.Println("GOSSIP-STATE", fmt.Sprintf("failed to get memory stats: %v", err), logger.ERROR)
+	}
+	redisFreeSize := 1.0 - memStats.UsedMemoryDatasetPercentage
+
 	for value := range m.policy.serverInfo.Children {
-		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.Address)
+		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.Address, redisFreeSize)
 		m.policy.sender.SendGosssipMessages(msgToChild, m.policy.serverInfo.Children[value].Address)
 	}
 
 	if m.policy.serverInfo.Father != nil {
-		memStats, err := m.dbInterface.GetMemoryStats()
-		if err != nil {
-			m.policy.logger.Println("GOSSIP-STATE", fmt.Sprintf("failed to get memory stats: %v", err), logger.ERROR)
-		}
-		redisFreeSize := 1.0 - memStats.UsedMemoryDatasetPercentage
 		msgToFather := gossip.NewChildStateMessage(m.policy.serverInfo.Address, redisFreeSize)
 		m.policy.sender.SendGosssipMessages(msgToFather, m.policy.serverInfo.Father.Address)
 	}
@@ -69,19 +70,23 @@ func (m *MigrationManagerGossipState) ManageGossipMessage(msg gossip.GossipMessa
 
 	m.MissingMessageCounter -= 1
 	if m.MissingMessageCounter <= 0 {
-		m.policy.transitionToDecision(m.ChildrenResourceUsage)
+		m.policy.transitionToDecision(m.NodeResourceUsage)
 	}
 }
 
 // save memory and state info from the child in order to take further decisions
 func (m *MigrationManagerGossipState) manageChildGossipMessage(msg gossip.ChildStateMessage) {
-	childStateInfo := ChildStateInfo{
+	childStateInfo := NodeStateInfo{
 		//childName:   msg.GetSenderID(),
 		FreeRedisMemory: msg.FreeRedisMemory,
 	}
-	m.ChildrenResourceUsage[msg.GetSenderID()] = childStateInfo
+	m.NodeResourceUsage[msg.GetSenderID()] = childStateInfo
 }
 
 func (m *MigrationManagerGossipState) manageAnchestorGossipMessage(msg gossip.LeaderDelegaMessage) {
-	//TODO
+	childStateInfo := NodeStateInfo{
+		//childName:   msg.GetSenderID(),
+		FreeRedisMemory: msg.FreeRedisMemory,
+	}
+	m.NodeResourceUsage[msg.GetSenderID()] = childStateInfo
 }

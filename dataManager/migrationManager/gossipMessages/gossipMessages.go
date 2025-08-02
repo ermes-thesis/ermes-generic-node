@@ -51,15 +51,16 @@ func (c *ChildStateMessage) FromJSON(data []byte) error {
 // LeaderDelegaMessage represents a leadership delegation message include info to update forces
 type LeaderDelegaMessage struct {
 	BaseGossipMessage
-	//TODO
+	FreeRedisMemory float64 `json:"freeRedisMemory"`
 }
 
-func NewLeaderDelegaMessage(senderID string) *LeaderDelegaMessage {
+func NewLeaderDelegaMessage(senderID string, freeRedisMemory float64) *LeaderDelegaMessage {
 	return &LeaderDelegaMessage{
 		BaseGossipMessage: BaseGossipMessage{
 			MessageType: "LEADER_DELEGA",
 			SenderID:    senderID,
 		},
+		FreeRedisMemory: freeRedisMemory,
 	}
 }
 

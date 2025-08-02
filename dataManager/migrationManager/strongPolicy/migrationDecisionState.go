@@ -11,8 +11,8 @@ import (
 
 // - Decision state -> in this state the Migration manager ingore all the messages, take decisions on collection migration; consume the stack
 type MigrationManagerDecisionState struct {
-	policy         *DefaultStrongCollectionPolicy
-	ChildStateInfo map[string]ChildStateInfo
+	policy            *DefaultStrongCollectionPolicy
+	NodeResourceUsage map[string]NodeStateInfo
 
 	requestStack stack.CallStack
 }
@@ -22,13 +22,13 @@ func (m *MigrationManagerDecisionState) Setup(args ...any) {
 	if len(args) != 1 {
 		panic("invalid arguments for Setup in DecisionState")
 	}
-	childrenResourceUsage, ok := args[0].(map[string]ChildStateInfo)
+	childrenResourceUsage, ok := args[0].(map[string]NodeStateInfo)
 	if !ok {
 		panic("expected []ChildStateInfo for childrenResourceUsage")
 	}
 	m.requestStack = stack.NewCallStack()
 
-	m.ChildStateInfo = childrenResourceUsage
+	m.NodeResourceUsage = childrenResourceUsage
 
 	m.computeEqState()
 
@@ -122,7 +122,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 		if strongCollection.IsLeader {
 			//if the collection has been moved and removed locally
 			if m.leaderDecision(outerKey, innerKey, buffer, strongCollection, totalForce, totalReqNumber) {
-				break
+				return
 			}
 		}
 
@@ -137,8 +137,8 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 // return true if the leader has been moved (only 1 direction can return true)
 func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, strongCollection *shared.StrongCollection, totalForce int, totalReq int) bool {
 	//compute decision
-	feW, _ := m.computeElasticForce(buffer, usage.GetWrite)
-	var driverForce = float64(2*feW) - (m.ChildStateInfo[innerKey].FreeRedisMemory * m.policy.currentConfig.GravityConstant) - float64(totalReq*int(m.policy.serverInfo.Latency))
+	feW, req := m.computeElasticForce(buffer, usage.GetWrite)
+	var driverForce = float64(2*feW) - (m.NodeResourceUsage[innerKey].FreeRedisMemory * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(m.policy.serverInfo.Latency)
 
 	//evaluate decision
 	if driverForce <= float64(totalForce) {
@@ -152,7 +152,7 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 		panic(err) //TODO: decide
 	}
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, res, groups)
+	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, true, res, groups)
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(outerKey)
@@ -164,13 +164,16 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 	//remove the collection from the lru
 	m.policy.lruCache.Remove(outerKey)
 
+	//stop keep track of access for a remote collection
+	delete(m.policy.equilibriumState, outerKey)
+
 	return true
 }
 
 func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, strongCollection *shared.StrongCollection, interestedNodeCounter int) bool {
 	//compute decision
 	feR, _ := m.computeElasticForce(buffer, usage.GetRead)
-	resistance := (m.ChildStateInfo[innerKey].FreeRedisMemory * m.policy.currentConfig.GravityConstant) + float64(m.policy.currentConfig.FollowerThreshold)
+	resistance := (m.NodeResourceUsage[innerKey].FreeRedisMemory * m.policy.currentConfig.GravityConstant) + float64(m.policy.currentConfig.FollowerThreshold)
 
 	//evaluate decision
 	if float64(feR) <= resistance {
@@ -184,10 +187,10 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 		panic(err) //TODO: decide
 	}
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, res, groups)
+	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, false, res, groups)
 
 	//if all the interest adjacent node has been satisfied
-	if interestedNodeCounter-len(strongCollection.HostsId()) <= 0 {
+	if interestedNodeCounter-len(strongCollection.HostsId()) <= 0 && !strongCollection.IsLeader {
 		//remove collection from redis instance
 		m.policy.dbInterface.DeleteCollection(outerKey)
 
@@ -196,6 +199,9 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 
 		//remove the collection from the lru
 		m.policy.lruCache.Remove(outerKey)
+
+		//stop keep track of access for a remote collection
+		delete(m.policy.equilibriumState, outerKey)
 	}
 
 	return true

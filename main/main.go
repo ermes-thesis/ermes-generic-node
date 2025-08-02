@@ -32,7 +32,7 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	var logger = logger.NewLogger(logger.INFO, &loggerFile)
 
 	config := config.LoadConfig(configPath)
-	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](config.Lru.Size)
+	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](config.Lru.Size) //TODO: replace with redis size
 
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()

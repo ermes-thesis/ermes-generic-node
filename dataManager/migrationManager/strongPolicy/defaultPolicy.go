@@ -72,8 +72,8 @@ func (s *DefaultStrongCollectionPolicy) SetDefaultState() {
 	s.logger.Println("DEFAULT-STRONG-POLICY", "Setting default state", log.INFO)
 	//state pattern
 	s.idleState = &MigrationManagerIdleState{policy: s}
-	s.gossipState = &MigrationManagerGossipState{policy: s, dbInterface: s.dbInterface, MissingMessageCounter: 0, ChildrenResourceUsage: make(map[string]ChildStateInfo, 0)}
-	s.decisionState = &MigrationManagerDecisionState{policy: s, ChildStateInfo: make(map[string]ChildStateInfo, 0)}
+	s.gossipState = &MigrationManagerGossipState{policy: s, dbInterface: s.dbInterface, MissingMessageCounter: 0, NodeResourceUsage: make(map[string]NodeStateInfo, 0)}
+	s.decisionState = &MigrationManagerDecisionState{policy: s, NodeResourceUsage: make(map[string]NodeStateInfo, 0)}
 
 	s.currentState = s.idleState
 
@@ -119,7 +119,7 @@ func (s *DefaultStrongCollectionPolicy) transitionToGossip() {
 	}
 }
 
-func (s *DefaultStrongCollectionPolicy) transitionToDecision(childrenResourceUsage map[string]ChildStateInfo) {
+func (s *DefaultStrongCollectionPolicy) transitionToDecision(childrenResourceUsage map[string]NodeStateInfo) {
 	s.logger.Println("DEFAULT-STRONG-POLICY", "transition to decision state", log.INFO)
 	// Only transition if still in gossip state
 	if _, isGossip := s.currentState.(*MigrationManagerGossipState); isGossip {

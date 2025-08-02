@@ -12,6 +12,6 @@ type MigrationManagerState interface {
 	Setup(args ...any)
 }
 
-type ChildStateInfo struct {
+type NodeStateInfo struct {
 	FreeRedisMemory float64
 }

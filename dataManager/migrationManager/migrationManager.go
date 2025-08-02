@@ -27,7 +27,7 @@ type MigrationManager interface {
 	ManageNewRequest(string, string, bool, int) error
 	//used to update non real time info
 	ManageGossipMessage(gossip.GossipMessage)
-	//used when the node receive  a collection from one of the directly connected nodes (collectionID,size,isStrong)
+	//used when the node receive  a collection from one of the directly connected nodes (collectionID,isStrong,leader)
 	//return True if the collection is already stored locally and must not be stored in Redis
 	NewCollectionReceived(string, bool, bool, map[string]string, []string) bool
 	//used when user create a new collection in the local node (collectionID,size,isStrong)

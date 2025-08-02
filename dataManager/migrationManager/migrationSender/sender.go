@@ -13,7 +13,7 @@ const (
 )
 
 type Sender interface {
-	SendRemoteCollectionTo(string, shared.Collection, map[string]string, []string)
+	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]string, []string)
 	SendGosssipMessages(gossip.GossipMessage, string)
 	GossipPath() string
 	RepoPath() string
@@ -31,7 +31,7 @@ func NewSender(logger log.Logger, server server.ServerType) Sender {
 	}
 }
 
-func (s *SendImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, res map[string]string, groups []string) {
+func (s *SendImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]string, groups []string) {
 	//sync -> avoid send a collection if used
 	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
 	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
@@ -46,7 +46,7 @@ func (s *SendImpl) SendRemoteCollectionTo(destination string, collection shared.
 		IsStrong:     collection.IsStrong(),
 	}
 	if collection.IsStrong() {
-		msg.IsLeader = collection.(*shared.StrongCollection).IsLeader
+		msg.IsLeader = collection.(*shared.StrongCollection).IsLeader && sendAsLeader
 	} else {
 		msg.IsLeader = false
 	}

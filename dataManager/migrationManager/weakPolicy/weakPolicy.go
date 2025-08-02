@@ -51,5 +51,5 @@ func (a *AlwayCopyPolicy) ManageNewWeakRequest(collectionId string, childName st
 	}
 
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	a.sender.SendRemoteCollectionTo(childName, weakCollection, res, groups)
+	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups)
 }

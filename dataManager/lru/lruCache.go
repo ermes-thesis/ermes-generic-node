@@ -213,20 +213,18 @@ func (this *LRUCache[T]) GetAvailableSize() uint {
 // Potentially useful for debug, but tricky to manage with generics
 // func (this *LRUCach (TODO: decide)e) PrintLRU() {
 
-// 	fmt.Println("LRU:")
-// 	fmt.Println("head: %d", this.head.key)
+//  	fmt.Println("LRU:")
+//  	fmt.Println("head: %d", this.head.key)
 // 	fmt.Println("tail: %d", this.tail.key)
 
-// 	fmt.Println("Forwards:")
+//  	fmt.Println("Forwards:")
+//  	for i := this.head; i != nil; i = i.next {
+//  		fmt.Println("%d", i.key)
+//  	}
 
-// 	for i := this.head; i != nil; i = i.next {
-// 		fmt.Println("%d", i.key)
+//  	fmt.Println("Backwards:")
+
+//  	for i := this.tail; i != nil; i = i.prev {
+//  		fmt.Println("%d", i.key)
 // 	}
-
-// 	fmt.Println("Backwards:")
-
-// 	for i := this.tail; i != nil; i = i.prev {
-// 		fmt.Println("%d", i.key)
-// 	}
-
-//	}
+// }

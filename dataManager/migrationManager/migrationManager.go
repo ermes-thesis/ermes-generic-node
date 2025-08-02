@@ -102,7 +102,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	m.defaultPolicy = policy.NewDefaultPolicy(config, lruConfig, collections, migLock, penalityFunc, dbInterface, serverInfo, m.sender, m.lruCache, m.logger)
 	m.StrongCollectionPolicy = m.defaultPolicy
 
-	m.alwaysCopyPolicy = weakpolicy.NewAlwayCopyPolicy(config, m.sender, logger)
+	m.alwaysCopyPolicy = weakpolicy.NewAlwayCopyPolicy(config, m.sender, logger, collections, dbInterface)
 	m.WeakCollectionPolicy = m.alwaysCopyPolicy
 
 	//init data

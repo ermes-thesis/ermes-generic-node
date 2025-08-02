@@ -30,10 +30,12 @@ type AlwayCopyPolicy struct {
 	sender      sender.Sender
 }
 
-func NewAlwayCopyPolicy(config config.MigrationManagerConfig, sender sender.Sender, logger log.Logger) WeakCollectionPolicy {
+func NewAlwayCopyPolicy(config config.MigrationManagerConfig, sender sender.Sender, logger log.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB) WeakCollectionPolicy {
 	policy := &AlwayCopyPolicy{
-		sender: sender,
-		logger: logger,
+		dbInterface: dbInterface,
+		partialView: partialView,
+		sender:      sender,
+		logger:      logger,
 	}
 
 	return policy
@@ -41,6 +43,10 @@ func NewAlwayCopyPolicy(config config.MigrationManagerConfig, sender sender.Send
 
 // impl
 func (a *AlwayCopyPolicy) ManageNewWeakRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
+	if childName == "user" {
+		return
+	}
+
 	a.logger.Println("WEAK-POLICY", "handle request for a weak collection", log.INFO)
 	weakCollection := a.partialView.KnowedCollections[collectionId]
 

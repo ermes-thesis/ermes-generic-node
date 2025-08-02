@@ -146,7 +146,7 @@ func (s *DefaultStrongCollectionPolicy) transitionToIdle() {
 		s.setState(s.idleState)
 		s.startIdleTimer()
 	} else {
-		s.logger.Println("DEFAULT-STRONG-POLICY", "can't translate to idel state from a state different from decision", log.ERROR)
+		s.logger.Println("DEFAULT-STRONG-POLICY", "can't translate to idle state from a state different from decision", log.ERROR)
 	}
 }
 

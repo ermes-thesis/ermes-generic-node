@@ -7,6 +7,7 @@ import (
 type StrongCollectionPolicy interface {
 	SetDefaultState()
 	ManageGossipMessage(msg gossip.GossipMessage)
+	RemoveInfo(collectionId string)
 	ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int)
 }
 

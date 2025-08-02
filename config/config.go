@@ -25,7 +25,8 @@ type MigrationManagerConfig struct {
 }
 
 type LruConfig struct {
-	Size uint `yaml:"size"`
+	Size      uint    `yaml:"size"`
+	SafeLevel float32 `yaml:"safeLevel"`
 }
 
 type RedisConfig struct {

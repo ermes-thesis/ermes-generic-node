@@ -129,7 +129,11 @@ func (this *LRUCache[T]) FreeToAchieveSize(sizeGoal uint) *list.List {
 
 	// Start removing elements from the back until the condition is satisfied
 	for this.capacity-this.current < sizeGoal {
-
+		backElement := this.linkedlist.Back()
+		if backElement == nil {
+			// Lista vuota, non possiamo liberare più spazio
+			break
+		}
 		// Pop the last element
 
 		// Convert the last element to an object

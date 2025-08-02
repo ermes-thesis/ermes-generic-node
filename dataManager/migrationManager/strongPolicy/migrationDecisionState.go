@@ -32,6 +32,8 @@ func (m *MigrationManagerDecisionState) Setup(args ...any) {
 
 	m.computeEqState()
 
+	m.setLruToSafeLevel()
+
 	go m.consumeStrongRequests()
 
 	//back in idel state
@@ -146,6 +148,10 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 	}
 
 	//react to positive decision
+	//sync -> avoid send a collection if used
+	strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+	defer strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+
 	//get collection from redis instance
 	res, groups, err := m.policy.dbInterface.GetCollection(outerKey)
 	if err != nil {
@@ -181,6 +187,10 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 	}
 
 	//react to positive decision
+	//sync -> avoid send a collection if used
+	strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+	defer strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+
 	//get collection from redis instance
 	res, groups, err := m.policy.dbInterface.GetCollection(outerKey)
 	if err != nil {
@@ -205,4 +215,49 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 	}
 
 	return true
+}
+
+func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
+	sizeGoal := m.policy.lruConfig.Size * uint(m.policy.lruConfig.SafeLevel)
+	collectionList := m.policy.lruCache.FreeToAchieveSize(sizeGoal)
+	var wg sync.WaitGroup
+	wg.Add(collectionList.Len())
+
+	for item := collectionList.Front(); item != nil; item = item.Next() {
+		collection := item.Value.(shared.Collection)
+		go m.sendCollectionAndRemove(collection, &wg)
+	}
+
+	wg.Wait()
+}
+
+func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection shared.Collection, wg *sync.WaitGroup) {
+	defer wg.Done()
+
+	//sync -> avoid send a collection if used
+	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+
+	//get collection from redis instance
+	res, groups, err := m.policy.dbInterface.GetCollection(collection.CollectionId())
+	if err != nil {
+		panic(err) //TODO: decide
+	}
+	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
+	isLeader := false
+	if collection.IsStrong() {
+		isLeader = collection.(*shared.StrongCollection).IsLeader
+		if isLeader {
+			collection.(*shared.StrongCollection).LeaderId = m.policy.serverInfo.Father.Address
+		}
+		//stop keep track of access for a remote collection
+		m.policy.RemoveInfo(collection.CollectionId())
+	}
+	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.Address, collection, isLeader, res, groups)
+
+	//remove collection from redis instance
+	m.policy.dbInterface.DeleteCollection(collection.CollectionId())
+
+	//set the collection as remote only in the node partial view
+	collection.SetToRemote()
 }

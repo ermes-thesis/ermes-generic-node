@@ -32,9 +32,6 @@ func NewSender(logger log.Logger, server server.ServerType) Sender {
 }
 
 func (s *SendImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]string, groups []string) {
-	//sync -> avoid send a collection if used
-	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
-	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 
 	//imp
 	collection.AddHost(destination)

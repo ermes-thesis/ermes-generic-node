@@ -70,7 +70,7 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 		KnowedCollections: make(map[string]dataManagerShared.Collection),
 	}
 	migrationManagerIstance := migrationManager.GetMigrationManagerInstance(*logger)
-	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, ser, *ser.Serverinfo, &lruCache, redisClient, *logger)
+	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, config.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *logger)
 	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
 	clDiscovererIstance.Init(collections)
 
@@ -97,7 +97,6 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 }
 
 func main() {
-
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "No path specified for config file as argument, node cannot start.\n")
 		os.Exit(0)

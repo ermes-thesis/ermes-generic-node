@@ -29,6 +29,7 @@ migrationManager:
 
 lru:
   size: 2000
+  safeLevel: 0.8
 
 redis:
   host: "localhost"

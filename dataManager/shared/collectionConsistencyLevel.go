@@ -25,11 +25,13 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 	hosts := make(map[string]struct{})
 	if isRemote {
 		return &StrongCollection{
+			collectionId:    collectionId,
 			collectionState: NewRemoteCollection(hosts),
 			IsLeader:        false,
 		}
 	}
 	return &StrongCollection{
+		collectionId:    collectionId,
 		collectionState: NewLocalCollection(size, hosts),
 		IsLeader:        isLeader,
 	}
@@ -82,10 +84,12 @@ func NewWeakCollection(collectionId string, size uint64, isRemote bool) Collecti
 	hosts := make(map[string]struct{})
 	if isRemote {
 		return &WeakCollection{
+			collectionId:    collectionId,
 			collectionState: NewRemoteCollection(hosts),
 		}
 	}
 	return &WeakCollection{
+		collectionId:    collectionId,
 		collectionState: NewLocalCollection(size, hosts),
 	}
 }

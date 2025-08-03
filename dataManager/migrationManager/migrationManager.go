@@ -229,6 +229,7 @@ func (m *MigrationManagerImp) updateLru(collectionId string) {
 }
 
 func (m *MigrationManagerImp) freeLru(sizeGoal uint) {
+	m.logger.Println("MIG-MANAGER", fmt.Sprintf("free space in the lru to achieve size %d", sizeGoal), log.INFO)
 	collectionList := m.lruCache.FreeToAchieveSize(sizeGoal) //TODO send the collection up to the
 
 	for item := collectionList.Front(); item != nil; item = item.Next() {

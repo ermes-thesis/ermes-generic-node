@@ -3,6 +3,7 @@ package migrationSender
 import (
 	gossip "dataManager/migrationManager/gossipMessages"
 	shared "dataManager/shared"
+	"fmt"
 	log "logger"
 	server "server"
 )
@@ -33,6 +34,7 @@ func NewSender(logger log.Logger, server server.ServerType) Sender {
 
 func (s *SendImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]string, groups []string) {
 	//imp
+	s.logger.Println("SENDER", fmt.Sprintf("send collection %s to %s", collection.CollectionId(), destination), log.INFO)
 	collection.AddHost(destination)
 
 	msg := gossip.SendCollectionMessage{

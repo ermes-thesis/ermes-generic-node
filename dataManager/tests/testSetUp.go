@@ -42,6 +42,7 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 		LeaderThreshold:   0,
 		FollowerThreshold: 1,
 		ViewSize:          3,
+		GravityConstant:   0.981,
 	}
 	lurConfig := config.LruConfig{
 		Size:      100000,
@@ -80,6 +81,7 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 		LeaderThreshold:   0,
 		FollowerThreshold: 1,
 		ViewSize:          3,
+		GravityConstant:   0.981,
 	}
 	lurConfig := config.LruConfig{
 		Size:      10,
@@ -90,6 +92,7 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	db.On("GetCollectionMemoryUsage", "repoId3").Return(uint64(1), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", "repoId4").Return(uint64(5), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", "repoId5").Return(uint64(10), nil).Maybe()
+	db.On("DeleteCollection", mock.AnythingOfType("string")).Return(nil).Maybe()
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string")).Return(nil).Maybe()
 	db.On("GetCollection", mock.AnythingOfType("string")).Return(map[string]string{"a": "1", "b": "2"}, []string{"a", "b"}, nil).Maybe()
 
@@ -102,10 +105,10 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverinfo := info.ServerInfo{
 		Node:   info.Node{Address: "0000", MetadataDomain: "Domain"},
-		Father: &info.Node{Address: "1111", MetadataDomain: "fDomain"},
+		Father: &info.Node{Address: "1111", MetadataDomain: "fDomain", Latency: 5},
 		Children: []info.Node{
-			{Address: "2222", MetadataDomain: "Domain"},
-			{Address: "3333", MetadataDomain: "Domain"},
+			{Address: "2222", MetadataDomain: "Domain", Latency: 3},
+			{Address: "3333", MetadataDomain: "Domain", Latency: 4},
 		},
 		Secret: "ermes-secret",
 	}

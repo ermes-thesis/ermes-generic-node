@@ -5,6 +5,7 @@ import (
 	sender "dataManager/migrationManager/migrationSender"
 	shared "dataManager/shared"
 	"db"
+	"fmt"
 	log "logger"
 )
 
@@ -57,5 +58,6 @@ func (a *AlwayCopyPolicy) ManageNewWeakRequest(collectionId string, childName st
 	}
 
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
+	a.logger.Println("WEAK-POLICY", fmt.Sprintf("send weak collection%s to node %s", collectionId, childName), log.INFO)
 	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups)
 }

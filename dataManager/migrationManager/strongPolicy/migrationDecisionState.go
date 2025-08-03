@@ -5,7 +5,9 @@ import (
 	usage "dataManager/migrationManager/childUsage"
 	gossip "dataManager/migrationManager/gossipMessages"
 	shared "dataManager/shared"
+	"fmt"
 	"logger"
+	log "logger"
 	"sync"
 )
 
@@ -91,6 +93,7 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 			continue
 		}
 
+		m.policy.logger.Println("DEFAULT-STRONG-POLICY", fmt.Sprintf("start taking decisions for collection %s", outerKey), log.INFO)
 		//take decision on a secondary thread
 		go m.innerKeyDecision(outerKey, innerMap, &wg, len(innerMap))
 
@@ -121,6 +124,11 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 		if innerKey == "user" {
 			continue
 		}
+		//if present on that host
+		if _, ok := m.policy.partialView.KnowedCollections[outerKey].HostsId()[innerKey]; ok {
+			continue
+		}
+
 		if strongCollection.IsLeader {
 			//if the collection has been moved and removed locally
 			if m.leaderDecision(outerKey, innerKey, buffer, strongCollection, totalForce, totalReqNumber) {
@@ -140,12 +148,14 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, strongCollection *shared.StrongCollection, totalForce int, totalReq int) bool {
 	//compute decision
 	feW, req := m.computeElasticForce(buffer, usage.GetWrite)
-	var driverForce = float64(2*feW) - (m.NodeResourceUsage[innerKey].FreeRedisMemory * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(m.policy.serverInfo.Latency)
-
+	var driverForce = float64(2*feW) - ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(m.policy.serverInfo.Latency)
+	m.policy.logger.Println("DEFAULT-STRONG-POLICY", fmt.Sprintf("leader decision on collection %s result in force %f and resistance %f", outerKey, driverForce, float64(totalForce)), log.INFO)
 	//evaluate decision
 	if driverForce <= float64(totalForce) {
+		m.policy.logger.Println("DEFAULT-STRONG-POLICY", fmt.Sprintf("leader decision on collection %s has negative reseult for node %s", outerKey, innerKey), log.INFO)
 		return false
 	}
+	m.policy.logger.Println("DEFAULT-STRONG-POLICY", fmt.Sprintf("leader decision on collection %s has positive result for node %s", outerKey, innerKey), log.INFO)
 
 	//react to positive decision
 	//sync -> avoid send a collection if used
@@ -179,12 +189,15 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, strongCollection *shared.StrongCollection, interestedNodeCounter int) bool {
 	//compute decision
 	feR, _ := m.computeElasticForce(buffer, usage.GetRead)
-	resistance := (m.NodeResourceUsage[innerKey].FreeRedisMemory * m.policy.currentConfig.GravityConstant) + float64(m.policy.currentConfig.FollowerThreshold)
+	resistance := ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) + float64(m.policy.currentConfig.FollowerThreshold)
+	m.policy.logger.Println("DEFAULT-STRONG-POLICY", fmt.Sprintf("follower decision on collection %s result in force %d and resistance %f", outerKey, feR, resistance), log.INFO)
 
 	//evaluate decision
 	if float64(feR) <= resistance {
+		m.policy.logger.Println("DEFAULT-STRONG-POLICY", fmt.Sprintf("follower decision on collection %s has negative result for node %s", outerKey, innerKey), log.INFO)
 		return false
 	}
+	m.policy.logger.Println("DEFAULT-STRONG-POLICY", fmt.Sprintf("follower decision on collection %s has positive result for node %s", outerKey, innerKey), log.INFO)
 
 	//react to positive decision
 	//sync -> avoid send a collection if used
@@ -219,6 +232,7 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 
 func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
 	sizeGoal := m.policy.lruConfig.Size * uint(m.policy.lruConfig.SafeLevel)
+	m.policy.logger.Println("DEFAULT-STRONG-POLICY", fmt.Sprintf("set lru to safe level %d", sizeGoal), log.INFO)
 	collectionList := m.policy.lruCache.FreeToAchieveSize(sizeGoal)
 	var wg sync.WaitGroup
 	wg.Add(collectionList.Len())

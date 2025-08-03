@@ -87,56 +87,86 @@ func (r *RedisClient) DeleteRecords(collectionId string, recordNames ...string) 
 }
 
 func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []string, error) {
-	//TODO: capire come usare le pipeline/transaction (probabilmente con LUA script)
-	keys, err := r.client.SMembers(r.ctx, "info:"+collectionId+":keys").Result()
-	if err != nil {
+	const maxRetries = 5
+
+	keysKey := "info:" + collectionId + ":keys"
+	groupsKey := "info:" + collectionId + ":groups"
+
+	var (
+		keys   []string
+		groups []string
+		result map[string]string
+	)
+
+	for retries := 0; retries < maxRetries; retries++ {
+		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+			var err error
+			keys, err = tx.SMembers(r.ctx, keysKey).Result()
+			if err != nil {
+				return err
+			}
+
+			groups, err = tx.SMembers(r.ctx, groupsKey).Result()
+			if err != nil {
+				return err
+			}
+
+			cmds, err := tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+				pipe.MGet(r.ctx, buildKeys(collectionId, keys)...)
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+
+			mgetCmd := cmds[0].(*redis.SliceCmd)
+			values, err := mgetCmd.Result()
+			if err != nil {
+				return err
+			}
+
+			result = make(map[string]string, len(keys))
+			for i, key := range keys {
+				result[key] = values[i].(string)
+			}
+
+			return nil
+		}, keysKey, groupsKey)
+
+		if err == nil {
+			return result, groups, nil
+		}
+
+		if errors.Is(err, redis.TxFailedErr) {
+			continue
+		}
+
 		return nil, nil, err
 	}
 
-	values, err := r.client.MGet(r.ctx, buildKeys(collectionId, keys)...).Result()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	res := make(map[string]string, len(keys))
-	for i, key := range keys {
-		res[key] = values[i].(string)
-	}
-
-	groups, err := r.client.SMembers(r.ctx, "info:"+collectionId+":groups").Result()
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return res, groups, nil
+	return nil, nil, errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) SetCollection(collectionId string, records map[string]string, groups []string) error {
-	err := r.client.Set(r.ctx, "info:"+collectionId, "", 0).Err()
-	if err != nil {
-		return err
-	}
+	keysKey := "info:" + collectionId + ":keys"
+	groupsKey := "info:" + collectionId + ":groups"
 
-	for key, value := range records {
-		err := r.client.Set(r.ctx, buildKey(collectionId, key), value, 0).Err()
-		if err != nil {
-			return err
+	_, err := r.client.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+		pipe.Set(r.ctx, "info:"+collectionId, "", 0)
+
+		for key, value := range records {
+			pipe.Set(r.ctx, buildKey(collectionId, key), value, 0)
+			pipe.SAdd(r.ctx, keysKey, key)
 		}
 
-		err = r.client.SAdd(r.ctx, "info:"+collectionId+":keys", key).Err()
-		if err != nil {
-			return err
+		for _, g := range groups {
+			pipe.SAdd(r.ctx, groupsKey, g)
 		}
-	}
 
-	for _, g := range groups {
-		err := r.client.SAdd(r.ctx, "info:"+collectionId+":groups", g).Err()
-		if err != nil {
-			return err
-		}
-	}
+		return nil
+	})
 
-	return nil
+	return err
 }
 
 func (r *RedisClient) DeleteCollection(collectionId string) error {

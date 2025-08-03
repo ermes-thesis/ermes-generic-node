@@ -244,6 +244,7 @@ func TestMemStats(t *testing.T) {
 	}, groups)
 	require.NoError(t, err, "Expected no error setting collection metadata")
 
+	time.Sleep(500 * time.Millisecond)
 	memStats1, err := redisClient.GetMemoryStats()
 	require.NoError(t, err, "Expected no error getting memory stats")
 

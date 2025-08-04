@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/redis/go-redis/v9"
 	"metadataManager/utils"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -388,40 +389,36 @@ func (r *RedisClient) GetAvailableMemory() (uint64, error) {
 }
 
 func (r *RedisClient) GetMemoryStats() (*MemStats, error) {
-	stats, err := r.client.Do(r.ctx, "MEMORY", "STATS").Result()
+	stats, err := r.client.Info(r.ctx, "MEMORY", "KEYSPACE").Result()
 	if err != nil {
 		return nil, err
 	}
 
-	statsArr := stats.([]interface{})
+	statsMap := parseRedisInfo(stats)
 
-	statsMap := make(map[string]any)
-	for i := 0; i < len(statsArr); i += 2 {
-		key := statsArr[i].(string)
-		value := statsArr[i+1]
-		statsMap[key] = value
+	re := regexp.MustCompile(`keys=(\d+)`)
+	match := re.FindStringSubmatch(statsMap["db0"])
+	if len(match) != 2 {
+		return nil, errors.New("keys not found")
 	}
 
-	datasetPerc, err := strconv.ParseFloat(statsMap["dataset.percentage"].(string), 64)
-	if err != nil {
-		return nil, err
-	}
+	datasetPerc, err := strconv.ParseFloat(statsMap["used_memory_dataset_perc"][:len(statsMap["used_memory_dataset_perc"])-1], 64)
 	memStats := MemStats{
 		AllocationStats: AllocationStats{
-			UsedMemoryPeak:              uint64(statsMap["peak.allocated"].(int64)),
-			CurrentUsedMemory:           uint64(statsMap["total.allocated"].(int64)),
-			UsedMemoryOverhead:          uint64(statsMap["overhead.total"].(int64)),
-			UsedMemoryStartup:           uint64(statsMap["startup.allocated"].(int64)),
-			UsedMemoryDataset:           uint64(statsMap["dataset.bytes"].(int64)),
+			UsedMemoryPeak:              strToInt(statsMap["used_memory_peak"]),
+			CurrentUsedMemory:           strToInt(statsMap["used_memory"]),
+			UsedMemoryOverhead:          strToInt(statsMap["used_memory_overhead"]),
+			UsedMemoryStartup:           strToInt(statsMap["used_memory_startup"]),
+			UsedMemoryDataset:           strToInt(statsMap["used_memory_dataset"]),
 			UsedMemoryDatasetPercentage: datasetPerc,
 		},
-		ReplicationBacklogSize: uint64(statsMap["replication.backlog"].(int64)),
-		LuaScriptsCacheSize:    uint64(statsMap["lua.caches"].(int64)),
-		KeysCount:              uint64(statsMap["keys.count"].(int64)),
-		BytesKeysRatio:         uint64(statsMap["keys.bytes-per-key"].(int64)),
+		ReplicationBacklogSize: strToInt(statsMap["mem_replication_backlog"]),
+		LuaScriptsCacheSize:    strToInt(statsMap["used_memory_scripts"]),
+		KeysCount:              strToInt(match[1]),
+		BytesKeysRatio:         strToInt(statsMap["used_memory_dataset"]) / strToInt(match[1]),
 	}
 
-	return &memStats, nil
+	return &memStats, err
 }
 
 func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, error) {

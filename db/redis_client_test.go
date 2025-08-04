@@ -247,7 +247,6 @@ func TestMemStats(t *testing.T) {
 	}, groups)
 	require.NoError(t, err, "Expected no error setting collection metadata")
 
-	time.Sleep(500 * time.Millisecond)
 	memStats1, err := redisClient.GetMemoryStats()
 	require.NoError(t, err, "Expected no error getting memory stats")
 
@@ -255,7 +254,7 @@ func TestMemStats(t *testing.T) {
 	require.Equal(t, memStats1.KeysCount, uint64(11+3))
 	require.LessOrEqual(t, memStats1.CurrentUsedMemory, memStats1.UsedMemoryPeak)
 	require.Equal(t, memStats1.BytesKeysRatio, memStats1.UsedMemoryDataset/memStats1.KeysCount)
-	require.Equal(t, memStats1.LuaScriptsCacheSize, uint64(0))
+	require.Equal(t, memStats1.LuaScriptsCacheSize, uint64(0xc0))
 	require.Equal(t, memStats1.ReplicationBacklogSize, uint64(0))
 	require.Greater(t, memStats1.UsedMemoryOverhead, uint64(0))
 	require.Greater(t, memStats1.UsedMemoryStartup, uint64(0))
@@ -281,7 +280,7 @@ func TestMemStats(t *testing.T) {
 	require.Equal(t, memStats2.KeysCount, uint64(16+3*2))
 	require.LessOrEqual(t, memStats2.CurrentUsedMemory, memStats2.UsedMemoryPeak)
 	require.Equal(t, memStats2.BytesKeysRatio, memStats2.UsedMemoryDataset/memStats2.KeysCount)
-	require.Equal(t, memStats2.LuaScriptsCacheSize, uint64(0))
+	require.Equal(t, memStats2.LuaScriptsCacheSize, uint64(0xc0))
 	require.Equal(t, memStats2.ReplicationBacklogSize, uint64(0))
 	require.Greater(t, memStats2.UsedMemoryOverhead, uint64(0))
 	require.Greater(t, memStats2.UsedMemoryStartup, uint64(0))
@@ -321,11 +320,11 @@ func TestMemoryStress(t *testing.T) {
 
 	err := redisClient.SetCollection("collection1", nil, nil)
 	fmt.Println("Starting...")
-	for i := 5; i < 1000; i++ {
+	for i := 0; i < 1000; i++ {
 		names := make([]string, 1000)
 		val := make([]string, 1000)
 		for j := 0; j < 1000; j++ {
-			names[j] = "record" + strconv.Itoa(j) + strconv.Itoa(i)
+			names[j] = "record" + strconv.Itoa(j) + "-" + strconv.Itoa(i)
 			val[j] = "valuevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevalue" + strconv.Itoa(i)
 		}
 		err := redisClient.SetRecords("collection1", names, val)
@@ -337,7 +336,7 @@ func TestMemoryStress(t *testing.T) {
 
 	res, err := redisClient.GetMemoryStats()
 	require.NoError(t, err, "Expected no error getting memory stats")
-	fmt.Printf("RES: %+v\n", res)
+	require.Exactly(t, uint64(1_000_002), res.KeysCount, "Expected 1000002 keys in memory stats")
 }
 
 func startRedisContainer(t *testing.T) (GenericDB, func()) {

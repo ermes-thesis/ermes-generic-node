@@ -21,51 +21,67 @@ func (r *RedisClient) GetRecord(collectionId string, recordName string) (string,
 }
 
 func (r *RedisClient) SetRecord(collectionId string, recordName string, value string) error {
-	exists, err := r.CollectionExists(collectionId)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return errors.New("collection does not exist")
-	}
+	infoKey := "info:" + collectionId
+	dataKey := buildKey(collectionId, recordName)
+	keysKey := "info:" + collectionId + ":keys"
 
-	err = r.client.SAdd(r.ctx, "info:"+collectionId+":keys", recordName).Err()
-	if err != nil {
+	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+		exists, err := tx.Exists(r.ctx, infoKey).Result()
+		if err != nil {
+			return err
+		}
+		if exists == 0 {
+			return errors.New("collection does not exist")
+		}
+
+		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+			pipe.SAdd(r.ctx, keysKey, recordName)
+			pipe.Set(r.ctx, dataKey, value, 0)
+			return nil
+		})
+
 		return err
-	}
-	return r.client.Set(r.ctx, buildKey(collectionId, recordName), value, 0).Err()
+	}, infoKey)
+
+	return err
 }
 
 func (r *RedisClient) GetRecords(collectionId string, recordNames ...string) ([]any, error) {
 	return r.client.MGet(r.ctx, buildKeys(collectionId, recordNames)...).Result()
 }
-
 func (r *RedisClient) SetRecords(collectionId string, recordNames []string, recordValues []string) error {
-	exists, err := r.CollectionExists(collectionId)
-	if err != nil {
-		return err
-	}
-	if !exists {
-		return errors.New("collection does not exist")
-	}
-
 	if len(recordNames) != len(recordValues) {
-		return errors.New("recordNames and recordValue must be the same length")
+		return errors.New("recordNames and recordValues must be the same length")
 	}
 
-	anyConvertedNames := make([]any, len(recordNames))
-	inlineRecords := make([]any, len(recordNames)*2)
-	for i := 0; i < len(recordNames); i++ {
-		anyConvertedNames[i] = recordNames[i]
-		inlineRecords[i*2] = buildKey(collectionId, recordNames[i])
-		inlineRecords[i*2+1] = recordValues[i]
-	}
+	infoKey := "info:" + collectionId
+	keysKey := "info:" + collectionId + ":keys"
 
-	err = r.client.SAdd(r.ctx, "info:"+collectionId+":keys", anyConvertedNames...).Err()
-	if err != nil {
+	return r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+		exists, err := tx.Exists(r.ctx, infoKey).Result()
+		if err != nil {
+			return err
+		}
+		if exists == 0 {
+			return errors.New("collection does not exist")
+		}
+
+		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+			anyConvertedNames := make([]any, len(recordNames))
+			inlineRecords := make([]any, len(recordNames)*2)
+			for i, name := range recordNames {
+				anyConvertedNames[i] = name
+				inlineRecords[i*2] = buildKey(collectionId, recordNames[i])
+				inlineRecords[i*2+1] = recordValues[i]
+			}
+			pipe.SAdd(r.ctx, keysKey, anyConvertedNames...)
+			pipe.MSet(r.ctx, inlineRecords...)
+
+			return nil
+		})
+
 		return err
-	}
-	return r.client.MSet(r.ctx, inlineRecords...).Err()
+	}, infoKey)
 }
 
 func (r *RedisClient) RecordExists(collectionId string, recordName string) (bool, error) {
@@ -74,17 +90,18 @@ func (r *RedisClient) RecordExists(collectionId string, recordName string) (bool
 }
 
 func (r *RedisClient) DeleteRecords(collectionId string, recordNames ...string) error {
-	for _, recordName := range recordNames {
-		err := r.client.SRem(r.ctx, "info:"+collectionId+":keys", recordName).Err()
-		if err != nil {
-			return err
+	keysKey := "info:" + collectionId + ":keys"
+
+	_, err := r.client.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+		for _, recordName := range recordNames {
+			dataKey := buildKey(collectionId, recordName)
+			pipe.SRem(r.ctx, keysKey, recordName)
+			pipe.Del(r.ctx, dataKey)
 		}
-		err = r.client.Del(r.ctx, buildKey(collectionId, recordName)).Err()
-		if err != nil {
-			return err
-		}
-	}
-	return nil
+		return nil
+	})
+
+	return err
 }
 
 func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []string, error) {
@@ -171,24 +188,28 @@ func (r *RedisClient) SetCollection(collectionId string, records map[string]stri
 }
 
 func (r *RedisClient) DeleteCollection(collectionId string) error {
-	keys, err := r.client.SMembers(r.ctx, "info:"+collectionId+":keys").Result()
-	if err != nil {
-		return err
-	}
+	keysKey := "info:" + collectionId + ":keys"
+	infoKey := "info:" + collectionId
+	groupsKey := "info:" + collectionId + ":groups"
 
-	if len(keys) > 0 {
-		err = r.client.Del(r.ctx, buildKeys(collectionId, keys)...).Err()
+	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+		keys, err := tx.SMembers(r.ctx, keysKey).Result()
 		if err != nil {
 			return err
 		}
-	}
 
-	err = r.client.Del(r.ctx, "info:"+collectionId, "info:"+collectionId+":keys", "info:"+collectionId+":groups").Err()
-	if err != nil {
+		dataKeys := buildKeys(collectionId, keys)
+		allKeysToDelete := append(dataKeys, infoKey, keysKey, groupsKey)
+
+		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+			pipe.Del(r.ctx, allKeysToDelete...)
+			return nil
+		})
+
 		return err
-	}
+	}, keysKey)
 
-	return nil
+	return err
 }
 
 func (r *RedisClient) CollectionExists(collectionId string) (bool, error) {
@@ -422,34 +443,43 @@ func (r *RedisClient) GetMemoryStats() (*MemStats, error) {
 }
 
 func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, error) {
-	keys, err := r.client.SMembers(r.ctx, "info:"+collectionId+":keys").Result()
-	if err != nil {
-		return 0, err
-	}
+	keysKey := "info:" + collectionId + ":keys"
+	groupsKey := "info:" + collectionId + ":groups"
+	infoKey := "info:" + collectionId
 
-	totalMemory := uint64(0)
-	for _, key := range keys {
-		memUsage, err := r.client.MemoryUsage(r.ctx, buildKey(collectionId, key)).Result()
+	var totalMemory uint64
+
+	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+		keys, err := tx.SMembers(r.ctx, keysKey).Result()
 		if err != nil {
-			return 0, err
+			return err
 		}
 
-		totalMemory += uint64(memUsage)
-	}
+		totalMemory = 0
 
-	keysRecordSize, err := r.client.MemoryUsage(r.ctx, "info:"+collectionId+":keys").Result()
+		for _, key := range keys {
+			memUsage, err := tx.MemoryUsage(r.ctx, buildKey(collectionId, key)).Result()
+			if err != nil {
+				return err
+			}
+			totalMemory += uint64(memUsage)
+		}
+
+		metaKeys := []string{keysKey, groupsKey, infoKey}
+		for _, metaKey := range metaKeys {
+			memUsage, err := tx.MemoryUsage(r.ctx, metaKey).Result()
+			if err != nil {
+				return err
+			}
+			totalMemory += uint64(memUsage)
+		}
+
+		return nil
+	}, keysKey)
+
 	if err != nil {
 		return 0, err
 	}
-	groupsRecordSize, err := r.client.MemoryUsage(r.ctx, "info:"+collectionId+":groups").Result()
-	if err != nil {
-		return 0, err
-	}
-	existingRecordSize, err := r.client.MemoryUsage(r.ctx, "info:"+collectionId).Result()
-	if err != nil {
-		return 0, err
-	}
-	totalMemory += uint64(keysRecordSize) + uint64(groupsRecordSize) + uint64(existingRecordSize)
 
 	return totalMemory, nil
 }

@@ -331,6 +331,62 @@ func (r *RedisClient) AlterIndex(customMetadataKeys ...string) error {
 	return r.client.FTAlter(r.ctx, "metadata_index", true, fields).Err()
 }
 
+func strToInt(s string) uint64 {
+	i, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return i
+}
+
+func parseRedisInfo(info string) map[string]string {
+	lines := strings.Split(info, "\r\n")
+	result := make(map[string]string, len(lines))
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 {
+			key := parts[0]
+			value := parts[1]
+			result[key] = value
+		}
+	}
+
+	return result
+}
+
+func (r *RedisClient) GetMaxMemory() (uint64, error) {
+	stats, err := r.client.ConfigGet(r.ctx, "maxmemory").Result()
+	if err != nil {
+		return 0, err
+	}
+	if val, ok := stats["maxmemory"]; ok {
+		return strToInt(val), nil
+	}
+	return strToInt(stats["maxmemory"]), nil
+}
+
+func (r *RedisClient) GetAvailableMemory() (uint64, error) {
+	maxMem, err := r.GetMaxMemory()
+	if err != nil {
+		return 0, err
+	}
+	if maxMem == 0 {
+		return ^uint64(0), nil
+	}
+
+	stats, err := r.GetMemoryStats()
+	if err != nil {
+		return 0, err
+	}
+	return maxMem - stats.CurrentUsedMemory, nil
+}
+
 func (r *RedisClient) GetMemoryStats() (*MemStats, error) {
 	stats, err := r.client.Do(r.ctx, "MEMORY", "STATS").Result()
 	if err != nil {

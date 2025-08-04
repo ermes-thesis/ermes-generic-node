@@ -219,7 +219,10 @@ func TestMemStats(t *testing.T) {
 	collectionId := "collection1"
 	groups := []string{"group1", "group2"}
 
-	err := redisClient.SetMetadata(collectionId, Metadata{
+	maxMem, err := redisClient.GetMaxMemory()
+	require.NoError(t, err, "Expected no error getting max memory")
+	require.Equal(t, uint64(0x1f400000), maxMem, "Expected max memory to be 500mb")
+	err = redisClient.SetMetadata(collectionId, Metadata{
 		Owner:          "owner1",
 		Name:           "name1",
 		Groups:         groups,
@@ -248,6 +251,7 @@ func TestMemStats(t *testing.T) {
 	memStats1, err := redisClient.GetMemoryStats()
 	require.NoError(t, err, "Expected no error getting memory stats")
 
+	require.Greater(t, memStats1.UsedMemoryDatasetPercentage, float64(0), "Expected UsedMemoryDatasetPercentage to be greater than 0")
 	require.Equal(t, memStats1.KeysCount, uint64(11+3))
 	require.LessOrEqual(t, memStats1.CurrentUsedMemory, memStats1.UsedMemoryPeak)
 	require.Equal(t, memStats1.BytesKeysRatio, memStats1.UsedMemoryDataset/memStats1.KeysCount)
@@ -268,6 +272,10 @@ func TestMemStats(t *testing.T) {
 
 	memStats2, err := redisClient.GetMemoryStats()
 	require.NoError(t, err, "Expected no error getting memory stats")
+
+	availableMemory, err := redisClient.GetAvailableMemory()
+	require.NoError(t, err, "Expected no error getting available memory")
+	require.Equal(t, maxMem-memStats2.CurrentUsedMemory, availableMemory, "Expected available memory to match max memory minus used dataset memory")
 
 	// 15 "Normal record" + 1 metadata record + 3 special records for each collection (that are 2)
 	require.Equal(t, memStats2.KeysCount, uint64(16+3*2))
@@ -339,6 +347,7 @@ func startRedisContainer(t *testing.T) (GenericDB, func()) {
 		tcredis.WithSnapshotting(10, 1),
 		tcredis.WithLogLevel(tcredis.LogLevelVerbose),
 		testcontainers.WithCmd("redis-stack-server"),
+		testcontainers.WithCmdArgs("--maxmemory", "500mb"),
 		//tcredis.WithConfigFile(filepath.Join("testdata", "redis7.conf")),
 	)
 

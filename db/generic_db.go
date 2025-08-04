@@ -223,7 +223,18 @@ type GenericDB interface {
 	// The index must exist before calling this method.
 	// Existing indexed fields remain unchanged.
 	AlterIndex(customMetadataKeys ...string) error
-
+	// GetMaxMemory retrieves the maximum memory limit set for the database.
+	//
+	// Returns:
+	//	- uint64: maximum memory limit in bytes (0 if no limit is set)
+	//	- error: non-nil if the memory limit retrieval fails
+	GetMaxMemory() (uint64, error)
+	// GetAvailableMemory retrieves the currently available memory for the database.
+	//
+	// Returns:
+	//	- uint64: available memory in bytes (math.MaxUint64 if no limit is set or if the retrieval fails)
+	//	- error: non-nil if the memory retrieval operation fails
+	GetAvailableMemory() (uint64, error)
 	// GetMemoryStats retrieves detailed memory usage statistics from the underlying
 	// database system. The exact statistics returned depend on the implementation.
 	//

@@ -64,13 +64,14 @@ func (m *MigrationManagerDecisionState) computeElasticForce(cb *usage.CircularBu
 	var fe = 0
 	var reqT = 0
 
-	for i := 0; i < cb.Capacity; i++ {
-		idx := (cb.Head - i + cb.Capacity) % cb.Capacity
-		if cb.Data[idx] == nil {
+	for i := 0; i < cb.Capacity(); i++ {
+		el := cb.Get(i)
+		if el == nil {
 			break
 		}
-		reqT += data(cb, idx).TotalRequests //TODO: penality anche per questo?
-		fe += m.policy.penalityFunc(i, usage.GetElasticForce(data(cb, idx)))
+		resourceUsage := data(el)
+		reqT += resourceUsage.TotalRequests //TODO: penality anche per questo?
+		fe += m.policy.penalityFunc(i, resourceUsage.GetElasticForce())
 	}
 
 	return fe, reqT
@@ -139,7 +140,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 		m.replicaDecision(outerKey, innerKey, buffer, strongCollection, interestedNodeCounter)
 
 		//after taking all the decision skip to next round for this buffer
-		buffer.Movehead()
+		buffer.MoveHead()
 
 	}
 }

@@ -10,31 +10,22 @@ import (
 
 func TestBuffer(t *testing.T) {
 	b := usage.NewCircularBuffer(3)
-	c := usage.NewChildResourceUsage()
-	b.Add(c)
-	b.Movehead()
-	d := usage.NewChildResourceUsage()
-	b.Add(d)
-	b.Movehead()
-	b.Add(usage.NewChildResourceUsage())
-	b.Movehead()
+	b.MoveHead()
+	b.MoveHead()
+	b.MoveHead()
 
-	if b.Head != 0 {
+	if b.HeadCursor() != 0 {
 		t.Fatal("head on wrong el - 1")
 	}
 
-	e := usage.NewChildResourceUsage()
-	b.Add(e)
-	b.Movehead()
-	if b.Head == 0 {
+	b.MoveHead()
+	if b.HeadCursor() == 0 {
 		t.Fatal("head on wrong el - 2.2")
 	}
 
-	b.Add(usage.NewChildResourceUsage())
-	b.Movehead()
-	b.Add(usage.NewChildResourceUsage())
-	b.Movehead()
-	if b.Head != 0 {
+	b.MoveHead()
+	b.MoveHead()
+	if b.HeadCursor() != 0 {
 		t.Fatal("head on wrong el  3")
 	}
 }

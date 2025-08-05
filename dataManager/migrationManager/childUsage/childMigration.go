@@ -1,36 +1,36 @@
 package childUsage
 
-// keep update forces for each child on each resources
-type childResourceUsage struct {
-	Write resourceUsage
-	Read  resourceUsage
+// ChildResourceUsage keep update forces for each child on each resource
+type ChildResourceUsage struct {
+	Write ResourceUsage
+	Read  ResourceUsage
 }
-type resourceUsage struct {
+type ResourceUsage struct {
 	CumulativeLatency int
 	TotalRequests     int
 }
 
-func NewChildResourceUsage() *childResourceUsage {
-	return &childResourceUsage{
-		Write: resourceUsage{CumulativeLatency: 0, TotalRequests: 0},
-		Read:  resourceUsage{CumulativeLatency: 0, TotalRequests: 0},
+func NewChildResourceUsage() *ChildResourceUsage {
+	return &ChildResourceUsage{
+		Write: ResourceUsage{CumulativeLatency: 0, TotalRequests: 0},
+		Read:  ResourceUsage{CumulativeLatency: 0, TotalRequests: 0},
 	}
 }
 
-func ManageNewRequest(cr *resourceUsage, requestLatency int) {
+func (cr *ResourceUsage) ManageNewRequest(requestLatency int) {
 	cr.TotalRequests++
 	cr.CumulativeLatency += requestLatency
 }
 
-func GetElasticForce(cr resourceUsage) int {
+func (cr *ResourceUsage) GetElasticForce() int {
 	return cr.CumulativeLatency * cr.TotalRequests
 }
 
-type GetUsage func(*CircularBuffer, int) resourceUsage
+type GetUsage func(*ChildResourceUsage) ResourceUsage
 
-func GetRead(cb *CircularBuffer, idx int) resourceUsage {
-	return cb.Data[idx].Read
+func GetRead(data *ChildResourceUsage) ResourceUsage {
+	return data.Read
 }
-func GetWrite(cb *CircularBuffer, idx int) resourceUsage {
-	return cb.Data[idx].Write
+func GetWrite(data *ChildResourceUsage) ResourceUsage {
+	return data.Write
 }

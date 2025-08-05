@@ -5,7 +5,6 @@ package tests
 
 import (
 	migrationManager "dataManager/migrationManager"
-	usage "dataManager/migrationManager/childUsage"
 	gossip "dataManager/migrationManager/gossipMessages"
 	penality "dataManager/migrationManager/penalityFunction"
 	policy "dataManager/migrationManager/strongPolicy"
@@ -74,12 +73,12 @@ func TestManageNewStrongRequest(t *testing.T) {
 	}
 
 	var equilibrium = instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.DefaultStrongCollectionPolicy).GetUnstableEquilibriumState()
-	if equilibrium["repoId"]["childName"].Data[0].GetWrite().CumulativeLatency != 13 ||
-		equilibrium["repoId"]["childName"].Data[0].GetRead().CumulativeLatency != 3 ||
-		equilibrium["repoId"]["childName1"].Data[0].GetWrite().CumulativeLatency != 0 ||
-		equilibrium["repoId"]["childName1"].Data[0].GetRead().CumulativeLatency != 7 ||
-		equilibrium["repoId1"]["childName1"].Data[0].GetWrite().CumulativeLatency != 7 ||
-		equilibrium["repoId1"]["childName1"].Data[0].GetRead().CumulativeLatency != 0 {
+	if equilibrium["repoId"]["childName"].Head().Write.CumulativeLatency != 13 ||
+		equilibrium["repoId"]["childName"].Head().Read.CumulativeLatency != 3 ||
+		equilibrium["repoId"]["childName1"].Head().Write.CumulativeLatency != 0 ||
+		equilibrium["repoId"]["childName1"].Head().Read.CumulativeLatency != 7 ||
+		equilibrium["repoId1"]["childName1"].Head().Write.CumulativeLatency != 7 ||
+		equilibrium["repoId1"]["childName1"].Head().Read.CumulativeLatency != 0 {
 		t.Error("wrong latency values")
 	}
 
@@ -108,10 +107,10 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 
 	var equilibrium = instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.DefaultStrongCollectionPolicy).GetUnstableEquilibriumState()
 
-	if usage.GetElasticForce(equilibrium["repoId"]["childName"].Data[0].GetWrite()) != 26 {
+	if equilibrium["repoId"]["childName"].Head().Write.GetElasticForce() != 26 {
 		t.Error("wrong write force")
 	}
-	if usage.GetElasticForce(equilibrium["repoId"]["childName"].Data[0].GetRead()) != 3 {
+	if equilibrium["repoId"]["childName"].Head().Read.GetElasticForce() != 3 {
 		t.Error("wrong read force")
 	}
 
@@ -134,7 +133,7 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 	instance1.ManageNewRequest("repoId", "childName", true, 3)
 	instance1.ManageNewRequest("repoId", "childName", false, 7)
 
-	instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.DefaultStrongCollectionPolicy).GetBuffer("repoId", "childName").Movehead() //skip to next window
+	instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.DefaultStrongCollectionPolicy).GetBuffer("repoId", "childName").MoveHead() //skip to next window
 
 	instance1.ManageNewRequest("repoId", "childName", true, 14)
 	instance1.ManageNewRequest("repoId", "childName", false, 9)

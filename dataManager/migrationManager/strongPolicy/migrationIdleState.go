@@ -28,16 +28,12 @@ func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, 
 	if !exists { //first time accessing resource from a child
 		resUsage = usage.NewCircularBuffer(m.policy.currentConfig.ViewSize)
 		m.policy.equilibriumState[collectionId][childName] = resUsage
-		resUsage.Add(usage.NewChildResourceUsage())
-	}
-	if resUsage.Data[resUsage.Head] == nil {
-		resUsage.Add(usage.NewChildResourceUsage())
 	}
 
 	if isWrite { //update saved info
-		usage.ManageNewRequest(&resUsage.Data[resUsage.Head].Write, requestLatency)
+		resUsage.Head().Write.ManageNewRequest(requestLatency)
 	} else {
-		usage.ManageNewRequest(&resUsage.Data[resUsage.Head].Read, requestLatency)
+		resUsage.Head().Read.ManageNewRequest(requestLatency)
 	}
 }
 

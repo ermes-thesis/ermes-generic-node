@@ -7,4 +7,5 @@ use (
 	metadataManager
 	config
 	db
+	logger
 )

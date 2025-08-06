@@ -5,7 +5,7 @@ import (
 	shared "dataManager/shared"
 	"fmt"
 	log "logger"
-	server "server"
+	"server"
 )
 
 const (
@@ -15,7 +15,7 @@ const (
 
 type Sender interface {
 	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]string, []string)
-	SendGosssipMessages(gossip.GossipMessage, string)
+	SendGossipMessages(gossip.GossipMessage, string)
 	GossipPath() string
 	RepoPath() string
 }
@@ -39,7 +39,7 @@ func (s *SendImpl) SendRemoteCollectionTo(destination string, collection shared.
 
 	msg := gossip.SendCollectionMessage{
 		CollectionId: collection.CollectionId(),
-		Res:          res,
+		Records:      res,
 		Groups:       groups,
 		IsStrong:     collection.IsStrong(),
 	}
@@ -52,7 +52,7 @@ func (s *SendImpl) SendRemoteCollectionTo(destination string, collection shared.
 	s.server.SendGenericHTTPRequest(destination, repoPath, msg)
 }
 
-func (s *SendImpl) SendGosssipMessages(msg gossip.GossipMessage, destination string) {
+func (s *SendImpl) SendGossipMessages(msg gossip.GossipMessage, destination string) {
 	s.server.SendGenericHTTPRequest(destination, gossipPath, msg)
 }
 

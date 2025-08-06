@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-// default policy
+// DefaultStrongCollectionPolicy default policy
 type DefaultStrongCollectionPolicy struct {
 	//sync
 	migLock *sync.Mutex
@@ -74,8 +74,8 @@ func (s *DefaultStrongCollectionPolicy) SetDefaultState() {
 	s.logger.Println("DEFAULT-STRONG-POLICY", "Setting default state", log.INFO)
 	//state pattern
 	s.idleState = &MigrationManagerIdleState{policy: s}
-	s.gossipState = &MigrationManagerGossipState{policy: s, dbInterface: s.dbInterface, MissingMessageCounter: 0, NodeResourceUsage: make(map[string]NodeStateInfo, 0)}
-	s.decisionState = &MigrationManagerDecisionState{policy: s, NodeResourceUsage: make(map[string]NodeStateInfo, 0)}
+	s.gossipState = &MigrationManagerGossipState{policy: s, dbInterface: s.dbInterface, MissingMessageCounter: 0, NodeResourceUsage: make(map[string]NodeStateInfo)}
+	s.decisionState = &MigrationManagerDecisionState{policy: s, NodeResourceUsage: make(map[string]NodeStateInfo)}
 
 	s.currentState = s.idleState
 
@@ -113,10 +113,10 @@ func (s *DefaultStrongCollectionPolicy) transitionToGossip() {
 		s.setState(s.gossipState)
 		s.stopIdleTimer()
 		if s.serverInfo.Father != nil {
-			s.logger.Println("DEFAULT-STRONG-POLICY", "fog node setted in gossip state", log.INFO)
+			s.logger.Println("DEFAULT-STRONG-POLICY", "fog node set in gossip state", log.INFO)
 			s.gossipState.Setup(len(s.serverInfo.Children) + 1)
 		} else {
-			s.logger.Println("DEFAULT-STRONG-POLICY", "cloud node setted in gossip state", log.INFO)
+			s.logger.Println("DEFAULT-STRONG-POLICY", "cloud node set in gossip state", log.INFO)
 			s.gossipState.Setup(len(s.serverInfo.Children)) //number of adjacent nodes - TODO: manage cloud nodes.
 		}
 	} else {

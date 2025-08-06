@@ -16,7 +16,7 @@ type CollectionsDiscovererImp struct {
 	collectionsPartialView *shared.CollectionPartialView
 }
 
-// singleton pattern
+// Singleton pattern
 var collectionsDiscovererInstance CollectionsDiscoverer
 var lock = &sync.Mutex{}
 
@@ -37,7 +37,7 @@ func (m *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialVie
 	lock.Lock()
 	defer lock.Unlock()
 	//imp
-	if m.collectionsPartialView != nil { //if singleton allready inizialized
+	if m.collectionsPartialView != nil { //if singleton already initialized
 		return
 	}
 	m.collectionsPartialView = collections
@@ -49,7 +49,7 @@ func (m *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 	m.collectionsPartialView.Mutex.Lock()
 	defer m.collectionsPartialView.Mutex.Unlock()
 	//imp
-	collection, exists := m.collectionsPartialView.KnowedCollections[collectionId]
+	collection, exists := m.collectionsPartialView.KnownCollections[collectionId]
 	if !exists {
 		return false, nil
 	}

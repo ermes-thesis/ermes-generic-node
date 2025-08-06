@@ -7,24 +7,24 @@ import (
 	usage "dataManager/migrationManager/childUsage"
 )
 
-func (m *DefaultStrongCollectionPolicy) GetUnstableEquilibriumState() map[string]map[string]*usage.CircularBuffer {
-	return m.equilibriumState
+func (s *DefaultStrongCollectionPolicy) GetUnstableEquilibriumState() map[string]map[string]*usage.CircularBuffer {
+	return s.equilibriumState
 }
 
-func (m *DefaultStrongCollectionPolicy) GetBuffer(collection string, child string) *usage.CircularBuffer {
-	return m.equilibriumState[collection][child]
+func (s *DefaultStrongCollectionPolicy) GetBuffer(collection string, child string) *usage.CircularBuffer {
+	return s.equilibriumState[collection][child]
 }
 
-func (m *DefaultStrongCollectionPolicy) GetCurrentState() MigrationManagerState {
-	return m.currentState
+func (s *DefaultStrongCollectionPolicy) GetCurrentState() MigrationManagerState {
+	return s.currentState
 }
 
-func (m *DefaultStrongCollectionPolicy) SetState(s MigrationManagerState) {
-	m.setState(s)
+func (s *DefaultStrongCollectionPolicy) SetState(m MigrationManagerState) {
+	s.setState(m)
 }
 
-func (m *DefaultStrongCollectionPolicy) GetDecisionState() MigrationManagerState {
-	return m.decisionState
+func (s *DefaultStrongCollectionPolicy) GetDecisionState() MigrationManagerState {
+	return s.decisionState
 }
 
 func (m *MigrationManagerDecisionState) ComputeReadElasticForce(cb *usage.CircularBuffer) int {

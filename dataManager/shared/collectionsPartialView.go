@@ -57,10 +57,9 @@ func (l *RemoteCollection) HostsId() map[string]struct{} {
 	return l.hostsId
 }
 
-// partialView
 type CollectionPartialView struct {
 	//sync
 	Mutex sync.Mutex
 	//data
-	KnowedCollections map[string]Collection //maps collectionID to info related to that collection
+	KnownCollections map[string]Collection //maps collectionID to info related to that collection
 }

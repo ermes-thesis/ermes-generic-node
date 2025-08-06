@@ -58,10 +58,10 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 	server.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
+		KnownCollections: make(map[string]shared.Collection),
 	}
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
-	serverinfo := info.ServerInfo{
+	serverInfo := info.ServerInfo{
 		Node:   info.Node{Address: "Name", MetadataDomain: "Domain"},
 		Father: &info.Node{Address: "fName", MetadataDomain: "fDomain"},
 		Children: []info.Node{
@@ -72,7 +72,7 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 	}
 
 	SetupGetMemoryStatsMock(db, server)
-	return migrationManagerConfig, lurConfig, collections, serverinfo, &lruCache, db, server
+	return migrationManagerConfig, lurConfig, collections, serverInfo, &lruCache, db, server
 }
 
 func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
@@ -100,10 +100,10 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
+		KnownCollections: make(map[string]shared.Collection),
 	}
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
-	serverinfo := info.ServerInfo{
+	serverInfo := info.ServerInfo{
 		Node:   info.Node{Address: "0000", MetadataDomain: "Domain"},
 		Father: &info.Node{Address: "1111", MetadataDomain: "fDomain", Latency: 5},
 		Children: []info.Node{
@@ -114,5 +114,5 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	}
 
 	SetupGetMemoryStatsMock(db, server)
-	return migrationManagerConfig, lurConfig, collections, serverinfo, &lruCache, db, server
+	return migrationManagerConfig, lurConfig, collections, serverInfo, &lruCache, db, server
 }

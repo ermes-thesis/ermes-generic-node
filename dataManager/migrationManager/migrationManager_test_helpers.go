@@ -9,7 +9,7 @@ import (
 )
 
 func ResetSingleton() {
-	migrationManagareInstance = nil
+	migrationManagerInstance = nil
 }
 
 func (m *MigrationManagerImp) GetLru() *lru.LRUCache[shared.Collection] {

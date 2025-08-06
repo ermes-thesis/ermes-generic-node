@@ -5,12 +5,13 @@ import (
 	gossipmessages "dataManager/migrationManager/gossipMessages"
 )
 
+// MigrationManagerIdleState
 // - Idle state -> in this state the Migration manager can receive collection requests; ignore gossip messages
 type MigrationManagerIdleState struct {
 	policy *DefaultStrongCollectionPolicy
 }
 
-func (s *MigrationManagerIdleState) Setup(args ...any) {}
+func (m *MigrationManagerIdleState) Setup(args ...any) {}
 
 // methods
 func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
@@ -37,7 +38,7 @@ func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, 
 	}
 }
 
-// if receive a gossip message during idle state directly migrate to gossip state and forward the message to that state
+// ManageGossipMessage if receive a gossip message during idle state directly migrate to gossip state and forward the message to that state
 func (m *MigrationManagerIdleState) ManageGossipMessage(msg gossipmessages.GossipMessage) {
 	m.policy.transitionToGossip()
 	m.policy.currentState.ManageGossipMessage(msg)

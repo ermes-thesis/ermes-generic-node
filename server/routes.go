@@ -23,7 +23,7 @@ func (s *Server) compileRoutes() {
 	s.AddCustomRoute("/info2", false, public.HandleRouteInfo(&s.Logger, s.Serverinfo))
 }
 
-// Method to add a route defined by the user to the server. DO NOT ADD IT AFTER THE SERVER HAS BEEN STARTED PLS (idk what could happen)
+// AddCustomRoute Method to add a route defined by the user to the server. DO NOT ADD IT AFTER THE SERVER HAS BEEN STARTED PLS (idk what could happen)
 func (s *Server) AddCustomRoute(path string, isPrivate bool, handler http.HandlerFunc) error {
 
 	if len(path) < 1 || path[0] != '/' {

@@ -27,7 +27,7 @@ func (b *BaseGossipMessage) FromJSON(data []byte) error {
 	return json.Unmarshal(data, b)
 }
 
-// HwStaChildStateMessageteMessage represents the hardware state of a node + contains info of a new collection created in the child node.
+// ChildStateMessage represents the hardware state of a node + contains info of a new collection created in the child node.
 type ChildStateMessage struct {
 	BaseGossipMessage
 	//CPUUsage          float64 `json:"cpuUsage"`

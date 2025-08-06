@@ -82,7 +82,7 @@ func TestManageNewStrongRequest(t *testing.T) {
 		t.Error("wrong latency values")
 	}
 
-	if collections.KnowedCollections["repoId"] == nil || collections.KnowedCollections["repoId1"] == nil {
+	if collections.KnownCollections["repoId"] == nil || collections.KnownCollections["repoId1"] == nil {
 		t.Fatal("collection not initialized")
 	}
 

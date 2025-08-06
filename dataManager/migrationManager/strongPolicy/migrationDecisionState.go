@@ -11,7 +11,8 @@ import (
 	"sync"
 )
 
-// - Decision state -> in this state the Migration manager ingore all the messages, take decisions on collection migration; consume the stack
+// MigrationManagerDecisionState
+// - Decision state -> in this state the Migration manager ignore all the messages, take decisions on collection migration; consume the stack
 type MigrationManagerDecisionState struct {
 	policy            *DefaultStrongCollectionPolicy
 	NodeResourceUsage map[string]NodeStateInfo
@@ -38,11 +39,11 @@ func (m *MigrationManagerDecisionState) Setup(args ...any) {
 
 	go m.consumeStrongRequests()
 
-	//back in idel state
+	//back in idle state
 	m.policy.transitionToIdle()
 }
 
-// save strong request in a buffer for future consumption
+// ManageNewStrongRequest save strong request in a buffer for future consumption
 func (m *MigrationManagerDecisionState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
 	//sync -> all op in MigrationManagerDecisionState are sync => lock == wait until all decsion are taken
 	m.requestStack.Push(func() { m.policy.idleState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency) })
@@ -88,9 +89,9 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 
 	for outerKey, innerMap := range m.policy.equilibriumState {
 		//apply decision only on strong local collections
-		if m.policy.partialView.KnowedCollections[outerKey] == nil ||
-			!m.policy.partialView.KnowedCollections[outerKey].IsLocal() ||
-			!m.policy.partialView.KnowedCollections[outerKey].IsStrong() {
+		if m.policy.partialView.KnownCollections[outerKey] == nil ||
+			!m.policy.partialView.KnownCollections[outerKey].IsLocal() ||
+			!m.policy.partialView.KnownCollections[outerKey].IsStrong() {
 			continue
 		}
 
@@ -107,7 +108,7 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerMap map[string]*usage.CircularBuffer, wg *sync.WaitGroup, interestedNodeCounter int) {
 	defer wg.Done()
 
-	strongCollection := m.policy.partialView.KnowedCollections[outerKey].(*shared.StrongCollection)
+	strongCollection := m.policy.partialView.KnownCollections[outerKey].(*shared.StrongCollection)
 
 	//compute total forces sum -> value that must be outclassed to delegate the leader
 	var totalForce = 0
@@ -126,7 +127,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 			continue
 		}
 		//if present on that host
-		if _, ok := m.policy.partialView.KnowedCollections[outerKey].HostsId()[innerKey]; ok {
+		if _, ok := m.policy.partialView.KnownCollections[outerKey].HostsId()[innerKey]; ok {
 			continue
 		}
 

@@ -7,6 +7,7 @@ import (
 	"logger"
 )
 
+// MigrationManagerGossipState
 // - Gossip state -> in this state the Migration manager can receive gossip messages and place in a stack collection requests
 type MigrationManagerGossipState struct {
 	policy                *DefaultStrongCollectionPolicy
@@ -24,9 +25,9 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 		panic("expected int for counter")
 	}
 	m.MissingMessageCounter = counter
-	m.NodeResourceUsage = make(map[string]NodeStateInfo, 0)
+	m.NodeResourceUsage = make(map[string]NodeStateInfo)
 
-	go m.SendGosssipMessages()
+	go m.SendGossipMessages()
 }
 
 // methods
@@ -34,7 +35,7 @@ func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string
 	m.policy.idleState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
 }
 
-func (m *MigrationManagerGossipState) SendGosssipMessages() {
+func (m *MigrationManagerGossipState) SendGossipMessages() {
 	memStats, err := m.dbInterface.GetMemoryStats()
 	if err != nil {
 		m.policy.logger.Println("GOSSIP-STATE", fmt.Sprintf("failed to get memory stats: %v", err), logger.ERROR)
@@ -43,12 +44,12 @@ func (m *MigrationManagerGossipState) SendGosssipMessages() {
 
 	for value := range m.policy.serverInfo.Children {
 		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.Address, redisFreeSize)
-		m.policy.sender.SendGosssipMessages(msgToChild, m.policy.serverInfo.Children[value].Address)
+		m.policy.sender.SendGossipMessages(msgToChild, m.policy.serverInfo.Children[value].Address)
 	}
 
 	if m.policy.serverInfo.Father != nil {
 		msgToFather := gossip.NewChildStateMessage(m.policy.serverInfo.Address, redisFreeSize)
-		m.policy.sender.SendGosssipMessages(msgToFather, m.policy.serverInfo.Father.Address)
+		m.policy.sender.SendGossipMessages(msgToFather, m.policy.serverInfo.Father.Address)
 	}
 }
 
@@ -62,7 +63,7 @@ func (m *MigrationManagerGossipState) ManageGossipMessage(msg gossip.GossipMessa
 	case *gossip.ChildStateMessage:
 		m.manageChildGossipMessage(*parsed)
 	case *gossip.LeaderDelegaMessage:
-		m.manageAnchestorGossipMessage(*parsed)
+		m.manageAncestorGossipMessage(*parsed)
 	default:
 		fmt.Println("Unknown message type:", msg.GetMessageType())
 		return
@@ -83,7 +84,7 @@ func (m *MigrationManagerGossipState) manageChildGossipMessage(msg gossip.ChildS
 	m.NodeResourceUsage[msg.GetSenderID()] = childStateInfo
 }
 
-func (m *MigrationManagerGossipState) manageAnchestorGossipMessage(msg gossip.LeaderDelegaMessage) {
+func (m *MigrationManagerGossipState) manageAncestorGossipMessage(msg gossip.LeaderDelegaMessage) {
 	childStateInfo := NodeStateInfo{
 		//childName:   msg.GetSenderID(),
 		FreeRedisMemory: msg.FreeRedisMemory,

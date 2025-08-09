@@ -68,13 +68,15 @@ func TestCreateMetadata(t *testing.T) {
 
 	tm := time.Now().Truncate(time.Millisecond)
 	metadata := db.Metadata{
-		Name:           "test",
-		Owner:          "fake",
-		CreatedAt:      tm,
-		Groups:         []string{"g1", "g2", "g3"},
-		Consistency:    db.EVENTUAL_CONSISTENT,
-		Geolocation:    "IT",
-		CustomMetadata: map[string]string{},
+		Name:        "test",
+		Owner:       "fake",
+		CreatedAt:   tm,
+		Groups:      []string{"g1", "g2", "g3"},
+		Consistency: db.EVENTUAL_CONSISTENT,
+		Geolocation: "IT",
+		CustomMetadata: map[string]string{
+			"key1": "value1",
+		},
 	}
 
 	mPropagator := &metadataManager_mock.MetadataPropagator{}

@@ -101,7 +101,7 @@ func NewMetadataPropagator(serverInfo *info.ServerInfo, logger *io.Writer) *Meta
 }
 
 func (p *MetadataPropagatorImpl) Propagate(collectionId string, metadata db.Metadata, reqOrigin PropagationOrigin) error {
-	fmt.Fprintf(*p.logger, "Starting to propagating metadata...")
+	fmt.Fprintf(*p.logger, "Starting to propagating metadata...\n")
 
 	body, err := json.Marshal(metadata)
 	if err != nil {
@@ -123,16 +123,20 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, metadata db.Meta
 			}
 		}
 	case FROM_CHILD:
-		err = p.sendHttpReqToDest(p.serverInfo.Father.Address, collectionId, body)
-		if err != nil {
-			fmt.Fprintf(*p.logger, "Error sending request to father : %v\n", err)
-			return err
+		if p.serverInfo.Father != nil {
+			err = p.sendHttpReqToDest(p.serverInfo.Father.Address, collectionId, body)
+			if err != nil {
+				fmt.Fprintf(*p.logger, "Error sending request to father : %v\n", err)
+				return err
+			}
 		}
 	case FROM_LOCAL:
-		err = p.sendHttpReqToDest(p.serverInfo.Father.Address, collectionId, body)
-		if err != nil {
-			fmt.Fprintf(*p.logger, "Error sending request to father : %v\n", err)
-			return err
+		if p.serverInfo.Father != nil {
+			err = p.sendHttpReqToDest(p.serverInfo.Father.Address, collectionId, body)
+			if err != nil {
+				fmt.Fprintf(*p.logger, "Error sending request to father : %v\n", err)
+				return err
+			}
 		}
 
 		for _, child := range p.serverInfo.Children {
@@ -162,7 +166,7 @@ func (p *MetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId str
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		fmt.Fprintf(*p.logger, "Error sending request: %v\n", err)
+		fmt.Fprintf(*p.logger, "[%s] Error sending request: %v\n", p.serverInfo.MetadataDomain, err)
 		return err
 	}
 	defer resp.Body.Close()

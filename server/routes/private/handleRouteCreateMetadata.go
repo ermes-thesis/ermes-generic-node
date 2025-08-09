@@ -13,7 +13,8 @@ import (
 
 func HandleRouteCreateMetadata(logger *io.Writer, lookupMgr metadataManager.MetadataManager, serverInfo *info.ServerInfo) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(*logger, "got /create_metadata \n")
+		fmt.Fprintf(*logger, "[%s], got /create_metadata \n", serverInfo.MetadataDomain)
+		defer r.Body.Close()
 
 		collectionId := r.PathValue("collection_id")
 		reqMetadataDomain := r.Header.Get("X-ERMES-METADATA-DOMAIN")
@@ -25,14 +26,14 @@ func HandleRouteCreateMetadata(logger *io.Writer, lookupMgr metadataManager.Meta
 			return
 		}
 
-		var isReqFromFather metadataManager.PropagationOrigin
-		if reqMetadataDomain == serverInfo.Father.MetadataDomain {
-			isReqFromFather = metadataManager.FROM_FATHER
+		var reqOrigin metadataManager.PropagationOrigin
+		if serverInfo.Father != nil && reqMetadataDomain == serverInfo.Father.MetadataDomain {
+			reqOrigin = metadataManager.FROM_FATHER
 		} else {
-			isReqFromFather = metadataManager.FROM_CHILD
+			reqOrigin = metadataManager.FROM_CHILD
 		}
 
-		err = lookupMgr.CreateMetadata(collectionId, meta, isReqFromFather)
+		err = lookupMgr.CreateMetadata(collectionId, meta, reqOrigin)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when executing queries: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)

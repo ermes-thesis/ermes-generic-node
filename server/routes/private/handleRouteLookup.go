@@ -16,6 +16,7 @@ func HandleRouteLookup(logger *io.Writer, lookupMgr metadataManager.MetadataMana
 		queryParams := r.Header.Get("X-ERMES-QUERY")
 		geolocation := r.Header.Get("X-ERMES-POSITION")
 		groups := r.Header.Get("X-ERMES-GROUPS")
+		r.Body.Close()
 
 		queries, err := lookupMgr.ExecuteQueries(queryParams, groups, geolocation)
 		if err != nil {

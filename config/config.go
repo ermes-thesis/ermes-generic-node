@@ -3,6 +3,7 @@ package config
 import (
 	"log"
 	"os"
+	"time"
 
 	"gopkg.in/yaml.v3" //go get gopkg.in/yaml.v3
 )
@@ -14,6 +15,8 @@ type Config struct {
 	MigrationManager MigrationManagerConfig `yaml:"migrationManager"`
 	Redis            RedisConfig            `yaml:"redis"`
 	Lru              LruConfig              `yaml:"lru"`
+	FunctionsCache   FunctionsCacheConfig   `yaml:"functionsCache"`
+	FunctionRegistry FunctionRegistryConfig `yaml:"functionRegistry"`
 }
 
 type MigrationManagerConfig struct {
@@ -37,11 +40,32 @@ type RedisConfig struct {
 	Protocol int    `yaml:"protocol"`
 }
 
+type FunctionsCacheConfig struct {
+	BinaryCache   BinaryCacheConfig    `yaml:"binaryCache"`
+	TemplateCache TemplatesCacheConfig `yaml:"templateCache"`
+}
+
+type BinaryCacheConfig struct {
+	Size   int           `yaml:"size"`
+	Ttl    time.Duration `yaml:"ttl"`
+	BinDir string        `yaml:"binDir"`
+}
+
+type TemplatesCacheConfig struct {
+	Size int           `yaml:"size"`
+	Ttl  time.Duration `yaml:"ttl"`
+}
+
 type NodeConfig struct {
 	Name   string `yaml:"name"`
 	Domain string `yaml:"domain"`
 	Port   string `yaml:"port"`
 	Secret string `yaml:"secret"`
+}
+
+type FunctionRegistryConfig struct {
+	Address string `yaml:"address"`
+	Port    string `yaml:"port"`
 }
 
 // The father should look something like:

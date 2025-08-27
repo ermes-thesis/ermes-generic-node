@@ -2,6 +2,7 @@ package metadataManager_test
 
 import (
 	"bytes"
+	caches_mock "caches/mocks"
 	"config"
 	"context"
 	"db"
@@ -40,7 +41,8 @@ func TestMetadataLookupIntegration(t *testing.T) {
 		},
 		Secret: "secret",
 	}
-	metadataManagerFather := metadataManager.NewMetadataManager(redisClient1, serverInfoFather, os.Stdout)
+	fnCache := &caches_mock.FunctionCache{}
+	metadataManagerFather := metadataManager.NewMetadataManager(redisClient1, serverInfoFather, os.Stdout, fnCache)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient1, metadataManagerFather)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -58,7 +60,8 @@ func TestMetadataLookupIntegration(t *testing.T) {
 		},
 		Secret: "secret",
 	}
-	metadataManagerChild := metadataManager.NewMetadataManager(redisClient2, serverInfoChild, os.Stdout)
+	fnCache2 := &caches_mock.FunctionCache{}
+	metadataManagerChild := metadataManager.NewMetadataManager(redisClient2, serverInfoChild, os.Stdout, fnCache2)
 
 	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClient2, metadataManagerChild)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -127,7 +130,8 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 		},
 		Secret: "secret",
 	}
-	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout)
+	fnCache := &caches_mock.FunctionCache{}
+	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout, fnCache)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClientFather, metadataManagerFather)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -146,7 +150,8 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 		},
 		Secret: "secret",
 	}
-	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout)
+	fnCacheChild := &caches_mock.FunctionCache{}
+	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout, fnCacheChild)
 
 	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClientChild, metadataManagerChild)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -218,7 +223,8 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 		},
 		Secret: "secret",
 	}
-	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout)
+	fnCache := &caches_mock.FunctionCache{}
+	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout, fnCache)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClientFather, metadataManagerFather)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -237,7 +243,8 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 		},
 		Secret: "secret",
 	}
-	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout)
+	fnCacheChild := &caches_mock.FunctionCache{}
+	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout, fnCacheChild)
 
 	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClientChild, metadataManagerChild)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -316,7 +323,8 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 		},
 		Secret: "secret",
 	}
-	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout)
+	fnCacheFather := &caches_mock.FunctionCache{}
+	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout, fnCacheFather)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClientFather, metadataManagerFather)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -334,7 +342,8 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 		},
 		Secret: "secret",
 	}
-	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout)
+	fnCacheChild := &caches_mock.FunctionCache{}
+	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout, fnCacheChild)
 
 	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClientChild, metadataManagerChild)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -358,7 +367,8 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 		},
 		Secret: "secret",
 	}
-	metadataManagerLocal := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, os.Stdout)
+	fnCacheLocal := &caches_mock.FunctionCache{}
+	metadataManagerLocal := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, os.Stdout, fnCacheLocal)
 
 	metadata := db.Metadata{
 		Name:           "test",

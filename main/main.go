@@ -1,6 +1,7 @@
 package main
 
 import (
+	"caches"
 	"config"
 	"context"
 	clDiscoverer "dataManager/collectionsDiscoverer"
@@ -43,7 +44,12 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	}
 
 	redisClient := db.NewRedisClient(config.Redis, ctx)
-	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w)
+	// remoteFunctionName must be in the format: "functionName/functionVersion"
+	funcCache, err := caches.NewDefaultFunctionCache(config.FunctionsCache)
+	if err != nil {
+		return fmt.Errorf("error creating function cache: %w", err)
+	}
+	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w, funcCache)
 
 	//Run server
 	ser, err := server.NewServer(w, serverInfo, redisClient, metadataLookup)

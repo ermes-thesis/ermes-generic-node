@@ -67,6 +67,14 @@ func (q *Query) ReplacePlaceholder(vars map[string]any) error {
 	return nil
 }
 
+func (q *Query) ReplacePlaceholderFromStrings(vars map[string]string) error {
+	anyVars := make(map[string]any, len(vars))
+	for k, v := range vars {
+		anyVars[k] = v
+	}
+	return q.ReplacePlaceholder(anyVars)
+}
+
 type Condition interface {
 	Validate() error
 	ToRedisQuery() (string, error)

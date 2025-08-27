@@ -21,7 +21,7 @@ const (
 )
 
 type QueryPropagator interface {
-	Propagate(queryParams string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error)
+	Propagate(functionName string, templateParamsMappings string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error)
 }
 
 type QueryPropagatorImpl struct {
@@ -36,7 +36,7 @@ func NewQueryPropagator(serverInfo *info.ServerInfo, logger *io.Writer) QueryPro
 	}
 }
 
-func (p *QueryPropagatorImpl) Propagate(queryParams string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error) {
+func (p *QueryPropagatorImpl) Propagate(functionName string, templateParamsMappings string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error) {
 	fmt.Fprintf(*p.logger, "No geolocation provided in the request header.\n")
 
 	var receiver string
@@ -49,14 +49,16 @@ func (p *QueryPropagatorImpl) Propagate(queryParams string, groupToken string, g
 	}
 
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%s/lookup", receiver), nil)
-	req.Header.Set("X-ERMES-SECRET", p.serverInfo.Secret)
-	req.Header.Set("X-ERMES-GROUPS", groupToken)
-	req.Header.Set("X-ERMES-POSITION", geolocation)
-	req.Header.Set("X-ERMES-QUERY", queryParams)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when creating the http request: %s \n", err)
 		return nil, err
 	}
+	req.Header.Set("X-ERMES-REQ-FUNCTION", functionName)
+	req.Header.Set("X-ERMES-SECRET", p.serverInfo.Secret)
+	req.Header.Set("X-ERMES-GROUPS", groupToken)
+	req.Header.Set("X-ERMES-POSITION", geolocation)
+	req.Header.Set("X-ERMES-QUERY", templateParamsMappings)
+
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when contacting the cloud node: %s \n", err)

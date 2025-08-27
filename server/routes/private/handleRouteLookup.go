@@ -13,12 +13,13 @@ func HandleRouteLookup(logger *io.Writer, lookupMgr metadataManager.MetadataMana
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(*logger, "got /lookup \n")
 
+		fnName := r.Header.Get("X-ERMES-REQ-FUNCTION")
 		queryParams := r.Header.Get("X-ERMES-QUERY")
 		geolocation := r.Header.Get("X-ERMES-POSITION")
 		groups := r.Header.Get("X-ERMES-GROUPS")
 		r.Body.Close()
 
-		queries, err := lookupMgr.ExecuteQueries(queryParams, groups, geolocation)
+		queries, err := lookupMgr.ExecuteQueries(fnName, queryParams, groups, geolocation)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when executing queries: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)

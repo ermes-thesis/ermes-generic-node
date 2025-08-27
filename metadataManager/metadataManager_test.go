@@ -1,6 +1,7 @@
 package metadataManager_test
 
 import (
+	caches_mock "caches/mocks"
 	"db"
 	"encoding/json"
 	"github.com/stretchr/testify/assert"
@@ -27,8 +28,20 @@ func TestExecuteQueries(t *testing.T) {
 		},
 	}
 
-	// Create a new MetadataManager instance
-	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger)
+	requestedFnName := "test_function"
+	queryTemplates := map[string]string{
+		"private_data_query": `{
+		  "SELECT": "ALL",
+		  "AS": "private_data",
+		  "WHERE": {
+			"AND": [
+			  { "field": "owner", "eq": "<ownerID>"},
+			  { "field": "name", "eq": "DATI_PRIVATE"}
+			]
+		  }
+		}`,
+		"gt_data_query": `{}`,
+	}
 
 	queryParams, _ := json.Marshal(map[string]map[string]any{
 		"private_data_query": {
@@ -37,8 +50,13 @@ func TestExecuteQueries(t *testing.T) {
 		"gt_data_query": {},
 	})
 
+	fnCache := &caches_mock.FunctionCache{}
+	fnCache.EXPECT().GetTemplate(requestedFnName).Return(queryTemplates, nil)
+	// Create a new MetadataManager instance
+	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger, fnCache)
+
 	// Execute the query
-	result, err := manager.ExecuteQueries(string(queryParams), "bohhh", "IT/Milan")
+	result, err := manager.ExecuteQueries("fnNameRequested", string(queryParams), "bohhh", "IT/Milan")
 	assert.NoError(t, err, "Expected no error when executing queries")
 
 	assert.Len(t, result, 1, "Expected result to be non-empty")
@@ -82,7 +100,8 @@ func TestCreateMetadata(t *testing.T) {
 	mPropagator := &metadataManager_mock.MetadataPropagator{}
 	mPropagator.EXPECT().Propagate("collection_id_test", metadata, metadataManager.FROM_LOCAL).Return(nil).Once()
 
-	manager := metadataManager.CreateMetadataManagerWithMocks(redisClient, srvInfo, logger, nil, mPropagator)
+	fnCache := &caches_mock.FunctionCache{}
+	manager := metadataManager.CreateMetadataManagerWithMocks(redisClient, srvInfo, logger, nil, mPropagator, fnCache)
 
 	// Execute the query
 	err := manager.CreateMetadata("collection_id_test", metadata, metadataManager.FROM_LOCAL)

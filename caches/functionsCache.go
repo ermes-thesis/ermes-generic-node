@@ -6,20 +6,19 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-type FunctionBundle struct {
-	Binary    []byte
-	Templates []string
+type FunctionCache interface {
+	GetTemplate(functionName string) (map[string]string, error)
+	GetBinary(functionName string) ([]byte, error)
 }
-type BundleFetcher func(remoteFunctionName string) (*FunctionBundle, error)
 
-type FunctionCache struct {
+type FunctionCacheImpl struct {
 	Templates *TemplatesCache
 	Binaries  *BinaryCache
-	fetcher   BundleFetcher
+	fetcher   Fetcher[*FunctionBundle]
 	group     singleflight.Group
 }
 
-func NewFunctionCache(config config.FunctionsCacheConfig, fetcher BundleFetcher) (*FunctionCache, error) {
+func NewFunctionCache(config config.FunctionsCacheConfig, fetcher Fetcher[*FunctionBundle]) (*FunctionCacheImpl, error) {
 	tmplCache, err := NewTemplatesCache(config.TemplateCache)
 	if err != nil {
 		return nil, fmt.Errorf("error creating template cache: %v", err)
@@ -29,14 +28,32 @@ func NewFunctionCache(config config.FunctionsCacheConfig, fetcher BundleFetcher)
 		return nil, fmt.Errorf("error creating binary cache: %v", err)
 	}
 
-	return &FunctionCache{
+	return &FunctionCacheImpl{
 		Templates: tmplCache,
 		Binaries:  binCache,
 		fetcher:   fetcher,
 	}, nil
 }
 
-func (f *FunctionCache) GetTemplate(functionName string) ([]string, error) {
+func NewDefaultFunctionCache(config config.FunctionsCacheConfig) (*FunctionCacheImpl, error) {
+	tmplCache, err := NewTemplatesCache(config.TemplateCache)
+	if err != nil {
+		return nil, fmt.Errorf("error creating template cache: %v", err)
+	}
+	binCache, err := NewBinaryCache(config.BinaryCache)
+	if err != nil {
+		return nil, fmt.Errorf("error creating binary cache: %v", err)
+	}
+
+	return &FunctionCacheImpl{
+		Templates: tmplCache,
+		Binaries:  binCache,
+		fetcher:   NewRemoteBundleFetcher(fmt.Sprintf("http://%s:%s", config.FunctionRegistry.Address, config.FunctionRegistry.Port)),
+		group:     singleflight.Group{},
+	}, nil
+}
+
+func (f *FunctionCacheImpl) GetTemplate(functionName string) (map[string]string, error) {
 	if tmpl, ok := f.Templates.Get(functionName); ok {
 		return tmpl, nil
 	}
@@ -48,7 +65,7 @@ func (f *FunctionCache) GetTemplate(functionName string) ([]string, error) {
 	return fnBundle.Templates, nil
 }
 
-func (f *FunctionCache) GetBinary(functionName string) ([]byte, error) {
+func (f *FunctionCacheImpl) GetBinary(functionName string) ([]byte, error) {
 	bin, ok, err := f.Binaries.Get(functionName)
 	if err != nil {
 		return nil, err
@@ -64,9 +81,9 @@ func (f *FunctionCache) GetBinary(functionName string) ([]byte, error) {
 	return fnBundle.Binary, err
 }
 
-func (f *FunctionCache) fetchAndStore(functionName string) (*FunctionBundle, error) {
+func (f *FunctionCacheImpl) fetchAndStore(functionName string) (*FunctionBundle, error) {
 	fetchedValue, err, _ := f.group.Do(functionName, func() (any, error) {
-		bundle, err := f.fetcher(functionName)
+		bundle, err := f.fetcher.Fetch(functionName)
 		if err != nil {
 			return nil, err
 		}

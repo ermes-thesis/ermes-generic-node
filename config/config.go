@@ -16,7 +16,6 @@ type Config struct {
 	Redis            RedisConfig            `yaml:"redis"`
 	Lru              LruConfig              `yaml:"lru"`
 	FunctionsCache   FunctionsCacheConfig   `yaml:"functionsCache"`
-	FunctionRegistry FunctionRegistryConfig `yaml:"functionRegistry"`
 }
 
 type MigrationManagerConfig struct {
@@ -41,8 +40,9 @@ type RedisConfig struct {
 }
 
 type FunctionsCacheConfig struct {
-	BinaryCache   BinaryCacheConfig    `yaml:"binaryCache"`
-	TemplateCache TemplatesCacheConfig `yaml:"templateCache"`
+	BinaryCache      BinaryCacheConfig      `yaml:"binaryCache"`
+	TemplateCache    TemplatesCacheConfig   `yaml:"templateCache"`
+	FunctionRegistry FunctionRegistryConfig `yaml:"functionRegistry"`
 }
 
 type BinaryCacheConfig struct {

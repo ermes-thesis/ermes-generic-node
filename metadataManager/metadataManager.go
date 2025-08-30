@@ -165,8 +165,9 @@ func (l MetadataManagerImpl) ExecuteQueries(functionName string, templateParamsM
 					if len(collInfo) > 0 {
 						result[query.As] = append(result[query.As], collInfo...)
 					}
+				} else {
+					return nil, fmt.Errorf("template '%s' specified in the request was not found for function %s", templateName, functionName)
 				}
-				return nil, fmt.Errorf("template '%s' specified in the request was not found for function %s", templateName, functionName)
 			}
 			return result, nil
 		}

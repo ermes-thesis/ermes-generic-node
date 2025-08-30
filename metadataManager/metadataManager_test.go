@@ -35,12 +35,33 @@ func TestExecuteQueries(t *testing.T) {
 		  "AS": "private_data",
 		  "WHERE": {
 			"AND": [
-			  { "field": "owner", "eq": "<ownerID>"},
-			  { "field": "name", "eq": "DATI_PRIVATE"}
+			  { "field": "owner", "eq": "12345"},
+			  { "field": "name", "eq": "<name>"}
 			]
 		  }
 		}`,
-		"gt_data_query": `{}`,
+		"gt_data_query": `
+				{
+				  "SELECT": "ALL",
+				  "AS": "gt_data",
+				  "WHERE": {
+					"AND": [
+					  {
+						"field": "owner",
+						"eq": "12345"
+					  },
+					  {
+						"field": "name",
+						"eq": "DATI_PRIVATE"
+					  },
+					  {
+						"field": "created_at",
+						"gt": 1745747999
+					  }
+					]
+				  }
+				}
+		`,
 	}
 
 	queryParams, _ := json.Marshal(map[string]map[string]any{
@@ -56,7 +77,7 @@ func TestExecuteQueries(t *testing.T) {
 	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger, fnCache)
 
 	// Execute the query
-	result, err := manager.ExecuteQueries("fnNameRequested", string(queryParams), "bohhh", "IT/Milan")
+	result, err := manager.ExecuteQueries(requestedFnName, string(queryParams), "bohhh", "IT/Milan")
 	assert.NoError(t, err, "Expected no error when executing queries")
 
 	assert.Len(t, result, 1, "Expected result to be non-empty")

@@ -24,6 +24,49 @@ import (
 	"time"
 )
 
+var templates = map[string]string{
+	"private_data_query": `
+			{
+			  "SELECT": "ALL",
+			  "AS": "private_data",
+			  "WHERE": {
+				"AND": [
+				  {
+					"field": "owner",
+					"eq": "12345"
+				  },
+				  {
+					"field": "name",
+					"eq": "<name>"
+				  }
+				]
+			  }
+			}
+	`,
+	"gt_data_query": `
+			{
+			  "SELECT": "ALL",
+			  "AS": "gt_data",
+			  "WHERE": {
+				"AND": [
+				  {
+					"field": "owner",
+					"eq": "12345"
+				  },
+				  {
+					"field": "name",
+					"eq": "DATI_PRIVATE"
+				  },
+				  {
+					"field": "created_at",
+					"gt": 1745747999
+				  }
+				]
+			  }
+			}
+	`,
+}
+
 func TestMetadataLookupIntegration(t *testing.T) {
 	redisClient1, shutdownFunc1 := startRedisContainer(t, false)
 	defer shutdownFunc1()
@@ -41,7 +84,9 @@ func TestMetadataLookupIntegration(t *testing.T) {
 		},
 		Secret: "secret",
 	}
+	invokedFnName := "test_function"
 	fnCache := &caches_mock.FunctionCache{}
+	fnCache.EXPECT().GetTemplate(invokedFnName).Return(templates, nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClient1, serverInfoFather, os.Stdout, fnCache)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient1, metadataManagerFather)
@@ -85,6 +130,10 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	})
 	req.Header.Set("X-ERMES-SECRET", "secret")
 	req.Header.Set("X-ERMES-QUERY", string(queryParams))
+	// This header is needed only for testing purposes. Since we don't have a way to simulate a function
+	// invocation request, we have to pass manually the invoked function name as a header to make the
+	// metadataManager work properly.
+	req.Header.Set("X-ERMES-REQ-FUNCTION", invokedFnName)
 
 	res, err := http.DefaultClient.Do(req)
 	assert.NoError(t, err, "Expected no error when sending request")

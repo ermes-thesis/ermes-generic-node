@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"metadataManager/utils"
 	"os"
 	"server/info"
 	"slices"
@@ -25,17 +24,19 @@ type MetadataManagerImpl struct {
 	redis              db.GenericDB
 	logger             io.Writer
 	templateCache      caches.FunctionCache
+	tokenDecoder       TokenDecoder
 	serverInfo         *info.ServerInfo
 	queryPropagator    QueryPropagator
 	metadataPropagator MetadataPropagator
 	customMetadataKeys []string
 }
 
-func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, logger io.Writer, cache caches.FunctionCache) MetadataManager {
+func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, logger io.Writer, cache caches.FunctionCache, decoder TokenDecoder) MetadataManager {
 	return &MetadataManagerImpl{
 		redis:         redis,
 		logger:        logger,
 		templateCache: cache,
+		tokenDecoder:  decoder,
 		//templateCache: map[string]string{
 		//	"private_data_query": `
 		//		{
@@ -131,8 +132,10 @@ func (l MetadataManagerImpl) ExecuteQueries(functionName string, templateParamsM
 			return nil, err
 		}
 
-		groups := []string{"groupC"}
-		//TODO: decode the groupToken to get the groups
+		groups, err := l.tokenDecoder.DecodeGroupToken(groupToken)
+		if err != nil {
+			return nil, fmt.Errorf("error decoding group token: %v", err)
+		}
 
 		// Getting from the cache (or remotely) the templates of the function name
 		if tmpls, err := l.templateCache.GetTemplate(functionName); err == nil {

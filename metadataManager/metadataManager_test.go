@@ -78,8 +78,10 @@ func TestExecuteQueries(t *testing.T) {
 
 	fnCache := &caches_mock.FunctionCache{}
 	fnCache.EXPECT().GetTemplate(requestedFnName).Return(queryTemplates, nil)
+	tknDecoder := &metadataManager_mock.TokenDecoder{}
+	tknDecoder.EXPECT().DecodeGroupToken("bohhh").Return([]string{"groupC"}, nil)
 	// Create a new MetadataManager instance
-	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger, fnCache)
+	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger, fnCache, tknDecoder)
 
 	// Execute the query
 	result, err := manager.ExecuteQueries(requestedFnName, string(queryParams), "bohhh", "IT/Milan")

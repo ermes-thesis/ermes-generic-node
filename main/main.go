@@ -49,7 +49,11 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	if err != nil {
 		return fmt.Errorf("error creating function cache: %w", err)
 	}
-	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w, funcCache)
+	tknDecoder, err := metadataManager.NewTokenDecoder("/path/to/pem/file")
+	if err != nil {
+		return fmt.Errorf("error creating token decoder: %w", err)
+	}
+	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w, funcCache, tknDecoder)
 
 	//Run server
 	ser, err := server.NewServer(w, serverInfo, redisClient, metadataLookup)

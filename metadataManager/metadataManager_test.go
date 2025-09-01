@@ -8,6 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"metadataManager"
 	metadataManager_mock "metadataManager/mocks"
+	"metadataManager/utils"
 	"os"
 	"server/info"
 	"testing"
@@ -29,39 +30,43 @@ func TestExecuteQueries(t *testing.T) {
 	}
 
 	requestedFnName := "test_function"
-	queryTemplates := map[string]string{
-		"private_data_query": `{
-		  "SELECT": "ALL",
-		  "AS": "private_data",
-		  "WHERE": {
-			"AND": [
-			  { "field": "owner", "eq": "12345"},
-			  { "field": "name", "eq": "<name>"}
-			]
-		  }
-		}`,
-		"gt_data_query": `
-				{
-				  "SELECT": "ALL",
-				  "AS": "gt_data",
-				  "WHERE": {
-					"AND": [
-					  {
-						"field": "owner",
-						"eq": "12345"
-					  },
-					  {
-						"field": "name",
-						"eq": "DATI_PRIVATE"
-					  },
-					  {
-						"field": "created_at",
-						"gt": 1745747999
-					  }
-					]
-				  }
-				}
-		`,
+	queryTemplates := map[string]utils.Query{
+		"private_data_query": {
+			Select: "ALL",
+			As:     "private_data",
+			Where: &utils.ConditionWrapper{Condition: &utils.AndCondition{
+				Conditions: []utils.Condition{
+					&utils.EqCondition{
+						Field: "owner",
+						Value: "12345",
+					},
+					&utils.EqCondition{
+						Field: "name",
+						Value: "<name>",
+					},
+				},
+			}},
+		},
+		"gt_data_query": {
+			Select: "ALL",
+			As:     "gt_data",
+			Where: &utils.ConditionWrapper{Condition: &utils.AndCondition{
+				Conditions: []utils.Condition{
+					&utils.EqCondition{
+						Field: "owner",
+						Value: "12345",
+					},
+					&utils.EqCondition{
+						Field: "name",
+						Value: "DATI_PRIVATE",
+					},
+					&utils.GtCondition{
+						Field: "created_at",
+						Value: 1745747999,
+					},
+				},
+			}},
+		},
 	}
 
 	queryParams, _ := json.Marshal(map[string]map[string]any{

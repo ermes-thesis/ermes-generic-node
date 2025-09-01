@@ -139,13 +139,7 @@ func (l MetadataManagerImpl) ExecuteQueries(functionName string, templateParamsM
 			// For each template specified in the HTTP request
 			for templateName, params := range queryMap {
 				// Check if the template really exists, if that's the case continue the normal execution
-				if tmpl, ok := tmpls[templateName]; ok {
-					var query utils.Query
-					if err := json.Unmarshal([]byte(tmpl), &query); err != nil {
-						fmt.Fprintf(l.logger, "Error unmarshalling templateParamsMapping template: %v\n", err)
-						return nil, err
-					}
-
+				if query, ok := tmpls[templateName]; ok {
 					err := query.ReplacePlaceholderFromStrings(params)
 					if err != nil {
 						fmt.Fprintf(l.logger, "Error replacing placeholders in templateParamsMapping: %v\n", err)

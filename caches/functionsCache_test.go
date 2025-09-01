@@ -5,6 +5,7 @@ import (
 	"config"
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"metadataManager/utils"
 	"os"
 	"path/filepath"
 	"testing"
@@ -17,9 +18,20 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 	fn := "func1"
 
 	fetcher := &caches_mock.Fetcher[*FunctionBundle]{}
+	query := utils.Query{
+		Select: "ALL",
+		As:     "test",
+		Where: &utils.ConditionWrapper{Condition: &utils.EqCondition{
+			Field: "name",
+			Value: "test",
+		},
+		},
+	}
 	fetcher.EXPECT().Fetch(fn).Return(&FunctionBundle{
-		Binary:    []byte("binary-" + fn),
-		Templates: map[string]string{"tmpl" + fn: "value-" + fn},
+		Binary: []byte("binary-" + fn),
+		Templates: map[string]utils.Query{
+			"tmpl" + fn: query,
+		},
 	}, nil)
 
 	cfg := config.FunctionsCacheConfig{
@@ -40,7 +52,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 	// Initially cache is empty, so fetcher should be called
 	tmpl, err := cache.GetTemplate(fn)
 	require.NoError(t, err)
-	require.Equal(t, "value-"+fn, tmpl["tmpl"+fn])
+	require.Equal(t, query, tmpl["tmpl"+fn])
 	fetcher.AssertNumberOfCalls(t, "Fetch", 1)
 
 	// Requesting binary for the same fn. Fetcher SHOULD NOT BE CALLED
@@ -72,9 +84,20 @@ func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
 	fnName := "func1"
 	fetcher := &caches_mock.Fetcher[*FunctionBundle]{}
 	// Return invalid bundle (empty binary)
+	query := utils.Query{
+		Select: "ALL",
+		As:     "test",
+		Where: &utils.ConditionWrapper{Condition: &utils.EqCondition{
+			Field: "name",
+			Value: "test",
+		},
+		},
+	}
 	fetcher.EXPECT().Fetch(fnName).Return(&FunctionBundle{
-		Binary:    []byte{},
-		Templates: map[string]string{"tmpl": "value"},
+		Binary: []byte{},
+		Templates: map[string]utils.Query{
+			"tmpl" + fnName: query,
+		},
 	}, nil)
 
 	cfg := config.FunctionsCacheConfig{

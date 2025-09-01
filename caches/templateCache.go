@@ -2,6 +2,7 @@ package caches
 
 import (
 	"config"
+	"metadataManager/utils"
 )
 
 // TODO: In the template cache we store functionName -> [<tmpl1_name, tmpl1_value>, <tmpl2_name, tmpl2_value>, ...]
@@ -14,7 +15,7 @@ import (
 // Internally, it uses a BaseCache that maps function names to a map[string]string
 // containing template name-value pairs.
 type TemplatesCache struct {
-	cache *BaseCache[map[string]string]
+	cache *BaseCache[map[string]utils.Query]
 }
 
 // NewTemplatesCache creates a new TemplatesCache based on the given configuration.
@@ -26,7 +27,7 @@ type TemplatesCache struct {
 //   - *TemplatesCache: the newly created templates cache
 //   - error: non-nil if the underlying BaseCache could not be created
 func NewTemplatesCache(config config.TemplatesCacheConfig) (*TemplatesCache, error) {
-	cache, err := NewBaseCache[map[string]string](config.Size, config.Ttl)
+	cache, err := NewBaseCache[map[string]utils.Query](config.Size, config.Ttl)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +45,7 @@ func NewTemplatesCache(config config.TemplatesCacheConfig) (*TemplatesCache, err
 // Returns:
 //   - map[string]string: the templates associated with the function (nil if not found)
 //   - bool: true if templates were found, false otherwise
-func (t *TemplatesCache) Get(functionName string) (map[string]string, bool) {
+func (t *TemplatesCache) Get(functionName string) (map[string]utils.Query, bool) {
 	return t.cache.Get(functionName)
 }
 
@@ -53,6 +54,6 @@ func (t *TemplatesCache) Get(functionName string) (map[string]string, bool) {
 // Parameters:
 //   - functionName: the name of the function to associate with the templates
 //   - templates: a map of template names to template values
-func (t *TemplatesCache) Set(functionName string, templates map[string]string) {
+func (t *TemplatesCache) Set(functionName string, templates map[string]utils.Query) {
 	t.cache.Set(functionName, templates)
 }

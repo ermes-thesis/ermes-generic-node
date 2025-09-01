@@ -3,6 +3,7 @@ package caches
 import (
 	"config"
 	"github.com/stretchr/testify/require"
+	"metadataManager/utils"
 	"testing"
 	"time"
 )
@@ -17,9 +18,17 @@ func TestTemplatesCache_SetAndGet(t *testing.T) {
 	require.NoError(t, err)
 
 	fn := "func1"
-	templates := map[string]string{
-		"tmpl1": "value1",
-		"tmpl2": "value2",
+	templates := map[string]utils.Query{
+		"tmpl1": {
+			Select: "ALL",
+			As:     "test1",
+			Where:  nil,
+		},
+		"tmpl2": {
+			Select: "ALL",
+			As:     "test2",
+			Where:  nil,
+		},
 	}
 
 	cache.Set(fn, templates)
@@ -57,7 +66,13 @@ func TestTemplatesCache_TTLExpiry(t *testing.T) {
 	require.NoError(t, err)
 
 	fn := "func1"
-	templates := map[string]string{"tmpl": "value"}
+	templates := map[string]utils.Query{
+		"tmpl": {
+			Select: "ALL",
+			As:     "test",
+			Where:  nil,
+		},
+	}
 	cache.Set(fn, templates)
 
 	// Immediately should exist

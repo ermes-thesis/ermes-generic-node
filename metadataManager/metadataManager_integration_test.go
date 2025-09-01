@@ -13,6 +13,8 @@ import (
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 	"io"
 	"metadataManager"
+	metadataManager_mock "metadataManager/mocks"
+	"metadataManager/utils"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -24,48 +26,87 @@ import (
 	"time"
 )
 
-var templates = map[string]string{
-	"private_data_query": `
-			{
-			  "SELECT": "ALL",
-			  "AS": "private_data",
-			  "WHERE": {
-				"AND": [
-				  {
-					"field": "owner",
-					"eq": "12345"
-				  },
-				  {
-					"field": "name",
-					"eq": "<name>"
-				  }
-				]
-			  }
-			}
-	`,
-	"gt_data_query": `
-			{
-			  "SELECT": "ALL",
-			  "AS": "gt_data",
-			  "WHERE": {
-				"AND": [
-				  {
-					"field": "owner",
-					"eq": "12345"
-				  },
-				  {
-					"field": "name",
-					"eq": "DATI_PRIVATE"
-				  },
-				  {
-					"field": "created_at",
-					"gt": 1745747999
-				  }
-				]
-			  }
-			}
-	`,
+var templates = map[string]utils.Query{
+	"private_data_query": {
+		Select: "ALL",
+		As:     "private_data",
+		Where: &utils.ConditionWrapper{Condition: &utils.AndCondition{
+			Conditions: []utils.Condition{
+				&utils.EqCondition{
+					Field: "owner",
+					Value: "12345",
+				},
+				&utils.EqCondition{
+					Field: "name",
+					Value: "<name>",
+				},
+			},
+		}},
+	},
+	"gt_data_query": {
+		Select: "ALL",
+		As:     "gt_data",
+		Where: &utils.ConditionWrapper{Condition: &utils.AndCondition{
+			Conditions: []utils.Condition{
+				&utils.EqCondition{
+					Field: "owner",
+					Value: 12345,
+				},
+				&utils.EqCondition{
+					Field: "name",
+					Value: "DATI_PRIVATE",
+				},
+				&utils.GtCondition{
+					Field: "created_at",
+					Value: 1745747999,
+				},
+			},
+		}},
+	},
 }
+
+//var templates = map[string]string{
+//	"private_data_query": `
+//			{
+//			  "SELECT": "ALL",
+//			  "AS": "private_data",
+//			  "WHERE": {
+//				"AND": [
+//				  {
+//					"field": "owner",
+//					"eq": "12345"
+//				  },
+//				  {
+//					"field": "name",
+//					"eq": "<name>"
+//				  }
+//				]
+//			  }
+//			}
+//	`,
+//	"gt_data_query": `
+//			{
+//			  "SELECT": "ALL",
+//			  "AS": "gt_data",
+//			  "WHERE": {
+//				"AND": [
+//				  {
+//					"field": "owner",
+//					"eq": "12345"
+//				  },
+//				  {
+//					"field": "name",
+//					"eq": "DATI_PRIVATE"
+//				  },
+//				  {
+//					"field": "created_at",
+//					"gt": 1745747999
+//				  }
+//				]
+//			  }
+//			}
+//	`,
+//}
 
 func TestMetadataLookupIntegration(t *testing.T) {
 	redisClient1, shutdownFunc1 := startRedisContainer(t, false)

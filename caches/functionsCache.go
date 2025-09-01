@@ -4,10 +4,11 @@ import (
 	"config"
 	"fmt"
 	"golang.org/x/sync/singleflight"
+	"metadataManager/utils"
 )
 
 type FunctionCache interface {
-	GetTemplate(functionName string) (map[string]string, error)
+	GetTemplate(functionName string) (map[string]utils.Query, error)
 	GetBinary(functionName string) ([]byte, error)
 }
 
@@ -53,7 +54,7 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig) (*FunctionCache
 	}, nil
 }
 
-func (f *FunctionCacheImpl) GetTemplate(functionName string) (map[string]string, error) {
+func (f *FunctionCacheImpl) GetTemplate(functionName string) (map[string]utils.Query, error) {
 	if tmpl, ok := f.Templates.Get(functionName); ok {
 		return tmpl, nil
 	}

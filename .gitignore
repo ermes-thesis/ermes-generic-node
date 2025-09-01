@@ -32,3 +32,5 @@
 
 # Include mockery file
 !.mockery.yml
+
+*/mocks

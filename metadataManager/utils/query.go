@@ -229,8 +229,10 @@ func (g *GtCondition) Validate() error {
 
 func (g *GtCondition) ToRedisQuery() (string, error) {
 	switch v := g.Value.(type) {
-	case float64, int:
+	case float64:
 		return fmt.Sprintf(`@%s:[(%f +inf]`, g.Field, v), nil
+	case int:
+		return fmt.Sprintf(`@%s:[(%d +inf]`, g.Field, v), nil
 	default:
 		return "", fmt.Errorf("unsupported value type for gt: %T", v)
 	}

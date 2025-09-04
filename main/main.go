@@ -21,6 +21,7 @@ import (
 	"server/info"
 	"sync"
 	"time"
+	"tokenDecoder"
 )
 
 // TODO replace
@@ -30,26 +31,26 @@ func myPenalityFunc(bufferPos int, currentValue int) int {
 
 func run(ctx context.Context, w io.Writer, configPath string) error {
 	var loggerFile io.Writer = os.Stdout //TODO replace with file
-	var logger = logger.NewLogger(logger.INFO, &loggerFile)
+	var log = logger.NewLogger(logger.INFO, &loggerFile)
 
-	config := config.LoadConfig(configPath)
-	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](config.Lru.Size) //TODO: replace with redis size
+	cfg := config.LoadConfig(configPath)
+	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](cfg.Lru.Size) //TODO: replace with redis size
 
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	serverInfo, err := info.NewServerInfo(config)
+	serverInfo, err := info.NewServerInfo(cfg)
 	if err != nil {
 		return fmt.Errorf("error creating server info: %w", err)
 	}
 
-	redisClient := db.NewRedisClient(config.Redis, ctx)
+	redisClient := db.NewRedisClient(cfg.Redis, ctx)
 	// remoteFunctionName must be in the format: "functionName/functionVersion"
-	funcCache, err := caches.NewDefaultFunctionCache(config.FunctionsCache)
+	funcCache, err := caches.NewDefaultFunctionCache(cfg.FunctionsCache)
 	if err != nil {
 		return fmt.Errorf("error creating function cache: %w", err)
 	}
-	tknDecoder, err := metadataManager.NewTokenDecoder("/path/to/pem/file")
+	tknDecoder, err := tokenDecoder.NewTokenDecoder("/path/to/pem/file")
 	if err != nil {
 		return fmt.Errorf("error creating token decoder: %w", err)
 	}
@@ -79,9 +80,9 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	collections := &dataManagerShared.CollectionPartialView{
 		KnowedCollections: make(map[string]dataManagerShared.Collection),
 	}
-	migrationManagerIstance := migrationManager.GetMigrationManagerInstance(*logger)
-	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager, config.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *logger)
-	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
+	migrationManagerIstance := migrationManager.GetMigrationManagerInstance(*log)
+	migrationManagerIstance.Init(collections, myPenalityFunc, cfg.MigrationManager, cfg.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *log)
+	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance(*log)
 	clDiscovererIstance.Init(collections)
 
 	// TODO: understand these lines of code

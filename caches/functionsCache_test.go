@@ -48,7 +48,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 			Size: 10,
 			Ttl:  30 * time.Second,
 		},
-		BinaryCache: config.BinaryCacheConfig{
+		BinaryCache: config.MetadataBinaryCacheConfig{
 			Size:   10,
 			Ttl:    30 * time.Second,
 			BinDir: tmpDir,
@@ -115,7 +115,7 @@ func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
 			Size: 10,
 			Ttl:  1 * time.Second,
 		},
-		BinaryCache: config.BinaryCacheConfig{
+		BinaryCache: config.MetadataBinaryCacheConfig{
 			Size:   10,
 			Ttl:    1 * time.Second,
 			BinDir: tmpDir,

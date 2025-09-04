@@ -15,16 +15,16 @@ type MetadataBinaryCache struct {
 	binDir string
 }
 
-// NewBinaryCache creates a new MetadataBinaryCache based on the given configuration.
+// NewMetadataBinaryCache creates a new MetadataBinaryCache based on the given configuration.
 // Evicted binaries are automatically deleted from disk.
 //
 // Parameters:
-//   - config: config.BinaryCacheConfig containing the cache size, TTL, and binary directory
+//   - config: config.MetadataBinaryCacheConfig containing the cache size, TTL, and binary directory
 //
 // Returns:
 //   - *MetadataBinaryCache: the newly created binary cache
 //   - error: non-nil if the underlying BaseCache could not be created
-func NewBinaryCache(config config.BinaryCacheConfig) (*MetadataBinaryCache, error) {
+func NewMetadataBinaryCache(config config.MetadataBinaryCacheConfig) (*MetadataBinaryCache, error) {
 	binCache, err := NewBaseCacheWithEviction(config.Size, config.Ttl, func(key string, item CacheItem[metadata.FunctionMetadata]) {
 		_ = os.Remove(filepath.Join(config.BinDir, item.Value.Name+"@"+item.Value.Version))
 	})

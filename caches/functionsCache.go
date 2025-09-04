@@ -27,7 +27,7 @@ func NewFunctionCache(config config.FunctionsCacheConfig, fetcher Fetcher[*Funct
 	if err != nil {
 		return nil, fmt.Errorf("error creating template cache: %v", err)
 	}
-	binCache, err := NewBinaryCache(config.BinaryCache)
+	binCache, err := NewMetadataBinaryCache(config.BinaryCache)
 	if err != nil {
 		return nil, fmt.Errorf("error creating binary cache: %v", err)
 	}
@@ -44,7 +44,7 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig) (*FunctionCache
 	if err != nil {
 		return nil, fmt.Errorf("error creating template cache: %v", err)
 	}
-	binCache, err := NewBinaryCache(config.BinaryCache)
+	binCache, err := NewMetadataBinaryCache(config.BinaryCache)
 	if err != nil {
 		return nil, fmt.Errorf("error creating binary cache: %v", err)
 	}

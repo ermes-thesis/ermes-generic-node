@@ -13,13 +13,13 @@ import (
 func TestBinaryCache_SetAndGet(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	cfg := config.BinaryCacheConfig{
+	cfg := config.MetadataBinaryCacheConfig{
 		Size:   10,
 		Ttl:    1 * time.Second,
 		BinDir: tmpDir,
 	}
 
-	cache, err := NewBinaryCache(cfg)
+	cache, err := NewMetadataBinaryCache(cfg)
 	require.NoError(t, err)
 
 	data := []byte("test-content-binary")
@@ -53,13 +53,13 @@ func TestBinaryCache_SetAndGet(t *testing.T) {
 func TestBinaryCache_EvictionRemovesFile(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	cfg := config.BinaryCacheConfig{
+	cfg := config.MetadataBinaryCacheConfig{
 		Size:   1, // Size 1, so that with two set the first one is evicted
 		Ttl:    0,
 		BinDir: tmpDir,
 	}
 
-	cache, err := NewBinaryCache(cfg)
+	cache, err := NewMetadataBinaryCache(cfg)
 	require.NoError(t, err)
 
 	fn1 := "func1"
@@ -107,13 +107,13 @@ func TestBinaryCache_EvictionRemovesFile(t *testing.T) {
 func TestBinaryCache_GetMissing(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	cfg := config.BinaryCacheConfig{
+	cfg := config.MetadataBinaryCacheConfig{
 		Size:   10,
 		Ttl:    1 * time.Second,
 		BinDir: tmpDir,
 	}
 
-	cache, err := NewBinaryCache(cfg)
+	cache, err := NewMetadataBinaryCache(cfg)
 	require.NoError(t, err)
 
 	// Nothing set yet

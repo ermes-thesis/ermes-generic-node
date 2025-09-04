@@ -40,12 +40,12 @@ type RedisConfig struct {
 }
 
 type FunctionsCacheConfig struct {
-	BinaryCache      BinaryCacheConfig      `yaml:"binaryCache"`
-	TemplateCache    TemplatesCacheConfig   `yaml:"templateCache"`
-	FunctionRegistry FunctionRegistryConfig `yaml:"functionRegistry"`
+	BinaryCache      MetadataBinaryCacheConfig `yaml:"binaryCache"`
+	TemplateCache    TemplatesCacheConfig      `yaml:"templateCache"`
+	FunctionRegistry FunctionRegistryConfig    `yaml:"functionRegistry"`
 }
 
-type BinaryCacheConfig struct {
+type MetadataBinaryCacheConfig struct {
 	Size   int           `yaml:"size"`
 	Ttl    time.Duration `yaml:"ttl"`
 	BinDir string        `yaml:"binDir"`

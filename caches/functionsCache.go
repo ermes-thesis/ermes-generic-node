@@ -1,22 +1,25 @@
 package caches
 
 import (
+	"caches/metadata"
 	"config"
 	"fmt"
 	"golang.org/x/sync/singleflight"
 	"metadataManager/utils"
+	"slices"
 )
 
 type FunctionCache interface {
-	GetTemplate(functionName string) (map[string]utils.Query, error)
-	GetBinary(functionName string) ([]byte, error)
+	GetTemplate(functionName string, functionVersion string, templateName string) (*utils.Query, error)
+	GetBinary(functionName string, functionVersion string) ([]byte, error)
+	GetMetadata(functionName string, functionVersion string) (*metadata.FunctionMetadata, error)
 }
 
 type FunctionCacheImpl struct {
-	Templates *TemplatesCache
-	Binaries  *BinaryCache
-	fetcher   Fetcher[*FunctionBundle]
-	group     singleflight.Group
+	Templates        *TemplatesCache
+	MetadataBinaries *MetadataBinaryCache
+	fetcher          Fetcher[*FunctionBundle]
+	group            singleflight.Group
 }
 
 func NewFunctionCache(config config.FunctionsCacheConfig, fetcher Fetcher[*FunctionBundle]) (*FunctionCacheImpl, error) {
@@ -30,9 +33,9 @@ func NewFunctionCache(config config.FunctionsCacheConfig, fetcher Fetcher[*Funct
 	}
 
 	return &FunctionCacheImpl{
-		Templates: tmplCache,
-		Binaries:  binCache,
-		fetcher:   fetcher,
+		Templates:        tmplCache,
+		MetadataBinaries: binCache,
+		fetcher:          fetcher,
 	}, nil
 }
 
@@ -47,27 +50,44 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig) (*FunctionCache
 	}
 
 	return &FunctionCacheImpl{
-		Templates: tmplCache,
-		Binaries:  binCache,
-		fetcher:   NewRemoteBundleFetcher(fmt.Sprintf("http://%s:%s", config.FunctionRegistry.Address, config.FunctionRegistry.Port)),
-		group:     singleflight.Group{},
+		Templates:        tmplCache,
+		MetadataBinaries: binCache,
+		fetcher:          NewRemoteBundleFetcher(fmt.Sprintf("http://%s:%s", config.FunctionRegistry.Address, config.FunctionRegistry.Port)),
+		group:            singleflight.Group{},
 	}, nil
 }
 
-func (f *FunctionCacheImpl) GetTemplate(functionName string) (map[string]utils.Query, error) {
-	if tmpl, ok := f.Templates.Get(functionName); ok {
-		return tmpl, nil
-	}
+func (f *FunctionCacheImpl) GetTemplate(functionName string, functionVersion string, templateName string) (*utils.Query, error) {
+	if metadata, ok := f.MetadataBinaries.Get(functionName, functionVersion); ok {
+		if slices.Contains(metadata.TemplateNames, templateName) {
+			if tmpl, ok := f.Templates.Get(templateName); ok {
+				return &tmpl, nil
+			}
+			fnBundle, err := f.fetchAndStore(functionName, functionVersion)
+			if err != nil {
+				return nil, err
+			}
 
-	fnBundle, err := f.fetchAndStore(functionName)
-	if err != nil {
-		return nil, err
+			q := fnBundle.Templates[templateName]
+			return &q, nil
+		} else {
+			return nil, fmt.Errorf("requested template %s not associated with function %s", templateName, functionName)
+		}
+	} else {
+		fnBundle, err := f.fetchAndStore(functionName, functionVersion)
+		if err != nil {
+			return nil, err
+		}
+		q, ok := fnBundle.Templates[templateName]
+		if !ok {
+			return nil, fmt.Errorf("requested template %s not associated with function %s", templateName, functionName)
+		}
+		return &q, nil
 	}
-	return fnBundle.Templates, nil
 }
 
-func (f *FunctionCacheImpl) GetBinary(functionName string) ([]byte, error) {
-	bin, ok, err := f.Binaries.Get(functionName)
+func (f *FunctionCacheImpl) GetBinary(functionName string, functionVersion string) ([]byte, error) {
+	bin, _, ok, err := f.MetadataBinaries.GetWithBinary(functionName, functionVersion)
 	if err != nil {
 		return nil, err
 	}
@@ -75,16 +95,29 @@ func (f *FunctionCacheImpl) GetBinary(functionName string) ([]byte, error) {
 		return bin, nil
 	}
 
-	fnBundle, err := f.fetchAndStore(functionName)
+	fnBundle, err := f.fetchAndStore(functionName, functionVersion)
 	if err != nil {
 		return nil, err
 	}
 	return fnBundle.Binary, err
 }
 
-func (f *FunctionCacheImpl) fetchAndStore(functionName string) (*FunctionBundle, error) {
+func (f *FunctionCacheImpl) GetMetadata(functionName string, functionVersion string) (*metadata.FunctionMetadata, error) {
+	meta, ok := f.MetadataBinaries.Get(functionName, functionVersion)
+	if ok {
+		return &meta, nil
+	}
+
+	fnBundle, err := f.fetchAndStore(functionName, functionVersion)
+	if err != nil {
+		return nil, err
+	}
+	return &fnBundle.Metadata, err
+}
+
+func (f *FunctionCacheImpl) fetchAndStore(functionName string, functionVersion string) (*FunctionBundle, error) {
 	fetchedValue, err, _ := f.group.Do(functionName, func() (any, error) {
-		bundle, err := f.fetcher.Fetch(functionName)
+		bundle, err := f.fetcher.Fetch(functionName + "@" + functionVersion)
 		if err != nil {
 			return nil, err
 		}
@@ -92,10 +125,12 @@ func (f *FunctionCacheImpl) fetchAndStore(functionName string) (*FunctionBundle,
 			return nil, fmt.Errorf("invalid bundle from registry")
 		}
 
-		if err = f.Binaries.Set(functionName, bundle.Binary); err != nil {
+		if err = f.MetadataBinaries.Set(bundle.Metadata, bundle.Binary); err != nil {
 			return nil, err
 		}
-		f.Templates.Set(functionName, bundle.Templates)
+		for templateName, q := range bundle.Templates {
+			f.Templates.Set(templateName, q)
+		}
 
 		return bundle, nil
 	})

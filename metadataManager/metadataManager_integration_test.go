@@ -13,7 +13,6 @@ import (
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 	"io"
 	"metadataManager"
-	metadataManager_mock "metadataManager/mocks"
 	"metadataManager/utils"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +23,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	tokenDecoder_mock "tokenDecoder/mocks"
 )
 
 var templates = map[string]utils.Query{
@@ -135,7 +135,7 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	fnCache.EXPECT().GetTemplate(invokedFnName, invokedFnVer, "private_data_query").Return(&q, nil)
 	fnCache.EXPECT().GetTemplate(invokedFnName, invokedFnVer, "gt_data_query").Return(&q2, nil)
 
-	tknDecoder := &metadataManager_mock.TokenDecoder{}
+	tknDecoder := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClient1, serverInfoFather, os.Stdout, fnCache, tknDecoder)
 
@@ -157,7 +157,7 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	}
 	fnCache2 := &caches_mock.FunctionCache{}
 
-	tknDecoder2 := &metadataManager_mock.TokenDecoder{}
+	tknDecoder2 := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoder2.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerChild := metadataManager.NewMetadataManager(redisClient2, serverInfoChild, os.Stdout, fnCache2, tknDecoder2)
 
@@ -237,7 +237,7 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	tokenString := "JWTToken"
 
 	fnCache := &caches_mock.FunctionCache{}
-	tknDecoder := &metadataManager_mock.TokenDecoder{}
+	tknDecoder := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout, fnCache, tknDecoder)
 
@@ -259,7 +259,7 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 		Secret: "secret",
 	}
 	fnCacheChild := &caches_mock.FunctionCache{}
-	tknDecoderChild := &metadataManager_mock.TokenDecoder{}
+	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout, fnCacheChild, tknDecoderChild)
 
@@ -336,7 +336,7 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	tokenString := "JWTToken"
 
 	fnCache := &caches_mock.FunctionCache{}
-	tknDecoderFather := &metadataManager_mock.TokenDecoder{}
+	tknDecoderFather := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout, fnCache, tknDecoderFather)
 
@@ -358,7 +358,7 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 		Secret: "secret",
 	}
 	fnCacheChild := &caches_mock.FunctionCache{}
-	tknDecoderChild := &metadataManager_mock.TokenDecoder{}
+	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout, fnCacheChild, tknDecoderChild)
 
@@ -442,7 +442,7 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	tokenString := "JWTToken"
 
 	fnCacheFather := &caches_mock.FunctionCache{}
-	tknDecoderFather := &metadataManager_mock.TokenDecoder{}
+	tknDecoderFather := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout, fnCacheFather, tknDecoderFather)
 
@@ -463,7 +463,7 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 		Secret: "secret",
 	}
 	fnCacheChild := &caches_mock.FunctionCache{}
-	tknDecoderChild := &metadataManager_mock.TokenDecoder{}
+	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout, fnCacheChild, tknDecoderChild)
 
@@ -490,7 +490,7 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 		Secret: "secret",
 	}
 	fnCacheLocal := &caches_mock.FunctionCache{}
-	tknDecoderLocal := &metadataManager_mock.TokenDecoder{}
+	tknDecoderLocal := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderLocal.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerLocal := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, os.Stdout, fnCacheLocal, tknDecoderLocal)
 

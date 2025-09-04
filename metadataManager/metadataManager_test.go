@@ -13,6 +13,7 @@ import (
 	"server/info"
 	"testing"
 	"time"
+	tokenDecoder_mock "tokenDecoder/mocks"
 )
 
 func TestExecuteQueries(t *testing.T) {
@@ -82,7 +83,7 @@ func TestExecuteQueries(t *testing.T) {
 	q2 := queryTemplates["gt_data_query"]
 	fnCache.EXPECT().GetTemplate(requestedFnName, requestedFnVersion, "private_data_query").Return(&q, nil)
 	fnCache.EXPECT().GetTemplate(requestedFnName, requestedFnVersion, "gt_data_query").Return(&q2, nil)
-	tknDecoder := &metadataManager_mock.TokenDecoder{}
+	tknDecoder := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoder.EXPECT().DecodeGroupToken("bohhh").Return([]string{"groupC"}, nil)
 	// Create a new MetadataManager instance
 	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger, fnCache, tknDecoder)

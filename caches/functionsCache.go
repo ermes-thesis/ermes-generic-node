@@ -58,8 +58,8 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig) (*FunctionCache
 }
 
 func (f *FunctionCacheImpl) GetTemplate(functionName string, functionVersion string, templateName string) (*utils.Query, error) {
-	if metadata, ok := f.MetadataBinaries.Get(functionName, functionVersion); ok {
-		if slices.Contains(metadata.TemplateNames, templateName) {
+	if meta, ok := f.MetadataBinaries.Get(functionName, functionVersion); ok {
+		if slices.Contains(meta.TemplateNames, templateName) {
 			if tmpl, ok := f.Templates.Get(templateName); ok {
 				return &tmpl, nil
 			}

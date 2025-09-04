@@ -2,6 +2,7 @@ package caches
 
 import (
 	"github.com/hashicorp/golang-lru/v2"
+	"sync"
 	"time"
 )
 
@@ -41,6 +42,7 @@ type CacheItem[T any] struct {
 type BaseCache[T any] struct {
 	cache *lru.Cache[string, CacheItem[T]]
 	ttl   time.Duration
+	mu    sync.RWMutex
 }
 
 // NewBaseCache creates a new BaseCache with the given maximum size and TTL.
@@ -96,6 +98,9 @@ func NewBaseCacheWithEviction[T any](size int, ttl time.Duration, evictFn func(s
 //   - T: the value stored under the key (zero value if not found or expired)
 //   - bool: true if the key was found and not expired, false otherwise
 func (c *BaseCache[T]) Get(key string) (T, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	if item, ok := c.cache.Get(key); ok {
 		if c.ttl == 0 || time.Since(item.Timestamp) < c.ttl {
 			return item.Value, true
@@ -113,6 +118,9 @@ func (c *BaseCache[T]) Get(key string) (T, bool) {
 //   - key: the key under which to store the value
 //   - value: the value to store
 func (c *BaseCache[T]) Set(key string, value T) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	c.cache.Add(key, CacheItem[T]{
 		Value:     value,
 		Timestamp: time.Now(),

@@ -115,8 +115,11 @@ func (c *BaseCache[T]) Get(key string) (T, bool) {
 
 		if item, ok = c.cache.Get(key); ok && time.Since(item.Timestamp) > c.ttl {
 			c.cache.Remove(key)
+			return zero, false
+		} else {
+			// Item was refreshed
+			return item.Value, true
 		}
-		return zero, false
 	}
 
 	c.mu.RUnlock()

@@ -116,8 +116,9 @@ func (f *FunctionCacheImpl) GetMetadata(functionName string, functionVersion str
 }
 
 func (f *FunctionCacheImpl) fetchAndStore(functionName string, functionVersion string) (*FunctionBundle, error) {
-	fetchedValue, err, _ := f.group.Do(functionName, func() (any, error) {
-		bundle, err := f.fetcher.Fetch(functionName + "@" + functionVersion)
+	functionNameString := functionName + "@" + functionVersion
+	fetchedValue, err, _ := f.group.Do(functionNameString, func() (any, error) {
+		bundle, err := f.fetcher.Fetch(functionNameString)
 		if err != nil {
 			return nil, err
 		}

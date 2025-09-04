@@ -10,6 +10,7 @@ import (
 	"server/info"
 	"slices"
 	"strings"
+	"tokenDecoder"
 )
 
 // map[tmpl_name]map[param_name]param_value
@@ -24,14 +25,14 @@ type MetadataManagerImpl struct {
 	redis              db.GenericDB
 	logger             io.Writer
 	templateCache      caches.FunctionCache
-	tokenDecoder       TokenDecoder
+	tokenDecoder       tokenDecoder.TokenDecoder
 	serverInfo         *info.ServerInfo
 	queryPropagator    QueryPropagator
 	metadataPropagator MetadataPropagator
 	customMetadataKeys []string
 }
 
-func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, logger io.Writer, cache caches.FunctionCache, decoder TokenDecoder) MetadataManager {
+func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, logger io.Writer, cache caches.FunctionCache, decoder tokenDecoder.TokenDecoder) MetadataManager {
 	return &MetadataManagerImpl{
 		redis:         redis,
 		logger:        logger,

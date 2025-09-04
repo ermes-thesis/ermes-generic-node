@@ -1,4 +1,4 @@
-package metadataManager
+package tokenDecoder
 
 import (
 	"crypto/rsa"

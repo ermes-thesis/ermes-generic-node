@@ -1,9 +1,8 @@
-package metadataManager_test
+package tokenDecoder
 
 import (
 	"crypto/rand"
 	"crypto/rsa"
-	"metadataManager"
 	"testing"
 	"time"
 
@@ -17,7 +16,7 @@ func TestDecodeGroupToken_Success(t *testing.T) {
 	pubKey := &privKey.PublicKey
 
 	// Create a JWT
-	claims := metadataManager.GroupTokenClaims{
+	claims := GroupTokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "ermes-central-repository",
 			Subject:   "userID",
@@ -32,7 +31,7 @@ func TestDecodeGroupToken_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// Build decoder with public key
-	decoder, err := metadataManager.NewTokenDecoderWithKey(pubKey, "ermes-central-repository")
+	decoder, err := NewTokenDecoderWithKey(pubKey, "ermes-central-repository")
 	require.NoError(t, err)
 
 	// Decode
@@ -45,7 +44,7 @@ func TestDecodeGroupToken_Expired(t *testing.T) {
 	privKey, _ := rsa.GenerateKey(rand.Reader, 2048)
 	pubKey := &privKey.PublicKey
 
-	claims := metadataManager.GroupTokenClaims{
+	claims := GroupTokenClaims{
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    "ermes-central-repository",
 			Subject:   "userID",
@@ -60,7 +59,7 @@ func TestDecodeGroupToken_Expired(t *testing.T) {
 	require.NoError(t, err)
 
 	// Build decoder with public key
-	decoder, err := metadataManager.NewTokenDecoderWithKey(pubKey, "ermes-central-repository")
+	decoder, err := NewTokenDecoderWithKey(pubKey, "ermes-central-repository")
 	require.NoError(t, err)
 
 	// Decode

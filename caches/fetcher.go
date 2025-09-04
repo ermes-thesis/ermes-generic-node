@@ -12,8 +12,8 @@ import (
 
 type FunctionBundle struct {
 	Binary    []byte
-	Templates map[string]utils.Query
 	Metadata  metadata.FunctionMetadata
+	Templates map[string]utils.Query
 }
 
 type Fetcher[T any] interface {
@@ -28,7 +28,7 @@ func (f *RemoteBundleFetcher) Fetch(functionName string) (*FunctionBundle, error
 	//TODO: Fix with the right decision of how taking functionName + version
 	parts := strings.SplitN(functionName, "@", 2)
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("Invalid function name %s, expected name:version", functionName)
+		return nil, fmt.Errorf("invalid function name %s, expected name:version", functionName)
 	}
 	name, version := parts[0], parts[1]
 
@@ -43,16 +43,9 @@ func (f *RemoteBundleFetcher) Fetch(functionName string) (*FunctionBundle, error
 		return nil, err
 	}
 
-	var fnDetails map[string]any
-	err = json.Unmarshal(body, &fnDetails)
-	if err != nil {
-		return nil, err
-	}
-	return &FunctionBundle{
-		Binary:    fnDetails["function"].([]byte),
-		Templates: fnDetails["queries"].(map[string]utils.Query),
-		Metadata:  fnDetails["metadata"].(metadata.FunctionMetadata),
-	}, nil
+	var fnBundle FunctionBundle
+	err = json.Unmarshal(body, &fnBundle)
+	return &fnBundle, err
 }
 
 func NewRemoteBundleFetcher(baseURL string) *RemoteBundleFetcher {

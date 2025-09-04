@@ -17,7 +17,7 @@ type QueryTemplatesParamsMapping[T any] map[string]map[string]T
 
 type MetadataManager interface {
 	CreateMetadata(collectionId string, metadata db.Metadata, reqOrigin PropagationOrigin) error
-	ExecuteQueries(functionName string, templateParamsMapping string, groups string, geolocation string) (map[string][]db.CollectionInfo, error)
+	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups string, geolocation string) (map[string][]db.CollectionInfo, error)
 }
 
 type MetadataManagerImpl struct {
@@ -119,7 +119,7 @@ func (l MetadataManagerImpl) CreateMetadata(collectionId string, metadata db.Met
 	return nil
 }
 
-func (l MetadataManagerImpl) ExecuteQueries(functionName string, templateParamsMapping string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error) {
+func (l MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error) {
 	// Execute the query locally if the server's metadata domain match the geolocation, it is its prefix or if the local node is a cloud node.
 	//Otherwise, propagate the query to the cloud node or the father node.
 	if strings.HasPrefix(geolocation, l.serverInfo.MetadataDomain) || l.serverInfo.Father == nil {
@@ -137,39 +137,35 @@ func (l MetadataManagerImpl) ExecuteQueries(functionName string, templateParamsM
 			return nil, fmt.Errorf("error decoding group token: %v", err)
 		}
 
-		// Getting from the cache (or remotely) the templates of the function name
-		if tmpls, err := l.templateCache.GetTemplate(functionName); err == nil {
-			// For each template specified in the HTTP request
-			for templateName, params := range queryMap {
-				// Check if the template really exists, if that's the case continue the normal execution
-				if query, ok := tmpls[templateName]; ok {
-					err := query.ReplacePlaceholderFromStrings(params)
-					if err != nil {
-						fmt.Fprintf(l.logger, "Error replacing placeholders in templateParamsMapping: %v\n", err)
-						return nil, err
-					}
-
-					if err := query.Validate(); err != nil {
-						fmt.Fprintf(l.logger, "Error validating templateParamsMapping: %v\n", err)
-						return nil, err
-					}
-
-					collInfo, err := l.redis.SearchOnMetadata(query, groups)
-					if err != nil {
-						fmt.Fprintf(l.logger, "Error executing templateParamsMapping: %v\n", err)
-						return nil, err
-					}
-					if len(collInfo) > 0 {
-						result[query.As] = append(result[query.As], collInfo...)
-					}
-				} else {
-					return nil, fmt.Errorf("template '%s' specified in the request was not found for function %s", templateName, functionName)
+		// For each template specified in the HTTP request
+		for templateName, params := range queryMap {
+			// Getting from the cache (or remotely) the templates of the function name
+			if query, err := l.templateCache.GetTemplate(functionName, functionVersion, templateName); err == nil {
+				err = query.ReplacePlaceholderFromStrings(params)
+				if err != nil {
+					fmt.Fprintf(l.logger, "Error replacing placeholders in templateParamsMapping: %v\n", err)
+					return nil, err
 				}
+
+				if err = query.Validate(); err != nil {
+					fmt.Fprintf(l.logger, "Error validating templateParamsMapping: %v\n", err)
+					return nil, err
+				}
+
+				collInfo, err := l.redis.SearchOnMetadata(*query, groups)
+				if err != nil {
+					fmt.Fprintf(l.logger, "Error executing templateParamsMapping: %v\n", err)
+					return nil, err
+				}
+				if len(collInfo) > 0 {
+					result[query.As] = append(result[query.As], collInfo...)
+				}
+			} else {
+				return nil, fmt.Errorf("error while retrieving template %s for function %s:%s, with error: %v", templateName, functionName, functionVersion, err)
 			}
-			return result, nil
 		}
-		return nil, fmt.Errorf("error while retrieving templates for function %s from cache: %v", functionName, err)
+		return result, nil
 	} else {
-		return l.queryPropagator.Propagate(functionName, templateParamsMapping, groupToken, geolocation)
+		return l.queryPropagator.Propagate(functionName, functionVersion, templateParamsMapping, groupToken, geolocation)
 	}
 }

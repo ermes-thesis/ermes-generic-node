@@ -21,7 +21,7 @@ const (
 )
 
 type QueryPropagator interface {
-	Propagate(functionName string, templateParamsMappings string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error)
+	Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error)
 }
 
 type QueryPropagatorImpl struct {
@@ -36,7 +36,7 @@ func NewQueryPropagator(serverInfo *info.ServerInfo, logger *io.Writer) QueryPro
 	}
 }
 
-func (p *QueryPropagatorImpl) Propagate(functionName string, templateParamsMappings string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error) {
+func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error) {
 	fmt.Fprintf(*p.logger, "No geolocation provided in the request header.\n")
 
 	var receiver string
@@ -54,6 +54,7 @@ func (p *QueryPropagatorImpl) Propagate(functionName string, templateParamsMappi
 		return nil, err
 	}
 	req.Header.Set("X-ERMES-REQ-FUNCTION", functionName)
+	req.Header.Set("X-ERMES-REQ-FUNCTION-VERSION", functionVersion)
 	req.Header.Set("X-ERMES-SECRET", p.serverInfo.Secret)
 	req.Header.Set("X-ERMES-GROUPS", groupToken)
 	req.Header.Set("X-ERMES-POSITION", geolocation)

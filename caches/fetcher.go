@@ -1,6 +1,7 @@
 package caches
 
 import (
+	"caches/metadata"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 type FunctionBundle struct {
 	Binary    []byte
 	Templates map[string]utils.Query
+	Metadata  metadata.FunctionMetadata
 }
 
 type Fetcher[T any] interface {
@@ -24,7 +26,7 @@ type RemoteBundleFetcher struct {
 
 func (f *RemoteBundleFetcher) Fetch(functionName string) (*FunctionBundle, error) {
 	//TODO: Fix with the right decision of how taking functionName + version
-	parts := strings.SplitN(functionName, ":", 2)
+	parts := strings.SplitN(functionName, "@", 2)
 	if len(parts) != 2 {
 		return nil, fmt.Errorf("Invalid function name %s, expected name:version", functionName)
 	}
@@ -49,6 +51,7 @@ func (f *RemoteBundleFetcher) Fetch(functionName string) (*FunctionBundle, error
 	return &FunctionBundle{
 		Binary:    fnDetails["function"].([]byte),
 		Templates: fnDetails["queries"].(map[string]utils.Query),
+		Metadata:  fnDetails["metadata"].(metadata.FunctionMetadata),
 	}, nil
 }
 

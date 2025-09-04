@@ -30,6 +30,7 @@ func TestExecuteQueries(t *testing.T) {
 	}
 
 	requestedFnName := "test_function"
+	requestedFnVersion := "1.0.0"
 	queryTemplates := map[string]utils.Query{
 		"private_data_query": {
 			Select: "ALL",
@@ -77,14 +78,17 @@ func TestExecuteQueries(t *testing.T) {
 	})
 
 	fnCache := &caches_mock.FunctionCache{}
-	fnCache.EXPECT().GetTemplate(requestedFnName).Return(queryTemplates, nil)
+	q := queryTemplates["private_data_query"]
+	q2 := queryTemplates["gt_data_query"]
+	fnCache.EXPECT().GetTemplate(requestedFnName, requestedFnVersion, "private_data_query").Return(&q, nil)
+	fnCache.EXPECT().GetTemplate(requestedFnName, requestedFnVersion, "gt_data_query").Return(&q2, nil)
 	tknDecoder := &metadataManager_mock.TokenDecoder{}
 	tknDecoder.EXPECT().DecodeGroupToken("bohhh").Return([]string{"groupC"}, nil)
 	// Create a new MetadataManager instance
 	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger, fnCache, tknDecoder)
 
 	// Execute the query
-	result, err := manager.ExecuteQueries(requestedFnName, string(queryParams), "bohhh", "IT/Milan")
+	result, err := manager.ExecuteQueries(requestedFnName, requestedFnVersion, string(queryParams), "bohhh", "IT/Milan")
 	assert.NoError(t, err, "Expected no error when executing queries")
 
 	assert.Len(t, result, 1, "Expected result to be non-empty")

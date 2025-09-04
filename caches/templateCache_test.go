@@ -17,7 +17,6 @@ func TestTemplatesCache_SetAndGet(t *testing.T) {
 	cache, err := NewTemplatesCache(cfg)
 	require.NoError(t, err)
 
-	fn := "func1"
 	templates := map[string]utils.Query{
 		"tmpl1": {
 			Select: "ALL",
@@ -31,15 +30,15 @@ func TestTemplatesCache_SetAndGet(t *testing.T) {
 		},
 	}
 
-	cache.Set(fn, templates)
+	cache.Set("tmpl1", templates["tmpl1"])
+	cache.Set("tmpl2", templates["tmpl2"])
 
-	templs, ok := cache.Get(fn)
+	q1, ok := cache.Get("tmpl1")
 	require.True(t, ok)
-
-	require.Len(t, templs, len(templates))
-
-	require.Equal(t, templates["tmpl1"], templs["tmpl1"])
-	require.Equal(t, templates["tmpl2"], templs["tmpl2"])
+	require.Equal(t, q1, templates["tmpl1"])
+	q2, ok := cache.Get("tmpl2")
+	require.True(t, ok)
+	require.Equal(t, q2, templates["tmpl2"])
 }
 
 func TestTemplatesCache_GetMissing(t *testing.T) {
@@ -73,17 +72,17 @@ func TestTemplatesCache_TTLExpiry(t *testing.T) {
 			Where:  nil,
 		},
 	}
-	cache.Set(fn, templates)
+	cache.Set(fn, templates["tmpl"])
 
 	// Immediately should exist
-	templs, ok := cache.Get(fn)
+	q, ok := cache.Get(fn)
 	require.True(t, ok)
-	require.Equal(t, templates["tmpl"], templs["tmpl"])
+	require.Equal(t, q, templates["tmpl"])
 
 	// Wait for TTL to expire
 	time.Sleep(60 * time.Millisecond)
 
-	templs, ok = cache.Get(fn)
+	qLater, ok := cache.Get(fn)
 	require.False(t, ok)
-	require.Zero(t, templs)
+	require.Zero(t, qLater)
 }

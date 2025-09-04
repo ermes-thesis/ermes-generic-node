@@ -126,10 +126,14 @@ func TestMetadataLookupIntegration(t *testing.T) {
 		Secret: "secret",
 	}
 	invokedFnName := "test_function"
+	invokedFnVer := "1.0.0"
 	tokenString := "JWTToken"
 
 	fnCache := &caches_mock.FunctionCache{}
-	fnCache.EXPECT().GetTemplate(invokedFnName).Return(templates, nil)
+	q := templates["private_data_query"]
+	q2 := templates["gt_data_query"]
+	fnCache.EXPECT().GetTemplate(invokedFnName, invokedFnVer, "private_data_query").Return(&q, nil)
+	fnCache.EXPECT().GetTemplate(invokedFnName, invokedFnVer, "gt_data_query").Return(&q2, nil)
 
 	tknDecoder := &metadataManager_mock.TokenDecoder{}
 	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
@@ -180,10 +184,11 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	req.Header.Set("X-ERMES-SECRET", "secret")
 	req.Header.Set("X-ERMES-QUERY", string(queryParams))
 	req.Header.Set("X-ERMES-GROUPS", tokenString)
-	// This header is needed only for testing purposes. Since we don't have a way to simulate a function
-	// invocation request, we have to pass manually the invoked function name as a header to make the
+	// These headers are needed only for testing purposes. Since we don't have a way to simulate a function
+	// invocation request, we have to pass manually the invoked function name and version as headers to make the
 	// metadataManager work properly.
 	req.Header.Set("X-ERMES-REQ-FUNCTION", invokedFnName)
+	req.Header.Set("X-ERMES-REQ-FUNCTION-VERSION", invokedFnVer)
 
 	res, err := http.DefaultClient.Do(req)
 	assert.NoError(t, err, "Expected no error when sending request")

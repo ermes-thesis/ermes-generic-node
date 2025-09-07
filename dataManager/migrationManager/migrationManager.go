@@ -7,7 +7,7 @@ import (
 	sender "dataManager/migrationManager/migrationSender"
 	penality "dataManager/migrationManager/penalityFunction"
 	"dataManager/migrationManager/strongPolicy"
-	"dataManager/migrationManager/weakPolicy"
+	weakpolicy "dataManager/migrationManager/weakPolicy"
 	shared "dataManager/shared"
 	"db"
 	"errors"
@@ -62,56 +62,46 @@ type MigrationManagerImp struct {
 
 // Singleton pattern
 var migrationManagerInstance MigrationManager
-var migLock = &sync.Mutex{}
-
-//TODO: remove from global var
+var once sync.Once
+var initOnce sync.Once
 
 func GetMigrationManagerInstance(logger log.Logger) MigrationManager {
-	if migrationManagerInstance == nil {
-		migLock.Lock()
-		defer migLock.Unlock()
-		if migrationManagerInstance == nil {
-			migrationManagerInstance = &MigrationManagerImp{}
-			logger.Println("MIG-MANAGER", "create new migration manager instance", log.INFO)
-		}
-	}
+	once.Do(func() {
+		migrationManagerInstance = &MigrationManagerImp{logger: logger}
+	})
 	return migrationManagerInstance
 }
 
 func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger log.Logger) {
-	//sync
-	migLock.Lock()
-	defer migLock.Unlock()
-	//imp
-	if m.collectionsPartialView != nil { //if singleton already initialized
-		return
-	}
-	m.serverInfo = serverInfo
-	m.logger = logger
-	m.dbInterface = dbInterface
-	m.lruCache = lruCache
-	m.config = config
+	initOnce.Do(func() {
+		//imp
+		if m.collectionsPartialView != nil { //if singleton already initialized
+			return
+		}
 
-	//prepare server
-	m.sender = sender.NewSender(m.logger, server)
-	server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages(logger).ServeHTTP)
-	server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection(logger).ServeHTTP)
+		m.serverInfo = serverInfo
+		m.logger = logger
+		m.dbInterface = dbInterface
+		m.lruCache = lruCache
+		m.config = config
+		//prepare server
+		m.sender = sender.NewSender(m.logger, server)
+		server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages(logger).ServeHTTP)
+		server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection(logger).ServeHTTP)
 
-	//policy
+		//policy
 
-	m.defaultPolicy = strongPolicy.NewDefaultPolicy(config, lruConfig, collections, migLock, penalityFunc, dbInterface, serverInfo, m.sender, m.lruCache, m.logger)
-	m.StrongCollectionPolicy = m.defaultPolicy
+		m.defaultPolicy = strongPolicy.NewDefaultPolicy(config, lruConfig, collections, penalityFunc, dbInterface, serverInfo, m.sender, m.lruCache, m.logger)
+		m.StrongCollectionPolicy = m.defaultPolicy
 
-	m.alwaysCopyPolicy = weakpolicy.NewAlwaysCopyPolicy(config, m.sender, logger, collections, dbInterface)
-	m.WeakCollectionPolicy = m.alwaysCopyPolicy
+		m.alwaysCopyPolicy = weakpolicy.NewAlwaysCopyPolicy(config, m.sender, logger, collections, dbInterface)
+		m.WeakCollectionPolicy = m.alwaysCopyPolicy
 
-	//init data
-	m.collectionsPartialView = collections
+		//init data
+		m.collectionsPartialView = collections
 
-	logger.Println("MIG-MANAGER", "migration manager instance has been initialized", log.INFO)
-
-	//prepare server
-
+		logger.Println("MIG-MANAGER", "migration manager instance has been initialized", log.INFO)
+	})
 }
 
 // methods

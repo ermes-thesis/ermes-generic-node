@@ -48,13 +48,13 @@ type DefaultStrongCollectionPolicy struct {
 	penalityFunc penality.PenalityFunc
 }
 
-func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.LruConfig, collections *shared.CollectionPartialView, migLock *sync.Mutex, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo, sender sender.Sender, lruCache *lru.LRUCache[shared.Collection], logger log.Logger) StrongCollectionPolicy {
+func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.LruConfig, collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo, sender sender.Sender, lruCache *lru.LRUCache[shared.Collection], logger log.Logger) StrongCollectionPolicy {
 	policy := &DefaultStrongCollectionPolicy{
 		lruCache:         lruCache,
 		lruConfig:        lruConfig,
 		sender:           sender,
 		logger:           logger,
-		migLock:          migLock,
+		migLock:          &sync.Mutex{},
 		currentConfig:    config,
 		serverInfo:       serverInfo,
 		partialView:      collections,

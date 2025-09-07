@@ -8,7 +8,7 @@ import (
 // MigrationManagerIdleState
 // - Idle state -> in this state the Migration manager can receive collection requests; ignore gossip messages
 type MigrationManagerIdleState struct {
-	policy *DefaultStrongCollectionPolicy
+	policy *ErmesStrongCollectionPolicy
 }
 
 func (m *MigrationManagerIdleState) Setup(args ...any) {}

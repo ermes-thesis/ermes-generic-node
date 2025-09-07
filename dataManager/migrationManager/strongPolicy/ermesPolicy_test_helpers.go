@@ -7,23 +7,23 @@ import (
 	usage "dataManager/migrationManager/childUsage"
 )
 
-func (s *DefaultStrongCollectionPolicy) GetUnstableEquilibriumState() map[string]map[string]*usage.CircularBuffer {
+func (s *ErmesStrongCollectionPolicy) GetUnstableEquilibriumState() map[string]map[string]*usage.CircularBuffer {
 	return s.equilibriumState
 }
 
-func (s *DefaultStrongCollectionPolicy) GetBuffer(collection string, child string) *usage.CircularBuffer {
+func (s *ErmesStrongCollectionPolicy) GetBuffer(collection string, child string) *usage.CircularBuffer {
 	return s.equilibriumState[collection][child]
 }
 
-func (s *DefaultStrongCollectionPolicy) GetCurrentState() MigrationManagerState {
+func (s *ErmesStrongCollectionPolicy) GetCurrentState() MigrationManagerState {
 	return s.currentState
 }
 
-func (s *DefaultStrongCollectionPolicy) SetState(m MigrationManagerState) {
+func (s *ErmesStrongCollectionPolicy) SetState(m MigrationManagerState) {
 	s.setState(m)
 }
 
-func (s *DefaultStrongCollectionPolicy) GetDecisionState() MigrationManagerState {
+func (s *ErmesStrongCollectionPolicy) GetDecisionState() MigrationManagerState {
 	return s.decisionState
 }
 

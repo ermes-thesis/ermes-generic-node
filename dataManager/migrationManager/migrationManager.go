@@ -45,7 +45,7 @@ type MigrationManagerImp struct {
 	logger     log.Logger
 
 	//policy
-	defaultPolicy          strongPolicy.StrongCollectionPolicy
+	ermesPolicy            strongPolicy.StrongCollectionPolicy
 	StrongCollectionPolicy strongPolicy.StrongCollectionPolicy
 
 	alwaysCopyPolicy     weakpolicy.WeakCollectionPolicy
@@ -91,8 +91,8 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 
 		//policy
 
-		m.defaultPolicy = strongPolicy.NewDefaultPolicy(config, lruConfig, collections, penalityFunc, dbInterface, serverInfo, m.sender, m.lruCache, m.logger)
-		m.StrongCollectionPolicy = m.defaultPolicy
+		m.ermesPolicy = strongPolicy.NewDefaultPolicy(config, lruConfig, collections, penalityFunc, dbInterface, serverInfo, m.sender, m.lruCache, m.logger)
+		m.StrongCollectionPolicy = m.ermesPolicy
 
 		m.alwaysCopyPolicy = weakpolicy.NewAlwaysCopyPolicy(config, m.sender, logger, collections, dbInterface)
 		m.WeakCollectionPolicy = m.alwaysCopyPolicy
@@ -259,8 +259,8 @@ func (m *MigrationManagerImp) SendCollectionAndRemove(collection shared.Collecti
 
 func (m *MigrationManagerImp) ChangeStrongCollectionPolicy(newPolicy strongPolicy.CurrentPolicy) {
 	switch newPolicy {
-	case strongPolicy.DefaultPolicy:
-		m.StrongCollectionPolicy = m.defaultPolicy
+	case strongPolicy.ErmesPolicy:
+		m.StrongCollectionPolicy = m.ermesPolicy
 	default:
 		panic("unknown policy")
 	}

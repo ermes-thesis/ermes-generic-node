@@ -14,7 +14,7 @@ import (
 // MigrationManagerDecisionState
 // - Decision state -> in this state the Migration manager ignore all the messages, take decisions on collection migration; consume the stack
 type MigrationManagerDecisionState struct {
-	policy            *DefaultStrongCollectionPolicy
+	policy            *ErmesStrongCollectionPolicy
 	NodeResourceUsage map[string]NodeStateInfo
 
 	requestStack stack.CallStack

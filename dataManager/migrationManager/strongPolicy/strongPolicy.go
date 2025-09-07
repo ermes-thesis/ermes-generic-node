@@ -15,5 +15,5 @@ type CurrentPolicy int
 
 const (
 	Pending CurrentPolicy = iota
-	DefaultPolicy
+	ErmesPolicy
 )

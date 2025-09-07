@@ -15,8 +15,8 @@ import (
 	"time"
 )
 
-// DefaultStrongCollectionPolicy default policy
-type DefaultStrongCollectionPolicy struct {
+// ErmesStrongCollectionPolicy default policy
+type ErmesStrongCollectionPolicy struct {
 	//sync
 	migLock *sync.Mutex
 	//config
@@ -49,7 +49,7 @@ type DefaultStrongCollectionPolicy struct {
 }
 
 func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.LruConfig, collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo, sender sender.Sender, lruCache *lru.LRUCache[shared.Collection], logger log.Logger) StrongCollectionPolicy {
-	policy := &DefaultStrongCollectionPolicy{
+	policy := &ErmesStrongCollectionPolicy{
 		lruCache:         lruCache,
 		lruConfig:        lruConfig,
 		sender:           sender,
@@ -70,7 +70,7 @@ func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.Lru
 
 //impl StrongCollectionPolicy
 
-func (s *DefaultStrongCollectionPolicy) SetDefaultState() {
+func (s *ErmesStrongCollectionPolicy) SetDefaultState() {
 	s.logger.Println("DEFAULT-STRONG-POLICY", "Setting default state", log.INFO)
 	//state pattern
 	s.idleState = &MigrationManagerIdleState{policy: s}
@@ -82,25 +82,25 @@ func (s *DefaultStrongCollectionPolicy) SetDefaultState() {
 	//start timer
 	s.startIdleTimer()
 }
-func (s *DefaultStrongCollectionPolicy) RemoveInfo(collectionId string) {
+func (s *ErmesStrongCollectionPolicy) RemoveInfo(collectionId string) {
 	delete(s.equilibriumState, collectionId)
 }
 
-func (s *DefaultStrongCollectionPolicy) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
+func (s *ErmesStrongCollectionPolicy) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
 	s.currentState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency)
 }
 
-func (s *DefaultStrongCollectionPolicy) ManageGossipMessage(msg gossipmessages.GossipMessage) {
+func (s *ErmesStrongCollectionPolicy) ManageGossipMessage(msg gossipmessages.GossipMessage) {
 	s.currentState.ManageGossipMessage(msg)
 }
 
 // methods
-func (s *DefaultStrongCollectionPolicy) setState(state MigrationManagerState) {
+func (s *ErmesStrongCollectionPolicy) setState(state MigrationManagerState) {
 	s.currentState = state
 }
 
 // transitionToGossip handles automatic transition from idle to gossip
-func (s *DefaultStrongCollectionPolicy) transitionToGossip() {
+func (s *ErmesStrongCollectionPolicy) transitionToGossip() {
 	s.logger.Println("DEFAULT-STRONG-POLICY", "transition to gossip state", log.INFO)
 	//sync
 	s.migLock.Lock()
@@ -124,7 +124,7 @@ func (s *DefaultStrongCollectionPolicy) transitionToGossip() {
 	}
 }
 
-func (s *DefaultStrongCollectionPolicy) transitionToDecision(childrenResourceUsage map[string]NodeStateInfo) {
+func (s *ErmesStrongCollectionPolicy) transitionToDecision(childrenResourceUsage map[string]NodeStateInfo) {
 	s.logger.Println("DEFAULT-STRONG-POLICY", "transition to decision state", log.INFO)
 	// Only transition if still in gossip state
 	if _, isGossip := s.currentState.(*MigrationManagerGossipState); isGossip {
@@ -137,7 +137,7 @@ func (s *DefaultStrongCollectionPolicy) transitionToDecision(childrenResourceUsa
 	}
 }
 
-func (s *DefaultStrongCollectionPolicy) transitionToIdle() {
+func (s *ErmesStrongCollectionPolicy) transitionToIdle() {
 	s.logger.Println("DEFAULT-STRONG-POLICY", "transition to idle state", log.INFO)
 
 	//imp
@@ -152,7 +152,7 @@ func (s *DefaultStrongCollectionPolicy) transitionToIdle() {
 }
 
 // startIdleTimer starts or restarts the timer for idle->gossip transition
-func (s *DefaultStrongCollectionPolicy) startIdleTimer() {
+func (s *ErmesStrongCollectionPolicy) startIdleTimer() {
 	s.logger.Println("DEFAULT-STRONG-POLICY", "start idle timer", log.INFO)
 	// Cancel existing timer if any
 	if s.stateTimer != nil {
@@ -168,7 +168,7 @@ func (s *DefaultStrongCollectionPolicy) startIdleTimer() {
 	}
 }
 
-func (s *DefaultStrongCollectionPolicy) stopIdleTimer() {
+func (s *ErmesStrongCollectionPolicy) stopIdleTimer() {
 	if s.stateTimer != nil {
 		s.logger.Println("DEFAULT-STRONG-POLICY", "stop idle timer", log.INFO)
 		s.stateTimer.Stop()
@@ -177,6 +177,6 @@ func (s *DefaultStrongCollectionPolicy) stopIdleTimer() {
 }
 
 // resetIdleTimer resets the idle timer when activity occurs
-func (s *DefaultStrongCollectionPolicy) resetIdleTimer() {
+func (s *ErmesStrongCollectionPolicy) resetIdleTimer() {
 	s.startIdleTimer()
 }

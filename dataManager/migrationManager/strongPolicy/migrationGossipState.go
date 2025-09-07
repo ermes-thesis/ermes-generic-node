@@ -10,7 +10,7 @@ import (
 // MigrationManagerGossipState
 // - Gossip state -> in this state the Migration manager can receive gossip messages and place in a stack collection requests
 type MigrationManagerGossipState struct {
-	policy                *DefaultStrongCollectionPolicy
+	policy                *ErmesStrongCollectionPolicy
 	dbInterface           db.GenericDB
 	MissingMessageCounter int
 	NodeResourceUsage     map[string]NodeStateInfo

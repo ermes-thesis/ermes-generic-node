@@ -89,6 +89,9 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	}
 
 	db := mockDb.NewGenericDB(t)
+	db.On("GetCollectionMemoryUsage", "repoId0").Return(uint64(3), nil).Maybe()
+	db.On("GetCollectionMemoryUsage", "repoId1").Return(uint64(2), nil).Maybe()
+	db.On("GetCollectionMemoryUsage", "repoId2").Return(uint64(2), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", "repoId3").Return(uint64(1), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", "repoId4").Return(uint64(5), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", "repoId5").Return(uint64(10), nil).Maybe()

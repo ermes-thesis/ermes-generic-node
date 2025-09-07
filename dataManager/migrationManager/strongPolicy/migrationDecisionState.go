@@ -169,8 +169,13 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 	if err != nil {
 		panic(err) //TODO: decide
 	}
+	collectionSize, sizeError := m.policy.dbInterface.GetCollectionMemoryUsage(outerKey)
+	if sizeError != nil {
+		panic(sizeError) //TODO: decide
+	}
+	//s
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, true, res, groups)
+	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, true, res, groups, collectionSize)
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(outerKey)
@@ -211,8 +216,12 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 	if err != nil {
 		panic(err) //TODO: decide
 	}
+	collectionSize, sizeError := m.policy.dbInterface.GetCollectionMemoryUsage(outerKey)
+	if sizeError != nil {
+		panic(sizeError) //TODO: decide
+	}
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, false, res, groups)
+	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, false, res, groups, collectionSize)
 
 	//if all the interest adjacent node has been satisfied
 	if interestedNodeCounter-len(strongCollection.HostsId()) <= 0 && !strongCollection.IsLeader {
@@ -259,6 +268,11 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 	if err != nil {
 		panic(err) //TODO: decide
 	}
+	collectionSize, sizeError := m.policy.dbInterface.GetCollectionMemoryUsage(collection.CollectionId())
+	if sizeError != nil {
+		panic(sizeError) //TODO: decide
+	}
+
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	isLeader := false
 	if collection.IsStrong() {
@@ -269,7 +283,7 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 		//stop keep track of access for a remote collection
 		m.policy.RemoveInfo(collection.CollectionId())
 	}
-	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.Address, collection, isLeader, res, groups)
+	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.Address, collection, isLeader, res, groups, collectionSize)
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(collection.CollectionId())

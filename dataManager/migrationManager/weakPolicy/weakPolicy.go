@@ -56,8 +56,12 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 		a.logger.Println("WEAK-POLICY", "got an error getting the collection from redis", log.ERROR)
 		panic(err) //TODO: decide
 	}
+	collectionSize, sizeError := a.dbInterface.GetCollectionMemoryUsage(collectionId)
+	if sizeError != nil {
+		panic(sizeError) //TODO: decide
+	}
 
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	a.logger.Println("WEAK-POLICY", fmt.Sprintf("send weak collection%s to node %s", collectionId, childName), log.INFO)
-	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups)
+	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups, collectionSize)
 }

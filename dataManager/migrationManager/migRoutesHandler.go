@@ -82,7 +82,7 @@ func (m *MigrationManagerImp) handleIncomingCollection(logger log.Logger) http.H
 		}
 
 		//TODO: capire come stimare dimensioni e come capire se strong o weak
-		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups)
+		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.CollectionSize)
 
 		w.WriteHeader(http.StatusOK)
 	})

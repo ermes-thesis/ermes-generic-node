@@ -53,6 +53,7 @@ type MigrationManagerImp struct {
 
 	//impl
 	collectionsPartialView *shared.CollectionPartialView //set of local and remotes collections
+	collectionsLock        *sync.Mutex
 
 	lruCache    *lru.LRUCache[shared.Collection]
 	dbInterface db.GenericDB
@@ -67,7 +68,7 @@ var initOnce sync.Once
 
 func GetMigrationManagerInstance(logger log.Logger) MigrationManager {
 	once.Do(func() {
-		migrationManagerInstance = &MigrationManagerImp{logger: logger}
+		migrationManagerInstance = &MigrationManagerImp{logger: logger, collectionsLock: &sync.Mutex{}}
 	})
 	return migrationManagerInstance
 }
@@ -106,6 +107,11 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 
 // methods
 func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string) bool {
+	//sync
+	m.collectionsLock.Lock()
+	defer m.collectionsLock.Unlock()
+
+	//imp
 	m.logger.Println("MIG-MANAGER", "new local collection received", log.INFO)
 	collection := m.collectionsPartialView.KnownCollections[collectionId]
 	if collection != nil {
@@ -153,6 +159,10 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 }
 
 func (m *MigrationManagerImp) NewCollectionCreated(collectionId string, collectionSize uint64, isStrong bool) error {
+	//sync
+	m.collectionsLock.Lock()
+	defer m.collectionsLock.Unlock()
+
 	m.logger.Println("MIG-MANAGER", "new local collection created", log.INFO)
 	collection := m.collectionsPartialView.KnownCollections[collectionId]
 	if collection != nil {
@@ -168,7 +178,11 @@ func (m *MigrationManagerImp) NewCollectionCreated(collectionId string, collecti
 	m.logger.Println("MIG-MANAGER", "new collection added to known collections", log.INFO)
 
 	//place on top in the LRU
-	m.updateLru(collectionId)
+	err := m.lruCache.Put(collectionId, m.collectionsPartialView.KnownCollections[collectionId], uint(collectionSize))
+	if err != nil {
+		//if not enough space in the LRU for the new collection return error
+		return err
+	}
 	m.logger.Println("MIG-MANAGER", "collection placed on top in the LRU", log.INFO)
 	return nil
 }
@@ -180,6 +194,10 @@ func (m *MigrationManagerImp) ManageGossipMessage(msg gossip.GossipMessage) {
 
 // ManageNewRequest call this when wasm function has completed
 func (m *MigrationManagerImp) ManageNewRequest(collectionId string, nodeName string, isWrite bool, requestLatency int) error {
+	//sync
+	m.collectionsLock.Lock()
+	defer m.collectionsLock.Unlock()
+
 	//if no local info on the collection
 	if m.collectionsPartialView.KnownCollections[collectionId] == nil || !m.collectionsPartialView.KnownCollections[collectionId].IsLocal() {
 		m.logger.Println("MIG-MANAGER", fmt.Sprintf("collection %s not found locally or not local", collectionId), log.ERROR)

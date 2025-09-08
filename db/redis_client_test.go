@@ -4,14 +4,15 @@ import (
 	"config"
 	"context"
 	"fmt"
-	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 	"metadataManager/utils"
 	"net/url"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+	"github.com/testcontainers/testcontainers-go"
+	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
 
 func TestRecord(t *testing.T) {
@@ -247,6 +248,9 @@ func TestMemStats(t *testing.T) {
 	}, groups)
 	require.NoError(t, err, "Expected no error setting collection metadata")
 
+	// Wait a second to ensure Redis has updated its memory stats
+	time.Sleep(1 * time.Second)
+
 	memStats1, err := redisClient.GetMemoryStats()
 	require.NoError(t, err, "Expected no error getting memory stats")
 
@@ -268,6 +272,9 @@ func TestMemStats(t *testing.T) {
 		"record15": "value15",
 	}, groups)
 	require.NoError(t, err, "Expected no error setting collection metadata")
+
+	// Wait a second to ensure Redis has updated its memory stats
+	time.Sleep(1 * time.Second)
 
 	memStats2, err := redisClient.GetMemoryStats()
 	require.NoError(t, err, "Expected no error getting memory stats")

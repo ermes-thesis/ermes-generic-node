@@ -1,9 +1,9 @@
 package strongPolicy
 
 import (
+	gossip "dataManager/messages"
 	stack "dataManager/migrationManager/callbackStack"
 	usage "dataManager/migrationManager/childUsage"
-	gossip "dataManager/migrationManager/gossipMessages"
 	shared "dataManager/shared"
 	"fmt"
 	"logger"

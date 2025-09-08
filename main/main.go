@@ -3,7 +3,6 @@ package main
 import (
 	"config"
 	"context"
-	clDiscoverer "dataManager/collectionsDiscoverer"
 	"dataManager/lru"
 	"dataManager/migrationManager"
 	dataManagerShared "dataManager/shared"
@@ -70,10 +69,8 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	collections := &dataManagerShared.CollectionPartialView{
 		KnownCollections: make(map[string]dataManagerShared.Collection),
 	}
-	migrationManagerInstance := migrationManager.GetMigrationManagerInstance(*logger)
-	migrationManagerInstance.Init(collections, myPenalityFunc, config.MigrationManager, config.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *logger)
-	clDiscovererInstance := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
-	clDiscovererInstance.Init(collections)
+	dataManger := migrationManager.GetMigrationManagerInstance(*logger)
+	dataManger.Init(collections, myPenalityFunc, config.MigrationManager, config.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *logger)
 
 	// TODO: understand these lines of code
 	// I think it should be some synchronization method when the server shuts down

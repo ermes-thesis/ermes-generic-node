@@ -4,8 +4,8 @@
 package tests
 
 import (
+	gossip "dataManager/messages"
 	migrationManager "dataManager/migrationManager"
-	gossip "dataManager/migrationManager/gossipMessages"
 	penality "dataManager/migrationManager/penalityFunction"
 	policy "dataManager/migrationManager/strongPolicy"
 	"io"

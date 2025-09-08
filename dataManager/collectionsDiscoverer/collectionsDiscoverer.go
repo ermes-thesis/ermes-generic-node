@@ -2,13 +2,13 @@ package collectionsDiscoverer
 
 import (
 	shared "dataManager/shared"
-	"fmt"
+	"errors"
 	log "logger"
 	"sync"
 )
 
 type CollectionsDiscoverer interface {
-	IsCollectionLocallyPresent(collectionId string) (bool, shared.Collection)
+	IsCollectionLocallyPresent(collectionId string, consistencyClock uint) (bool, shared.Collection, error)
 	Init(*shared.CollectionPartialView)
 }
 
@@ -24,7 +24,6 @@ var initOnce sync.Once
 
 func GetCollectionsDiscovererInstance(logger log.Logger) CollectionsDiscoverer {
 	once.Do(func() {
-		fmt.Println("create singleton instance")
 		collectionsDiscovererInstance = &CollectionsDiscovererImp{}
 	})
 	return collectionsDiscovererInstance
@@ -37,17 +36,23 @@ func (m *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialVie
 }
 
 // methods
-func (m *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId string) (bool, shared.Collection) {
+func (m *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId string, consistencyClock uint) (bool, shared.Collection, error) {
 	//sync
 	m.collectionsPartialView.Mutex.Lock()
 	defer m.collectionsPartialView.Mutex.Unlock()
 	//imp
 	collection, exists := m.collectionsPartialView.KnownCollections[collectionId]
 	if !exists {
-		return false, nil
+		return false, nil, nil
 	}
 	if !collection.IsLocal() {
-		return false, collection
+		return false, collection, nil
 	}
-	return true, collection
+	if collection.IsStrong() {
+		if collection.(*shared.StrongCollection).ConsistencyClock < consistencyClock {
+			return true, collection, errors.New("outdated data in a strong collection replica")
+		}
+	}
+
+	return true, collection, nil
 }

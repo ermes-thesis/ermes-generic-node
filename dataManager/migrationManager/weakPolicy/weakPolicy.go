@@ -2,7 +2,7 @@ package weakpolicy
 
 import (
 	"config"
-	sender "dataManager/migrationManager/migrationSender"
+	sender "dataManager/sender"
 	shared "dataManager/shared"
 	"db"
 	"fmt"
@@ -28,10 +28,10 @@ type AlwaysCopyPolicy struct {
 	partialView *shared.CollectionPartialView
 
 	dbInterface db.GenericDB
-	sender      sender.Sender
+	sender      sender.MigrationManagerSender
 }
 
-func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.Sender, logger log.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB) WeakCollectionPolicy {
+func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.MigrationManagerSender, logger log.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB) WeakCollectionPolicy {
 	policy := &AlwaysCopyPolicy{
 		dbInterface: dbInterface,
 		partialView: partialView,

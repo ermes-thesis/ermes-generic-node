@@ -1,4 +1,4 @@
-package gossipmessages
+package messages
 
 type SendCollectionMessage struct {
 	CollectionId   string            `json:"collectionId"`

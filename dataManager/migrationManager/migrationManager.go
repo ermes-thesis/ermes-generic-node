@@ -3,11 +3,11 @@ package migrationManager
 import (
 	"config"
 	"dataManager/lru"
-	gossip "dataManager/migrationManager/gossipMessages"
-	sender "dataManager/migrationManager/migrationSender"
+	gossip "dataManager/messages"
 	penality "dataManager/migrationManager/penalityFunction"
 	"dataManager/migrationManager/strongPolicy"
 	weakpolicy "dataManager/migrationManager/weakPolicy"
+	sender "dataManager/sender"
 	shared "dataManager/shared"
 	"db"
 	"errors"
@@ -58,7 +58,7 @@ type MigrationManagerImp struct {
 	lruCache    *lru.LRUCache[shared.Collection]
 	dbInterface db.GenericDB
 
-	sender sender.Sender
+	sender sender.MigrationManagerSender
 }
 
 // Singleton pattern
@@ -86,7 +86,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.lruCache = lruCache
 		m.config = config
 		//prepare server
-		m.sender = sender.NewSender(m.logger, server)
+		m.sender = sender.NewMigrationManagerSender(m.logger, server)
 		server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages(logger).ServeHTTP)
 		server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection(logger).ServeHTTP)
 

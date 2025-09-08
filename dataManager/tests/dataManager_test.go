@@ -5,8 +5,8 @@ package tests
 
 import (
 	clDiscoverer "dataManager/collectionsDiscoverer"
+	gossip "dataManager/messages"
 	migrationManager "dataManager/migrationManager"
-	gossip "dataManager/migrationManager/gossipMessages"
 	penality "dataManager/migrationManager/penalityFunction"
 	"fmt"
 	"io"
@@ -29,15 +29,15 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 	clDiscovererImp.Init(collections)
 	mig.ManageNewRequest("repoId", "childName", true, 3)
 
-	b, c := clDiscovererImp.IsCollectionLocallyPresent("repoId")
+	b, c, d := clDiscovererImp.IsCollectionLocallyPresent("repoId", 0)
 
-	if c != nil {
+	if c != nil || d != nil {
 		t.Fatal("unexpected non null collection")
 	}
 
 	mig.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 13)
-	b, c = clDiscovererImp.IsCollectionLocallyPresent("repoId")
-	if c == nil {
+	b, c, d = clDiscovererImp.IsCollectionLocallyPresent("repoId", 0)
+	if c == nil || d != nil {
 		t.Fatal("unexpected null collection")
 	}
 	if !b {

@@ -3,10 +3,10 @@ package strongPolicy
 import (
 	"config"
 	"dataManager/lru"
+	gossipmessages "dataManager/messages"
 	usage "dataManager/migrationManager/childUsage"
-	gossipmessages "dataManager/migrationManager/gossipMessages"
-	sender "dataManager/migrationManager/migrationSender"
 	penality "dataManager/migrationManager/penalityFunction"
+	sender "dataManager/sender"
 	shared "dataManager/shared"
 	"db"
 	log "logger"
@@ -42,13 +42,13 @@ type ErmesStrongCollectionPolicy struct {
 	partialView      *shared.CollectionPartialView               //set of local and remotes collections
 
 	dbInterface db.GenericDB
-	sender      sender.Sender
+	sender      sender.MigrationManagerSender
 
 	//used to define a penalization factor for past data -> func(bufferPos int, currentValue int)
 	penalityFunc penality.PenalityFunc
 }
 
-func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.LruConfig, collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo, sender sender.Sender, lruCache *lru.LRUCache[shared.Collection], logger log.Logger) StrongCollectionPolicy {
+func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.LruConfig, collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo, sender sender.MigrationManagerSender, lruCache *lru.LRUCache[shared.Collection], logger log.Logger) StrongCollectionPolicy {
 	policy := &ErmesStrongCollectionPolicy{
 		lruCache:         lruCache,
 		lruConfig:        lruConfig,

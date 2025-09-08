@@ -1,7 +1,7 @@
 package strongPolicy
 
 import (
-	gossip "dataManager/migrationManager/gossipMessages"
+	gossip "dataManager/messages"
 )
 
 // MigrationManagerState statePattern

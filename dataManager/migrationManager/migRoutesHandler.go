@@ -1,7 +1,7 @@
 package migrationManager
 
 import (
-	gossip "dataManager/migrationManager/gossipMessages"
+	gossip "dataManager/messages"
 	"encoding/json"
 	"io"
 	log "logger"

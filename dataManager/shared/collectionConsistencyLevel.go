@@ -16,10 +16,11 @@ type Collection interface {
 
 // StrongCollection strong collection
 type StrongCollection struct {
-	collectionId    string
-	collectionState CollectionState
-	IsLeader        bool
-	LeaderId        string
+	collectionId     string
+	collectionState  CollectionState
+	IsLeader         bool
+	LeaderId         string
+	ConsistencyClock uint
 }
 
 func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLeader bool) Collection {

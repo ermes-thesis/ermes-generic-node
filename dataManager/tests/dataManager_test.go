@@ -35,7 +35,7 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 		t.Fatal("unexpected non null collection")
 	}
 
-	mig.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{})
+	mig.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 13)
 	b, c = clDiscovererImp.IsCollectionLocallyPresent("repoId")
 	if c == nil {
 		t.Fatal("unexpected null collection")
@@ -53,14 +53,15 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 func TestIterationModule(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := CycleTestSetUp(t)
 	var loggerFile io.Writer = os.Stdout //TODO replace with file
-	var logger = logger.NewLogger(logger.WARNING, &loggerFile)
+	var logger = logger.NewLogger(logger.INFO, &loggerFile)
+	logger.SetAllowList([]string{"SENDER"}) // , "DEFAULT-STRONG-POLICY"
 
 	mig := migrationManager.GetMigrationManagerInstance(*logger)
 	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
 	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
 	clDiscovererImp.Init(collections)
 
-	//SET INITIAL STATE
+	// SET INITIAL STATE
 	fmt.Println("SET INITIAL STATE")
 	mig.NewCollectionCreated("repoId0", 3, true)
 	mig.NewCollectionCreated("repoId1", 2, false)
@@ -72,7 +73,7 @@ func TestIterationModule(t *testing.T) {
 		t.Fatal("fail in initial state")
 	}
 
-	//FIRST CYCLE
+	// FIRST CYCLE
 	fmt.Println("START FIRST CYCLE")
 	ser.On("SendGenericHTTPRequest", "2222", "/repo", mock.Anything).Return(200, nil).Once()
 	ser.On("SendGenericHTTPRequest", "1111", "/repo", mock.Anything).Return(200, nil).Once()
@@ -93,19 +94,108 @@ func TestIterationModule(t *testing.T) {
 	mig.ManageGossipMessage(leaderGossip1)
 	// gossipState
 	mig.ManageNewRequest("repoId0", "3333", true, 20)
-	child1Gossip1 := gossip.NewChildStateMessage("3333", 0.90)
+	child1Gossip1 := gossip.NewChildStateMessage("3333", 0.00)
 	mig.ManageGossipMessage(child1Gossip1)
-	child2Gossip1 := gossip.NewChildStateMessage("2222", 0.90)
+	child2Gossip1 := gossip.NewChildStateMessage("2222", 0.10)
 	mig.ManageGossipMessage(child2Gossip1)
 	// decisionState
-	mig.NewCollectionReceived("repoId3", true, false, make(map[string]string), []string{})
+	mig.NewCollectionReceived("repoId3", true, false, make(map[string]string), []string{}, 1)
 
 	// verify first cycle
 	time.Sleep(1 * time.Second)
 	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
+
 	if !lru.CheckOrder([]string{"repoId3", "repoId0", "repoId1", "repoId2"}) {
 		t.Fatal("fail in first cycle")
 	}
+
+	// SECOND CYCLE
+	fmt.Println("START SECOND CYCLE")
+	ser.On("SendGenericHTTPRequest", "2222", "/repo", mock.Anything).Return(200, nil).Once()
+	ser.On("SendGenericHTTPRequest", "3333", "/repo", mock.Anything).Return(200, nil).Times(2)
+	ser.On("SendGenericHTTPRequest", "1111", "/repo", mock.Anything).Return(200, nil).Times(2)
+	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/gossip", mock.Anything).Return(200, nil).Times(3)
+	// idle
+	mig.ManageNewRequest("repoId0", "2222", false, 10)
+	mig.ManageNewRequest("repoId0", "2222", false, 10)
+	mig.ManageNewRequest("repoId0", "3333", false, 5)
+	mig.ManageNewRequest("repoId0", "3333", false, 15)
+
+	mig.ManageNewRequest("repoId3", "3333", false, 5)
+	mig.ManageNewRequest("repoId3", "2222", false, 1)
+
+	child1Gossip1 = gossip.NewChildStateMessage("3333", 0.90)
+	mig.ManageGossipMessage(child1Gossip1)
+	// gossipState
+	leaderGossip1 = gossip.NewLeaderDelegaMessage("1111", 0.90)
+	mig.ManageGossipMessage(child1Gossip1)
+	child2Gossip1 = gossip.NewChildStateMessage("2222", 0.70)
+	mig.ManageGossipMessage(child2Gossip1)
+
+	// decisionState
+	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 4)
+	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 4)
+
+	// verify second cycle
+	time.Sleep(1 * time.Second)
+	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
+	if !lru.CheckOrder([]string{"repoId4", "repoId3", "repoId0"}) {
+		t.Fatal("fail in second cycle")
+	}
+
+	// THIRD CYCLE
+	fmt.Println("START THIRD CYCLE")
+	ser.On("SendGenericHTTPRequest", "2222", "/repo", mock.Anything).Return(200, nil).Once()
+	ser.On("SendGenericHTTPRequest", "3333", "/repo", mock.Anything).Return(200, nil).Once()
+	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/gossip", mock.Anything).Return(200, nil).Times(3)
+	// idle
+	mig.ManageNewRequest("repoId3", "2222", false, 20)
+	mig.ManageNewRequest("repoId4", "3333", true, 20)
+	child1Gossip1 = gossip.NewChildStateMessage("3333", 0.90)
+	mig.ManageGossipMessage(child1Gossip1)
+	// gossipState
+	leaderGossip1 = gossip.NewLeaderDelegaMessage("1111", 0.90)
+	mig.ManageGossipMessage(child1Gossip1)
+	child2Gossip1 = gossip.NewChildStateMessage("2222", 0.90)
+	mig.ManageGossipMessage(child2Gossip1)
+	// decisionState
+	// ---
+
+	// verify third cycle
+	time.Sleep(1 * time.Second)
+	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
+	if !lru.CheckOrder([]string{"repoId0"}) {
+		t.Fatal("fail in third cycle")
+	}
+
+	// FOURTH CYCLE
+	fmt.Println("START FOURTH CYCLE")
+	ser.On("SendGenericHTTPRequest", "1111", "/repo", mock.Anything).Return(200, nil).Once()
+	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/gossip", mock.Anything).Return(200, nil).Times(3)
+
+	// idle
+	mig.NewCollectionReceived("repoId5", true, true, make(map[string]string), []string{}, 10)
+
+	// verify fourth cycle p1
+	time.Sleep(1 * time.Second)
+	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
+	if !lru.CheckOrder([]string{"repoId5"}) {
+		t.Fatal("fail in fourth cycle")
+	}
+	ser.On("SendGenericHTTPRequest", "1111", "/repo", mock.Anything).Return(200, nil).Once()
+
+	child1Gossip1 = gossip.NewChildStateMessage("3333", 0.90)
+	mig.ManageGossipMessage(child1Gossip1)
+	// gossipState
+	leaderGossip1 = gossip.NewLeaderDelegaMessage("1111", 0.90)
+	mig.ManageGossipMessage(child1Gossip1)
+	child2Gossip1 = gossip.NewChildStateMessage("2222", 0.90)
+	mig.ManageGossipMessage(child2Gossip1)
+
+	// verify fourth cycle p2
+	time.Sleep(1 * time.Second)
+	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
+	lru.PrintLRU()
 
 	t.Cleanup(func() {
 		migrationManager.ResetSingleton()

@@ -1,6 +1,6 @@
 package dataManagerShared
 
-// collection Info
+// Collection Info
 type Collection interface {
 	CollectionId() string //duplicated?
 	IsLocal() bool
@@ -13,7 +13,8 @@ type Collection interface {
 }
 
 // consistency levels
-// strong collection
+
+// StrongCollection strong collection
 type StrongCollection struct {
 	collectionId    string
 	collectionState CollectionState
@@ -25,11 +26,13 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 	hosts := make(map[string]struct{})
 	if isRemote {
 		return &StrongCollection{
+			collectionId:    collectionId,
 			collectionState: NewRemoteCollection(hosts),
 			IsLeader:        false,
 		}
 	}
 	return &StrongCollection{
+		collectionId:    collectionId,
 		collectionState: NewLocalCollection(size, hosts),
 		IsLeader:        isLeader,
 	}
@@ -72,7 +75,7 @@ func (s *StrongCollection) HostsId() map[string]struct{} {
 	return s.collectionState.HostsId()
 }
 
-// weak collection
+// WeakCollection weak collection
 type WeakCollection struct {
 	collectionId    string
 	collectionState CollectionState
@@ -82,10 +85,12 @@ func NewWeakCollection(collectionId string, size uint64, isRemote bool) Collecti
 	hosts := make(map[string]struct{})
 	if isRemote {
 		return &WeakCollection{
+			collectionId:    collectionId,
 			collectionState: NewRemoteCollection(hosts),
 		}
 	}
 	return &WeakCollection{
+		collectionId:    collectionId,
 		collectionState: NewLocalCollection(size, hosts),
 	}
 }
@@ -113,8 +118,8 @@ func (w *WeakCollection) SetToRemote() {
 func (w *WeakCollection) CollectionId() string {
 	return w.collectionId
 }
-func (s *WeakCollection) AddHost(hostId string) {
-	s.collectionState.AddHost(hostId)
+func (w *WeakCollection) AddHost(hostId string) {
+	w.collectionState.AddHost(hostId)
 }
 func (w *WeakCollection) IsLocal() bool {
 	return w.collectionState.IsLocal()

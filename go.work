@@ -9,4 +9,5 @@ use (
 	db
 	caches
 	tokenDecoder
+	logger
 )

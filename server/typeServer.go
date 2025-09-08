@@ -61,31 +61,31 @@ func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.Gen
 
 }
 
-// Method to send a generic data transfer request. It returns both the status code of the response and the error.
-func (this *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageContent interface{}) (int, error) {
+// SendGenericHTTPRequest Method to send a generic data transfer request. It returns both the status code of the response and the error.
+func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageContent interface{}) (int, error) {
 	// Check if the node to is correctly formatted
 
-	fmt.Fprintf(this.Logger, "got a generic request %s \n", pathTo)
+	fmt.Fprintf(s.Logger, "got a generic request %s \n", pathTo)
 
 	// Check if the node is valid TODO: refactor with slices if possible
 
 	ok := false
 
-	for _, elem := range this.Serverinfo.Children {
+	for _, elem := range s.Serverinfo.Children {
 		if elem.Address == nodeTo {
 			ok = true
 		}
 	}
 
-	if this.Serverinfo.Father.Address != nodeTo && !ok {
-		fmt.Fprintf(this.Logger, "request should be sent to %s , which is not a known node. \n", nodeTo)
+	if s.Serverinfo.Father.Address != nodeTo && !ok {
+		fmt.Fprintf(s.Logger, "request should be sent to %s , which is not a known node. \n", nodeTo)
 
 		return -1, errors.New("node not in the hierarchy, cannot send request")
 	}
 
 	reqUrl := fmt.Sprintf("http://localhost:%s%s", nodeTo, pathTo)
 
-	fmt.Fprintf(this.Logger, "Sending request to node: %s \n", reqUrl)
+	fmt.Fprintf(s.Logger, "Sending request to node: %s \n", reqUrl)
 
 	jsonBody, err := json.Marshal(messageContent)
 
@@ -108,9 +108,9 @@ func (this *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, message
 	// Prepare the headers
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-ERMES-SECRET", this.Serverinfo.Father.Address)
+	req.Header.Set("X-ERMES-SECRET", s.Serverinfo.Father.Address)
 
-	fmt.Fprintf(this.Logger, "Request is ready, now sending it ...\n")
+	fmt.Fprintf(s.Logger, "Request is ready, now sending it ...\n")
 
 	res, err := http.DefaultClient.Do(req)
 

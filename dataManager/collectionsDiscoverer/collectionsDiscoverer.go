@@ -2,6 +2,7 @@ package collectionsDiscoverer
 
 import (
 	shared "dataManager/shared"
+	"fmt"
 	log "logger"
 	"sync"
 )
@@ -16,31 +17,23 @@ type CollectionsDiscovererImp struct {
 	collectionsPartialView *shared.CollectionPartialView
 }
 
-// singleton pattern
+// Singleton pattern
 var collectionsDiscovererInstance CollectionsDiscoverer
-var lock = &sync.Mutex{}
+var once sync.Once
+var initOnce sync.Once
 
 func GetCollectionsDiscovererInstance(logger log.Logger) CollectionsDiscoverer {
-	if collectionsDiscovererInstance == nil {
-		lock.Lock()
-		defer lock.Unlock()
-		if collectionsDiscovererInstance == nil {
-			logger.Println("COLLECTION-DISCOVERER", "create new collection discoverer instance", log.INFO)
-			collectionsDiscovererInstance = &CollectionsDiscovererImp{}
-		}
-	}
+	once.Do(func() {
+		fmt.Println("create singleton instance")
+		collectionsDiscovererInstance = &CollectionsDiscovererImp{}
+	})
 	return collectionsDiscovererInstance
 }
 
 func (m *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView) {
-	//sync
-	lock.Lock()
-	defer lock.Unlock()
-	//imp
-	if m.collectionsPartialView != nil { //if singleton allready inizialized
-		return
-	}
-	m.collectionsPartialView = collections
+	initOnce.Do(func() {
+		m.collectionsPartialView = collections
+	})
 }
 
 // methods
@@ -49,7 +42,7 @@ func (m *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 	m.collectionsPartialView.Mutex.Lock()
 	defer m.collectionsPartialView.Mutex.Unlock()
 	//imp
-	collection, exists := m.collectionsPartialView.KnowedCollections[collectionId]
+	collection, exists := m.collectionsPartialView.KnownCollections[collectionId]
 	if !exists {
 		return false, nil
 	}

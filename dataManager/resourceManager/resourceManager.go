@@ -6,7 +6,7 @@ import (
 
 // Interesting but brief blog: https://reintech.io/blog/introduction-to-gos-runtime-package-memory-management-performance
 
-// Function which returns the current memory allocated by the node.
+// GetRuntimeMemoryAllocated Function which returns the current memory allocated by the node.
 func GetRuntimeMemoryAllocated() uint64 {
 
 	var stats runtime.MemStats

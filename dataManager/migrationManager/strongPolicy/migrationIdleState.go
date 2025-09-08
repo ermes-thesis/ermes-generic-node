@@ -5,12 +5,13 @@ import (
 	gossipmessages "dataManager/migrationManager/gossipMessages"
 )
 
+// MigrationManagerIdleState
 // - Idle state -> in this state the Migration manager can receive collection requests; ignore gossip messages
 type MigrationManagerIdleState struct {
-	policy *DefaultStrongCollectionPolicy
+	policy *ErmesStrongCollectionPolicy
 }
 
-func (s *MigrationManagerIdleState) Setup(args ...any) {}
+func (m *MigrationManagerIdleState) Setup(args ...any) {}
 
 // methods
 func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
@@ -28,20 +29,16 @@ func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, 
 	if !exists { //first time accessing resource from a child
 		resUsage = usage.NewCircularBuffer(m.policy.currentConfig.ViewSize)
 		m.policy.equilibriumState[collectionId][childName] = resUsage
-		resUsage.Add(usage.NewChildResourceUsage())
-	}
-	if resUsage.Data[resUsage.Head] == nil {
-		resUsage.Add(usage.NewChildResourceUsage())
 	}
 
 	if isWrite { //update saved info
-		usage.ManageNewRequest(&resUsage.Data[resUsage.Head].Write, requestLatency)
+		resUsage.Head().Write.ManageNewRequest(requestLatency)
 	} else {
-		usage.ManageNewRequest(&resUsage.Data[resUsage.Head].Read, requestLatency)
+		resUsage.Head().Read.ManageNewRequest(requestLatency)
 	}
 }
 
-// if receive a gossip message during idle state directly migrate to gossip state and forward the message to that state
+// ManageGossipMessage if receive a gossip message during idle state directly migrate to gossip state and forward the message to that state
 func (m *MigrationManagerIdleState) ManageGossipMessage(msg gossipmessages.GossipMessage) {
 	m.policy.transitionToGossip()
 	m.policy.currentState.ManageGossipMessage(msg)

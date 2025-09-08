@@ -4,7 +4,7 @@ import (
 	gossip "dataManager/migrationManager/gossipMessages"
 )
 
-// statePattern
+// MigrationManagerState statePattern
 type MigrationManagerState interface {
 	//ManageNewRequestanageNewWeekRequest(string, string, int) TODO
 	ManageNewStrongRequest(string, string, bool, int)

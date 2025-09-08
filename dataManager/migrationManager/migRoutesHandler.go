@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-func (m *MigrationManagerImp) handleIncommingGossipMessages(logger log.Logger) http.Handler {
+func (m *MigrationManagerImp) handleIncomingGossipMessages(logger log.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger.Println("HTTP-REQ", "New gossip message received through HTTP request", log.INFO)
 
@@ -61,7 +61,7 @@ func (m *MigrationManagerImp) handleIncommingGossipMessages(logger log.Logger) h
 	})
 }
 
-func (m *MigrationManagerImp) handleIncommingCollection(logger log.Logger) http.Handler {
+func (m *MigrationManagerImp) handleIncomingCollection(logger log.Logger) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		logger.Println("HTTP-REQ", "New collection received through HTTP request", log.INFO)
 
@@ -82,7 +82,7 @@ func (m *MigrationManagerImp) handleIncommingCollection(logger log.Logger) http.
 		}
 
 		//TODO: capire come stimare dimensioni e come capire se strong o weak
-		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Res, collection.Groups)
+		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.CollectionSize)
 
 		w.WriteHeader(http.StatusOK)
 	})

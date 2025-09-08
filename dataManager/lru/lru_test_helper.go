@@ -30,3 +30,14 @@ func (this *LRUCache[T]) CheckOrder(keys []string) bool {
 
 	return matchIndex == len(keys)
 }
+
+func (this *LRUCache[T]) PrintLRU() {
+	this.mux.Lock()
+	defer this.mux.Unlock()
+	println("lru: ")
+	for e := this.linkedlist.Front(); e != nil; e = e.Next() {
+		node := e.Value.(lruCacheType[T])
+		println(node.key, "---", node.size)
+	}
+	println("-------")
+}

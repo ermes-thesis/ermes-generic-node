@@ -5,13 +5,14 @@ import (
 	"config"
 	"context"
 	clDiscoverer "dataManager/collectionsDiscoverer"
-	lru "dataManager/lru"
-	migrationManager "dataManager/migrationManager"
+	"dataManager/lru"
+	"dataManager/migrationManager"
 	dataManagerShared "dataManager/shared"
 	"db"
+	"errors"
 	"fmt"
 	"io"
-	logger "logger"
+	"logger"
 	"metadataManager"
 	"net"
 	"net/http"
@@ -71,19 +72,19 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	go func() {
 		fmt.Fprintf(w, "Server correctly created and listening on port %s \n", ser.Port)
 
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			fmt.Fprintf(os.Stderr, "error listening and serving: %s\n", err)
 		}
 	}()
 
 	//node set up
 	collections := &dataManagerShared.CollectionPartialView{
-		KnowedCollections: make(map[string]dataManagerShared.Collection),
+		KnownCollections: make(map[string]dataManagerShared.Collection),
 	}
-	migrationManagerIstance := migrationManager.GetMigrationManagerInstance(*log)
-	migrationManagerIstance.Init(collections, myPenalityFunc, cfg.MigrationManager, cfg.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *log)
-	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance(*log)
-	clDiscovererIstance.Init(collections)
+	migrationManagerInstance := migrationManager.GetMigrationManagerInstance(*log)
+	migrationManagerInstance.Init(collections, myPenalityFunc, cfg.MigrationManager, cfg.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *log)
+	clDiscovererInstance := clDiscoverer.GetCollectionsDiscovererInstance(*log)
+	clDiscovererInstance.Init(collections)
 
 	// TODO: understand these lines of code
 	// I think it should be some synchronization method when the server shuts down

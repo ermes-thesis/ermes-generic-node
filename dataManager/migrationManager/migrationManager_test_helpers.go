@@ -6,10 +6,13 @@ package migrationManager
 import (
 	lru "dataManager/lru"
 	shared "dataManager/shared"
+	"sync"
 )
 
 func ResetSingleton() {
-	migrationManagareInstance = nil
+	migrationManagerInstance = nil
+	once = sync.Once{}
+	initOnce = sync.Once{}
 }
 
 func (m *MigrationManagerImp) GetLru() *lru.LRUCache[shared.Collection] {

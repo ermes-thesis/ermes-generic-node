@@ -16,8 +16,8 @@
 !docker-compose.yml
 !go.work*
 
-#Include config file
-!config/config.yaml
+#Include config examples
+!exampleConfigs/**
 
 !.github/**
 

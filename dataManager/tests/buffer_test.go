@@ -4,40 +4,28 @@
 package tests
 
 import (
-	migrationManager "dataManager/migrationManager"
+	usage "dataManager/migrationManager/childUsage"
 	"testing"
 )
 
 func TestBuffer(t *testing.T) {
-	b := migrationManager.NewCircularBuffer(3)
-	c := migrationManager.NewChildResourceUsage()
-	b.Add(c)
-	b.Movehead()
-	d := migrationManager.NewChildResourceUsage()
-	b.Add(d)
-	b.Movehead()
-	b.Add(migrationManager.NewChildResourceUsage())
-	b.Movehead()
+	b := usage.NewCircularBuffer(3)
+	b.MoveHead()
+	b.MoveHead()
+	b.MoveHead()
 
-	if b.Data[b.Head] != c || b.Head != 0 {
-		t.Fatal("head on wrong el 1")
+	if b.HeadCursor() != 0 {
+		t.Fatal("head on wrong el - 1")
 	}
 
-	e := migrationManager.NewChildResourceUsage()
-	b.Add(e)
-	b.Movehead()
-	if b.Data[b.Head] != d {
-		t.Fatal("head on wrong el 2.0")
-	}
-	if b.Head == 0 {
-		t.Fatal("head on wrong el 2.2")
+	b.MoveHead()
+	if b.HeadCursor() == 0 {
+		t.Fatal("head on wrong el - 2.2")
 	}
 
-	b.Add(migrationManager.NewChildResourceUsage())
-	b.Movehead()
-	b.Add(migrationManager.NewChildResourceUsage())
-	b.Movehead()
-	if b.Data[b.Head] != e || b.Head != 0 {
+	b.MoveHead()
+	b.MoveHead()
+	if b.HeadCursor() != 0 {
 		t.Fatal("head on wrong el  3")
 	}
 }

@@ -71,7 +71,7 @@ func HandleRouteAskClientExists(logger *io.Writer, serverinfo *info.ServerInfo, 
 
 		// If the client has a father contact him with the same request.
 
-		reqUrl := fmt.Sprintf("http://localhost:%s/pvt-ask-client-exists", fathername)
+		reqUrl := fmt.Sprintf("http://localhost:%s/pvt-ask-client-exists", fathername.Address)
 
 		fmt.Fprintf(*logger, "Sending a request to the father, located at %s \n", reqUrl)
 

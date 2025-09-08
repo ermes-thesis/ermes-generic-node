@@ -4,14 +4,16 @@ import (
 	"config"
 	"context"
 	clDiscoverer "dataManager/collectionsDiscoverer"
-	migrationManager "dataManager/migrationManager"
+	"dataManager/lru"
+	"dataManager/migrationManager"
 	dataManagerShared "dataManager/shared"
 	"db"
+	"errors"
 	"fmt"
 	"io"
+	"logger"
 	"metadataManager"
 	"net"
-
 	"net/http"
 	"os"
 	"os/signal"
@@ -26,22 +28,17 @@ func myPenalityFunc(bufferPos int, currentValue int) int {
 	return currentValue
 }
 
-func run(ctx context.Context, w io.Writer, args []string) error {
-	config := config.LoadConfig("../config/config.yaml")
+func run(ctx context.Context, w io.Writer, configPath string) error {
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.INFO, &loggerFile)
+
+	config := config.LoadConfig(configPath)
+	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](config.Lru.Size) //TODO: replace with redis size
 
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	//node set up
-	collections := &dataManagerShared.CollectionPartialView{
-		KnowedCollections: make(map[string]dataManagerShared.Collection),
-	}
-	migrationManagerIstance := migrationManager.GetMigrationManagerInstance()
-	migrationManagerIstance.Init(collections, myPenalityFunc, config.MigrationManager)
-	clDiscovererIstance := clDiscoverer.GetCollectionsDiscovererInstance()
-	clDiscovererIstance.Init(collections)
-
-	serverInfo, err := info.NewServerInfo(args)
+	serverInfo, err := info.NewServerInfo(config)
 	if err != nil {
 		return fmt.Errorf("error creating server info: %w", err)
 	}
@@ -64,10 +61,19 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 	go func() {
 		fmt.Fprintf(w, "Server correctly created and listening on port %s \n", ser.Port)
 
-		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			fmt.Fprintf(os.Stderr, "error listening and serving: %s\n", err)
 		}
 	}()
+
+	//node set up
+	collections := &dataManagerShared.CollectionPartialView{
+		KnownCollections: make(map[string]dataManagerShared.Collection),
+	}
+	migrationManagerInstance := migrationManager.GetMigrationManagerInstance(*logger)
+	migrationManagerInstance.Init(collections, myPenalityFunc, config.MigrationManager, config.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *logger)
+	clDiscovererInstance := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
+	clDiscovererInstance.Init(collections)
 
 	// TODO: understand these lines of code
 	// I think it should be some synchronization method when the server shuts down
@@ -92,10 +98,14 @@ func run(ctx context.Context, w io.Writer, args []string) error {
 }
 
 func main() {
+	if len(os.Args) < 2 {
+		fmt.Fprintf(os.Stderr, "No path specified for config file as argument, node cannot start.\n")
+		os.Exit(0)
+	}
 
 	ctx := context.Background()
 
-	if err := run(ctx, os.Stdout, os.Args); err != nil {
+	if err := run(ctx, os.Stdout, os.Args[1]); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 		os.Exit(1)
 	}

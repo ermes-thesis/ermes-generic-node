@@ -3,45 +3,37 @@ package collectionsDiscoverer
 import (
 	shared "dataManager/shared"
 	"fmt"
+	log "logger"
 	"sync"
 )
 
 type CollectionsDiscoverer interface {
 	IsCollectionLocallyPresent(collectionId string) (bool, shared.Collection)
+	Init(*shared.CollectionPartialView)
 }
 
 type CollectionsDiscovererImp struct {
-	//sync
-
 	//data
 	collectionsPartialView *shared.CollectionPartialView
 }
 
-// singleton pattern
-var collectionsDiscovererInstance *CollectionsDiscovererImp
-var lock = &sync.Mutex{}
+// Singleton pattern
+var collectionsDiscovererInstance CollectionsDiscoverer
+var once sync.Once
+var initOnce sync.Once
 
-func GetCollectionsDiscovererInstance() *CollectionsDiscovererImp {
-	if collectionsDiscovererInstance == nil {
-		lock.Lock()
-		defer lock.Unlock()
-		if collectionsDiscovererInstance == nil {
-			fmt.Println("Creating single instance now.")
-			collectionsDiscovererInstance = &CollectionsDiscovererImp{}
-		}
-	}
+func GetCollectionsDiscovererInstance(logger log.Logger) CollectionsDiscoverer {
+	once.Do(func() {
+		fmt.Println("create singleton instance")
+		collectionsDiscovererInstance = &CollectionsDiscovererImp{}
+	})
 	return collectionsDiscovererInstance
 }
 
 func (m *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView) {
-	//sync
-	lock.Lock()
-	defer lock.Unlock()
-	//imp
-	if m.collectionsPartialView != nil { //if singleton allready inizialized
-		return
-	}
-	m.collectionsPartialView = collections
+	initOnce.Do(func() {
+		m.collectionsPartialView = collections
+	})
 }
 
 // methods
@@ -50,7 +42,7 @@ func (m *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 	m.collectionsPartialView.Mutex.Lock()
 	defer m.collectionsPartialView.Mutex.Unlock()
 	//imp
-	collection, exists := m.collectionsPartialView.KnowedCollections[collectionId]
+	collection, exists := m.collectionsPartialView.KnownCollections[collectionId]
 	if !exists {
 		return false, nil
 	}

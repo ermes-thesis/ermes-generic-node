@@ -130,3 +130,53 @@ func TestLRUCachePutLotOfElementsUint(t *testing.T) {
 		t.Errorf("Did not get an error while trying to insert a new element in a full cache.")
 	}
 }
+
+func TestLRUCacheRemoveElementUint(t *testing.T) {
+
+	var total_size uint = 5
+
+	var elem_size uint = 1
+
+	cache := LRUCacheConstructor[uint](total_size)
+
+	// Fill the cache
+	for i := uint(0); i < total_size/elem_size; i++ {
+		cache.Put("ciao"+fmt.Sprint(i), i, elem_size)
+	}
+
+	// Now try to remove one non existing item
+
+	err1 := cache.Remove("sium")
+
+	if err1 == nil {
+		t.Errorf("Did not get an error while trying to remove a non existing element in the cache.")
+	}
+
+	// Now remove all the elements one by one and check them
+
+	for i := uint(0); i < total_size/elem_size; i++ {
+
+		keyName := fmt.Sprintf("ciao%d", i)
+
+		err2 := cache.Remove(keyName)
+
+		if err2 != nil {
+			t.Errorf("Got an error while removing the element %s: %s", keyName, err2)
+		}
+
+		// Check that at each step the size is correct
+
+		if cache.GetCurrentSize() != cache.GetTotalSize()-(i+1) {
+			t.Errorf("Mismatch in the expected size of the cache after a remove: expected (total- #elemsremoved): %d vs returned: %d ", cache.GetTotalSize()-(i+1), cache.GetCurrentSize())
+		}
+	}
+
+	// Try to remove from an empty list
+
+	err3 := cache.Remove("ciao0")
+
+	if err3 == nil {
+		t.Errorf("Got no error when removing from an empty cache")
+	}
+
+}

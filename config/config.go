@@ -9,14 +9,24 @@ import (
 
 // config data structures
 type Config struct {
+	Node             NodeConfig             `yaml:"node"`
+	Hierarchy        HierarchyConfig        `yaml:"hierarchy"`
 	MigrationManager MigrationManagerConfig `yaml:"migrationManager"`
 	Redis            RedisConfig            `yaml:"redis"`
+	Lru              LruConfig              `yaml:"lru"`
 }
 
 type MigrationManagerConfig struct {
-	LeaderThreshold   int `yaml:"leaderThreshold"`
-	FollowerThreshold int `yaml:"followerThreshold"`
-	ViewSize          int `yaml:"viewSize"`
+	LeaderThreshold   int     `yaml:"leaderThreshold"`
+	FollowerThreshold int     `yaml:"followerThreshold"`
+	ViewSize          int     `yaml:"viewSize"`
+	IdleTimeoutMs     int     `yaml:"idleTimeoutMs"`
+	GravityConstant   float64 `yaml:"gravityConstant"`
+}
+
+type LruConfig struct {
+	Size      uint    `yaml:"size"`
+	SafeLevel float32 `yaml:"safeLevel"`
 }
 
 type RedisConfig struct {
@@ -25,6 +35,42 @@ type RedisConfig struct {
 	Password string `yaml:"password"`
 	DB       int    `yaml:"db"`
 	Protocol int    `yaml:"protocol"`
+}
+
+type NodeConfig struct {
+	Name   string `yaml:"name"`
+	Domain string `yaml:"domain"`
+	Port   string `yaml:"port"`
+	Secret string `yaml:"secret"`
+}
+
+// The father should look something like:
+//
+//	father:
+//		fatherName
+//		fatherDomain
+//		fatherLatency
+//
+// Children will be:
+//
+//	children:
+//		child1Name
+//		child1Domain
+//		child1Latency
+//		child2Name
+//		child2Domain
+//		child2Latency
+//		...
+//
+// In case of no children or no father:
+//
+// children:
+//
+//	nil
+type HierarchyConfig struct {
+	Father   []string `yaml:"father"`
+	Cloud    []string `yaml:"cloud"`
+	Children []string `yaml:"children"`
 }
 
 func LoadConfig(filename string) Config {

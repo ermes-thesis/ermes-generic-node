@@ -3,11 +3,11 @@ package lru
 import (
 	"container/list"
 	"errors"
+	"sync"
 )
 
 // We need to create a generic LRU cache.
 // We will hold an object of the type and the size of the element.
-
 type lruCacheType[T any] struct {
 	key  string
 	obj  T
@@ -16,17 +16,16 @@ type lruCacheType[T any] struct {
 
 // We just need to decide what is the key type. For the moment a string should be fine ? Another possibility is to be more generic and use comparable ?
 
-// TODO: there already exists a double linked list type.
-
-// TODO: make this atomic
-
+// This data structure is atomic.
 type LRUCache[T any] struct {
 	current    uint
 	capacity   uint
 	cache      map[string]*list.Element
 	linkedlist *list.List
+	mux        sync.Mutex
 }
 
+// Method to construct a generic LRU cache with given capacity and element type T.
 func LRUCacheConstructor[T any](capacity uint) LRUCache[T] {
 
 	return LRUCache[T]{
@@ -34,11 +33,16 @@ func LRUCacheConstructor[T any](capacity uint) LRUCache[T] {
 		capacity:   capacity,
 		cache:      make(map[string]*list.Element),
 		linkedlist: list.New(),
+		mux:        sync.Mutex{},
 	}
 }
 
-// Return the value of the key if the key exists, otherwise return an error.
+// Return the value of the key if the key exists, otherwise return an error. This operation is atomic
 func (this *LRUCache[T]) Get(key string) (T, error) {
+
+	this.mux.Lock()
+
+	defer this.mux.Unlock()
 
 	get := this.cache[key]
 
@@ -68,7 +72,12 @@ func (this *LRUCache[T]) Get(key string) (T, error) {
 
 // Update the value of the key if the key exists. Otherwise, add the key-value pair to the cache.
 // If the number of keys exceeds the capacity from this operation, return an error (TODO: decide)
+// This operation is thread safe.
 func (this *LRUCache[T]) Put(key string, value T, size uint) error {
+
+	this.mux.Lock()
+
+	defer this.mux.Unlock()
 
 	get := this.cache[key]
 
@@ -110,13 +119,21 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 
 // Utility function in order to obtain capacity-current>=sizeGoal.
 // This function returns a list of removed items
-func (this *LRUCache[T]) freeToAchieveSize(sizeGoal uint) *list.List {
+func (this *LRUCache[T]) FreeToAchieveSize(sizeGoal uint) *list.List {
+
+	this.mux.Lock()
+
+	defer this.mux.Unlock()
 
 	returnList := list.New()
 
 	// Start removing elements from the back until the condition is satisfied
-	for this.capacity-this.current < sizeGoal {
-
+	for this.capacity-this.current <= sizeGoal {
+		backElement := this.linkedlist.Back()
+		if backElement == nil {
+			// Lista vuota, non possiamo liberare più spazio
+			break
+		}
 		// Pop the last element
 
 		// Convert the last element to an object
@@ -139,11 +156,46 @@ func (this *LRUCache[T]) freeToAchieveSize(sizeGoal uint) *list.List {
 		delete(this.cache, converted.key)
 
 		// Update the capacity
-		this.current += converted.size
+		this.current -= converted.size
 
 	}
 
 	return returnList
+}
+
+// Function to remove a value given its key.
+// This operation is thread safe and O(1)
+func (this *LRUCache[T]) Remove(key string) error {
+
+	this.mux.Lock()
+
+	defer this.mux.Unlock()
+
+	get := this.cache[key]
+
+	if get == nil {
+		return errors.New("Trying to remove a non existing key")
+	}
+
+	// The returned element will be garbage collected (brrrr)
+	this.linkedlist.Remove(get)
+
+	// Delete the element from the map
+
+	delete(this.cache, key)
+
+	// Update the size
+
+	converted, ok := get.Value.(lruCacheType[T])
+
+	// Should never arrive here
+	if !ok {
+		return errors.New("Unknown error when converting element to type 'lruCacheType[T]'")
+	}
+
+	this.current -= converted.size
+
+	return nil
 }
 
 func (this *LRUCache[T]) GetCurrentSize() uint {
@@ -159,23 +211,20 @@ func (this *LRUCache[T]) GetAvailableSize() uint {
 }
 
 // Potentially useful for debug, but tricky to manage with generics
+// func (this *LRUCach (TODO: decide)e) PrintLRU() {
 
-// func (this *LRUCache) PrintLRU() {
-
-// 	fmt.Println("LRU:")
-// 	fmt.Println("head: %d", this.head.key)
+//  	fmt.Println("LRU:")
+//  	fmt.Println("head: %d", this.head.key)
 // 	fmt.Println("tail: %d", this.tail.key)
 
-// 	fmt.Println("Forwards:")
+//  	fmt.Println("Forwards:")
+//  	for i := this.head; i != nil; i = i.next {
+//  		fmt.Println("%d", i.key)
+//  	}
 
-// 	for i := this.head; i != nil; i = i.next {
-// 		fmt.Println("%d", i.key)
+//  	fmt.Println("Backwards:")
+
+//  	for i := this.tail; i != nil; i = i.prev {
+//  		fmt.Println("%d", i.key)
 // 	}
-
-// 	fmt.Println("Backwards:")
-
-// 	for i := this.tail; i != nil; i = i.prev {
-// 		fmt.Println("%d", i.key)
-// 	}
-
-//	}
+// }

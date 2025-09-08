@@ -44,7 +44,7 @@ func (p *QueryPropagatorImpl) Propagate(queryParams string, groupToken string, g
 		fmt.Fprintf(*p.logger, "No cloud node configured, forwarding to parent node.\n")
 		receiver = p.serverInfo.Father.Address
 	} else {
-		fmt.Fprintf(*p.logger, "Using cloud node %s for the request.\n", p.serverInfo.CloudNode)
+		fmt.Fprintf(*p.logger, "Using cloud node %s for the request.\n", p.serverInfo.CloudNode.Address)
 		receiver = p.serverInfo.CloudNode.Address
 	}
 

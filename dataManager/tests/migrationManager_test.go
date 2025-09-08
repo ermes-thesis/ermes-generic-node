@@ -4,9 +4,13 @@
 package tests
 
 import (
-	"config"
 	migrationManager "dataManager/migrationManager"
-	shared "dataManager/shared"
+	gossip "dataManager/migrationManager/gossipMessages"
+	penality "dataManager/migrationManager/penalityFunction"
+	policy "dataManager/migrationManager/strongPolicy"
+	"io"
+	logger "logger"
+	"os"
 	"testing"
 )
 
@@ -15,16 +19,14 @@ func myT1PenalityFunc(bufferPos int, currentValue int) int {
 }
 
 func TestSingletonInstance(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
+	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
-	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
-	}
-
-	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, config.MigrationManager)
-	instance2 := migrationManager.GetMigrationManagerInstance()
-	instance2.Init(collections, myT1PenalityFunc, config.MigrationManager)
+	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
+	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
+	instance2 := migrationManager.GetMigrationManagerInstance(*logger)
+	instance2.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
 
 	if instance1 == nil {
 		t.Fatal("Expected non-nil instance from GetMigrationManagerIstance")
@@ -40,48 +42,47 @@ func TestSingletonInstance(t *testing.T) {
 }
 
 func TestManageNewStrongRequest(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
-	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
+	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
+
+	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
+	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
+	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string, 13), []string{}, 13)
+	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string, 14), []string{}, 14)
+
+	instance1.ManageNewRequest("repoId", "childName", true, 10)
+
+	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()["repoId"]["childName"] == nil {
+		t.Fatal("Expected non-nil entry - 1")
 	}
 
-	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, config.MigrationManager)
-	instance1.NewCollectionReceived("repoId", 10, true)
-	instance1.NewCollectionReceived("repoId1", 10, true)
+	instance1.ManageNewRequest("repoId", "childName", true, 3)
+	instance1.ManageNewRequest("repoId", "childName", false, 3)
+	instance1.ManageNewRequest("repoId", "childName1", false, 7)
+	instance1.ManageNewRequest("repoId1", "childName1", true, 7)
 
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
-
-	if instance1.GetUnstableEquilibriumState()["repoId"]["childName"] == nil {
-		t.Fatal("Expected non-nil entry")
+	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()["repoId"]["childName1"] == nil {
+		t.Fatal("Expected non-nil entry - 2")
 	}
-
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
-	instance1.ManageNewStrongRequest("repoId", "childName", false, 3)
-	instance1.ManageNewStrongRequest("repoId", "childName1", false, 7)
-	instance1.ManageNewStrongRequest("repoId1", "childName1", true, 7)
-
-	if instance1.GetUnstableEquilibriumState()["repoId"]["childName1"] == nil {
-		t.Fatal("Expected non-nil entry")
+	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()["repoId1"]["childName1"] == nil {
+		t.Fatal("Expected non-nil entry - 3")
 	}
-	if instance1.GetUnstableEquilibriumState()["repoId1"]["childName1"] == nil {
-		t.Fatal("Expected non-nil entry")
-	}
-	if instance1.GetUnstableEquilibriumState()["repoId1"]["childName"] != nil {
+	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()["repoId1"]["childName"] != nil {
 		t.Fatal("Expected nil entry")
 	}
 
-	var equilibrium = instance1.GetUnstableEquilibriumState()
-	if equilibrium["repoId"]["childName"].Data[0].GetWrite().CumulativeLatency != 13 ||
-		equilibrium["repoId"]["childName"].Data[0].GetRead().CumulativeLatency != 3 ||
-		equilibrium["repoId"]["childName1"].Data[0].GetWrite().CumulativeLatency != 0 ||
-		equilibrium["repoId"]["childName1"].Data[0].GetRead().CumulativeLatency != 7 ||
-		equilibrium["repoId1"]["childName1"].Data[0].GetWrite().CumulativeLatency != 7 ||
-		equilibrium["repoId1"]["childName1"].Data[0].GetRead().CumulativeLatency != 0 {
+	var equilibrium = instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()
+	if equilibrium["repoId"]["childName"].Head().Write.CumulativeLatency != 13 ||
+		equilibrium["repoId"]["childName"].Head().Read.CumulativeLatency != 3 ||
+		equilibrium["repoId"]["childName1"].Head().Write.CumulativeLatency != 0 ||
+		equilibrium["repoId"]["childName1"].Head().Read.CumulativeLatency != 7 ||
+		equilibrium["repoId1"]["childName1"].Head().Write.CumulativeLatency != 7 ||
+		equilibrium["repoId1"]["childName1"].Head().Read.CumulativeLatency != 0 {
 		t.Error("wrong latency values")
 	}
 
-	if collections.KnowedCollections["repoId"] == nil || collections.KnowedCollections["repoId1"] == nil {
+	if collections.KnownCollections["repoId"] == nil || collections.KnownCollections["repoId1"] == nil {
 		t.Fatal("collection not initialized")
 	}
 
@@ -91,26 +92,25 @@ func TestManageNewStrongRequest(t *testing.T) {
 }
 
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
-	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
-	}
+	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
-	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, config.MigrationManager)
-	instance1.NewCollectionReceived("repoId", 10, true)
-	instance1.NewCollectionReceived("repoId1", 10, true)
+	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
+	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
+	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 12)
+	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string), []string{}, 13)
 
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
-	instance1.ManageNewStrongRequest("repoId", "childName", false, 3)
+	instance1.ManageNewRequest("repoId", "childName", true, 10)
+	instance1.ManageNewRequest("repoId", "childName", true, 3)
+	instance1.ManageNewRequest("repoId", "childName", false, 3)
 
-	var equilibrium = instance1.GetUnstableEquilibriumState()
+	var equilibrium = instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()
 
-	if migrationManager.GetElasticForce(equilibrium["repoId"]["childName"].Data[0].GetWrite()) != 26 {
+	if equilibrium["repoId"]["childName"].Head().Write.GetElasticForce() != 26 {
 		t.Error("wrong write force")
 	}
-	if migrationManager.GetElasticForce(equilibrium["repoId"]["childName"].Data[0].GetRead()) != 3 {
+	if equilibrium["repoId"]["childName"].Head().Read.GetElasticForce() != 3 {
 		t.Error("wrong read force")
 	}
 
@@ -120,30 +120,29 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 }
 
 func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
-	config := config.LoadConfig("../../config/config.yaml")
-	collections := &shared.CollectionPartialView{
-		KnowedCollections: make(map[string]shared.Collection),
-	}
+	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
-	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, myT1PenalityFunc, config.MigrationManager)
-	instance1.NewCollectionReceived("repoId", 10, true)
-	instance1.NewCollectionReceived("repoId1", 10, true)
+	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
+	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
+	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 13)
+	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string), []string{}, 14)
 
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 10)
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 3)
-	instance1.ManageNewStrongRequest("repoId", "childName", false, 7)
+	instance1.ManageNewRequest("repoId", "childName", true, 10)
+	instance1.ManageNewRequest("repoId", "childName", true, 3)
+	instance1.ManageNewRequest("repoId", "childName", false, 7)
 
-	migrationManager.GetBuffer("repoId", "childName").Movehead() //skip to next window
+	instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName").MoveHead() //skip to next window
 
-	instance1.ManageNewStrongRequest("repoId", "childName", true, 14)
-	instance1.ManageNewStrongRequest("repoId", "childName", false, 9)
+	instance1.ManageNewRequest("repoId", "childName", true, 14)
+	instance1.ManageNewRequest("repoId", "childName", false, 9)
 	//fmt.Println(migrationManager.GetBuffer("repoId", "childName"))
 
-	instance1.SetState(instance1.GetDecisionState())
-	if decisionImpl, ok := instance1.GetDecisionState().(*migrationManager.MigrationManagerDecisionState); ok {
-		feR := decisionImpl.ComputeReadElasticForce(migrationManager.GetBuffer("repoId", "childName"))
-		feW := decisionImpl.ComputeWriteElasticForce(migrationManager.GetBuffer("repoId", "childName"))
+	instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).SetState(instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetDecisionState())
+	if decisionImpl, ok := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetDecisionState().(*policy.MigrationManagerDecisionState); ok {
+		feR := decisionImpl.ComputeReadElasticForce(instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName"))
+		feW := decisionImpl.ComputeWriteElasticForce(instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName"))
 		if feW != 39 {
 			t.Error("wrong write elastic force")
 		}
@@ -153,4 +152,40 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 	} else {
 		t.Fatal("wrong state type")
 	}
+
+	t.Cleanup(func() {
+		migrationManager.ResetSingleton()
+	})
+}
+
+func TestMigrationFromIdleToGossipAfterReceiveAMessage(t *testing.T) {
+	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
+	var loggerFile io.Writer = os.Stdout //TODO replace with file
+	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
+
+	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
+	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
+
+	msg := gossip.NewChildStateMessage("senderId", 0.0)
+
+	_, isIdle := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetCurrentState().(*policy.MigrationManagerIdleState)
+	print(isIdle)
+
+	instance1.ManageGossipMessage(msg)
+
+	if _, isIdle := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetCurrentState().(*policy.MigrationManagerIdleState); isIdle {
+		t.Error("unexpected idle state")
+	}
+
+	if _, isDecision := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetCurrentState().(*policy.MigrationManagerDecisionState); isDecision {
+		t.Error("unexpected decision state")
+	}
+
+	if _, isGossip := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetCurrentState().(*policy.MigrationManagerGossipState); !isGossip {
+		t.Error("must be in gossip state")
+	}
+
+	t.Cleanup(func() {
+		migrationManager.ResetSingleton()
+	})
 }

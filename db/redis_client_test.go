@@ -3,11 +3,13 @@ package db
 import (
 	"config"
 	"context"
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 	"metadataManager/utils"
 	"net/url"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -20,6 +22,12 @@ func TestRecord(t *testing.T) {
 	exists, err := redisClient.RecordExists("collection1", "record1")
 	require.NoError(t, err, "Expected no error checking record existence")
 	require.False(t, exists, "Expected record to not exist initially")
+
+	err = redisClient.SetRecord("collection1", "record1", "value1")
+	require.EqualError(t, err, "collection does not exist")
+
+	err = redisClient.SetCollection("collection1", nil, nil)
+	require.NoError(t, err, "Expected no error setting collection")
 
 	err = redisClient.SetRecord("collection1", "record1", "value1")
 	require.NoError(t, err, "Expected no error setting record")
@@ -51,6 +59,19 @@ func TestRecord(t *testing.T) {
 	exists, err = redisClient.RecordExists("collection1", "record2")
 	require.NoError(t, err, "Expected no error checking record existence after deletion")
 	require.True(t, exists, "Expected record to not exist after deletion")
+
+	err = redisClient.SetRecords("collection1", []string{"record10", "record11", "record12", "record13"}, []string{"value10", "value11", "value12"})
+	require.Error(t, err, "Expected no error setting record")
+
+	err = redisClient.SetRecords("collection1", []string{"record10", "record11", "record12", "record13"}, []string{"value10", "value11", "value12", "value13"})
+	require.NoError(t, err, "Expected no error setting record")
+	values2, err := redisClient.GetRecords("collection1", "record10", "record11", "record12", "record13")
+	require.NoError(t, err, "Expected no error getting multiple records")
+	require.Len(t, values2, 4, "Expected two records to be returned")
+	require.Equal(t, "value10", values2[0], "Expected first record value to be 'value10'")
+	require.Equal(t, "value11", values2[1], "Expected second record value to be 'value11'")
+	require.Equal(t, "value12", values2[2], "Expected third record value to be 'value12'")
+	require.Equal(t, "value13", values2[3], "Expected fourth record value to be 'value13'")
 }
 
 func TestCollection(t *testing.T) {
@@ -188,6 +209,126 @@ func TestIndex(t *testing.T) {
 
 	err = redisClient.DropIndex()
 	require.NoError(t, err, "Expected no error dropping index")
+}
+
+func TestMemStats(t *testing.T) {
+	redisClient, shutdownFunc1 := startRedisContainer(t)
+	defer shutdownFunc1()
+	defer redisClient.Close()
+
+	collectionId := "collection1"
+	groups := []string{"group1", "group2"}
+
+	err := redisClient.SetMetadata(collectionId, Metadata{
+		Owner:          "owner1",
+		Name:           "name1",
+		Groups:         groups,
+		CreatedAt:      time.Now().Truncate(time.Millisecond),
+		Geolocation:    "IT",
+		Consistency:    EVENTUAL_CONSISTENT,
+		CustomMetadata: map[string]string{},
+	})
+	require.NoError(t, err, "Expected no error setting metadata")
+
+	err = redisClient.SetCollection(collectionId, map[string]string{
+		"record1":  "value1",
+		"record2":  "value2",
+		"record3":  "value3",
+		"record4":  "value4",
+		"record5":  "value5",
+		"record6":  "value6",
+		"record7":  "value7",
+		"record8":  "value8",
+		"record9":  "value9",
+		"record10": "value10",
+	}, groups)
+	require.NoError(t, err, "Expected no error setting collection metadata")
+
+	memStats1, err := redisClient.GetMemoryStats()
+	require.NoError(t, err, "Expected no error getting memory stats")
+
+	require.Equal(t, memStats1.KeysCount, uint64(11+3))
+	require.LessOrEqual(t, memStats1.CurrentUsedMemory, memStats1.UsedMemoryPeak)
+	require.Equal(t, memStats1.BytesKeysRatio, memStats1.UsedMemoryDataset/memStats1.KeysCount)
+	require.Equal(t, memStats1.LuaScriptsCacheSize, uint64(0))
+	require.Equal(t, memStats1.ReplicationBacklogSize, uint64(0))
+	require.Greater(t, memStats1.UsedMemoryOverhead, uint64(0))
+	require.Greater(t, memStats1.UsedMemoryStartup, uint64(0))
+
+	collectionId2 := "collection2"
+	err = redisClient.SetCollection(collectionId2, map[string]string{
+		"record11": "value11",
+		"record12": "value12",
+		"record13": "value13",
+		"record14": "value14",
+		"record15": "value15",
+	}, groups)
+	require.NoError(t, err, "Expected no error setting collection metadata")
+
+	memStats2, err := redisClient.GetMemoryStats()
+	require.NoError(t, err, "Expected no error getting memory stats")
+
+	// 15 "Normal record" + 1 metadata record + 3 special records for each collection (that are 2)
+	require.Equal(t, memStats2.KeysCount, uint64(16+3*2))
+	require.LessOrEqual(t, memStats2.CurrentUsedMemory, memStats2.UsedMemoryPeak)
+	require.Equal(t, memStats2.BytesKeysRatio, memStats2.UsedMemoryDataset/memStats2.KeysCount)
+	require.Equal(t, memStats2.LuaScriptsCacheSize, uint64(0))
+	require.Equal(t, memStats2.ReplicationBacklogSize, uint64(0))
+	require.Greater(t, memStats2.UsedMemoryOverhead, uint64(0))
+	require.Greater(t, memStats2.UsedMemoryStartup, uint64(0))
+
+	require.Greater(t, memStats2.UsedMemoryOverhead, memStats1.UsedMemoryOverhead)
+	require.Equal(t, memStats2.UsedMemoryStartup, memStats1.UsedMemoryStartup)
+	require.Greater(t, memStats2.UsedMemoryDataset, memStats1.UsedMemoryDataset)
+	require.Greater(t, memStats2.KeysCount, memStats1.KeysCount)
+
+	collSize, err := redisClient.GetCollectionMemoryUsage(collectionId)
+	require.NoError(t, err, "Expected no error getting collection memory usage")
+	require.Greater(t, collSize, uint64(0), "Expected collection memory usage to not be zero")
+
+	err = redisClient.SetRecord(collectionId, "recordTest", "valueTest")
+	require.NoError(t, err, "Expected no error setting record")
+
+	collSize2, err := redisClient.GetCollectionMemoryUsage(collectionId)
+	require.NoError(t, err, "Expected no error getting collection memory usage")
+	require.Greater(t, collSize2, collSize, "Expected collection memory usage to not be zero")
+
+	recordSize, err := redisClient.GetRecordMemoryUsage(collectionId, "recordTest")
+	require.NoError(t, err, "Expected no error getting record")
+	require.Greater(t, recordSize, uint64(0), "Expected recordMemoryUsage to not be zero")
+
+	err = redisClient.SetRecord(collectionId, "recordTest", "Record with higher value size")
+	require.NoError(t, err, "Expected no error setting record")
+
+	recordSize2, err := redisClient.GetRecordMemoryUsage(collectionId, "recordTest")
+	require.NoError(t, err, "Expected no error getting record")
+	require.Greater(t, recordSize2, recordSize, "Expected recordMemoryUsage to not be zero")
+}
+
+func TestMemoryStress(t *testing.T) {
+	redisClient, shutdownFunc1 := startRedisContainer(t)
+	defer shutdownFunc1()
+	defer redisClient.Close()
+
+	err := redisClient.SetCollection("collection1", nil, nil)
+	fmt.Println("Starting...")
+	for i := 5; i < 1000; i++ {
+		names := make([]string, 1000)
+		val := make([]string, 1000)
+		for j := 0; j < 1000; j++ {
+			names[j] = "record" + strconv.Itoa(j) + strconv.Itoa(i)
+			val[j] = "valuevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevalue" + strconv.Itoa(i)
+		}
+		err := redisClient.SetRecords("collection1", names, val)
+		require.NoError(t, err, "Expected no error setting record")
+		if i%10 == 0 {
+			fmt.Println("10.000 done, still going!!")
+		}
+	}
+
+	res, err := redisClient.GetMemoryStats()
+	require.NoError(t, err, "Expected no error getting memory stats")
+	fmt.Printf("RES: %+v\n", res)
 }
 
 func startRedisContainer(t *testing.T) (GenericDB, func()) {

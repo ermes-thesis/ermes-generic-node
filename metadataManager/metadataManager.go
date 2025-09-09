@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"metadataManager/utils"
 	"os"
 	"server/info"
 	"slices"
@@ -17,8 +18,8 @@ import (
 type QueryTemplatesParamsMapping[T any] map[string]map[string]T
 
 type MetadataManager interface {
-	CreateMetadata(collectionId string, metadata db.Metadata, reqOrigin PropagationOrigin) error
-	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups string, geolocation string) (map[string][]db.CollectionInfo, error)
+	CreateMetadata(collectionId string, metadata utils.Metadata, reqOrigin PropagationOrigin) error
+	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups string, geolocation string) (map[uint64]utils.QueryResult, error)
 }
 
 type MetadataManagerImpl struct {
@@ -87,7 +88,7 @@ func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, logger 
 	}
 }
 
-func (l MetadataManagerImpl) CreateMetadata(collectionId string, metadata db.Metadata, reqOrigin PropagationOrigin) error {
+func (l MetadataManagerImpl) CreateMetadata(collectionId string, metadata utils.Metadata, reqOrigin PropagationOrigin) error {
 	if strings.HasPrefix(metadata.Geolocation, l.serverInfo.MetadataDomain) {
 		var newMetadata []string
 		for key, value := range metadata.CustomMetadata {
@@ -120,11 +121,11 @@ func (l MetadataManagerImpl) CreateMetadata(collectionId string, metadata db.Met
 	return nil
 }
 
-func (l MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error) {
+func (l MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error) {
 	// Execute the query locally if the server's metadata domain match the geolocation, it is its prefix or if the local node is a cloud node.
 	//Otherwise, propagate the query to the cloud node or the father node.
 	if strings.HasPrefix(geolocation, l.serverInfo.MetadataDomain) || l.serverInfo.Father == nil {
-		result := make(map[string][]db.CollectionInfo)
+		result := make(map[uint64]utils.QueryResult)
 
 		var queryMap QueryTemplatesParamsMapping[string]
 		err := json.Unmarshal([]byte(templateParamsMapping), &queryMap)
@@ -159,7 +160,11 @@ func (l MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion
 					return nil, err
 				}
 				if len(collInfo) > 0 {
-					result[query.As] = append(result[query.As], collInfo...)
+					hash := utils.NewQueryIdentifier(templateName, params).Hash()
+					result[hash] = utils.QueryResult{
+						As:          query.As,
+						Collections: collInfo,
+					}
 				}
 			} else {
 				return nil, fmt.Errorf("error while retrieving template %s for function %s:%s, with error: %v", templateName, functionName, functionVersion, err)

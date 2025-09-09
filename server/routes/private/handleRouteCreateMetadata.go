@@ -1,11 +1,11 @@
 package private
 
 import (
-	"db"
 	"encoding/json"
 	"fmt"
 	"io"
 	"metadataManager"
+	"metadataManager/utils"
 	"net/http"
 	"os"
 	"server/info"
@@ -18,7 +18,7 @@ func HandleRouteCreateMetadata(logger *io.Writer, lookupMgr metadataManager.Meta
 
 		collectionId := r.PathValue("collection_id")
 		reqMetadataDomain := r.Header.Get("X-ERMES-METADATA-DOMAIN")
-		var meta db.Metadata
+		var meta utils.Metadata
 		err := json.NewDecoder(r.Body).Decode(&meta)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error decoding metadata: %v\n", err)

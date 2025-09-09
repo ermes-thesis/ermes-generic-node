@@ -2,10 +2,7 @@ package metadataManager_test
 
 import (
 	caches_mock "caches/mocks"
-	"db"
 	"encoding/json"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"metadataManager"
 	metadataManager_mock "metadataManager/mocks"
 	"metadataManager/utils"
@@ -14,6 +11,9 @@ import (
 	"testing"
 	"time"
 	tokenDecoder_mock "tokenDecoder/mocks"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExecuteQueries(t *testing.T) {
@@ -93,10 +93,15 @@ func TestExecuteQueries(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when executing queries")
 
 	assert.Len(t, result, 1, "Expected result to be non-empty")
-	assert.Contains(t, result, "private_data", "Expected result to contain 'private_data' key")
 
-	assert.Len(t, result["private_data"], 1, "Expected 'private_data' to have one collection")
-	collection := result["private_data"][0]
+	hash := utils.NewQueryIdentifier("private_data_query", map[string]string{
+		"name": "collectionNameFather",
+	}).Hash()
+	assert.Contains(t, result, hash, "Expected result to contain 'private_data' key")
+
+	assert.Equal(t, result[hash].As, "private_data", "Expected 'As' field to be 'private_data'")
+	assert.Len(t, result[hash].Collections, 1, "Expected 'private_data' to have one collection")
+	collection := result[hash].Collections[0]
 
 	assert.Equal(t, "1111", collection.Id, "Expected collection ID to be 1111")
 	assert.Equal(t, "12345", collection.Metadata.Owner, "Expected owner to match query parameter")
@@ -118,12 +123,12 @@ func TestCreateMetadata(t *testing.T) {
 	}
 
 	tm := time.Now().Truncate(time.Millisecond)
-	metadata := db.Metadata{
+	metadata := utils.Metadata{
 		Name:        "test",
 		Owner:       "fake",
 		CreatedAt:   tm,
 		Groups:      []string{"g1", "g2", "g3"},
-		Consistency: db.EVENTUAL_CONSISTENT,
+		Consistency: utils.EVENTUAL_CONSISTENT,
 		Geolocation: "IT",
 		CustomMetadata: map[string]string{
 			"key1": "value1",

@@ -3,8 +3,9 @@ package db
 import (
 	"config"
 	"context"
-	"github.com/redis/go-redis/v9"
 	"metadataManager/utils"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // GenericDB provides a generic database abstraction for managing collections of record
@@ -132,7 +133,7 @@ type GenericDB interface {
 	// Returns:
 	//	- *Metadata: pointer to the metadata object, nil if no metadata exists
 	//	- error: non-nil if the retrieval operation fails
-	GetMetadata(collectionId string) (*Metadata, error)
+	GetMetadata(collectionId string) (*utils.Metadata, error)
 	// SetMetadata associates metadata with a collection for search purposes.
 	// Existing metadata will be completely replaced.
 	//
@@ -142,7 +143,7 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the operation fails
-	SetMetadata(collectionId string, metadata Metadata) error
+	SetMetadata(collectionId string, metadata utils.Metadata) error
 	// DeleteMetadata removes all metadata associated with a collection.
 	// The collection itself and its records remain unchanged. They must
 	// be explicitly deleted using the DeleteCollection method.
@@ -211,7 +212,7 @@ type GenericDB interface {
 	// Returns:
 	//	- []db.CollectionInfo: slice of matching collection information (empty if no matches)
 	//	- error: non-nil if the search operation fails
-	SearchOnMetadata(query utils.Query, groups []string) ([]CollectionInfo, error)
+	SearchOnMetadata(query utils.Query, groups []string) ([]utils.CollectionInfo, error)
 	// DropIndex removes the metadata search index, disabling search functionality.
 	// This operation is irreversible and will require CreateIndex to be called
 	// again to restore search capabilities.

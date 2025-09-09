@@ -8,9 +8,6 @@ import (
 	"db"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/testcontainers/testcontainers-go"
-	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 	"io"
 	"metadataManager"
 	"metadataManager/utils"
@@ -18,12 +15,18 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"scheduler"
+	scheduler_mock "scheduler/mocks"
 	"server"
 	"server/info"
 	"strings"
 	"testing"
 	"time"
 	tokenDecoder_mock "tokenDecoder/mocks"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/testcontainers/testcontainers-go"
+	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
 
 var templates = map[string]utils.Query{
@@ -139,7 +142,9 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClient1, serverInfoFather, os.Stdout, fnCache, tknDecoder)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient1, metadataManagerFather)
+	schedulerFather := &scheduler_mock.Scheduler{}
+
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient1, metadataManagerFather, schedulerFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -161,7 +166,8 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	tknDecoder2.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerChild := metadataManager.NewMetadataManager(redisClient2, serverInfoChild, os.Stdout, fnCache2, tknDecoder2)
 
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClient2, metadataManagerChild)
+	schedulerChild := &scheduler_mock.Scheduler{}
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClient2, metadataManagerChild, schedulerChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -200,7 +206,7 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	fmt.Println("Response: " + string(bodyResp))
 
 	assert.NoError(t, err, "Expected no error when reading response body")
-	var response map[string][]db.CollectionInfo
+	var response map[string][]utils.CollectionInfo
 	err = json.Unmarshal(bodyResp, &response)
 	assert.NoError(t, err, "Expected valid JSON response, got error: %v", err)
 
@@ -241,7 +247,8 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout, fnCache, tknDecoder)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClientFather, metadataManagerFather)
+	schedulerFather := &scheduler_mock.Scheduler{}
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClientFather, metadataManagerFather, schedulerFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -263,7 +270,8 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout, fnCacheChild, tknDecoderChild)
 
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClientChild, metadataManagerChild)
+	schedulerChild := &scheduler_mock.Scheduler{}
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClientChild, metadataManagerChild, schedulerChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -276,12 +284,12 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 		},
 	}
 
-	metadata := db.Metadata{
+	metadata := utils.Metadata{
 		Name:           "test",
 		Owner:          "test",
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Groups:         []string{"groupC"},
-		Consistency:    db.EVENTUAL_CONSISTENT,
+		Consistency:    utils.EVENTUAL_CONSISTENT,
 		Geolocation:    "IT/Milan",
 		CustomMetadata: map[string]string{},
 	}
@@ -340,7 +348,8 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout, fnCache, tknDecoderFather)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClientFather, metadataManagerFather)
+	schedulerFather := &scheduler_mock.Scheduler{}
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClientFather, metadataManagerFather, schedulerFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -362,7 +371,8 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout, fnCacheChild, tknDecoderChild)
 
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClientChild, metadataManagerChild)
+	schedulerChild := &scheduler_mock.Scheduler{}
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClientChild, metadataManagerChild, schedulerChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -375,12 +385,12 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 		},
 	}
 
-	metadata := db.Metadata{
+	metadata := utils.Metadata{
 		Name:           "test",
 		Owner:          "test",
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Groups:         []string{"groupC"},
-		Consistency:    db.EVENTUAL_CONSISTENT,
+		Consistency:    utils.EVENTUAL_CONSISTENT,
 		Geolocation:    "IT/Milan",
 		CustomMetadata: map[string]string{},
 	}
@@ -446,7 +456,8 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout, fnCacheFather, tknDecoderFather)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClientFather, metadataManagerFather)
+	schedulerFather := &scheduler_mock.Scheduler{}
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClientFather, metadataManagerFather, schedulerFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -467,7 +478,8 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout, fnCacheChild, tknDecoderChild)
 
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClientChild, metadataManagerChild)
+	schedulerChild := &scheduler_mock.Scheduler{}
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClientChild, metadataManagerChild, schedulerChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -494,12 +506,12 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	tknDecoderLocal.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, nil)
 	metadataManagerLocal := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, os.Stdout, fnCacheLocal, tknDecoderLocal)
 
-	metadata := db.Metadata{
+	metadata := utils.Metadata{
 		Name:           "test",
 		Owner:          "test",
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Groups:         []string{"groupC"},
-		Consistency:    db.EVENTUAL_CONSISTENT,
+		Consistency:    utils.EVENTUAL_CONSISTENT,
 		Geolocation:    "IT/Milan",
 		CustomMetadata: map[string]string{},
 	}
@@ -520,12 +532,12 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when getting metadata from local")
 	assert.Equal(t, metadata, *metaLocal, "Expected metadata to match")
 
-	metadata2 := db.Metadata{
+	metadata2 := utils.Metadata{
 		Name:           "test2",
 		Owner:          "test",
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Groups:         []string{"groupC"},
-		Consistency:    db.EVENTUAL_CONSISTENT,
+		Consistency:    utils.EVENTUAL_CONSISTENT,
 		Geolocation:    "IT/Milan/Polimi",
 		CustomMetadata: map[string]string{},
 	}
@@ -577,33 +589,33 @@ func startRedisContainer(t *testing.T, child bool) (db.GenericDB, func()) {
 	err = client.CreateIndex()
 	assert.NoError(t, err, "Expected no error when creating index")
 
-	err = client.SetMetadata("12345", db.Metadata{
+	err = client.SetMetadata("12345", utils.Metadata{
 		Name:        "collectionName",
 		Owner:       "12345",
 		CreatedAt:   time.Unix(1745748000, 0),
 		Groups:      []string{"groupA", "groupB", "groupC"},
-		Consistency: db.EVENTUAL_CONSISTENT,
+		Consistency: utils.EVENTUAL_CONSISTENT,
 		Geolocation: "IT/Como",
 	})
 	assert.NoError(t, err, "Expected no error when setting metadata for collection 12345")
 
-	err = client.SetMetadata("54321", db.Metadata{
+	err = client.SetMetadata("54321", utils.Metadata{
 		Name:        "collectionName2",
 		Owner:       "12345",
 		CreatedAt:   time.Unix(745748000, 0),
 		Groups:      []string{"groupC"},
-		Consistency: db.EVENTUAL_CONSISTENT,
+		Consistency: utils.EVENTUAL_CONSISTENT,
 		Geolocation: "IT/Milan",
 	})
 	assert.NoError(t, err, "Expected no error when setting metadata for collection 54321")
 
 	if !child {
-		err = client.SetMetadata("1111", db.Metadata{
+		err = client.SetMetadata("1111", utils.Metadata{
 			Name:        "collectionNameFather",
 			Owner:       "12345",
 			CreatedAt:   time.Unix(1745749000, 0),
 			Groups:      []string{"groupC"},
-			Consistency: db.EVENTUAL_CONSISTENT,
+			Consistency: utils.EVENTUAL_CONSISTENT,
 			Geolocation: "IT",
 		})
 		assert.NoError(t, err, "Expected no error when setting metadata for collection 1111")

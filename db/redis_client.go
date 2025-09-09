@@ -3,12 +3,13 @@ package db
 import (
 	"context"
 	"errors"
-	"github.com/redis/go-redis/v9"
 	"metadataManager/utils"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/redis/go-redis/v9"
 )
 
 type RedisClient struct {
@@ -220,7 +221,7 @@ func (r *RedisClient) CollectionExists(collectionId string) (bool, error) {
 	return res > 0, nil
 }
 
-func (r *RedisClient) GetMetadata(collectionId string) (*Metadata, error) {
+func (r *RedisClient) GetMetadata(collectionId string) (*utils.Metadata, error) {
 	res, err := r.client.HGetAll(r.ctx, "meta:"+collectionId).Result()
 	if err != nil {
 		return nil, err
@@ -228,11 +229,11 @@ func (r *RedisClient) GetMetadata(collectionId string) (*Metadata, error) {
 	if len(res) == 0 {
 		return nil, nil
 	}
-	return fromMap(res)
+	return utils.FromMap(res)
 }
 
-func (r *RedisClient) SetMetadata(collectionId string, metadata Metadata) error {
-	return r.client.HSet(r.ctx, "meta:"+collectionId, metadata.toList()...).Err()
+func (r *RedisClient) SetMetadata(collectionId string, metadata utils.Metadata) error {
+	return r.client.HSet(r.ctx, "meta:"+collectionId, metadata.ToList()...).Err()
 }
 
 func (r *RedisClient) DeleteMetadata(collectionId string) error {
@@ -307,7 +308,7 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 	}}, fields...)...).Err()
 }
 
-func (r *RedisClient) SearchOnMetadata(query utils.Query, userGroups []string) ([]CollectionInfo, error) {
+func (r *RedisClient) SearchOnMetadata(query utils.Query, userGroups []string) ([]utils.CollectionInfo, error) {
 	redisQuery, err := query.ToRedisSearchCommand()
 	if err != nil {
 		return nil, err
@@ -319,16 +320,16 @@ func (r *RedisClient) SearchOnMetadata(query utils.Query, userGroups []string) (
 		return nil, err
 	}
 
-	var result []CollectionInfo
+	var result []utils.CollectionInfo
 	for _, doc := range res.Docs {
 		collId, _ := strings.CutPrefix(doc.ID, "meta:")
 
-		metadata, err := fromMap(doc.Fields)
+		metadata, err := utils.FromMap(doc.Fields)
 		if err != nil {
 			return nil, err
 		}
 
-		collectionInfo := CollectionInfo{
+		collectionInfo := utils.CollectionInfo{
 			Id:       collId,
 			Metadata: *metadata,
 		}

@@ -2,10 +2,10 @@ package metadataManager
 
 import (
 	"bytes"
-	"db"
 	"encoding/json"
 	"fmt"
 	"io"
+	"metadataManager/utils"
 	"net/http"
 	"os"
 	"server/info"
@@ -21,7 +21,7 @@ const (
 )
 
 type QueryPropagator interface {
-	Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error)
+	Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error)
 }
 
 type QueryPropagatorImpl struct {
@@ -36,7 +36,7 @@ func NewQueryPropagator(serverInfo *info.ServerInfo, logger *io.Writer) QueryPro
 	}
 }
 
-func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[string][]db.CollectionInfo, error) {
+func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error) {
 	fmt.Fprintf(*p.logger, "No geolocation provided in the request header.\n")
 
 	var receiver string
@@ -78,7 +78,7 @@ func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion str
 		return nil, err
 	}
 
-	var result map[string][]db.CollectionInfo
+	var result map[uint64]utils.QueryResult
 	if err := json.Unmarshal(body, &result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error when unmarshalling the response body: %s \n", err)
 		return nil, err
@@ -88,7 +88,7 @@ func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion str
 }
 
 type MetadataPropagator interface {
-	Propagate(collectionId string, metadata db.Metadata, reqOrigin PropagationOrigin) error
+	Propagate(collectionId string, metadata utils.Metadata, reqOrigin PropagationOrigin) error
 }
 
 type MetadataPropagatorImpl struct {
@@ -103,7 +103,7 @@ func NewMetadataPropagator(serverInfo *info.ServerInfo, logger *io.Writer) *Meta
 	}
 }
 
-func (p *MetadataPropagatorImpl) Propagate(collectionId string, metadata db.Metadata, reqOrigin PropagationOrigin) error {
+func (p *MetadataPropagatorImpl) Propagate(collectionId string, metadata utils.Metadata, reqOrigin PropagationOrigin) error {
 	fmt.Fprintf(*p.logger, "Starting to propagating metadata...\n")
 
 	body, err := json.Marshal(metadata)

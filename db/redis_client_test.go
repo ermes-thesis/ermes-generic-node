@@ -113,12 +113,12 @@ func TestMetadata(t *testing.T) {
 	defer redisClient.Close()
 
 	collectionId := "collection1"
-	metadata := Metadata{
+	metadata := utils.Metadata{
 		Owner:          "owner1",
 		Name:           "name1",
 		Groups:         []string{"group1"},
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
-		Consistency:    EVENTUAL_CONSISTENT,
+		Consistency:    utils.EVENTUAL_CONSISTENT,
 		CustomMetadata: map[string]string{},
 	}
 
@@ -177,7 +177,7 @@ func TestIndex(t *testing.T) {
 	require.NoError(t, err, "Expected no error altering index")
 
 	collectionId := "collection1"
-	metadata := Metadata{
+	metadata := utils.Metadata{
 		Owner:  "owner1",
 		Name:   "name1",
 		Groups: []string{"group1"},
@@ -223,13 +223,13 @@ func TestMemStats(t *testing.T) {
 	maxMem, err := redisClient.GetMaxMemory()
 	require.NoError(t, err, "Expected no error getting max memory")
 	require.Equal(t, uint64(0x1f400000), maxMem, "Expected max memory to be 500mb")
-	err = redisClient.SetMetadata(collectionId, Metadata{
+	err = redisClient.SetMetadata(collectionId, utils.Metadata{
 		Owner:          "owner1",
 		Name:           "name1",
 		Groups:         groups,
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Geolocation:    "IT",
-		Consistency:    EVENTUAL_CONSISTENT,
+		Consistency:    utils.EVENTUAL_CONSISTENT,
 		CustomMetadata: map[string]string{},
 	})
 	require.NoError(t, err, "Expected no error setting metadata")

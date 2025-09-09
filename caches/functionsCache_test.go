@@ -35,11 +35,11 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 			"tmpl" + fn: query,
 		},
 		Metadata: metadata.FunctionMetadata{
-			Name:                 fn,
-			Version:              fnVer,
-			TemplateNames:        []string{"tmpl" + fn},
-			DeployedOn:           nil,
-			StrongCollAccessType: false,
+			Name:                  fn,
+			Version:               fnVer,
+			TemplateNames:         []string{"tmpl" + fn},
+			DeployedOn:            nil,
+			StrongCollWriteAccess: false,
 		},
 	}, nil)
 

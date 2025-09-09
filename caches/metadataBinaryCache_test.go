@@ -28,11 +28,11 @@ func TestBinaryCache_SetAndGet(t *testing.T) {
 
 	// Set should write file and cache entry
 	meta := metadata.FunctionMetadata{
-		Name:                 fn,
-		Version:              fnVersion,
-		TemplateNames:        nil,
-		DeployedOn:           nil,
-		StrongCollAccessType: false,
+		Name:                  fn,
+		Version:               fnVersion,
+		TemplateNames:         nil,
+		DeployedOn:            nil,
+		StrongCollWriteAccess: false,
 	}
 	err = cache.Set(meta, data)
 	require.NoError(t, err)
@@ -69,18 +69,18 @@ func TestBinaryCache_EvictionRemovesFile(t *testing.T) {
 
 	// Set should write file and cache entry
 	meta := metadata.FunctionMetadata{
-		Name:                 fn1,
-		Version:              fnVersion1,
-		TemplateNames:        nil,
-		DeployedOn:           nil,
-		StrongCollAccessType: false,
+		Name:                  fn1,
+		Version:               fnVersion1,
+		TemplateNames:         nil,
+		DeployedOn:            nil,
+		StrongCollWriteAccess: false,
 	}
 	meta2 := metadata.FunctionMetadata{
-		Name:                 fn2,
-		Version:              fnVersion2,
-		TemplateNames:        nil,
-		DeployedOn:           nil,
-		StrongCollAccessType: false,
+		Name:                  fn2,
+		Version:               fnVersion2,
+		TemplateNames:         nil,
+		DeployedOn:            nil,
+		StrongCollWriteAccess: false,
 	}
 
 	data1 := []byte("aaa")

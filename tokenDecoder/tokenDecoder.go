@@ -2,8 +2,6 @@ package tokenDecoder
 
 import (
 	"crypto/rsa"
-	"crypto/x509"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"github.com/golang-jwt/jwt/v5"
@@ -38,11 +36,11 @@ func NewTokenDecoder(path string) (TokenDecoder, error) {
 	return tknDecoder, nil
 }
 
-func NewTokenDecoderWithKey(publicKey *rsa.PublicKey, issuer string) (TokenDecoder, error) {
+func NewTokenDecoderWithKey(publicKey *rsa.PublicKey, issuer string) TokenDecoder {
 	return &TokenDecoderImpl{
 		publicKey: publicKey,
 		issuer:    issuer,
-	}, nil
+	}
 }
 
 func (t *TokenDecoderImpl) DecodeGroupToken(tokenString string) ([]string, error) {
@@ -88,19 +86,8 @@ func (t *TokenDecoderImpl) LoadPublicKey(path string) error {
 		return fmt.Errorf("error reading file: %s", err)
 	}
 
-	block, _ := pem.Decode(data)
-	if block == nil || block.Type != "PUBLIC KEY" {
-		return fmt.Errorf("failed to decode PEM block containing public key")
-	}
-	key, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return fmt.Errorf("failed to parse public key: %s", err)
-	}
+	key, err := jwt.ParseRSAPublicKeyFromPEM(data)
 
-	rsaKey, ok := key.(*rsa.PublicKey)
-	if !ok {
-		return fmt.Errorf("key is not an RSA key")
-	}
-	t.publicKey = rsaKey
+	t.publicKey = key
 	return nil
 }

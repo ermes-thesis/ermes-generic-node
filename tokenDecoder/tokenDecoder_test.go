@@ -31,8 +31,7 @@ func TestDecodeGroupToken_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	// Build decoder with public key
-	decoder, err := NewTokenDecoderWithKey(pubKey, "ermes-central-repository")
-	require.NoError(t, err)
+	decoder := NewTokenDecoderWithKey(pubKey, "ermes-central-repository")
 
 	// Decode
 	groups, err := decoder.DecodeGroupToken(tokenStr)
@@ -59,8 +58,7 @@ func TestDecodeGroupToken_Expired(t *testing.T) {
 	require.NoError(t, err)
 
 	// Build decoder with public key
-	decoder, err := NewTokenDecoderWithKey(pubKey, "ermes-central-repository")
-	require.NoError(t, err)
+	decoder := NewTokenDecoderWithKey(pubKey, "ermes-central-repository")
 
 	// Decode
 	_, err = decoder.DecodeGroupToken(tokenStr)

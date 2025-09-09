@@ -205,14 +205,20 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	fmt.Println("Response: " + string(bodyResp))
 
 	assert.NoError(t, err, "Expected no error when reading response body")
-	var response map[string][]utils.CollectionInfo
+	var response map[uint64]utils.QueryResult
 	err = json.Unmarshal(bodyResp, &response)
 	assert.NoError(t, err, "Expected valid JSON response, got error: %v", err)
 
 	assert.Len(t, response, 1, "Expected one collection in response")
-	assert.Contains(t, response, "private_data", "Expected response to contain 'private_data' key")
-	assert.Len(t, response["private_data"], 1, "Expected 'private_data' to have one collection")
-	collection := response["private_data"][0]
+
+	hash := utils.NewQueryIdentifier("private_data_query", map[string]string{
+		"name": "collectionNameFather",
+	}).Hash()
+	assert.Contains(t, response, hash, "Expected result to contain 'private_data' key")
+
+	assert.Equal(t, response[hash].As, "private_data", "Expected 'As' field to be 'private_data'")
+	assert.Len(t, response[hash].Collections, 1, "Expected 'private_data' to have one collection")
+	collection := response[hash].Collections[0]
 
 	assert.Equal(t, "1111", collection.Id, "Expected collection ID to be 1111")
 	assert.Equal(t, "12345", collection.Metadata.Owner, "Expected owner to match query parameter")

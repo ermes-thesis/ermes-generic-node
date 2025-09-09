@@ -15,7 +15,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
-	"scheduler"
 	scheduler_mock "scheduler/mocks"
 	"server"
 	"server/info"

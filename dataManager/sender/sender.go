@@ -3,7 +3,9 @@ package sender
 import (
 	gossip "dataManager/messages"
 	shared "dataManager/shared"
+	"encoding/json"
 	"fmt"
+	"io"
 	log "logger"
 	"server"
 )
@@ -11,8 +13,12 @@ import (
 const (
 	gossipPath       = "/gossip"
 	repoPath         = "/repo"
-	remoteAccessPatj = "/remoteAccess"
+	remoteAccessPath = "/dataRemoteAccess"
 )
+
+//###############################################################
+//########## Migration Manager Sender          ##################
+//###############################################################
 
 type MigrationManagerSender interface {
 	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]string, []string, uint64)
@@ -64,4 +70,59 @@ func (s *MigrationManagerSenderImpl) GossipPath() string {
 
 func (s *MigrationManagerSenderImpl) RepoPath() string {
 	return repoPath
+}
+
+//###############################################################
+//########## Collection Discoverer Sender      ##################
+//###############################################################
+
+type CollectionDiscovererSender interface {
+	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames ...string) ([]any, error)
+	RemoteAccessPath() string
+}
+
+type CollectionDiscovererSenderImpl struct {
+	server server.ServerType
+	logger log.Logger
+}
+
+func NewCollectionDiscovererSender(logger log.Logger, server server.ServerType) CollectionDiscovererSender {
+	return &CollectionDiscovererSenderImpl{
+		server: server,
+		logger: logger,
+	}
+}
+
+func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames ...string) ([]any, error) {
+	s.logger.Println("SENDER", fmt.Sprintf("request collection %s access to %s", collectionId, hostId), log.INFO)
+
+	msg := gossip.RemoteAccessRequest{
+		CollectionId: collectionId,
+		RecordNames:  recordNames,
+	}
+
+	res, err := s.server.SendGenericHTTPRequestRetrunResponse(hostId, remoteAccessPath, msg)
+	if err != nil {
+		s.logger.Println("HTTP-REQ", "Error reading response body", log.ERROR)
+		return nil, err
+	}
+
+	defer res.Body.Close()
+
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		s.logger.Println("HTTP-REQ", "Error reading response body", log.ERROR)
+		return nil, err
+	}
+	var resp gossip.RemoteAccessResponse
+	if err := json.Unmarshal(bodyBytes, &resp); err != nil {
+		s.logger.Println("HTTP-REQ", "Error parsing remote access response", log.ERROR)
+		return nil, err
+	}
+
+	return resp.Records, err
+}
+
+func (s *CollectionDiscovererSenderImpl) RemoteAccessPath() string {
+	return remoteAccessPath
 }

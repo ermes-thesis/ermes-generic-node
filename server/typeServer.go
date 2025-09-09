@@ -16,6 +16,7 @@ import (
 
 type ServerType interface {
 	SendGenericHTTPRequest(nodeTo string, pathTo string, messageContent interface{}) (int, error)
+	SendGenericHTTPRequestRetrunResponse(nodeTo string, pathTo string, messageContent interface{}) (*http.Response, error)
 	AddCustomRoute(path string, isPrivate bool, handler http.HandlerFunc) error
 }
 
@@ -63,6 +64,14 @@ func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.Gen
 
 // SendGenericHTTPRequest Method to send a generic data transfer request. It returns both the status code of the response and the error.
 func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageContent interface{}) (int, error) {
+	res, err := s.SendGenericHTTPRequestRetrunResponse(nodeTo, pathTo, messageContent)
+	if err != nil {
+		return -1, err
+	}
+	return res.StatusCode, nil
+}
+
+func (s *Server) SendGenericHTTPRequestRetrunResponse(nodeTo string, pathTo string, messageContent interface{}) (*http.Response, error) {
 	// Check if the node to is correctly formatted
 
 	fmt.Fprintf(s.Logger, "got a generic request %s \n", pathTo)
@@ -80,7 +89,7 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 	if s.Serverinfo.Father.Address != nodeTo && !ok {
 		fmt.Fprintf(s.Logger, "request should be sent to %s , which is not a known node. \n", nodeTo)
 
-		return -1, errors.New("node not in the hierarchy, cannot send request")
+		return nil, errors.New("node not in the hierarchy, cannot send request")
 	}
 
 	reqUrl := fmt.Sprintf("http://localhost:%s%s", nodeTo, pathTo)
@@ -92,7 +101,7 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when marshalling the body of the request: %s \n", err)
 
-		return -1, err
+		return nil, err
 	}
 
 	// Create the request
@@ -102,7 +111,7 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when creating the http request: %s \n", err)
 
-		return -1, err
+		return nil, err
 	}
 
 	// Prepare the headers
@@ -117,9 +126,9 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when contacting the node: %s \n", err)
 
-		return -1, err
+		return nil, err
 	}
 
-	// If everything went well return the response status code.
-	return res.StatusCode, nil
+	// If everything went well return the response.
+	return res, nil
 }

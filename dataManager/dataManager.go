@@ -8,7 +8,6 @@ import (
 	penality "dataManager/migrationManager/penalityFunction"
 	shared "dataManager/shared"
 	"db"
-	"errors"
 	log "logger"
 	"server"
 	"server/info"
@@ -34,12 +33,10 @@ type DataManager interface {
 }
 
 type DataManagerImp struct {
-	MigrationManager      migrationManager.MigrationManager
-	CollectionsDiscoverer collectionsDiscoverer.CollectionsDiscoverer
+	migrationManager      migrationManager.MigrationManager
+	collectionsDiscoverer collectionsDiscoverer.CollectionsDiscoverer
 
-	collectionsPartialView *shared.CollectionPartialView
-	dbInterface            db.GenericDB
-	serverInfo             info.ServerInfo
+	dbInterface db.GenericDB
 }
 
 // Singleton pattern
@@ -58,122 +55,71 @@ func GetDataManagerInstance(logger log.Logger) DataManager {
 
 func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger log.Logger) {
 	initOnce.Do(func() {
-		m.MigrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger)
-		m.CollectionsDiscoverer.Init(collections)
+		m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger)
+		m.collectionsDiscoverer.Init(collections, serverInfo, server, logger, dbInterface)
 
-		m.collectionsPartialView = collections
 		m.dbInterface = dbInterface
-		m.serverInfo = serverInfo
 	})
 }
 
 func (m *DataManagerImp) setMigrationManager(mig migrationManager.MigrationManager) {
-	m.MigrationManager = mig
+	m.migrationManager = mig
 }
 
 func (m *DataManagerImp) GetMigrationManager() migrationManager.MigrationManager {
-	return m.MigrationManager
+	return m.migrationManager
 }
 
 func (m *DataManagerImp) setCollectionsDiscoverer(cl collectionsDiscoverer.CollectionsDiscoverer) {
-	m.CollectionsDiscoverer = cl
+	m.collectionsDiscoverer = cl
 }
 
 func (m *DataManagerImp) GetCollectionsDiscoverer() collectionsDiscoverer.CollectionsDiscoverer {
-	return m.CollectionsDiscoverer
+	return m.collectionsDiscoverer
 }
 
 func (m *DataManagerImp) GetRecord(collectionId string, recordName string) (string, error) {
-	//sync
-	m.collectionsPartialView.Mutex.Lock()
-	defer m.collectionsPartialView.Mutex.Unlock()
-	//imp
-	collection, exists := m.collectionsPartialView.KnownCollections[collectionId]
-
-	if !exists {
-		//if not exist => not placed locally or in one child => search in father
-		return m.weakCollectionRemoteRecordAccess(m.serverInfo.Father.Address, collectionId, recordName) //TODO: no father case
-	}
-	if collection.IsLocal() {
-		return m.dbInterface.GetRecord(collectionId, recordName)
-	}
-
-	if collection.IsStrong() {
-		return "", errors.New("strong collection can't be accessed remotely")
-	} else {
-		var oneKey string
-		for k := range collection.HostsId() { //TODO: If multiple hosts are present, where should the request be sent? min latency?
-			oneKey = k
-			break
-		}
-		return m.weakCollectionRemoteRecordAccess(oneKey, collectionId, recordName)
-	}
+	return collectionsDiscoverer.AccessCollection(
+		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
+		collectionId,
+		func() (string, error) {
+			return m.dbInterface.GetRecord(collectionId, recordName)
+		},
+		func(addr string) (string, error) {
+			return m.collectionsDiscoverer.WeakCollectionRemoteRecordAccess(addr, collectionId, recordName)
+		},
+	)
 }
 
 func (m *DataManagerImp) SetRecord(collectionId string, recordName string, recordValue string) error {
-	//sync
-	m.collectionsPartialView.Mutex.Lock()
-	defer m.collectionsPartialView.Mutex.Unlock()
-	//imp
-	collection, exists := m.collectionsPartialView.KnownCollections[collectionId]
-
-	if !exists || !collection.IsLocal() {
-		return errors.New("write operations can't be done remotely")
-	}
-
-	if collection.IsStrong() {
-		collection.(*shared.StrongCollection).ConsistencyClock++
-	}
-	return m.dbInterface.SetRecord(collectionId, recordName, recordValue)
+	return collectionsDiscoverer.UpdateCollection(
+		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
+		collectionId,
+		func() error {
+			return m.dbInterface.SetRecord(collectionId, recordName, recordValue)
+		},
+	)
 }
 
 func (m *DataManagerImp) GetRecords(collectionId string, recordNames ...string) ([]any, error) {
-	//sync
-	m.collectionsPartialView.Mutex.Lock()
-	defer m.collectionsPartialView.Mutex.Unlock()
-	//imp
-	collection, exists := m.collectionsPartialView.KnownCollections[collectionId]
-
-	if !exists {
-		//if not exist => not placed locally or in one child => search in father
-		return m.weakCollectionRemoteRecordsAccess(m.serverInfo.Father.Address, collectionId, recordNames...) //TODO: no father case
-	}
-	if collection.IsLocal() {
-		return m.dbInterface.GetRecords(collectionId, recordNames...)
-	}
-
-	if collection.IsStrong() {
-		return nil, errors.New("strong collection can't be accessed remotely")
-	} else {
-		var oneKey string
-		for k := range collection.HostsId() { //TODO: If multiple hosts are present, where should the request be sent? min latency?
-			oneKey = k
-			break
-		}
-		return m.weakCollectionRemoteRecordsAccess(oneKey, collectionId, recordNames...)
-	}
+	return collectionsDiscoverer.AccessCollection(
+		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
+		collectionId,
+		func() ([]any, error) {
+			return m.dbInterface.GetRecords(collectionId, recordNames...)
+		},
+		func(addr string) ([]any, error) {
+			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsAccess(addr, collectionId, recordNames...)
+		},
+	)
 }
 
 func (m *DataManagerImp) SetRecords(collectionId string, recordNames []string, recordValues []string) error {
-	//sync
-	m.collectionsPartialView.Mutex.Lock()
-	defer m.collectionsPartialView.Mutex.Unlock()
-	//imp
-	collection, exists := m.collectionsPartialView.KnownCollections[collectionId]
-
-	if !exists || !collection.IsLocal() {
-		return errors.New("write operations can't be done remotely")
-	}
-
-	if collection.IsStrong() {
-		collection.(*shared.StrongCollection).ConsistencyClock++
-	}
-	return m.dbInterface.SetRecords(collectionId, recordNames, recordValues)
-}
-
-func (m *DataManagerImp) weakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames string) (string, error) {
-	return "", nil //TODO
-}
-func (m *DataManagerImp) weakCollectionRemoteRecordsAccess(hostId string, collectionId string, recordNames ...string) ([]any, error) {
-	return nil, nil //TODO
+	return collectionsDiscoverer.UpdateCollection(
+		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
+		collectionId,
+		func() error {
+			return m.dbInterface.SetRecords(collectionId, recordNames, recordValues)
+		},
+	)
 }

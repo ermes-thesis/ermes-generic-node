@@ -10,6 +10,7 @@ import (
 	"metadataManager"
 	"net/http"
 	"os"
+	"scheduler"
 	"server/clientrepo"
 	"server/info"
 )
@@ -27,9 +28,10 @@ type Server struct {
 	ClientRepo      *clientrepo.ClientRepo
 	RedisClient     db.GenericDB
 	MetadataManager metadataManager.MetadataManager
+	Scheduler       scheduler.Scheduler
 }
 
-func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.GenericDB, metadataManager metadataManager.MetadataManager) (*Server, error) {
+func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.GenericDB, metadataManager metadataManager.MetadataManager, scheduler scheduler.Scheduler) (*Server, error) {
 
 	fmt.Fprintf(logger, "Creating a new Server instance... \n")
 
@@ -47,6 +49,7 @@ func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.Gen
 		ClientRepo:      clientrepo.CreateClientRepo(),
 		RedisClient:     redisClient,
 		MetadataManager: metadataManager,
+		Scheduler:       scheduler,
 	}
 
 	fmt.Fprintf(logger, "done \n")

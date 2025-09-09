@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	scheduler2 "scheduler"
 	"server"
 	"server/info"
 	"sync"
@@ -57,8 +58,10 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	}
 	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w, funcCache, tknDecoder)
 
+	scheduler := scheduler2.NewScheduler()
+
 	//Run server
-	ser, err := server.NewServer(w, serverInfo, redisClient, metadataLookup)
+	ser, err := server.NewServer(w, serverInfo, redisClient, metadataLookup, scheduler)
 
 	if err != nil {
 		return err

@@ -10,4 +10,5 @@ use (
 	caches
 	tokenDecoder
 	logger
+	scheduler
 )

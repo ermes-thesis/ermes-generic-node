@@ -39,6 +39,9 @@ jobs:
           cd tokenDecoder
           mockery
           cd ..
+          cd scheduler
+          mockery
+          cd ..
 
       - name: Install Go CTRF Reporter
         run: go install github.com/ctrf-io/go-ctrf-json-reporter/cmd/go-ctrf-json-reporter@latest

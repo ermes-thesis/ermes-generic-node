@@ -31,7 +31,8 @@ type ServerInfo struct {
 	Children []Node
 	// The secret is the private header value with which the ermes nodes can communicate.
 	// For privacy reasons it must not be exposed to the user.
-	Secret string
+	Secret           string
+	MiddlewareSecret string
 
 	CloudNode *Node
 }
@@ -69,7 +70,8 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 	}
 
 	serverinfo := &ServerInfo{
-		Secret: config.Node.Secret, // For the moment leave it hardcoded
+		Secret:           config.Node.Secret,
+		MiddlewareSecret: config.Node.MiddlewareSecret,
 		CloudNode: &Node{
 			Address:        cloudNode,
 			MetadataDomain: cloudNodeDomain,

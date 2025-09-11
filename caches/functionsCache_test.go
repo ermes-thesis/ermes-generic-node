@@ -82,7 +82,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 	require.Equal(t, bin, bin2)
 
 	// Check that binary file exists on disk
-	binPath := filepath.Join(tmpDir, fn+"@"+fnVer)
+	binPath := filepath.Join(tmpDir, fn+"@"+fnVer+".wasm")
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
 		require.Fail(t, fmt.Sprintf("%s does not exist", binPath))
 	}

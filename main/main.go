@@ -47,7 +47,7 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 
 	redisClient := db.NewRedisClient(cfg.Redis, ctx)
 	// remoteFunctionName must be in the format: "functionName/functionVersion"
-	funcCache, err := caches.NewDefaultFunctionCache(cfg.FunctionsCache)
+	funcCache, err := caches.NewDefaultFunctionCache(cfg.FunctionsCache, cfg.Node.Secret)
 	if err != nil {
 		return fmt.Errorf("error creating function cache: %w", err)
 	}

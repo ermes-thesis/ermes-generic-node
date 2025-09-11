@@ -46,7 +46,7 @@ func NewFunctionCache(config config.FunctionsCacheConfig, fetcher Fetcher[*Funct
 	}, nil
 }
 
-func NewDefaultFunctionCache(config config.FunctionsCacheConfig) (*FunctionCacheImpl, error) {
+func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret string) (*FunctionCacheImpl, error) {
 	tmplCache, err := NewTemplatesCache(config.TemplateCache)
 	if err != nil {
 		return nil, fmt.Errorf("error creating template cache: %v", err)
@@ -64,7 +64,7 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig) (*FunctionCache
 		Templates:        tmplCache,
 		MetadataBinaries: binCache,
 		LatestVersions:   latest,
-		fetcher:          NewRemoteBundleFetcher(fmt.Sprintf("http://%s:%s", config.FunctionRegistry.Address, config.FunctionRegistry.Port)),
+		fetcher:          NewRemoteBundleFetcher(fmt.Sprintf("http://%s:%s", config.FunctionRegistry.Address, config.FunctionRegistry.Port), ermesSecret),
 		group:            singleflight.Group{},
 	}, nil
 }

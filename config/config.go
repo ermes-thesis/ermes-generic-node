@@ -43,6 +43,7 @@ type FunctionsCacheConfig struct {
 	BinaryCache      MetadataBinaryCacheConfig `yaml:"binaryCache"`
 	TemplateCache    TemplatesCacheConfig      `yaml:"templateCache"`
 	FunctionRegistry FunctionRegistryConfig    `yaml:"functionRegistry"`
+	LatestCacheTtl   time.Duration             `yaml:"latestCacheTtl"`
 }
 
 type MetadataBinaryCacheConfig struct {

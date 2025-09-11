@@ -5,12 +5,13 @@ import (
 	caches_mock "caches/mocks"
 	"config"
 	"fmt"
-	"github.com/stretchr/testify/require"
 	"metadataManager/utils"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
@@ -29,7 +30,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 		},
 		},
 	}
-	fetcher.EXPECT().Fetch(fn+"@"+fnVer).Return(&FunctionBundle{
+	fetcher.EXPECT().Fetch(fn, fnVer).Return(&FunctionBundle{
 		Binary: []byte("binary-" + fn),
 		Templates: map[string]utils.Query{
 			"tmpl" + fn: query,
@@ -103,7 +104,7 @@ func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
 		},
 		},
 	}
-	fetcher.EXPECT().Fetch(fnName+"@"+fnVer).Return(&FunctionBundle{
+	fetcher.EXPECT().Fetch(fnName, fnVer).Return(&FunctionBundle{
 		Binary: []byte{},
 		Templates: map[string]utils.Query{
 			"tmpl" + fnName: query,

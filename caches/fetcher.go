@@ -7,7 +7,6 @@ import (
 	"io"
 	"metadataManager/utils"
 	"net/http"
-	"strings"
 )
 
 type FunctionBundle struct {
@@ -17,23 +16,26 @@ type FunctionBundle struct {
 }
 
 type Fetcher[T any] interface {
-	Fetch(identifier string) (T, error)
+	Fetch(functionName string, functionVersion string) (T, error)
+	FetchLatest(functionName string, cachedVersion string) (T, error)
 }
 
 type RemoteBundleFetcher struct {
 	BaseURL string
 }
 
-func (f *RemoteBundleFetcher) Fetch(functionName string) (*FunctionBundle, error) {
-	//TODO: Fix with the right decision of how taking functionName + version
-	parts := strings.SplitN(functionName, "@", 2)
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid function name %s, expected name:version", functionName)
-	}
-	name, version := parts[0], parts[1]
+func NewRemoteBundleFetcher(baseURL string) *RemoteBundleFetcher {
+	return &RemoteBundleFetcher{BaseURL: baseURL}
+}
 
-	url := fmt.Sprintf("%s/retrieve-function/%s/%s", f.BaseURL, name, version)
-	resp, err := http.Get(url)
+func (f *RemoteBundleFetcher) Fetch(functionName string, functionVersion string) (*FunctionBundle, error) {
+	url := fmt.Sprintf("%s/retrieve-function/%s/%s", f.BaseURL, functionName, functionVersion)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -43,11 +45,40 @@ func (f *RemoteBundleFetcher) Fetch(functionName string) (*FunctionBundle, error
 		return nil, err
 	}
 
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch function: %s", string(body))
+	}
+
 	var fnBundle FunctionBundle
 	err = json.Unmarshal(body, &fnBundle)
 	return &fnBundle, err
 }
 
-func NewRemoteBundleFetcher(baseURL string) *RemoteBundleFetcher {
-	return &RemoteBundleFetcher{BaseURL: baseURL}
+func (f *RemoteBundleFetcher) FetchLatest(functionName string, cachedVersion string) (*FunctionBundle, error) {
+	url := fmt.Sprintf("%s/retrieve-function/%s", f.BaseURL, functionName)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("If-None-Match", cachedVersion)
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode == http.StatusNotModified {
+		return nil, nil
+	} else if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch function: %s", string(body))
+	}
+
+	var fnBundle FunctionBundle
+	err = json.Unmarshal(body, &fnBundle)
+	return &fnBundle, err
 }

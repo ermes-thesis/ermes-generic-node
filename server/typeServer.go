@@ -13,6 +13,7 @@ import (
 	"scheduler"
 	"server/clientrepo"
 	"server/info"
+	"tokenDecoder"
 )
 
 type ServerType interface {
@@ -27,11 +28,12 @@ type Server struct {
 	Handler         *http.ServeMux
 	ClientRepo      *clientrepo.ClientRepo
 	RedisClient     db.GenericDB
+	TokenDecoder    tokenDecoder.TokenDecoder
 	MetadataManager metadataManager.MetadataManager
 	Scheduler       scheduler.Scheduler
 }
 
-func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.GenericDB, metadataManager metadataManager.MetadataManager, scheduler scheduler.Scheduler) (*Server, error) {
+func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.GenericDB, tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager, scheduler scheduler.Scheduler) (*Server, error) {
 
 	fmt.Fprintf(logger, "Creating a new Server instance... \n")
 
@@ -48,6 +50,7 @@ func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.Gen
 		Handler:         mux,
 		ClientRepo:      clientrepo.CreateClientRepo(),
 		RedisClient:     redisClient,
+		TokenDecoder:    tokenDecoder,
 		MetadataManager: metadataManager,
 		Scheduler:       scheduler,
 	}

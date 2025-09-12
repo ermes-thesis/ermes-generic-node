@@ -56,12 +56,19 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	if err != nil {
 		return fmt.Errorf("error creating token decoder: %w", err)
 	}
-	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w, funcCache, tknDecoder)
+	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w, funcCache)
+
+	//node set up
+	collections := &dataManagerShared.CollectionPartialView{
+		KnownCollections: make(map[string]dataManagerShared.Collection),
+	}
+	clDiscovererInstance := clDiscoverer.GetCollectionsDiscovererInstance(*log)
+	clDiscovererInstance.Init(collections)
 
 	scheduler := scheduler2.NewScheduler()
 
 	//Run server
-	ser, err := server.NewServer(w, serverInfo, redisClient, metadataLookup, scheduler)
+	ser, err := server.NewServer(w, serverInfo, redisClient, tknDecoder, metadataLookup, scheduler)
 
 	if err != nil {
 		return err
@@ -80,14 +87,8 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 		}
 	}()
 
-	//node set up
-	collections := &dataManagerShared.CollectionPartialView{
-		KnownCollections: make(map[string]dataManagerShared.Collection),
-	}
 	migrationManagerInstance := migrationManager.GetMigrationManagerInstance(*log)
 	migrationManagerInstance.Init(collections, myPenalityFunc, cfg.MigrationManager, cfg.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *log)
-	clDiscovererInstance := clDiscoverer.GetCollectionsDiscovererInstance(*log)
-	clDiscovererInstance.Init(collections)
 
 	// TODO: understand these lines of code
 	// I think it should be some synchronization method when the server shuts down

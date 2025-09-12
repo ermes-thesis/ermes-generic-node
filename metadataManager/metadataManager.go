@@ -11,7 +11,6 @@ import (
 	"server/info"
 	"slices"
 	"strings"
-	"tokenDecoder"
 )
 
 // map[tmpl_name]map[param_name]param_value
@@ -19,26 +18,24 @@ type QueryTemplatesParamsMapping[T any] map[string]map[string]T
 
 type MetadataManager interface {
 	CreateMetadata(collectionId string, metadata utils.Metadata, reqOrigin PropagationOrigin) error
-	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups string, geolocation string) (map[uint64]utils.QueryResult, error)
+	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error)
 }
 
 type MetadataManagerImpl struct {
 	redis              db.GenericDB
 	logger             io.Writer
 	templateCache      caches.FunctionCache
-	tokenDecoder       tokenDecoder.TokenDecoder
 	serverInfo         *info.ServerInfo
 	queryPropagator    QueryPropagator
 	metadataPropagator MetadataPropagator
 	customMetadataKeys []string
 }
 
-func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, logger io.Writer, cache caches.FunctionCache, decoder tokenDecoder.TokenDecoder) MetadataManager {
+func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, logger io.Writer, cache caches.FunctionCache) MetadataManager {
 	return &MetadataManagerImpl{
 		redis:         redis,
 		logger:        logger,
 		templateCache: cache,
-		tokenDecoder:  decoder,
 		//templateCache: map[string]string{
 		//	"private_data_query": `
 		//		{
@@ -121,7 +118,7 @@ func (l MetadataManagerImpl) CreateMetadata(collectionId string, metadata utils.
 	return nil
 }
 
-func (l MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error) {
+func (l MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error) {
 	// Execute the query locally if the server's metadata domain match the geolocation, it is its prefix or if the local node is a cloud node.
 	//Otherwise, propagate the query to the cloud node or the father node.
 	if strings.HasPrefix(geolocation, l.serverInfo.MetadataDomain) || l.serverInfo.Father == nil {
@@ -132,11 +129,6 @@ func (l MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when unmarshalling query parameters: %s \n", err)
 			return nil, err
-		}
-
-		groups, err := l.tokenDecoder.DecodeGroupToken(groupToken)
-		if err != nil {
-			return nil, fmt.Errorf("error decoding group token: %v", err)
 		}
 
 		// For each template specified in the HTTP request

@@ -7,9 +7,10 @@ import (
 	"metadataManager"
 	"net/http"
 	"os"
+	"tokenDecoder"
 )
 
-func HandleRouteLookup(logger *io.Writer, lookupMgr metadataManager.MetadataManager) http.HandlerFunc {
+func HandleRouteLookup(logger *io.Writer, tokenDecoder tokenDecoder.TokenDecoder, lookupMgr metadataManager.MetadataManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(*logger, "got /lookup \n")
 
@@ -17,10 +18,16 @@ func HandleRouteLookup(logger *io.Writer, lookupMgr metadataManager.MetadataMana
 		fnVersion := r.Header.Get("X-ERMES-REQ-FUNCTION-VERSION")
 		queryParams := r.Header.Get("X-ERMES-QUERY")
 		geolocation := r.Header.Get("X-ERMES-POSITION")
-		groups := r.Header.Get("X-ERMES-GROUPS")
+		groupToken := r.Header.Get("X-ERMES-GROUPS")
 		r.Body.Close()
 
-		queries, err := lookupMgr.ExecuteQueries(fnName, fnVersion, queryParams, groups, geolocation)
+		groups, _, err := tokenDecoder.DecodeGroupToken(groupToken)
+		if err != nil {
+			http.Error(w, "Error decoding group token", http.StatusUnauthorized)
+			return
+		}
+
+		queries, err := lookupMgr.ExecuteQueries(fnName, fnVersion, queryParams, groups, groupToken, geolocation)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when executing queries: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)

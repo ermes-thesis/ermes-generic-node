@@ -14,12 +14,12 @@ func (s *Server) compileRoutes() {
 	s.Handler.Handle("/pvt-add-client", s.checkErmesSecret(private.HandleRoutePvtAddClient(&s.Logger, s.Serverinfo, s.ClientRepo)))
 	s.Handler.Handle("/pvt-ask-client-exists", s.checkErmesSecret(private.HandleRoutePvtAskClientExists(&s.Logger, s.Serverinfo, s.ClientRepo)))
 	s.Handler.Handle("/pvt-data-transfer-request", s.checkErmesSecret(private.HandleRoutePvtDataTransferRequest(&s.Logger, s.Serverinfo)))
-	s.Handler.Handle("/lookup", s.checkErmesSecret(private.HandleRouteLookup(&s.Logger, s.MetadataManager)))
+	s.Handler.Handle("/lookup", s.checkErmesSecret(private.HandleRouteLookup(&s.Logger, s.TokenDecoder, s.MetadataManager)))
 	s.Handler.Handle("/create_metadata/{collection_id}", s.checkErmesSecret(private.HandleRouteCreateMetadata(&s.Logger, s.MetadataManager, s.Serverinfo)))
 	s.Handler.Handle("/info", public.HandleRouteInfo(&s.Logger, s.Serverinfo))
 
-	s.Handler.Handle("/invoke-function/{name}/{version}/", s.checkMiddlewareSecret(public.HandleFunctionInvocation(&s.Logger, s.Serverinfo, s.MetadataManager, s.Scheduler)))
-	s.Handler.Handle("/invoke-function/{name}", s.checkMiddlewareSecret(public.HandleFunctionInvocation(&s.Logger, s.Serverinfo, s.MetadataManager, s.Scheduler)))
+	s.Handler.Handle("/invoke-function/{name}/{version}/", s.checkMiddlewareSecret(public.HandleFunctionInvocation(&s.Logger, s.Serverinfo, s.TokenDecoder, s.MetadataManager, s.Scheduler)))
+	s.Handler.Handle("/invoke-function/{name}", s.checkMiddlewareSecret(public.HandleFunctionInvocation(&s.Logger, s.Serverinfo, s.TokenDecoder, s.MetadataManager, s.Scheduler)))
 
 	// Let's test the method AddCustomRoute with the /info handler but calling it /info2
 

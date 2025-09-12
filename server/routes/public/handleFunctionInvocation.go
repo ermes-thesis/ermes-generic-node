@@ -10,9 +10,10 @@ import (
 	"os"
 	"scheduler"
 	"server/info"
+	"tokenDecoder"
 )
 
-func HandleFunctionInvocation(logger *io.Writer, serverinfo *info.ServerInfo, metadataManager metadataManager.MetadataManager, scheduler scheduler.Scheduler) http.HandlerFunc {
+func HandleFunctionInvocation(logger *io.Writer, serverinfo *info.ServerInfo, tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager, scheduler scheduler.Scheduler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(*logger, "got function invocation \n")
 		defer r.Body.Close()
@@ -28,7 +29,13 @@ func HandleFunctionInvocation(logger *io.Writer, serverinfo *info.ServerInfo, me
 		queryParams := r.Header.Get("X-ERMES-QUERY")
 		cachedQuery := r.Header.Get("X-ERMES-CACHED-QUERY")
 		geolocation := r.Header.Get("X-ERMES-POSITION")
-		groups := r.Header.Get("X-ERMES-GROUPS")
+		groupToken := r.Header.Get("X-ERMES-GROUPS")
+
+		groups, userId, err := tokenDecoder.DecodeGroupToken(groupToken)
+		if err != nil {
+			http.Error(w, "Error decoding group token", http.StatusUnauthorized)
+			return
+		}
 
 		var collections map[string][]utils.CollectionInfo
 		var toCache map[uint64]utils.QueryResult
@@ -45,7 +52,7 @@ func HandleFunctionInvocation(logger *io.Writer, serverinfo *info.ServerInfo, me
 		}
 
 		if queryParams != "" {
-			res, err := metadataManager.ExecuteQueries(fnName, fnVersion, queryParams, groups, geolocation)
+			res, err := metadataManager.ExecuteQueries(fnName, fnVersion, queryParams, groups, groupToken, geolocation)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error when executing queries: %s \n", err)
 				w.WriteHeader(http.StatusInternalServerError)

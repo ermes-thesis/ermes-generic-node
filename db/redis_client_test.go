@@ -118,7 +118,7 @@ func TestMetadata(t *testing.T) {
 		Name:           "name1",
 		Groups:         []string{"group1"},
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
-		Consistency:    utils.EVENTUAL_CONSISTENT,
+		Consistency:    utils.EventualConsistent,
 		CustomMetadata: map[string]string{},
 	}
 
@@ -229,7 +229,7 @@ func TestMemStats(t *testing.T) {
 		Groups:         groups,
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Geolocation:    "IT",
-		Consistency:    utils.EVENTUAL_CONSISTENT,
+		Consistency:    utils.EventualConsistent,
 		CustomMetadata: map[string]string{},
 	})
 	require.NoError(t, err, "Expected no error setting metadata")

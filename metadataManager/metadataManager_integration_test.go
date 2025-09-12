@@ -294,7 +294,7 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 		Owner:          "test",
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Groups:         []string{"groupC"},
-		Consistency:    utils.EVENTUAL_CONSISTENT,
+		Consistency:    utils.EventualConsistent,
 		Geolocation:    "IT/Milan",
 		CustomMetadata: map[string]string{},
 	}
@@ -395,7 +395,7 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 		Owner:          "test",
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Groups:         []string{"groupC"},
-		Consistency:    utils.EVENTUAL_CONSISTENT,
+		Consistency:    utils.EventualConsistent,
 		Geolocation:    "IT/Milan",
 		CustomMetadata: map[string]string{},
 	}
@@ -516,7 +516,7 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 		Owner:          "test",
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Groups:         []string{"groupC"},
-		Consistency:    utils.EVENTUAL_CONSISTENT,
+		Consistency:    utils.EventualConsistent,
 		Geolocation:    "IT/Milan",
 		CustomMetadata: map[string]string{},
 	}
@@ -542,7 +542,7 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 		Owner:          "test",
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Groups:         []string{"groupC"},
-		Consistency:    utils.EVENTUAL_CONSISTENT,
+		Consistency:    utils.EventualConsistent,
 		Geolocation:    "IT/Milan/Polimi",
 		CustomMetadata: map[string]string{},
 	}
@@ -599,7 +599,7 @@ func startRedisContainer(t *testing.T, child bool) (db.GenericDB, func()) {
 		Owner:       "12345",
 		CreatedAt:   time.Unix(1745748000, 0),
 		Groups:      []string{"groupA", "groupB", "groupC"},
-		Consistency: utils.EVENTUAL_CONSISTENT,
+		Consistency: utils.EventualConsistent,
 		Geolocation: "IT/Como",
 	})
 	assert.NoError(t, err, "Expected no error when setting metadata for collection 12345")
@@ -609,7 +609,7 @@ func startRedisContainer(t *testing.T, child bool) (db.GenericDB, func()) {
 		Owner:       "12345",
 		CreatedAt:   time.Unix(745748000, 0),
 		Groups:      []string{"groupC"},
-		Consistency: utils.EVENTUAL_CONSISTENT,
+		Consistency: utils.EventualConsistent,
 		Geolocation: "IT/Milan",
 	})
 	assert.NoError(t, err, "Expected no error when setting metadata for collection 54321")
@@ -620,7 +620,7 @@ func startRedisContainer(t *testing.T, child bool) (db.GenericDB, func()) {
 			Owner:       "12345",
 			CreatedAt:   time.Unix(1745749000, 0),
 			Groups:      []string{"groupC"},
-			Consistency: utils.EVENTUAL_CONSISTENT,
+			Consistency: utils.EventualConsistent,
 			Geolocation: "IT",
 		})
 		assert.NoError(t, err, "Expected no error when setting metadata for collection 1111")

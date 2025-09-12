@@ -12,20 +12,20 @@ import (
 type Consistency int
 
 const (
-	// STRONG_CONSISTENT ensures sequential reads and writes.
+	// SequentialConsistent ensures sequential reads and writes.
 	// Writes are visible immediately and consistently across all nodes,
 	// but may require coordination with a leader.
 	//
 	// Use this Consistency if you prefer strong guarantees on the data of the
 	// collection at the expenses of serverless functions performances
-	STRONG_CONSISTENT Consistency = iota
+	SequentialConsistent Consistency = iota
 
-	// EVENTUAL_CONSISTENT provides lower latency and higher availability by allowing
+	// EventualConsistent provides lower latency and higher availability by allowing
 	// reads and writes to occur on any replica, with eventual convergence across replicas.
 	//
 	// Use this Consistency if you prefer higher serverless functions performances
 	// at the expanses of the data consistency
-	EVENTUAL_CONSISTENT
+	EventualConsistent
 )
 
 type Metadata struct {

@@ -128,7 +128,7 @@ func TestCreateMetadata(t *testing.T) {
 		Owner:       "fake",
 		CreatedAt:   tm,
 		Groups:      []string{"g1", "g2", "g3"},
-		Consistency: utils.EVENTUAL_CONSISTENT,
+		Consistency: utils.EventualConsistent,
 		Geolocation: "IT",
 		CustomMetadata: map[string]string{
 			"key1": "value1",

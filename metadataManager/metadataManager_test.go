@@ -10,7 +10,6 @@ import (
 	"server/info"
 	"testing"
 	"time"
-	tokenDecoder_mock "tokenDecoder/mocks"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -83,13 +82,12 @@ func TestExecuteQueries(t *testing.T) {
 	q2 := queryTemplates["gt_data_query"]
 	fnCache.EXPECT().GetTemplate(requestedFnName, requestedFnVersion, "private_data_query").Return(&q, nil)
 	fnCache.EXPECT().GetTemplate(requestedFnName, requestedFnVersion, "gt_data_query").Return(&q2, nil)
-	tknDecoder := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoder.EXPECT().DecodeGroupToken("bohhh").Return([]string{"groupC"}, nil)
+
 	// Create a new MetadataManager instance
-	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger, fnCache, tknDecoder)
+	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger, fnCache)
 
 	// Execute the query
-	result, err := manager.ExecuteQueries(requestedFnName, requestedFnVersion, string(queryParams), "bohhh", "IT/Milan")
+	result, err := manager.ExecuteQueries(requestedFnName, requestedFnVersion, string(queryParams), []string{"groupC"}, "boh", "IT/Milan")
 	assert.NoError(t, err, "Expected no error when executing queries")
 
 	assert.Len(t, result, 1, "Expected result to be non-empty")

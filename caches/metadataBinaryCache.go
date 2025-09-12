@@ -48,7 +48,7 @@ func NewMetadataBinaryCache(config config.MetadataBinaryCacheConfig) (*MetadataB
 //   - error: non-nil if writing the file to disk fails
 func (c *MetadataBinaryCache) Set(functionMetadata metadata.FunctionMetadata, binary []byte) error {
 	functionNameString := functionMetadata.Name + "@" + functionMetadata.Version
-	binPath := filepath.Join(c.binDir, functionNameString)
+	binPath := filepath.Join(c.binDir, functionNameString+".wasm")
 
 	err := os.WriteFile(binPath, binary, 0644)
 	if err != nil {
@@ -61,7 +61,7 @@ func (c *MetadataBinaryCache) Set(functionMetadata metadata.FunctionMetadata, bi
 
 func (c *MetadataBinaryCache) GetWithBinary(functionName string, functionVersion string) ([]byte, *metadata.FunctionMetadata, bool, error) {
 	functionNameString := functionName + "@" + functionVersion
-	binPath := filepath.Join(c.binDir, functionNameString)
+	binPath := filepath.Join(c.binDir, functionNameString+".wasm")
 	if fnMetadata, ok := c.cache.Get(functionNameString); ok {
 		bin, err := os.ReadFile(binPath)
 		if err != nil {

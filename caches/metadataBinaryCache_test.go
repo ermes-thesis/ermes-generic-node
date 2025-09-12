@@ -38,7 +38,7 @@ func TestBinaryCache_SetAndGet(t *testing.T) {
 	require.NoError(t, err)
 
 	// Check file exists
-	binPath := filepath.Join(tmpDir, fn+"@"+fnVersion)
+	binPath := filepath.Join(tmpDir, fn+"@"+fnVersion+".wasm")
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
 		require.Fail(t, "binary does not exist")
 	}
@@ -98,7 +98,7 @@ func TestBinaryCache_EvictionRemovesFile(t *testing.T) {
 	}
 
 	// fn2 should still exist
-	binPath2 := filepath.Join(tmpDir, fn2+"@"+fnVersion2)
+	binPath2 := filepath.Join(tmpDir, fn2+"@"+fnVersion2+".wasm")
 	if _, err := os.Stat(binPath2); os.IsNotExist(err) {
 		require.Fail(t, "binary2 should still exists but was removed")
 	}

@@ -68,7 +68,14 @@ func HandleFunctionInvocation(logger *io.Writer, serverinfo *info.ServerInfo, to
 			}
 		}
 
-		httpCode, response, err := scheduler.Schedule(fnName, fnVersion, collections)
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error reading request body: %s \n", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		functionResponse, err := scheduler.Schedule(fnName, fnVersion, collections, body, groups, userId, groupToken)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when scheduling function: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -83,7 +90,7 @@ func HandleFunctionInvocation(logger *io.Writer, serverinfo *info.ServerInfo, to
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-ERMES-CACHE", string(jsonToCache))
-		w.WriteHeader(httpCode)
-		w.Write(response)
+		w.WriteHeader(functionResponse.StatusCode)
+		w.Write(functionResponse.Body)
 	}
 }

@@ -24,6 +24,8 @@ import (
 	"sync"
 	"time"
 	"tokenDecoder"
+
+	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
 )
 
 // TODO replace
@@ -65,7 +67,9 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	clDiscovererInstance := clDiscoverer.GetCollectionsDiscovererInstance(*log)
 	clDiscovererInstance.Init(collections)
 
-	scheduler := scheduler2.NewScheduler()
+	wasmExecutorPool := wasm.NewExecutorPool(10)
+
+	scheduler := scheduler2.NewScheduler(clDiscovererInstance, funcCache, wasmExecutorPool)
 
 	//Run server
 	ser, err := server.NewServer(w, serverInfo, redisClient, tknDecoder, metadataLookup, scheduler)

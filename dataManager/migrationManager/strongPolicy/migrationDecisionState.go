@@ -242,7 +242,7 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 }
 
 func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
-	sizeGoal := m.policy.lruConfig.Size * uint(m.policy.lruConfig.SafeLevel)
+	sizeGoal := uint(float32(m.policy.lruConfig.Size) * (1.0 - m.policy.lruConfig.SafeLevel))
 	m.policy.logger.Println("DEFAULT-STRONG-POLICY", fmt.Sprintf("set lru to safe level %d", sizeGoal), log.INFO)
 	collectionList := m.policy.lruCache.FreeToAchieveSize(sizeGoal)
 	var wg sync.WaitGroup

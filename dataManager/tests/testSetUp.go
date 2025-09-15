@@ -85,7 +85,7 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	}
 	lurConfig := config.LruConfig{
 		Size:      10,
-		SafeLevel: 0.9,
+		SafeLevel: 0.95, //to avoid safe leve clean up
 	}
 
 	db := mockDb.NewGenericDB(t)

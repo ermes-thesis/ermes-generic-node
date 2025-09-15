@@ -14,6 +14,7 @@ const (
 	gossipPath       = "/gossip"
 	repoPath         = "/repo"
 	remoteAccessPath = "/dataRemoteAccess"
+	remoteUpdatePath = "/dataRemoteUpdate"
 )
 
 //###############################################################
@@ -78,7 +79,9 @@ func (s *MigrationManagerSenderImpl) RepoPath() string {
 
 type CollectionDiscovererSender interface {
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames ...string) ([]any, error)
+	WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string) error
 	RemoteAccessPath() string
+	RemoteUpdatePath() string
 }
 
 type CollectionDiscovererSenderImpl struct {
@@ -123,6 +126,30 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId
 	return resp.Records, err
 }
 
+func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string) error {
+	s.logger.Println("SENDER", fmt.Sprintf("request collection %s update to %s", collectionId, hostId), log.INFO)
+
+	msg := gossip.RemoteUpdateRequest{
+		CollectionId: collectionId,
+		RecordNames:  recordNames,
+		Record:       value,
+	}
+
+	res, err := s.server.SendGenericHTTPRequestRetrunResponse(hostId, remoteUpdatePath, msg)
+	if err != nil {
+		s.logger.Println("HTTP-REQ", "Error reading response body", log.ERROR)
+		return err
+	}
+
+	defer res.Body.Close()
+
+	return nil
+}
+
 func (s *CollectionDiscovererSenderImpl) RemoteAccessPath() string {
 	return remoteAccessPath
+}
+
+func (s *CollectionDiscovererSenderImpl) RemoteUpdatePath() string {
+	return remoteUpdatePath
 }

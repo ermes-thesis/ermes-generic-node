@@ -98,6 +98,9 @@ func (m *DataManagerImp) SetRecord(collectionId string, recordName string, recor
 		func() error {
 			return m.dbInterface.SetRecord(collectionId, recordName, recordValue)
 		},
+		func(addr string) error {
+			return m.collectionsDiscoverer.WeakCollectionRemoteRecordWrite(addr, collectionId, recordName, recordValue)
+		},
 	)
 }
 
@@ -120,6 +123,9 @@ func (m *DataManagerImp) SetRecords(collectionId string, recordNames []string, r
 		collectionId,
 		func() error {
 			return m.dbInterface.SetRecords(collectionId, recordNames, recordValues)
+		},
+		func(addr string) error {
+			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsWrite(addr, collectionId, recordNames, recordValues)
 		},
 	)
 }

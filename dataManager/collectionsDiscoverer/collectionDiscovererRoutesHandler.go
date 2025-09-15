@@ -70,3 +70,56 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess(logger log.Logger)
 		w.WriteHeader(http.StatusOK)
 	})
 }
+
+func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate(logger log.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger.Println("HTTP-REQ", "New remote update request received through HTTP request", log.INFO)
+
+		defer r.Body.Close()
+
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var msg gossip.RemoteUpdateRequest
+		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
+			logger.Println("HTTP-REQ", "Error parsing remote access request", log.ERROR)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var dbErr error
+
+		if len(msg.RecordNames) == 0 {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		} else if len(msg.RecordNames) == 1 {
+			dbFn := func() error {
+				return c.dbInterface.SetRecord(msg.CollectionId, msg.RecordNames[0], msg.Record[0])
+			}
+			remoteFn := func(addr string) error {
+				return c.WeakCollectionRemoteRecordWrite(addr, msg.CollectionId, msg.RecordNames[0], msg.Record[0])
+			}
+			dbErr = UpdateCollection(c, msg.CollectionId, dbFn, remoteFn)
+		} else {
+			dbFn := func() error {
+				return c.dbInterface.SetRecords(msg.CollectionId, msg.RecordNames, msg.Record)
+			}
+			remoteFn := func(addr string) error {
+				return c.WeakCollectionRemoteRecordsWrite(addr, msg.CollectionId, msg.RecordNames, msg.Record)
+			}
+			dbErr = UpdateCollection(c, msg.CollectionId, dbFn, remoteFn)
+		}
+
+		if dbErr != nil {
+			logger.Println("HTTP-REQ", "Error accessing collection: "+dbErr.Error(), log.ERROR)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	})
+}

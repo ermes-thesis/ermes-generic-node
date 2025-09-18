@@ -6,9 +6,11 @@ import (
 	shared "dataManager/shared"
 	"encoding/json"
 	"fmt"
+	"io"
 	"metadataManager/utils"
-
-	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
+	"net/http"
+	"scheduler/wasm-pool"
+	"server/info"
 )
 
 type Scheduler interface {
@@ -23,14 +25,16 @@ type FunctionResult struct {
 type SchedulerImpl struct {
 	collectionDiscoverer collectionsDiscoverer.CollectionsDiscoverer
 	cache                caches.FunctionCache
-	wasmExecutorPool     *wasm.ExecutorPool
+	wasmExecutorPool     wasm.ExecutorPool
+	serverInfo           *info.ServerInfo
 }
 
-func NewScheduler(collectionDiscoverer collectionsDiscoverer.CollectionsDiscoverer, cache caches.FunctionCache, wasmExecutorPool *wasm.ExecutorPool) Scheduler {
+func NewScheduler(collectionDiscoverer collectionsDiscoverer.CollectionsDiscoverer, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *info.ServerInfo) Scheduler {
 	return &SchedulerImpl{
 		collectionDiscoverer: collectionDiscoverer,
 		cache:                cache,
 		wasmExecutorPool:     wasmExecutorPool,
+		serverInfo:           serverInfo,
 	}
 }
 
@@ -44,6 +48,9 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 
 	var sequentialCollection shared.Collection
 	eventualCollectionPresent := false
+	eventualHostIds := make(map[string]uint)
+	hostWithMoreEventual := s.serverInfo.Father.Address
+	maxEventual := uint(0)
 	for _, cols := range collections {
 		for _, col := range cols {
 			found, collection := s.collectionDiscoverer.IsCollectionLocallyPresent(col.Id)
@@ -52,8 +59,17 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 					return nil, fmt.Errorf("multiple sequentially consistent collections are not supported")
 				}
 				sequentialCollection = collection
-			} else if found {
-				eventualCollectionPresent = true
+			} else {
+				if found {
+					eventualCollectionPresent = true
+				}
+				for hostId := range collection.HostsId() {
+					eventualHostIds[hostId]++
+					if eventualHostIds[hostId] > maxEventual {
+						maxEventual = eventualHostIds[hostId]
+						hostWithMoreEventual = hostId
+					}
+				}
 			}
 		}
 	}
@@ -64,8 +80,8 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 	}
 
 	if sequentialCollection != nil {
+		seqCollectionCasted, ok := sequentialCollection.(*shared.StrongCollection)
 		if sequentialCollection.IsLocal() {
-			seqCollectionCasted, ok := sequentialCollection.(*shared.StrongCollection)
 			if !ok {
 				return nil, fmt.Errorf("collection %s is not a strong collection", sequentialCollection)
 			}
@@ -74,22 +90,27 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 				return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId)
 			} else {
 				// Forward to seqCollectionCasted.LeaderId
+				return s.forwardRequest(seqCollectionCasted.LeaderId, functionName, functionVersion, collections, groupToken)
 			}
 		} else {
 			// Forward to the leader or to a replica based on the functionMetadata.StrongCollWriteAccess
+			if functionMetadata.StrongCollWriteAccess {
+				// Forward to seqCollectionCasted.LeaderId
+				return s.forwardRequest(seqCollectionCasted.LeaderId, functionName, functionVersion, collections, groupToken)
+			} else {
+				// Forward to any node that has the collection
+				//TODO: check if maps in Go are iterated consistently
+				for hostId := range seqCollectionCasted.HostsId() {
+					return s.forwardRequest(hostId, functionName, functionVersion, collections, groupToken)
+				}
+				return s.forwardRequest(s.serverInfo.Father.Address, functionName, functionVersion, collections, groupToken)
+			}
 		}
 	} else if eventualCollectionPresent {
 		return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId)
 	} else {
-		// Forward to any node that has one of the eventual collections
+		return s.forwardRequest(hostWithMoreEventual, functionName, functionVersion, collections, groupToken)
 	}
-
-	result := &FunctionResult{
-		StatusCode: 500,
-		Body:       []byte(fmt.Sprintf("Function %s@%s not executed!!!!", functionName, functionVersion)),
-	}
-	return result, nil
-
 }
 
 func (s *SchedulerImpl) executeLocally(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, reqBody []byte, groups []string, userId string) (*FunctionResult, error) {
@@ -109,5 +130,33 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 	return &FunctionResult{
 		StatusCode: httpCode,
 		Body:       response,
+	}, nil
+}
+
+func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, groupToken string) (*FunctionResult, error) {
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/invoke-function/%s/%s", dest, functionName, functionVersion), nil)
+	if err != nil {
+		return nil, fmt.Errorf("error creating request to leader: %v", err)
+	}
+	req.Header.Set("X-ERMES-GROUPS", groupToken)
+	collectionsJson, err := json.Marshal(collections)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling collections: %v", err)
+	}
+	req.Header.Set("X-ERMES-CACHED-QUERY", string(collectionsJson))
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("error forwarding request to leader: %v", err)
+	}
+
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response from leader: %v", err)
+	}
+	return &FunctionResult{
+		StatusCode: resp.StatusCode,
+		Body:       body,
 	}, nil
 }

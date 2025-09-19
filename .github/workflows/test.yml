@@ -43,27 +43,7 @@ jobs:
       - name: Generate mocks
         run: |
           cd ermes-generic-node
-          cd metadataManager
           mockery
-          cd ..
-          cd db
-          mockery
-          cd ..
-          cd caches
-          mockery
-          cd ..
-          cd tokenDecoder
-          mockery
-          cd ..
-          cd scheduler
-          mockery
-          cd ..
-          cd server
-          mockery
-          cd ..
-          cd dataManager
-          mockery
-          cd ..
           cd ../ermes-wasm-pool
           mockery
           cd ..

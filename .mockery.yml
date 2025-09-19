@@ -1,0 +1,33 @@
+all: true
+force-file-write: true
+formatter: goimports
+log-level: info
+structname: '{{.InterfaceName}}'
+filename: '{{.InterfaceDirRelative}}/{{.InterfaceName}}.go'
+pkgname: '{{.SrcPackageName}}_mock'
+recursive: true
+require-template-schema-exists: true
+template: testify
+template-schema: '{{.Template}}.schema.json'
+packages:
+  tokenDecoder:
+    config:
+      dir: 'tokenDecoder/mocks'
+  metadataManager:
+    config:
+      dir: 'metadataManager/mocks'
+  db:
+    config:
+      dir: 'db/mocks'
+  dataManager:
+    config:
+      dir: 'dataManager/mocks'
+  caches:
+    config:
+      dir: 'caches/mocks'
+  server:
+    config:
+      dir: 'server/mocks'
+  scheduler:
+    config:
+      dir: 'scheduler/mocks'

@@ -34,3 +34,5 @@
 !.mockery.yml
 
 */mocks
+
+!.devcontainer/*

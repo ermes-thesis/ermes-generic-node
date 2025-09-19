@@ -1,22 +1,18 @@
-package db
+package redis_test
 
 import (
-	"config"
-	"context"
+	"db/test_utils"
 	"fmt"
 	"metadataManager/utils"
-	"net/url"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
 
 func TestRecord(t *testing.T) {
-	redisClient, shutdownFunc1 := startRedisContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -76,7 +72,7 @@ func TestRecord(t *testing.T) {
 }
 
 func TestCollection(t *testing.T) {
-	redisClient, shutdownFunc1 := startRedisContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -108,7 +104,7 @@ func TestCollection(t *testing.T) {
 }
 
 func TestMetadata(t *testing.T) {
-	redisClient, shutdownFunc1 := startRedisContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -139,7 +135,7 @@ func TestMetadata(t *testing.T) {
 }
 
 func TestGroup(t *testing.T) {
-	redisClient, shutdownFunc1 := startRedisContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -166,7 +162,7 @@ func TestGroup(t *testing.T) {
 }
 
 func TestIndex(t *testing.T) {
-	redisClient, shutdownFunc1 := startRedisContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -213,7 +209,7 @@ func TestIndex(t *testing.T) {
 }
 
 func TestMemStats(t *testing.T) {
-	redisClient, shutdownFunc1 := startRedisContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -321,7 +317,7 @@ func TestMemStats(t *testing.T) {
 }
 
 func TestMemoryStress(t *testing.T) {
-	redisClient, shutdownFunc1 := startRedisContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -344,38 +340,4 @@ func TestMemoryStress(t *testing.T) {
 	res, err := redisClient.GetMemoryStats()
 	require.NoError(t, err, "Expected no error getting memory stats")
 	require.Exactly(t, uint64(1_000_002), res.KeysCount, "Expected 1000002 keys in memory stats")
-}
-
-func startRedisContainer(t *testing.T) (GenericDB, func()) {
-	ctx := context.Background()
-	redisContainer, err := tcredis.Run(ctx,
-		"redis/redis-stack:latest",
-		tcredis.WithSnapshotting(10, 1),
-		tcredis.WithLogLevel(tcredis.LogLevelVerbose),
-		testcontainers.WithCmd("redis-stack-server"),
-		testcontainers.WithCmdArgs("--maxmemory", "500mb"),
-		//tcredis.WithConfigFile(filepath.Join("testdata", "redis7.conf")),
-	)
-
-	if err != nil {
-		t.Fatalf("failed to start container: %s", err)
-		return nil, nil
-	}
-
-	connectionString, _ := redisContainer.ConnectionString(ctx)
-	parsedUrl, _ := url.Parse(connectionString)
-
-	client := NewRedisClient(config.RedisConfig{
-		Address:  parsedUrl.Hostname(),
-		Port:     parsedUrl.Port(),
-		Password: "",
-		DB:       0,
-		Protocol: 2,
-	}, ctx)
-
-	return client, func() {
-		if err := redisContainer.Terminate(ctx); err != nil {
-			t.Fatalf("failed to terminate container: %s", err)
-		}
-	}
 }

@@ -1,11 +1,7 @@
 package db
 
 import (
-	"config"
-	"context"
 	"metadataManager/utils"
-
-	"github.com/redis/go-redis/v9"
 )
 
 // GenericDB provides a generic database abstraction for managing collections of record
@@ -273,14 +269,4 @@ type GenericDB interface {
 	// Returns:
 	//	- error: non-nil if the close operation fails
 	Close() error
-}
-
-func NewRedisClient(config config.RedisConfig, ctx context.Context) GenericDB {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     config.Address + ":" + config.Port,
-		Password: config.Password,
-		DB:       config.DB,
-		Protocol: config.Protocol,
-	})
-	return &RedisClient{client: rdb, ctx: ctx}
 }

@@ -1,7 +1,9 @@
-package db
+package redis
 
 import (
+	"config"
 	"context"
+	"db"
 	"errors"
 	"metadataManager/utils"
 	"regexp"
@@ -15,6 +17,20 @@ import (
 type RedisClient struct {
 	client *redis.Client
 	ctx    context.Context
+}
+
+func NewRedisClient(config config.RedisConfig, ctx context.Context) *RedisClient {
+	rdb := redis.NewClient(&redis.Options{
+		Addr:     config.Address + ":" + config.Port,
+		Password: config.Password,
+		DB:       config.DB,
+		Protocol: config.Protocol,
+	})
+	return &RedisClient{client: rdb, ctx: ctx}
+}
+
+func (r *RedisClient) Client() *redis.Client {
+	return r.client
 }
 
 func (r *RedisClient) GetRecord(collectionId string, recordName string) (string, error) {
@@ -410,7 +426,7 @@ func (r *RedisClient) GetAvailableMemory() (uint64, error) {
 	return maxMem - stats.CurrentUsedMemory, nil
 }
 
-func (r *RedisClient) GetMemoryStats() (*MemStats, error) {
+func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
 	stats, err := r.client.Info(r.ctx, "MEMORY", "KEYSPACE").Result()
 	if err != nil {
 		return nil, err
@@ -425,8 +441,8 @@ func (r *RedisClient) GetMemoryStats() (*MemStats, error) {
 	}
 
 	datasetPerc, err := strconv.ParseFloat(statsMap["used_memory_dataset_perc"][:len(statsMap["used_memory_dataset_perc"])-1], 64)
-	memStats := MemStats{
-		AllocationStats: AllocationStats{
+	memStats := db.MemStats{
+		AllocationStats: db.AllocationStats{
 			UsedMemoryPeak:              strToInt(statsMap["used_memory_peak"]),
 			CurrentUsedMemory:           strToInt(statsMap["used_memory"]),
 			UsedMemoryOverhead:          strToInt(statsMap["used_memory_overhead"]),

@@ -61,6 +61,12 @@ jobs:
           cd server
           mockery
           cd ..
+          cd dataManager
+          mockery
+          cd ..
+          cd ../ermes-wasm-pool
+          mockery
+          cd ..
 
       - name: Install Go CTRF Reporter
         run: go install github.com/ctrf-io/go-ctrf-json-reporter/cmd/go-ctrf-json-reporter@latest

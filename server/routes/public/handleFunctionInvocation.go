@@ -9,11 +9,10 @@ import (
 	"net/http"
 	"os"
 	"scheduler"
-	"server/info"
 	"tokenDecoder"
 )
 
-func HandleFunctionInvocation(logger *io.Writer, serverinfo *info.ServerInfo, tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager, scheduler scheduler.Scheduler) http.HandlerFunc {
+func HandleFunctionInvocation(logger *io.Writer, tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager, scheduler scheduler.Scheduler) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(*logger, "got function invocation \n")
 		defer r.Body.Close()

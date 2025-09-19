@@ -48,39 +48,56 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 	}
 
 	var sequentialCollection shared.Collection
+	sequentialCollectionNeeded := false
 	eventualCollectionPresent := false
 	eventualHostIds := make(map[string]uint)
-	hostWithMoreEventual := s.serverInfo.Father.Address
+	hostWithMoreEventual := ""
+	if s.serverInfo.Father != nil {
+		hostWithMoreEventual = s.serverInfo.Father.Address
+	}
 	maxEventual := uint(0)
 	for _, cols := range collections {
 		for _, col := range cols {
 			found, collection := s.collectionDiscoverer.IsCollectionLocallyPresent(col.Id)
 			if col.Metadata.Consistency == utils.SequentialConsistent {
-				if sequentialCollection != nil {
+				if sequentialCollectionNeeded {
 					return nil, fmt.Errorf("multiple sequentially consistent collections are not supported")
 				}
 				sequentialCollection = collection
+				sequentialCollectionNeeded = true
 			} else {
 				if found {
 					eventualCollectionPresent = true
 				}
-				for hostId := range collection.HostsId() {
-					eventualHostIds[hostId]++
-					if eventualHostIds[hostId] > maxEventual {
-						maxEventual = eventualHostIds[hostId]
-						hostWithMoreEventual = hostId
+				if collection != nil {
+					for hostId := range collection.HostsId() {
+						eventualHostIds[hostId]++
+						if eventualHostIds[hostId] > maxEventual {
+							maxEventual = eventualHostIds[hostId]
+							hostWithMoreEventual = hostId
+						}
+					}
+				} else {
+					eventualHostIds[s.serverInfo.Father.Address]++
+					if eventualHostIds[s.serverInfo.Father.Address] > maxEventual {
+						maxEventual = eventualHostIds[s.serverInfo.Father.Address]
+						hostWithMoreEventual = s.serverInfo.Father.Address
 					}
 				}
 			}
 		}
 	}
 
-	functionMetadata, err := s.cache.GetMetadata(functionName, functionVersion)
-	if err != nil {
-		return nil, fmt.Errorf("error retrieving function metadata: %v", err)
-	}
+	if sequentialCollectionNeeded {
+		if sequentialCollection == nil {
+			return s.forwardRequest(s.serverInfo.Father.Address, functionName, functionVersion, collections, groupToken)
+		}
 
-	if sequentialCollection != nil {
+		functionMetadata, err := s.cache.GetMetadata(functionName, functionVersion)
+		if err != nil {
+			return nil, fmt.Errorf("error retrieving function metadata: %v", err)
+		}
+
 		seqCollectionCasted, ok := sequentialCollection.(*shared.StrongCollection)
 		if sequentialCollection.IsLocal() {
 			if !ok {
@@ -139,7 +156,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 }
 
 func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, groupToken string) (*FunctionResult, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/invoke-function/%s/%s", dest, functionName, functionVersion), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/offload-function/%s/%s", dest, functionName, functionVersion), nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request to leader: %v", err)
 	}
@@ -148,7 +165,8 @@ func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functio
 	if err != nil {
 		return nil, fmt.Errorf("error marshalling collections: %v", err)
 	}
-	req.Header.Set("X-ERMES-CACHED-QUERY", string(collectionsJson))
+	req.Header.Set("X-ERMES-COLLECTIONS", string(collectionsJson))
+	req.Header.Set("X-ERMES-SECRET", s.serverInfo.Secret)
 
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

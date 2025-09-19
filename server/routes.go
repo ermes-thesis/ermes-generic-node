@@ -18,8 +18,11 @@ func (s *Server) compileRoutes() {
 	s.Handler.Handle("/create_metadata/{collection_id}", s.checkErmesSecret(private.HandleRouteCreateMetadata(&s.Logger, s.MetadataManager, s.Serverinfo)))
 	s.Handler.Handle("/info", public.HandleRouteInfo(&s.Logger, s.Serverinfo))
 
-	s.Handler.Handle("/invoke-function/{name}/{version}/", s.checkMiddlewareSecret(public.HandleFunctionInvocation(&s.Logger, s.Serverinfo, s.TokenDecoder, s.MetadataManager, s.Scheduler)))
-	s.Handler.Handle("/invoke-function/{name}", s.checkMiddlewareSecret(public.HandleFunctionInvocation(&s.Logger, s.Serverinfo, s.TokenDecoder, s.MetadataManager, s.Scheduler)))
+	s.Handler.Handle("/invoke-function/{name}/{version}/", s.checkMiddlewareSecret(public.HandleFunctionInvocation(&s.Logger, s.TokenDecoder, s.MetadataManager, s.Scheduler)))
+	s.Handler.Handle("/invoke-function/{name}", s.checkMiddlewareSecret(public.HandleFunctionInvocation(&s.Logger, s.TokenDecoder, s.MetadataManager, s.Scheduler)))
+
+	s.Handler.Handle("/offload-function/{name}/{version}/", s.checkErmesSecret(private.HandleOffloadFunctionInvocation(&s.Logger, s.TokenDecoder, s.Scheduler)))
+	s.Handler.Handle("/offload-function/{name}", s.checkErmesSecret(private.HandleOffloadFunctionInvocation(&s.Logger, s.TokenDecoder, s.Scheduler)))
 
 	// Let's test the method AddCustomRoute with the /info handler but calling it /info2
 

@@ -8,7 +8,6 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/testcontainers/testcontainers-go"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
@@ -49,10 +48,6 @@ func StartRedisTestContainer(t *testing.T) (*redis.RedisClient, func()) {
 		DB:       0,
 		Protocol: 2,
 	}, ctx)
-
-	//https://redis.io/docs/latest/develop/ai/search-and-query/indexing/#index-limitations:~:text=After%20you%20create,modify%20command%20finishes
-	err = client.CreateIndex()
-	assert.NoError(t, err, "Expected no error when creating index")
 
 	return client, func() {
 		if err := redisContainer.Terminate(ctx); err != nil {

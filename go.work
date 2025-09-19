@@ -11,5 +11,4 @@ use (
 	tokenDecoder
 	logger
 	scheduler
-	../ermes-wasm-pool
 )

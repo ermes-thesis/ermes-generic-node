@@ -35,6 +35,9 @@ type ServerInfo struct {
 	MiddlewareSecret string
 
 	CloudNode *Node
+
+	// Address:port of the central repository
+	CentralRepo string
 }
 
 type Node struct {
@@ -86,6 +89,7 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 			Address:        name,
 			MetadataDomain: domain,
 		},
+		CentralRepo: config.Scheduler.CentralRepoAddress + ":" + config.Scheduler.CentralRepoPort,
 	}
 
 	return serverinfo, nil

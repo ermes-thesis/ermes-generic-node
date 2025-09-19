@@ -9,8 +9,9 @@ import (
 	"io"
 	"metadataManager/utils"
 	"net/http"
-	"scheduler/wasm-pool"
 	"server/info"
+
+	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
 )
 
 type Scheduler interface {
@@ -116,7 +117,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 func (s *SchedulerImpl) executeLocally(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, reqBody []byte, groups []string, userId string) (*FunctionResult, error) {
 	executor := s.wasmExecutorPool.Acquire()
 	defer executor.Release()
-	ctx := wasmContext{
+	ctx := WasmContext{
 		UserId:      userId,
 		GroupList:   groups,
 		Collections: collections,
@@ -126,10 +127,14 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		return nil, fmt.Errorf("error marshalling wasm context: %v", err)
 	}
 
-	response, httpCode := executor.InvokeFn(functionName+"@"+functionVersion, string(reqBody), string(ctxJson))
+	resp := executor.Invoke(functionName+"@"+functionVersion, "entry", reqBody, ctxJson)
+	repBody, err := json.Marshal(resp.Response)
+	if err != nil {
+		return nil, fmt.Errorf("error marshalling response body: %v", err)
+	}
 	return &FunctionResult{
-		StatusCode: httpCode,
-		Body:       response,
+		StatusCode: resp.HttpCode,
+		Body:       repBody,
 	}, nil
 }
 

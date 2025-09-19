@@ -16,6 +16,7 @@ type Config struct {
 	Redis            RedisConfig            `yaml:"redis"`
 	Lru              LruConfig              `yaml:"lru"`
 	FunctionsCache   FunctionsCacheConfig   `yaml:"functionsCache"`
+	Scheduler        SchedulerConfig        `yaml:"scheduler"`
 }
 
 type MigrationManagerConfig struct {
@@ -69,6 +70,10 @@ type FunctionRegistryConfig struct {
 	Address string `yaml:"address"`
 	Port    string `yaml:"port"`
 }
+type SchedulerConfig struct {
+	CentralRepoAddress string `yaml:"centralRepoAddress"`
+	CentralRepoPort    string `yaml:"centralRepoPort"`
+}
 
 // The father should look something like:
 //
@@ -111,5 +116,4 @@ func LoadConfig(filename string) Config {
 	}
 
 	return config
-	// Stampa i valori
 }

@@ -8,7 +8,7 @@ import (
 	"dataManager/lru"
 	"dataManager/migrationManager"
 	dataManagerShared "dataManager/shared"
-	"db"
+	"db/redis"
 	"errors"
 	"fmt"
 	"io"
@@ -18,7 +18,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	scheduler2 "scheduler"
+	"scheduler"
 	"server"
 	"server/info"
 	"sync"
@@ -48,7 +48,7 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 		return fmt.Errorf("error creating server info: %w", err)
 	}
 
-	redisClient := db.NewRedisClient(cfg.Redis, ctx)
+	redisClient := redis.NewRedisClient(cfg.Redis, ctx)
 	// remoteFunctionName must be in the format: "functionName/functionVersion"
 	funcCache, err := caches.NewDefaultFunctionCache(cfg.FunctionsCache, cfg.Node.Secret)
 	if err != nil {
@@ -68,8 +68,12 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	clDiscovererInstance.Init(collections)
 
 	wasmExecutorPool := wasm.NewExecutorPool(10)
+	err = scheduler.RegisterHostFns(wasmExecutorPool, redisClient.Client(), serverInfo)
+	if err != nil {
+		return fmt.Errorf("error registering host functions: %w", err)
+	}
 
-	scheduler := scheduler2.NewScheduler(clDiscovererInstance, funcCache, wasmExecutorPool)
+	scheduler := scheduler.NewScheduler(clDiscovererInstance, funcCache, wasmExecutorPool, serverInfo)
 
 	//Run server
 	ser, err := server.NewServer(w, serverInfo, redisClient, tknDecoder, metadataLookup, scheduler)

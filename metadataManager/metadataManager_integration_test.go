@@ -561,11 +561,7 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 func startRedisContainer(t *testing.T, child bool) (db.GenericDB, func()) {
 	client, shutdownFunc := test_utils.StartRedisTestContainer(t)
 
-	//https://redis.io/docs/latest/develop/ai/search-and-query/indexing/#index-limitations:~:text=After%20you%20create,modify%20command%20finishes
-	err := client.CreateIndex()
-	assert.NoError(t, err, "Expected no error when creating index")
-
-	err = client.SetMetadata("12345", utils.Metadata{
+	err := client.SetMetadata("12345", utils.Metadata{
 		Name:        "collectionName",
 		Owner:       "12345",
 		CreatedAt:   time.Unix(1745748000, 0),

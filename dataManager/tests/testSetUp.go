@@ -5,12 +5,12 @@ package tests
 
 import (
 	"config"
-	lru "dataManager/lru"
+	"dataManager/lru"
 	shared "dataManager/shared"
 	"db"
-	mockDb "db/mocks"
+	mockDb "mocks/db"
+	mockServer "mocks/server"
 	"server/info"
-	mockServer "server/mocks"
 	"testing"
 
 	"github.com/stretchr/testify/mock"

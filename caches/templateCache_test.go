@@ -2,10 +2,11 @@ package caches
 
 import (
 	"config"
-	"github.com/stretchr/testify/require"
 	"metadataManager/utils"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestTemplatesCache_SetAndGet(t *testing.T) {

@@ -3,11 +3,12 @@ package caches
 import (
 	"caches/metadata"
 	"config"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestBinaryCache_SetAndGet(t *testing.T) {

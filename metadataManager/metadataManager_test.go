@@ -1,11 +1,11 @@
 package metadataManager_test
 
 import (
-	caches_mock "caches/mocks"
 	"encoding/json"
 	"metadataManager"
-	metadataManager_mock "metadataManager/mocks"
 	"metadataManager/utils"
+	"mocks/caches"
+	"mocks/metadataManager"
 	"os"
 	"server/info"
 	"testing"

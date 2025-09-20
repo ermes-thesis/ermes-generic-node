@@ -1,9 +1,10 @@
 package caches
 
 import (
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestBaseCache_SetAndGet(t *testing.T) {

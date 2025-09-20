@@ -13,7 +13,6 @@
 !*.go
 !go.sum
 !go.mod
-!docker-compose.yml
 !go.work*
 
 #Include config examples
@@ -33,7 +32,7 @@
 # Include mockery file
 !.mockery.yml
 
-*/mocks
+mocks/
 
 !.devcontainer/*
 !scheduler/wasm_integration_test/*.wasm

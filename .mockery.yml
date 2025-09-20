@@ -3,31 +3,21 @@ force-file-write: true
 formatter: goimports
 log-level: info
 structname: '{{.InterfaceName}}'
-filename: '{{.InterfaceDirRelative}}/{{.InterfaceName}}.go'
+filename: '{{.InterfaceName}}.go'
 pkgname: '{{.SrcPackageName}}_mock'
+dir: 'mocks/{{.InterfaceDirRelative}}'
 recursive: true
 require-template-schema-exists: true
 template: testify
 template-schema: '{{.Template}}.schema.json'
 packages:
   tokenDecoder:
-    config:
-      dir: 'tokenDecoder/mocks'
   metadataManager:
-    config:
-      dir: 'metadataManager/mocks'
   db:
-    config:
-      dir: 'db/mocks'
   dataManager:
-    config:
-      dir: 'dataManager/mocks'
   caches:
-    config:
-      dir: 'caches/mocks'
   server:
-    config:
-      dir: 'server/mocks'
   scheduler:
+  github.com/ermes-thesis/ermes-wasm-pool:
     config:
-      dir: 'scheduler/mocks'
+      dir: 'mocks/ermes-wasm-pool/{{.InterfaceDirRelative}}'

@@ -2,7 +2,6 @@ package metadataManager_test
 
 import (
 	"bytes"
-	caches_mock "caches/mocks"
 	"db"
 	"db/test_utils"
 	"encoding/json"
@@ -10,16 +9,17 @@ import (
 	"io"
 	"metadataManager"
 	"metadataManager/utils"
+	"mocks/caches"
+	"mocks/scheduler"
+	"mocks/tokenDecoder"
 	"net/http"
 	"net/http/httptest"
 	"os"
-	scheduler_mock "scheduler/mocks"
 	"server"
 	"server/info"
 	"strings"
 	"testing"
 	"time"
-	tokenDecoder_mock "tokenDecoder/mocks"
 
 	"github.com/stretchr/testify/assert"
 )

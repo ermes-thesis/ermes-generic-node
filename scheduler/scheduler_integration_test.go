@@ -2,14 +2,16 @@ package scheduler_test
 
 import (
 	"caches/metadata"
-	caches_mock "caches/mocks"
-	collectionsDiscoverer_mock "dataManager/mocks/collectionsDiscoverer"
 	shared "dataManager/shared"
-	db_mock "db/mocks"
 	"encoding/json"
 	"io"
-	metadataManager_mock "metadataManager/mocks"
 	"metadataManager/utils"
+	"mocks/caches"
+	"mocks/dataManager/collectionsDiscoverer"
+	"mocks/db"
+	"mocks/ermes-wasm-pool/wasm-pool"
+	"mocks/metadataManager"
+	"mocks/tokenDecoder"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -20,9 +22,7 @@ import (
 	"strings"
 	"testing"
 	"time"
-	tokenDecoder_mock "tokenDecoder/mocks"
 
-	wasm_mock "github.com/ermes-thesis/ermes-wasm-pool/mocks/wasm-pool"
 	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
 	"github.com/stretchr/testify/assert"
 )

@@ -2,10 +2,10 @@ package caches
 
 import (
 	"caches/metadata"
-	caches_mock "caches/mocks"
 	"config"
 	"fmt"
 	"metadataManager/utils"
+	"mocks/caches"
 	"os"
 	"path/filepath"
 	"testing"

@@ -51,6 +51,9 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 	a.logger.Println("WEAK-POLICY", "handle request for a weak collection", log.INFO)
 	weakCollection := a.partialView.KnownCollections[collectionId]
 
+	weakCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+	defer weakCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+
 	res, groups, err := a.dbInterface.GetCollection(collectionId)
 	if err != nil {
 		a.logger.Println("WEAK-POLICY", "got an error getting the collection from redis", log.ERROR)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"dataManager/lru"
 	"dataManager/migrationManager"
+	penality "dataManager/migrationManager/penalityFunction"
 	dataManagerShared "dataManager/shared"
 	"db"
 	"errors"
@@ -21,11 +22,6 @@ import (
 	"sync"
 	"time"
 )
-
-// TODO replace
-func myPenalityFunc(bufferPos int, currentValue int) int {
-	return currentValue
-}
 
 func run(ctx context.Context, w io.Writer, configPath string) error {
 	var loggerFile io.Writer = os.Stdout //TODO replace with file
@@ -70,7 +66,7 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 		KnownCollections: make(map[string]dataManagerShared.Collection),
 	}
 	dataManger := migrationManager.GetMigrationManagerInstance(*logger)
-	dataManger.Init(collections, myPenalityFunc, config.MigrationManager, config.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *logger)
+	dataManger.Init(collections, penality.LogPenalty(2), config.MigrationManager, config.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *logger)
 
 	// TODO: understand these lines of code
 	// I think it should be some synchronization method when the server shuts down

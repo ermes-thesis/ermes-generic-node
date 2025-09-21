@@ -184,7 +184,7 @@ func TestIndex(t *testing.T) {
 	err = redisClient.SetMetadata(collectionId, metadata)
 	require.NoError(t, err, "Expected no error setting metadata")
 
-	query := utils.Query{
+	query := utils.QueryTemplate{
 		Select: "ALL",
 		As:     "test",
 		Where: &utils.ConditionWrapper{

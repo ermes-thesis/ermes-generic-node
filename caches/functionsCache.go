@@ -11,7 +11,7 @@ import (
 )
 
 type FunctionCache interface {
-	GetTemplate(functionName string, functionVersion string, templateName string) (*utils.Query, error)
+	GetTemplate(functionName string, functionVersion string, templateName string) (*utils.QueryTemplate, error)
 	GetBinary(functionName string, functionVersion string) ([]byte, error)
 	GetMetadata(functionName string, functionVersion string) (*metadata.FunctionMetadata, error)
 }
@@ -69,7 +69,7 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret str
 	}, nil
 }
 
-func (f *FunctionCacheImpl) GetTemplate(functionName string, functionVersion string, templateName string) (*utils.Query, error) {
+func (f *FunctionCacheImpl) GetTemplate(functionName string, functionVersion string, templateName string) (*utils.QueryTemplate, error) {
 	if functionVersion == "latest" {
 		bundle, err := f.resolveLatest(functionName, "template")
 		if err != nil {
@@ -179,7 +179,7 @@ func (f *FunctionCacheImpl) getSnapshot(functionName string, functionVersion str
 	case "template":
 		if meta, ok := f.MetadataBinaries.Get(functionName, functionVersion); ok {
 			all := true
-			tmpls := make(map[string]utils.Query)
+			tmpls := make(map[string]utils.QueryTemplate)
 			for _, tname := range meta.TemplateNames {
 				if t, okT := f.Templates.Get(tname); okT {
 					tmpls[tname] = t

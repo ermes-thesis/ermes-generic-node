@@ -31,7 +31,7 @@ func TestExecuteQueries(t *testing.T) {
 
 	requestedFnName := "test_function"
 	requestedFnVersion := "1.0.0"
-	queryTemplates := map[string]utils.Query{
+	queryTemplates := map[string]utils.QueryTemplate{
 		"private_data_query": {
 			Select: "ALL",
 			As:     "private_data",

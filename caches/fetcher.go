@@ -12,7 +12,7 @@ import (
 type FunctionBundle struct {
 	Binary    []byte
 	Metadata  metadata.FunctionMetadata
-	Templates map[string]utils.Query
+	Templates map[string]utils.QueryTemplate
 }
 
 type Fetcher[T any] interface {

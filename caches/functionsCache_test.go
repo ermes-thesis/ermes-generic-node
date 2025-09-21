@@ -21,7 +21,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 	fnVer := "1.0.0"
 
 	fetcher := &caches_mock.Fetcher[*FunctionBundle]{}
-	query := utils.Query{
+	query := utils.QueryTemplate{
 		Select: "ALL",
 		As:     "test",
 		Where: &utils.ConditionWrapper{Condition: &utils.EqCondition{
@@ -32,7 +32,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 	}
 	fetcher.EXPECT().Fetch(fn, fnVer).Return(&FunctionBundle{
 		Binary: []byte("binary-" + fn),
-		Templates: map[string]utils.Query{
+		Templates: map[string]utils.QueryTemplate{
 			"tmpl" + fn: query,
 		},
 		Metadata: metadata.FunctionMetadata{
@@ -95,7 +95,7 @@ func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
 	fnVer := "1.0.0"
 	fetcher := &caches_mock.Fetcher[*FunctionBundle]{}
 	// Return invalid bundle (empty binary)
-	query := utils.Query{
+	query := utils.QueryTemplate{
 		Select: "ALL",
 		As:     "test",
 		Where: &utils.ConditionWrapper{Condition: &utils.EqCondition{
@@ -106,7 +106,7 @@ func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
 	}
 	fetcher.EXPECT().Fetch(fnName, fnVer).Return(&FunctionBundle{
 		Binary: []byte{},
-		Templates: map[string]utils.Query{
+		Templates: map[string]utils.QueryTemplate{
 			"tmpl" + fnName: query,
 		},
 	}, nil)

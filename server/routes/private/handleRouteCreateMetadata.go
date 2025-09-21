@@ -35,7 +35,7 @@ func HandleRouteCreateMetadata(logger *io.Writer, lookupMgr metadataManager.Meta
 
 		err = lookupMgr.CreateMetadata(collectionId, meta, reqOrigin)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error when executing queries: %s \n", err)
+			fmt.Fprintf(os.Stderr, "Error when creating metadata: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}

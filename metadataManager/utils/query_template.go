@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-type Query struct {
+type QueryTemplate struct {
 	Select string            `json:"SELECT"`
 	As     string            `json:"AS"`
 	Where  *ConditionWrapper `json:"WHERE,omitempty"`
@@ -20,7 +20,7 @@ var allowedSelectValues = map[string]struct{}{
 	"MIN":    {},
 }
 
-func (q *Query) Validate() error {
+func (q *QueryTemplate) Validate() error {
 	if strings.TrimSpace(q.Select) == "" {
 		return errors.New("SELECT field is required")
 	}
@@ -43,7 +43,7 @@ func (q *Query) Validate() error {
 	return nil
 }
 
-func (q *Query) ToRedisSearchCommand() (string, error) {
+func (q *QueryTemplate) ToRedisSearchCommand() (string, error) {
 	if err := q.Validate(); err != nil {
 		return "", err
 	}
@@ -60,14 +60,14 @@ func (q *Query) ToRedisSearchCommand() (string, error) {
 	return query, nil
 }
 
-func (q *Query) ReplacePlaceholder(vars map[string]any) error {
+func (q *QueryTemplate) ReplacePlaceholder(vars map[string]any) error {
 	if q.Where != nil && q.Where.Condition != nil {
 		return q.Where.Condition.ReplacePlaceholder(vars)
 	}
 	return nil
 }
 
-func (q *Query) ReplacePlaceholderFromStrings(vars map[string]string) error {
+func (q *QueryTemplate) ReplacePlaceholderFromStrings(vars map[string]string) error {
 	anyVars := make(map[string]any, len(vars))
 	for k, v := range vars {
 		anyVars[k] = v

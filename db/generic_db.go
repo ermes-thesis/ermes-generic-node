@@ -202,13 +202,13 @@ type GenericDB interface {
 	// belongs to at least one of the specified groups.
 	//
 	// Parameters:
-	//	- query: the utils.Query object containing search criteria
+	//	- query: the utils.QueryTemplate object containing search criteria
 	//	- groups: slice of group names for access control filtering
 	//
 	// Returns:
 	//	- []db.CollectionInfo: slice of matching collection information (empty if no matches)
 	//	- error: non-nil if the search operation fails
-	SearchOnMetadata(query utils.Query, groups []string) ([]utils.CollectionInfo, error)
+	SearchOnMetadata(query utils.QueryTemplate, groups []string) ([]utils.CollectionInfo, error)
 	// DropIndex removes the metadata search index, disabling search functionality.
 	// This operation is irreversible and will require CreateIndex to be called
 	// again to restore search capabilities.

@@ -18,7 +18,7 @@ func TestTemplatesCache_SetAndGet(t *testing.T) {
 	cache, err := NewTemplatesCache(cfg)
 	require.NoError(t, err)
 
-	templates := map[string]utils.Query{
+	templates := map[string]utils.QueryTemplate{
 		"tmpl1": {
 			Select: "ALL",
 			As:     "test1",
@@ -66,7 +66,7 @@ func TestTemplatesCache_TTLExpiry(t *testing.T) {
 	require.NoError(t, err)
 
 	fn := "func1"
-	templates := map[string]utils.Query{
+	templates := map[string]utils.QueryTemplate{
 		"tmpl": {
 			Select: "ALL",
 			As:     "test",

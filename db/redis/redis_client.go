@@ -324,7 +324,7 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 	}}, fields...)...).Err()
 }
 
-func (r *RedisClient) SearchOnMetadata(query utils.Query, userGroups []string) ([]utils.CollectionInfo, error) {
+func (r *RedisClient) SearchOnMetadata(query utils.QueryTemplate, userGroups []string) ([]utils.CollectionInfo, error) {
 	redisQuery, err := query.ToRedisSearchCommand()
 	if err != nil {
 		return nil, err

@@ -20,7 +20,7 @@ const (
 	UNAUTHORIZED wasm.ResponseCode = iota + 100
 	NOT_FOUND
 	REDIS_ERROR
-	CENTRAL_REPO_ERROR
+	GROUP_TOKEN_PROVIDER_ERROR
 	HTTP_ERROR
 )
 
@@ -508,8 +508,8 @@ func hostRemoveUserFromGroup(data any, callframe *wasmedge.CallingFrame, params 
 	}
 	groupName, err := wasmComponent.GetWasmString(groupNamePtr, groupNameLength)
 
-	centralRepoAddr := fmt.Sprintf("http://%s", serverInfo.CentralRepo)
-	req, err := http.NewRequest(http.MethodDelete, centralRepoAddr+"/group/"+groupName+"/"+userId, nil)
+	groupTokenProviderAddr := fmt.Sprintf("http://%s", serverInfo.GroupTokenProvider)
+	req, err := http.NewRequest(http.MethodDelete, groupTokenProviderAddr+"/group/"+groupName+"/"+userId, nil)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
 		return returns, wasmedge.Result_Success
@@ -525,7 +525,7 @@ func hostRemoveUserFromGroup(data any, callframe *wasmedge.CallingFrame, params 
 	if res.StatusCode == http.StatusOK {
 		returns[0] = int32(wasm.SUCCESS)
 	} else {
-		returns[0] = wasmComponent.WriteError(CENTRAL_REPO_ERROR, errors.New(res.Status))
+		returns[0] = wasmComponent.WriteError(GROUP_TOKEN_PROVIDER_ERROR, errors.New(res.Status))
 	}
 	return returns, wasmedge.Result_Success
 }
@@ -552,8 +552,8 @@ func hostAddUserToGroup(data any, callframe *wasmedge.CallingFrame, params []any
 	}
 	groupName, err := wasmComponent.GetWasmString(groupNamePtr, groupNameLength)
 
-	centralRepoAddr := fmt.Sprintf("http://%s", serverInfo.CentralRepo)
-	req, err := http.NewRequest(http.MethodPost, centralRepoAddr+"/group/"+groupName+"/"+userId, nil)
+	groupTokenProviderAddr := fmt.Sprintf("http://%s", serverInfo.GroupTokenProvider)
+	req, err := http.NewRequest(http.MethodPost, groupTokenProviderAddr+"/group/"+groupName+"/"+userId, nil)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
 		return returns, wasmedge.Result_Success
@@ -569,7 +569,7 @@ func hostAddUserToGroup(data any, callframe *wasmedge.CallingFrame, params []any
 	if res.StatusCode == http.StatusOK {
 		returns[0] = int32(wasm.SUCCESS)
 	} else {
-		returns[0] = wasmComponent.WriteError(CENTRAL_REPO_ERROR, errors.New(res.Status))
+		returns[0] = wasmComponent.WriteError(GROUP_TOKEN_PROVIDER_ERROR, errors.New(res.Status))
 	}
 	return returns, wasmedge.Result_Success
 }
@@ -596,8 +596,8 @@ func hostCreateGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	}
 	groupName, err := wasmComponent.GetWasmString(groupNamePtr, groupNameLength)
 
-	centralRepoAddr := fmt.Sprintf("http://%s", serverInfo.CentralRepo)
-	req, err := http.NewRequest(http.MethodPost, centralRepoAddr+"/group/"+groupName, bytes.NewBufferString(participantIDsJsonStr))
+	groupTokenProviderAddr := fmt.Sprintf("http://%s", serverInfo.GroupTokenProvider)
+	req, err := http.NewRequest(http.MethodPost, groupTokenProviderAddr+"/group/"+groupName, bytes.NewBufferString(participantIDsJsonStr))
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
 		return returns, wasmedge.Result_Success
@@ -614,7 +614,7 @@ func hostCreateGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	if res.StatusCode == http.StatusCreated {
 		returns[0] = int32(wasm.SUCCESS)
 	} else {
-		returns[0] = wasmComponent.WriteError(CENTRAL_REPO_ERROR, errors.New(res.Status))
+		returns[0] = wasmComponent.WriteError(GROUP_TOKEN_PROVIDER_ERROR, errors.New(res.Status))
 	}
 	return returns, wasmedge.Result_Success
 }
@@ -638,8 +638,8 @@ func hostDeleteGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 		return returns, wasmedge.Result_Success
 	}
 
-	centralRepoAddr := fmt.Sprintf("http://%s", serverInfo.CentralRepo)
-	req, err := http.NewRequest(http.MethodDelete, centralRepoAddr+"/group/"+groupName, nil)
+	groupTokenProviderAddr := fmt.Sprintf("http://%s", serverInfo.GroupTokenProvider)
+	req, err := http.NewRequest(http.MethodDelete, groupTokenProviderAddr+"/group/"+groupName, nil)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
 		return returns, wasmedge.Result_Success
@@ -655,7 +655,7 @@ func hostDeleteGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	if res.StatusCode == http.StatusOK {
 		returns[0] = int32(wasm.SUCCESS)
 	} else {
-		returns[0] = wasmComponent.WriteError(CENTRAL_REPO_ERROR, errors.New(res.Status))
+		returns[0] = wasmComponent.WriteError(GROUP_TOKEN_PROVIDER_ERROR, errors.New(res.Status))
 	}
 	return returns, wasmedge.Result_Success
 }

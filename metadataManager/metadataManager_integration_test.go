@@ -24,7 +24,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var templates = map[string]utils.Query{
+var templates = map[string]utils.QueryTemplate{
 	"private_data_query": {
 		Select: "ALL",
 		As:     "private_data",

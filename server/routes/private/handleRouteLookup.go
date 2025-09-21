@@ -27,7 +27,7 @@ func HandleRouteLookup(logger *io.Writer, tokenDecoder tokenDecoder.TokenDecoder
 			return
 		}
 
-		queries, err := lookupMgr.ExecuteQueries(fnName, fnVersion, queryParams, groups, groupToken, geolocation)
+		queryResults, err := lookupMgr.ExecuteQueries(fnName, fnVersion, queryParams, groups, groupToken, geolocation)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when executing queries: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -36,7 +36,7 @@ func HandleRouteLookup(logger *io.Writer, tokenDecoder tokenDecoder.TokenDecoder
 
 		fmt.Fprintf(*logger, "Queries executed successfully, returning results.\n")
 		w.Header().Set("Content-Type", "application/json")
-		response, err := json.Marshal(queries)
+		response, err := json.Marshal(queryResults)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when marshalling response: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)

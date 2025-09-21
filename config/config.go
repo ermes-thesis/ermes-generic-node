@@ -71,8 +71,8 @@ type FunctionRegistryConfig struct {
 	Port    string `yaml:"port"`
 }
 type SchedulerConfig struct {
-	CentralRepoAddress string `yaml:"centralRepoAddress"`
-	CentralRepoPort    string `yaml:"centralRepoPort"`
+	GroupTokenProviderAddress string `yaml:"groupTokenProviderAddress"`
+	GroupTokenProviderPort    string `yaml:"groupTokenProviderPort"`
 }
 
 // The father should look something like:

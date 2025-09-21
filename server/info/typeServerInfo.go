@@ -36,8 +36,8 @@ type ServerInfo struct {
 
 	CloudNode *Node
 
-	// Address:port of the central repository
-	CentralRepo string
+	// Address:port of the Group Token Provider
+	GroupTokenProvider string
 }
 
 type Node struct {
@@ -89,7 +89,7 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 			Address:        name,
 			MetadataDomain: domain,
 		},
-		CentralRepo: config.Scheduler.CentralRepoAddress + ":" + config.Scheduler.CentralRepoPort,
+		GroupTokenProvider: config.Scheduler.GroupTokenProviderAddress + ":" + config.Scheduler.GroupTokenProviderPort,
 	}
 
 	return serverinfo, nil

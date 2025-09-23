@@ -99,7 +99,21 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate(logger log.Logger)
 			return
 		} else if len(msg.RecordNames) == 1 {
 			dbFn := func() error {
-				return c.dbInterface.SetRecord(msg.CollectionId, msg.RecordNames[0], msg.Record[0])
+				//write in db
+				err := c.dbInterface.SetRecord(msg.CollectionId, msg.RecordNames[0], msg.Record[0])
+				if err != nil {
+					return err
+				}
+
+				//propagate update
+				update := gossip.CollectionUpdate{
+					CollectionId: msg.CollectionId,
+					RecordNames:  msg.RecordNames,
+					RecordValues: msg.Record,
+				}
+				c.PropagateUpdates([]gossip.CollectionUpdate{update})
+
+				return nil
 			}
 			remoteFn := func(addr string) error {
 				return c.WeakCollectionRemoteRecordWrite(addr, msg.CollectionId, msg.RecordNames[0], msg.Record[0])
@@ -107,7 +121,21 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate(logger log.Logger)
 			dbErr = UpdateCollection(c, msg.CollectionId, dbFn, remoteFn)
 		} else {
 			dbFn := func() error {
-				return c.dbInterface.SetRecords(msg.CollectionId, msg.RecordNames, msg.Record)
+				//write in db
+				err := c.dbInterface.SetRecords(msg.CollectionId, msg.RecordNames, msg.Record)
+				if err != nil {
+					return err
+				}
+
+				//propagate update
+				update := gossip.CollectionUpdate{
+					CollectionId: msg.CollectionId,
+					RecordNames:  msg.RecordNames,
+					RecordValues: msg.Record,
+				}
+				c.PropagateUpdates([]gossip.CollectionUpdate{update})
+
+				return nil
 			}
 			remoteFn := func(addr string) error {
 				return c.WeakCollectionRemoteRecordsWrite(addr, msg.CollectionId, msg.RecordNames, msg.Record)

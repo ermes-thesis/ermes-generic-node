@@ -81,7 +81,7 @@ func (s *MigrationManagerSenderImpl) RepoPath() string {
 type CollectionDiscovererSender interface {
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames ...string) ([]any, error)
 	WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string) error
-	PropagateUpdates(hostId string, update gossip.CollectionUpdateMessage)
+	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessage)
 
 	RemoteAccessPath() string
 	RemoteUpdatePath() string
@@ -150,7 +150,7 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordUpdate(hostId
 	return nil
 }
 
-func (s *CollectionDiscovererSenderImpl) PropagateUpdates(hostId string, update gossip.CollectionUpdateMessage) {
+func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessage) {
 	s.logger.Println("SENDER", fmt.Sprintf("request collection update propagation to %s", hostId), log.INFO)
 
 	s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)

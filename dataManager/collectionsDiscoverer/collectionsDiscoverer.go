@@ -229,7 +229,7 @@ func (c *CollectionsDiscovererImp) propagateUpdate(updateMessage messages.Collec
 		hosts := collection.HostsId()
 		for host := range hosts {
 			if !contains(ignoredIp, host) {
-				c.sender.PropagateUpdates(host, updateMessage)
+				c.sender.PropagateUpdate(host, updateMessage)
 			}
 		}
 	}
@@ -240,7 +240,7 @@ func (c *CollectionsDiscovererImp) propagateUpdate(updateMessage messages.Collec
 	}
 	addr := c.serverInfo.Father.Address
 	if !contains(ignoredIp, addr) {
-		c.sender.PropagateUpdates(addr, updateMessage)
+		c.sender.PropagateUpdate(addr, updateMessage)
 	}
 }
 

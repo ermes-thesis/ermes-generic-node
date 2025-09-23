@@ -11,10 +11,11 @@ import (
 )
 
 const (
-	gossipPath       = "/gossip"
-	repoPath         = "/repo"
-	remoteAccessPath = "/dataRemoteAccess"
-	remoteUpdatePath = "/dataRemoteUpdate"
+	gossipPath            = "/gossip"
+	repoPath              = "/repo"
+	remoteAccessPath      = "/dataRemoteAccess"
+	remoteUpdatePath      = "/dataRemoteUpdate"
+	updatePropagationPath = "/dataUpdatePropagation"
 )
 
 //###############################################################
@@ -80,8 +81,11 @@ func (s *MigrationManagerSenderImpl) RepoPath() string {
 type CollectionDiscovererSender interface {
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames ...string) ([]any, error)
 	WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string) error
+	PropagateUpdates(hostId string, update gossip.CollectionUpdateMessage)
+
 	RemoteAccessPath() string
 	RemoteUpdatePath() string
+	UpdatePropagationPath() string
 }
 
 type CollectionDiscovererSenderImpl struct {
@@ -146,10 +150,20 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordUpdate(hostId
 	return nil
 }
 
+func (s *CollectionDiscovererSenderImpl) PropagateUpdates(hostId string, update gossip.CollectionUpdateMessage) {
+	s.logger.Println("SENDER", fmt.Sprintf("request collection update propagation to %s", hostId), log.INFO)
+
+	s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)
+}
+
 func (s *CollectionDiscovererSenderImpl) RemoteAccessPath() string {
 	return remoteAccessPath
 }
 
 func (s *CollectionDiscovererSenderImpl) RemoteUpdatePath() string {
 	return remoteUpdatePath
+}
+
+func (s *CollectionDiscovererSenderImpl) UpdatePropagationPath() string {
+	return updatePropagationPath
 }

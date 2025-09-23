@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	log "logger"
+	"net"
 	"net/http"
 )
 
@@ -121,5 +122,42 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate(logger log.Logger)
 		}
 
 		w.WriteHeader(http.StatusOK)
+	})
+}
+
+func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation(logger log.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger.Println("HTTP-REQ", "New update propagation request received through HTTP request", log.INFO)
+
+		defer r.Body.Close()
+
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var msg gossip.CollectionUpdateMessage
+		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
+			logger.Println("HTTP-REQ", "Error parsing remote access request", log.ERROR)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		ip, _, err := net.SplitHostPort(r.RemoteAddr) //TODO: verify
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK) //response
+
+		//sync
+		c.collectionsPartialView.Mutex.Lock()
+
+		c.propagateUpdate(msg, true, []string{ip})
+
+		c.collectionsPartialView.Mutex.Unlock() // lock release
 	})
 }

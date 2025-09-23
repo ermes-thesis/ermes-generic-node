@@ -4,6 +4,7 @@ import (
 	"config"
 	"dataManager/collectionsDiscoverer"
 	"dataManager/lru"
+	messages "dataManager/messages"
 	"dataManager/migrationManager"
 	penality "dataManager/migrationManager/penalityFunction"
 	shared "dataManager/shared"
@@ -30,6 +31,7 @@ type DataManager interface {
 	SetRecord(collectionId string, recordName string, recordValue string) error
 	GetRecords(collectionId string, recordNames ...string) ([]any, error)
 	SetRecords(collectionId string, recordNames []string, recordValues []string) error
+	PropagateUpdates(updates []messages.CollectionUpdate)
 }
 
 type DataManagerImp struct {
@@ -128,4 +130,8 @@ func (m *DataManagerImp) SetRecords(collectionId string, recordNames []string, r
 			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsWrite(addr, collectionId, recordNames, recordValues)
 		},
 	)
+}
+
+func (m *DataManagerImp) PropagateUpdates(updates []messages.CollectionUpdate) {
+	m.collectionsDiscoverer.PropagateUpdates(updates)
 }

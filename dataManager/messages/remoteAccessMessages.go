@@ -14,3 +14,18 @@ type RemoteUpdateRequest struct {
 	RecordNames  []string `json:"recordNames"`
 	Record       []string `json:"records"`
 }
+
+type CollectionUpdate struct {
+	CollectionId string   `json:"collectionId"`
+	RecordNames  []string `json:"recordNames"`
+	RecordValues []string `json:"recordValue"`
+}
+
+// TODO: add machine id for disambiguity
+type CollectionUpdateMessage struct {
+	CollectionId string   `json:"collectionId"`
+	RecordNames  []string `json:"recordNames"`
+	RecordValues []string `json:"recordValue"`
+	Time         int64    `json:"time"`
+	SenderIp     string   `json:"hostIp"`
+}

@@ -1,6 +1,11 @@
 package dataManagerShared
 
-import "sync"
+import (
+	log "logger"
+	"sync"
+
+	"gopkg.in/yaml.v3"
+)
 
 // collection types
 
@@ -8,6 +13,19 @@ type CollectionState interface {
 	IsLocal() bool
 	HostsId() map[string]struct{}
 	AddHost(hostId string)
+}
+
+type CollectionSettingsInfo struct {
+	CollectionID   string   `yaml:"collection_id"`       // mandatory
+	IsStrong       bool     `yaml:"is_strong"`           // mandatory
+	CollectionSize *uint64  `yaml:"collection_size"`     // mandatory for local collections
+	IsLeader       *bool    `yaml:"is_leader,omitempty"` // optional
+	IsRemote       bool     `yaml:"is_local"`            // mandatory
+	HostsID        []string `yaml:"hosts_id,omitempty"`  // optional
+	LeaderID       *string  `yaml:"leader_id,omitempty"` // optional
+}
+type CollectionsSettingsInfo struct {
+	Collections []CollectionSettingsInfo `yaml:"collections"`
 }
 
 type LocalCollection struct {
@@ -62,4 +80,66 @@ type CollectionPartialView struct {
 	Mutex sync.Mutex
 	//data
 	KnownCollections map[string]Collection //maps collectionID to info related to that collection
+}
+
+func (c *CollectionPartialView) RestoreInfoFromSettings(yamlData []byte, logger log.Logger) error {
+	var root CollectionsSettingsInfo
+	err := yaml.Unmarshal([]byte(yamlData), &root)
+	if err != nil {
+		logger.Println("CollectionPartialView", "Error parsing YAML", log.ERROR)
+		return err
+	}
+
+	//sync
+	c.Mutex.Lock()
+	defer c.Mutex.Unlock()
+	//imp
+
+	c.KnownCollections = make(map[string]Collection)
+	for _, coll := range root.Collections {
+		if coll.IsStrong {
+			c.restoreStrongCollectionFromSettings(coll)
+		} else {
+			c.restoreWeakCollectionFromSettings(coll)
+		}
+	}
+
+	return nil
+}
+
+func (c *CollectionPartialView) restoreStrongCollectionFromSettings(info CollectionSettingsInfo) {
+	CollectionSize := *info.CollectionSize
+	if info.IsRemote {
+		CollectionSize = 0
+	}
+
+	coll := NewStrongCollection(info.CollectionID, CollectionSize, info.IsRemote, info.IsLeader != nil && *info.IsLeader)
+
+	//set leader id
+	if info.LeaderID != nil {
+		coll.(*StrongCollection).LeaderId = *info.LeaderID
+	}
+
+	//add hosts
+	for _, host := range info.HostsID {
+		coll.AddHost(host)
+	}
+
+	c.KnownCollections[info.CollectionID] = coll
+}
+
+func (c *CollectionPartialView) restoreWeakCollectionFromSettings(info CollectionSettingsInfo) {
+	CollectionSize := *info.CollectionSize
+	if info.IsRemote {
+		CollectionSize = 0
+	}
+
+	coll := NewWeakCollection(info.CollectionID, CollectionSize, info.IsRemote)
+
+	//add hosts
+	for _, host := range info.HostsID {
+		coll.AddHost(host)
+	}
+
+	c.KnownCollections[info.CollectionID] = coll
 }

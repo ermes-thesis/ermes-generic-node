@@ -1,10 +1,9 @@
 package dataManagerShared
 
 import (
+	config "config"
 	log "logger"
 	"sync"
-
-	"gopkg.in/yaml.v3"
 )
 
 // collection types
@@ -13,19 +12,6 @@ type CollectionState interface {
 	IsLocal() bool
 	HostsId() map[string]struct{}
 	AddHost(hostId string)
-}
-
-type CollectionSettingsInfo struct {
-	CollectionID   string   `yaml:"collection_id"`       // mandatory
-	IsStrong       bool     `yaml:"is_strong"`           // mandatory
-	CollectionSize *uint64  `yaml:"collection_size"`     // mandatory for local collections
-	IsLeader       *bool    `yaml:"is_leader,omitempty"` // optional
-	IsRemote       bool     `yaml:"is_local"`            // mandatory
-	HostsID        []string `yaml:"hosts_id,omitempty"`  // optional
-	LeaderID       *string  `yaml:"leader_id,omitempty"` // optional
-}
-type CollectionsSettingsInfo struct {
-	Collections []CollectionSettingsInfo `yaml:"collections"`
 }
 
 type LocalCollection struct {
@@ -82,21 +68,14 @@ type CollectionPartialView struct {
 	KnownCollections map[string]Collection //maps collectionID to info related to that collection
 }
 
-func (c *CollectionPartialView) RestoreInfoFromSettings(yamlData []byte, logger log.Logger) error {
-	var root CollectionsSettingsInfo
-	err := yaml.Unmarshal([]byte(yamlData), &root)
-	if err != nil {
-		logger.Println("CollectionPartialView", "Error parsing YAML", log.ERROR)
-		return err
-	}
-
+func (c *CollectionPartialView) RestoreInfoFromSettings(configData []config.CollectionSettingsInfo, logger log.Logger) error {
 	//sync
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
 	//imp
 
 	c.KnownCollections = make(map[string]Collection)
-	for _, coll := range root.Collections {
+	for _, coll := range configData {
 		if coll.IsStrong {
 			c.restoreStrongCollectionFromSettings(coll)
 		} else {
@@ -107,7 +86,7 @@ func (c *CollectionPartialView) RestoreInfoFromSettings(yamlData []byte, logger 
 	return nil
 }
 
-func (c *CollectionPartialView) restoreStrongCollectionFromSettings(info CollectionSettingsInfo) {
+func (c *CollectionPartialView) restoreStrongCollectionFromSettings(info config.CollectionSettingsInfo) {
 	CollectionSize := *info.CollectionSize
 	if info.IsRemote {
 		CollectionSize = 0
@@ -128,7 +107,7 @@ func (c *CollectionPartialView) restoreStrongCollectionFromSettings(info Collect
 	c.KnownCollections[info.CollectionID] = coll
 }
 
-func (c *CollectionPartialView) restoreWeakCollectionFromSettings(info CollectionSettingsInfo) {
+func (c *CollectionPartialView) restoreWeakCollectionFromSettings(info config.CollectionSettingsInfo) {
 	CollectionSize := *info.CollectionSize
 	if info.IsRemote {
 		CollectionSize = 0

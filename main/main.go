@@ -65,6 +65,11 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	collections := &dataManagerShared.CollectionPartialView{
 		KnownCollections: make(map[string]dataManagerShared.Collection),
 	}
+	err = collections.RestoreInfoFromSettings(config.Collections, *logger)
+	if err != nil {
+		return fmt.Errorf("error restoring collections from settings: %w", err)
+	}
+
 	dataManger := migrationManager.GetMigrationManagerInstance(*logger)
 	dataManger.Init(collections, penality.LogPenalty(2), config.MigrationManager, config.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *logger)
 

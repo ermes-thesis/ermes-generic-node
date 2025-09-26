@@ -36,6 +36,7 @@ type MigrationManager interface {
 
 	ChangeStrongCollectionPolicy(strongPolicy.CurrentPolicy)
 	ChangeWeakCollectionPolicy(weakpolicy.CurrentPolicy)
+	GetCollectionVectorClockValue(collectionId string) (uint, error)
 }
 
 type MigrationManagerImp struct {
@@ -292,4 +293,24 @@ func (m *MigrationManagerImp) ChangeWeakCollectionPolicy(newPolicy weakpolicy.Cu
 	default:
 		panic("unknown policy")
 	}
+}
+
+func (m *MigrationManagerImp) GetCollectionVectorClockValue(collectionId string) (uint, error) {
+	//sync
+	m.collectionsLock.Lock()
+	defer m.collectionsLock.Unlock()
+
+	//imp
+	collection, exists := m.collectionsPartialView.KnownCollections[collectionId]
+	if !exists {
+		return 0, errors.New("collection not found")
+	}
+	if !collection.IsStrong() {
+		return 0, errors.New("collection is not strong")
+	}
+	if !collection.IsLocal() {
+		return 0, errors.New("collection is not local")
+	}
+
+	return collection.(*shared.StrongCollection).ConsistencyClock, nil
 }

@@ -24,9 +24,7 @@ func TestExecuteQueries(t *testing.T) {
 	defer redisClient.Close()
 
 	srvInfo := &info.ServerInfo{
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		MetadataDomain: "IT",
 	}
 
 	requestedFnName := "test_function"
@@ -115,9 +113,7 @@ func TestCreateMetadata(t *testing.T) {
 	defer redisClient.Close()
 
 	srvInfo := &info.ServerInfo{
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		MetadataDomain: "IT",
 	}
 
 	tm := time.Now().Truncate(time.Millisecond)

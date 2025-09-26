@@ -1,10 +1,11 @@
 package migrationManager
 
 import (
-	gossip "dataManager/migrationManager/gossipMessages"
+	gossip "dataManager/messages"
 	"encoding/json"
 	"io"
 	log "logger"
+	"net"
 	"net/http"
 )
 
@@ -81,8 +82,14 @@ func (m *MigrationManagerImp) handleIncomingCollection(logger log.Logger) http.H
 			return
 		}
 
-		//TODO: capire come stimare dimensioni e come capire se strong o weak
-		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.CollectionSize)
+		ip, port, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		address := ip + ":" + port //TODO: verify
+
+		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.CollectionSize, collection.HostToRemove, address)
 
 		w.WriteHeader(http.StatusOK)
 	})

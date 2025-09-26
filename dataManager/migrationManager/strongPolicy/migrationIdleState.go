@@ -1,8 +1,8 @@
 package strongPolicy
 
 import (
+	gossipmessages "dataManager/messages"
 	usage "dataManager/migrationManager/childUsage"
-	gossipmessages "dataManager/migrationManager/gossipMessages"
 )
 
 // MigrationManagerIdleState

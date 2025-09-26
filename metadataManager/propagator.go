@@ -43,13 +43,13 @@ func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion str
 	var receiver string
 	if p.serverInfo.CloudNode == nil || strings.HasPrefix(p.serverInfo.MetadataDomain, geolocation) {
 		fmt.Fprintf(*p.logger, "No cloud node configured, forwarding to parent node.\n")
-		receiver = p.serverInfo.Father.Address
+		receiver = p.serverInfo.Father.HostName
 	} else {
-		fmt.Fprintf(*p.logger, "Using cloud node %s for the request.\n", p.serverInfo.CloudNode.Address)
-		receiver = p.serverInfo.CloudNode.Address
+		fmt.Fprintf(*p.logger, "Using cloud node %s for the request.\n", p.serverInfo.CloudNode.HostName)
+		receiver = p.serverInfo.CloudNode.HostName
 	}
 
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://localhost:%s/lookup", receiver), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/lookup", receiver), nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when creating the http request: %s \n", err)
 		return nil, err
@@ -117,7 +117,7 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, metadata utils.M
 	case FROM_FATHER:
 		for _, child := range p.serverInfo.Children {
 			if strings.HasPrefix(metadata.Geolocation, child.MetadataDomain) {
-				err = p.sendHttpReqToDest(child.Address, collectionId, body)
+				err = p.sendHttpReqToDest(child.HostName, collectionId, body)
 				if err != nil {
 					fmt.Fprintf(*p.logger, "Error sending request to child : %v\n", err)
 					return err
@@ -128,7 +128,7 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, metadata utils.M
 		}
 	case FROM_CHILD:
 		if p.serverInfo.Father != nil {
-			err = p.sendHttpReqToDest(p.serverInfo.Father.Address, collectionId, body)
+			err = p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, body)
 			if err != nil {
 				fmt.Fprintf(*p.logger, "Error sending request to father : %v\n", err)
 				return err
@@ -136,7 +136,7 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, metadata utils.M
 		}
 	case FROM_LOCAL:
 		if p.serverInfo.Father != nil {
-			err = p.sendHttpReqToDest(p.serverInfo.Father.Address, collectionId, body)
+			err = p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, body)
 			if err != nil {
 				fmt.Fprintf(*p.logger, "Error sending request to father : %v\n", err)
 				return err
@@ -145,7 +145,7 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, metadata utils.M
 
 		for _, child := range p.serverInfo.Children {
 			if strings.HasPrefix(metadata.Geolocation, child.MetadataDomain) {
-				err = p.sendHttpReqToDest(child.Address, collectionId, body)
+				err = p.sendHttpReqToDest(child.HostName, collectionId, body)
 				if err != nil {
 					fmt.Fprintf(*p.logger, "Error sending request to child : %v\n", err)
 					return err
@@ -159,7 +159,7 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, metadata utils.M
 }
 
 func (p *MetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, body []byte) error {
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%s/create_metadata/%s", dest, collectionId), bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/create_metadata/%s", dest, collectionId), bytes.NewReader(body))
 	if err != nil {
 		fmt.Fprintf(*p.logger, "Error creating request: %v\n", err)
 		return err

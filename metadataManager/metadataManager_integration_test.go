@@ -10,7 +10,6 @@ import (
 	"metadataManager"
 	"metadataManager/utils"
 	"mocks/caches"
-	"mocks/scheduler"
 	"mocks/tokenDecoder"
 	"net/http"
 	"net/http/httptest"
@@ -116,12 +115,10 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	defer redisClient2.Close()
 
 	serverInfoFather := &info.ServerInfo{
-		Father:    nil,
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
-		Secret: "secret",
+		Father:         nil,
+		CloudNode:      nil,
+		MetadataDomain: "IT",
+		Secret:         "secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -137,40 +134,42 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClient1, serverInfoFather, os.Stdout, fnCache)
 
-	schedulerFather := &scheduler_mock.Scheduler{}
-
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient1, tknDecoder, metadataManagerFather, schedulerFather)
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
+	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoder)
+	assert.NoError(t, err, "Expected no error when registering routes")
+
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			Address: strings.Split(httpServerFather.URL, ":")[2],
+			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+
 		Secret: "secret",
 	}
 	fnCache2 := &caches_mock.FunctionCache{}
 
-	tknDecoder2 := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoder2.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
+	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
+	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 	metadataManagerChild := metadataManager.NewMetadataManager(redisClient2, serverInfoChild, os.Stdout, fnCache2)
 
-	schedulerChild := &scheduler_mock.Scheduler{}
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClient2, tknDecoder2, metadataManagerChild, schedulerChild)
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
+	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
+	assert.NoError(t, err, "Expected no error when registering routes")
+
 	serverInfoFather.Children = []info.Node{
 		{
-			Address: strings.Split(httpServerChild.URL, ":")[2],
+			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
 	}
 
@@ -234,12 +233,10 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	defer redisClientChild.Close()
 
 	serverInfoFather := &info.ServerInfo{
-		Father:    nil,
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
-		Secret: "secret",
+		Father:         nil,
+		CloudNode:      nil,
+		MetadataDomain: "IT",
+		Secret:         "secret",
 	}
 	tokenString := "JWTToken"
 
@@ -248,39 +245,41 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout, fnCache)
 
-	schedulerFather := &scheduler_mock.Scheduler{}
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClientFather, tknDecoder, metadataManagerFather, schedulerFather)
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
+	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoder)
+	assert.NoError(t, err, "Expected no error when registering routes")
+
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			Address:        strings.Split(httpServerFather.URL, ":")[2],
+			HostName:       strings.Split(httpServerFather.URL, ":")[2],
 			MetadataDomain: "IT",
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
-		Secret: "secret",
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+		Secret:         "secret",
 	}
 	fnCacheChild := &caches_mock.FunctionCache{}
 	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout, fnCacheChild)
 
-	schedulerChild := &scheduler_mock.Scheduler{}
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClientChild, tknDecoderChild, metadataManagerChild, schedulerChild)
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
+	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
+	assert.NoError(t, err, "Expected no error when registering routes")
+
 	serverInfoFather.Children = []info.Node{
 		{
-			Address:        strings.Split(httpServerChild.URL, ":")[2],
+			HostName:       strings.Split(httpServerChild.URL, ":")[2],
 			MetadataDomain: "IT/Milan",
 		},
 	}
@@ -336,11 +335,9 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 		Father: &info.Node{
 			//root node, so that the father can think that the message arrive from top
 		},
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
-		Secret: "secret",
+		CloudNode:      nil,
+		MetadataDomain: "IT",
+		Secret:         "secret",
 	}
 	tokenString := "JWTToken"
 
@@ -349,39 +346,41 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout, fnCache)
 
-	schedulerFather := &scheduler_mock.Scheduler{}
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClientFather, tknDecoderFather, metadataManagerFather, schedulerFather)
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
+	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoderFather)
+	assert.NoError(t, err, "Expected no error when registering routes")
+
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			Address:        strings.Split(httpServerFather.URL, ":")[2],
+			HostName:       strings.Split(httpServerFather.URL, ":")[2],
 			MetadataDomain: "IT",
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
-		Secret: "secret",
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+		Secret:         "secret",
 	}
 	fnCacheChild := &caches_mock.FunctionCache{}
 	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout, fnCacheChild)
 
-	schedulerChild := &scheduler_mock.Scheduler{}
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClientChild, tknDecoderChild, metadataManagerChild, schedulerChild)
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
 	serverInfoFather.Children = []info.Node{
 		{
-			Address:        strings.Split(httpServerChild.URL, ":")[2],
+			HostName:       strings.Split(httpServerChild.URL, ":")[2],
 			MetadataDomain: "IT/Milan",
 		},
 	}
@@ -438,11 +437,9 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	defer redisClientChild.Close()
 
 	serverInfoFather := &info.ServerInfo{
-		Father:    nil,
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		Father:         nil,
+		CloudNode:      nil,
+		MetadataDomain: "IT",
 		Children: []info.Node{
 			{
 				MetadataDomain: "IT/Milan",
@@ -457,50 +454,50 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, os.Stdout, fnCacheFather)
 
-	schedulerFather := &scheduler_mock.Scheduler{}
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClientFather, tknDecoderFather, metadataManagerFather, schedulerFather)
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
+	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoderFather)
+	assert.NoError(t, err, "Expected no error when registering routes")
+
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
 			MetadataDomain: "IT/Milan",
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan/Polimi",
-		},
-		Secret: "secret",
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan/Polimi",
+		Secret:         "secret",
 	}
 	fnCacheChild := &caches_mock.FunctionCache{}
 	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, os.Stdout, fnCacheChild)
 
-	schedulerChild := &scheduler_mock.Scheduler{}
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClientChild, tknDecoderChild, metadataManagerChild, schedulerChild)
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
 	serverInfoLocal := &info.ServerInfo{
 		Father: &info.Node{
-			Address:        strings.Split(httpServerFather.URL, ":")[2],
+			HostName:       strings.Split(httpServerFather.URL, ":")[2],
 			MetadataDomain: "IT",
 		},
 		Children: []info.Node{
 			{
-				Address:        strings.Split(httpServerChild.URL, ":")[2],
+				HostName:       strings.Split(httpServerChild.URL, ":")[2],
 				MetadataDomain: "IT/Milan/Polimi",
 			},
 		},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
-		Secret: "secret",
+		MetadataDomain: "IT/Milan",
+		Secret:         "secret",
 	}
 	fnCacheLocal := &caches_mock.FunctionCache{}
 	metadataManagerLocal := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, os.Stdout, fnCacheLocal)

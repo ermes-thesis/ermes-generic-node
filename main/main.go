@@ -4,9 +4,9 @@ import (
 	"caches"
 	"config"
 	"context"
-	clDiscoverer "dataManager/collectionsDiscoverer"
+	datamanager "dataManager"
 	"dataManager/lru"
-	"dataManager/migrationManager"
+	penality "dataManager/migrationManager/penalityFunction"
 	dataManagerShared "dataManager/shared"
 	"db/redis"
 	"errors"
@@ -28,11 +28,6 @@ import (
 	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
 )
 
-// TODO replace
-func myPenalityFunc(bufferPos int, currentValue int) int {
-	return currentValue
-}
-
 func run(ctx context.Context, w io.Writer, configPath string) error {
 	var loggerFile io.Writer = os.Stdout //TODO replace with file
 	var log = logger.NewLogger(logger.INFO, &loggerFile)
@@ -48,6 +43,11 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 		return fmt.Errorf("error creating server info: %w", err)
 	}
 
+	ser, err := server.NewServer(w, serverInfo)
+	if err != nil {
+		return err
+	}
+
 	redisClient := redis.NewRedisClient(cfg.Redis, ctx)
 	// remoteFunctionName must be in the format: "functionName/functionVersion"
 	funcCache, err := caches.NewDefaultFunctionCache(cfg.FunctionsCache, cfg.Node.Secret)
@@ -59,13 +59,21 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 		return fmt.Errorf("error creating token decoder: %w", err)
 	}
 	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w, funcCache)
+	err = metadataLookup.RegisterRoutes(ser, tknDecoder)
+	if err != nil {
+		return fmt.Errorf("error registering metadata routes: %w", err)
+	}
 
 	//node set up
 	collections := &dataManagerShared.CollectionPartialView{
 		KnownCollections: make(map[string]dataManagerShared.Collection),
 	}
-	clDiscovererInstance := clDiscoverer.GetCollectionsDiscovererInstance(*log)
-	clDiscovererInstance.Init(collections)
+	err = collections.RestoreInfoFromSettings(cfg.Collections, *log)
+	if err != nil {
+		return fmt.Errorf("error restoring collections from settings: %w", err)
+	}
+	dataManager := datamanager.GetDataManagerInstance(*log)
+	dataManager.Init(collections, penality.LogPenalty(2), cfg.MigrationManager, cfg.Lru, ser, *ser.ServerInfo, &lruCache, redisClient, *log)
 
 	wasmExecutorPool := wasm.NewExecutorPool(10)
 	err = scheduler.RegisterHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{RedisClient: redisClient, MetadataManager: metadataLookup, ServerInfo: serverInfo})
@@ -73,30 +81,24 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 		return fmt.Errorf("error registering host functions: %w", err)
 	}
 
-	sched := scheduler.NewScheduler(clDiscovererInstance, funcCache, wasmExecutorPool, serverInfo)
-
-	//Run server
-	ser, err := server.NewServer(w, serverInfo, redisClient, tknDecoder, metadataLookup, sched)
-
+	sched := scheduler.NewScheduler(dataManager.GetCollectionsDiscoverer(), funcCache, wasmExecutorPool, serverInfo)
+	err = sched.RegisterRoutes(ser, tknDecoder, metadataLookup)
 	if err != nil {
-		return err
+		return fmt.Errorf("error registering scheduler routes: %w", err)
 	}
 
 	httpServer := &http.Server{
-		Addr:    net.JoinHostPort("localhost", ser.Port),
+		Addr:    net.JoinHostPort("localhost", serverInfo.Port),
 		Handler: ser.Handler,
 	}
 
 	go func() {
-		fmt.Fprintf(w, "Server correctly created and listening on port %s \n", ser.Port)
+		fmt.Fprintf(w, "Server correctly created and listening on port %s \n", serverInfo.Port)
 
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			fmt.Fprintf(os.Stderr, "error listening and serving: %s\n", err)
 		}
 	}()
-
-	migrationManagerInstance := migrationManager.GetMigrationManagerInstance(*log)
-	migrationManagerInstance.Init(collections, myPenalityFunc, cfg.MigrationManager, cfg.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *log)
 
 	// TODO: understand these lines of code
 	// I think it should be some synchronization method when the server shuts down

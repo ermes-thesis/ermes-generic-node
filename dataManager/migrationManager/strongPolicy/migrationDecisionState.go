@@ -1,9 +1,9 @@
 package strongPolicy
 
 import (
+	gossip "dataManager/messages"
 	stack "dataManager/migrationManager/callbackStack"
 	usage "dataManager/migrationManager/childUsage"
-	gossip "dataManager/migrationManager/gossipMessages"
 	shared "dataManager/shared"
 	"fmt"
 	"logger"
@@ -150,7 +150,16 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, strongCollection *shared.StrongCollection, totalForce int, totalReq int) bool {
 	//compute decision
 	feW, req := m.computeElasticForce(buffer, usage.GetWrite)
-	var driverForce = float64(2*feW) - ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(m.policy.serverInfo.Latency)
+
+	var latency uint64
+	for _, child := range m.policy.serverInfo.Children {
+		if child.HostName == innerKey {
+			latency = child.Latency
+			break
+		}
+	}
+
+	var driverForce = float64(2*feW) - ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(latency)
 	m.policy.logger.Println("DEFAULT-STRONG-POLICY", fmt.Sprintf("leader decision on collection %s result in force %f and resistance %f", outerKey, driverForce, float64(totalForce)), log.INFO)
 	//evaluate decision
 	if driverForce <= float64(totalForce) {
@@ -242,7 +251,7 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 }
 
 func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
-	sizeGoal := m.policy.lruConfig.Size * uint(m.policy.lruConfig.SafeLevel)
+	sizeGoal := uint(float32(m.policy.lruConfig.Size) * (1.0 - m.policy.lruConfig.SafeLevel))
 	m.policy.logger.Println("DEFAULT-STRONG-POLICY", fmt.Sprintf("set lru to safe level %d", sizeGoal), log.INFO)
 	collectionList := m.policy.lruCache.FreeToAchieveSize(sizeGoal)
 	var wg sync.WaitGroup
@@ -278,12 +287,12 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 	if collection.IsStrong() {
 		isLeader = collection.(*shared.StrongCollection).IsLeader
 		if isLeader {
-			collection.(*shared.StrongCollection).LeaderId = m.policy.serverInfo.Father.Address
+			collection.(*shared.StrongCollection).LeaderId = m.policy.serverInfo.Father.HostName
 		}
 		//stop keep track of access for a remote collection
 		m.policy.RemoveInfo(collection.CollectionId())
 	}
-	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.Address, collection, isLeader, res, groups, collectionSize)
+	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.HostName, collection, isLeader, res, groups, collectionSize)
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(collection.CollectionId())

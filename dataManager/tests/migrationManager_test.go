@@ -4,8 +4,8 @@
 package tests
 
 import (
+	gossip "dataManager/messages"
 	migrationManager "dataManager/migrationManager"
-	gossip "dataManager/migrationManager/gossipMessages"
 	penality "dataManager/migrationManager/penalityFunction"
 	policy "dataManager/migrationManager/strongPolicy"
 	"io"
@@ -48,8 +48,8 @@ func TestManageNewStrongRequest(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
-	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string, 13), []string{}, 13)
-	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string, 14), []string{}, 14)
+	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string, 13), []string{}, 13, false, "host")
+	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string, 14), []string{}, 14, false, "host")
 
 	instance1.ManageNewRequest("repoId", "childName", true, 10)
 
@@ -98,8 +98,8 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
-	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 12)
-	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string), []string{}, 13)
+	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 12, false, "host")
+	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string), []string{}, 13, false, "host")
 
 	instance1.ManageNewRequest("repoId", "childName", true, 10)
 	instance1.ManageNewRequest("repoId", "childName", true, 3)
@@ -126,8 +126,8 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance(*logger)
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
-	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 13)
-	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string), []string{}, 14)
+	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 13, false, "host")
+	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string), []string{}, 14, false, "host")
 
 	instance1.ManageNewRequest("repoId", "childName", true, 10)
 	instance1.ManageNewRequest("repoId", "childName", true, 3)

@@ -8,7 +8,6 @@ import (
 	"metadataManager/utils"
 	"mocks/caches"
 	"mocks/dataManager/collectionsDiscoverer"
-	"mocks/db"
 	"mocks/ermes-wasm-pool/wasm-pool"
 	"mocks/metadataManager"
 	"mocks/tokenDecoder"
@@ -29,11 +28,9 @@ import (
 
 func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:    nil,
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		Father:           nil,
+		CloudNode:        nil,
+		MetadataDomain:   "IT",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -81,31 +78,31 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345 := shared.NewWeakCollection("12345", 40, false)
 	collChild1111 := shared.NewStrongCollection("1111", 40, false, false)
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345").Return(true, collChild12345)
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111").Return(true, collChild1111)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", 0).Return(true, collChild12345, nil)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", 0).Return(true, collChild1111, nil)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	redisClient := db_mock.NewGenericDB(t)
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient, tknDecoderFather, metadataManager, schedulerFather)
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			Address: strings.Split(httpServerFather.URL, ":")[2],
+			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
+		Children:         []info.Node{},
+		MetadataDomain:   "IT/Milan",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -132,15 +129,18 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
 	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClient, tknDecoderChild, metadataManager, schedulerChild)
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
 	serverInfoFather.Children = []info.Node{
 		{
-			Address: strings.Split(httpServerChild.URL, ":")[2],
+			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
 	}
 
@@ -168,11 +168,9 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 
 func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:    nil,
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		Father:           nil,
+		CloudNode:        nil,
+		MetadataDomain:   "IT",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -225,14 +223,13 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collFather12345 := shared.NewWeakCollection("12345", 40, true)
 	collFather1111 := shared.NewStrongCollection("1111", 40, false, true)
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345").Return(false, collFather12345)
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111").Return(true, collFather1111)
+	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", 0).Return(false, collFather12345, nil)
+	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", 0).Return(true, collFather1111, nil)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	redisClient := db_mock.NewGenericDB(t)
 
 	wasmExecutorFather := wasm_mock.NewExecutor(t)
 	wasmExecutorFather.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm.WasmResponse{
@@ -246,20 +243,21 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 
 	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient, tknDecoderFather, metadataManager, schedulerFather)
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			Address: strings.Split(httpServerFather.URL, ":")[2],
+			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
+		Children:         []info.Node{},
+		MetadataDomain:   "IT/Milan",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -285,12 +283,15 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when parsing url")
 	collChild1111.(*shared.StrongCollection).LeaderId = urlFather.Host
 
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345").Return(true, collChild12345)
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111").Return(true, collChild1111)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", 0).Return(true, collChild12345, nil)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", 0).Return(true, collChild1111, nil)
 
 	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClient, tknDecoderChild, metadataManager, schedulerChild)
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
@@ -301,7 +302,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	collFather1111.AddHost(urlChild.Host)
 	serverInfoFather.Children = []info.Node{
 		{
-			Address: strings.Split(httpServerChild.URL, ":")[2],
+			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
 	}
 
@@ -328,11 +329,9 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 
 func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:    nil,
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		Father:           nil,
+		CloudNode:        nil,
+		MetadataDomain:   "IT",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -369,26 +368,26 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	redisClient := db_mock.NewGenericDB(t)
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient, tknDecoderFather, metadataManager, schedulerFather)
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			Address: strings.Split(httpServerFather.URL, ":")[2],
+			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
+		Children:         []info.Node{},
+		MetadataDomain:   "IT/Milan",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -410,18 +409,21 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345 := shared.NewWeakCollection("12345", 40, false)
 
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345").Return(true, collChild12345)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", 0).Return(true, collChild12345, nil)
 
 	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClient, tknDecoderChild, metadataManager, schedulerChild)
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
 	serverInfoFather.Children = []info.Node{
 		{
-			Address: strings.Split(httpServerChild.URL, ":")[2],
+			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
 	}
 
@@ -448,11 +450,9 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 
 func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:    nil,
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		Father:           nil,
+		CloudNode:        nil,
+		MetadataDomain:   "IT",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -487,13 +487,12 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collFather12345 := shared.NewWeakCollection("12345", 40, false)
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345").Return(true, collFather12345)
+	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", 0).Return(true, collFather12345, nil)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	redisClient := db_mock.NewGenericDB(t)
 
 	wasmExecutorFather := wasm_mock.NewExecutor(t)
 	wasmExecutorFather.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm.WasmResponse{
@@ -507,8 +506,11 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 
 	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient, tknDecoderFather, metadataManager, schedulerFather)
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
@@ -518,12 +520,10 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			Address: urlFather.Host,
+			HostName: urlFather.Host,
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
+		Children:         []info.Node{},
+		MetadataDomain:   "IT/Milan",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -536,18 +536,21 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345").Return(false, nil)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", 0).Return(false, nil, nil)
 
 	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClient, tknDecoderChild, metadataManager, schedulerChild)
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
 	serverInfoFather.Children = []info.Node{
 		{
-			Address: strings.Split(httpServerChild.URL, ":")[2],
+			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
 	}
 
@@ -574,11 +577,9 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 
 func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:    nil,
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		Father:           nil,
+		CloudNode:        nil,
+		MetadataDomain:   "IT",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -626,26 +627,26 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	redisClient := db_mock.NewGenericDB(t)
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient, tknDecoderFather, metadataManager, schedulerFather)
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			Address: strings.Split(httpServerFather.URL, ":")[2],
+			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
+		Children:         []info.Node{},
+		MetadataDomain:   "IT/Milan",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -668,19 +669,22 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	collChild12345 := shared.NewWeakCollection("12345", 40, false)
 	collChild54321 := shared.NewWeakCollection("54321", 40, true)
 
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345").Return(true, collChild12345)
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("54321").Return(false, collChild54321)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", 0).Return(true, collChild12345, nil)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("54321", 0).Return(false, collChild54321, nil)
 
 	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClient, tknDecoderChild, metadataManager, schedulerChild)
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
 	serverInfoFather.Children = []info.Node{
 		{
-			Address: strings.Split(httpServerChild.URL, ":")[2],
+			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
 	}
 
@@ -707,11 +711,9 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 
 func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:    nil,
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		Father:           nil,
+		CloudNode:        nil,
+		MetadataDomain:   "IT",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -746,32 +748,32 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345 := shared.NewWeakCollection("12345", 40, true)
 
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345").Return(false, collChild12345)
+	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", 0).Return(false, collChild12345, nil)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	redisClient := db_mock.NewGenericDB(t)
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient, tknDecoderFather, metadataManager, schedulerFather)
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			Address: strings.Split(httpServerFather.URL, ":")[2],
+			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
+		Children:         []info.Node{},
+		MetadataDomain:   "IT/Milan",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -793,11 +795,14 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345Child := shared.NewWeakCollection("12345", 40, false)
 
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345").Return(true, collChild12345Child)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", 0).Return(true, collChild12345Child, nil)
 
 	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClient, tknDecoderChild, metadataManager, schedulerChild)
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
@@ -830,11 +835,9 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 
 func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:    nil,
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		Father:           nil,
+		CloudNode:        nil,
+		MetadataDomain:   "IT",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -888,33 +891,33 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	collFather12345 := shared.NewWeakCollection("12345", 40, false)
 	collFather1111 := shared.NewStrongCollection("1111", 40, false, false)
 
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345").Return(true, collFather12345)
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111").Return(true, collFather1111)
+	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", 0).Return(true, collFather12345, nil)
+	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", 0).Return(true, collFather1111, nil)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	redisClient := db_mock.NewGenericDB(t)
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient, tknDecoderFather, metadataManager, schedulerFather)
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			Address: strings.Split(httpServerFather.URL, ":")[2],
+			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
+		Children:         []info.Node{},
+		MetadataDomain:   "IT/Milan",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -944,12 +947,15 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild1111 := shared.NewStrongCollection("1111", 40, false, true)
 
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111").Return(true, collChild1111)
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345").Return(false, nil)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", 0).Return(true, collChild1111, nil)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", 0).Return(false, nil, nil)
 
 	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClient, tknDecoderChild, metadataManager, schedulerChild)
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
@@ -983,11 +989,9 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 
 func TestScheduleThreeNodes(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:    nil,
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		Father:           nil,
+		CloudNode:        nil,
+		MetadataDomain:   "IT",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -1029,32 +1033,32 @@ func TestScheduleThreeNodes(t *testing.T) {
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collFather1111 := shared.NewStrongCollection("1111", 40, true, false)
 
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111").Return(false, collFather1111)
+	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", 0).Return(false, collFather1111, nil)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	redisClient := db_mock.NewGenericDB(t)
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather, redisClient, tknDecoderFather, metadataManager, schedulerFather)
+	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			Address: strings.Split(httpServerFather.URL, ":")[2],
+			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
+		Children:         []info.Node{},
+		MetadataDomain:   "IT/Milan",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -1076,23 +1080,24 @@ func TestScheduleThreeNodes(t *testing.T) {
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild1111 := shared.NewStrongCollection("1111", 40, true, false)
 
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111").Return(false, collChild1111)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", 0).Return(false, collChild1111, nil)
 
 	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild, redisClient, tknDecoderChild, metadataManager, schedulerChild)
+	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
 	serverInfoChild2 := &info.ServerInfo{
 		Father: &info.Node{
-			Address: strings.Split(httpServerFather.URL, ":")[2],
+			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
+		Children:         []info.Node{},
+		MetadataDomain:   "IT/Milan",
 		Secret:           "secret",
 		MiddlewareSecret: "middleware-secret",
 	}
@@ -1122,11 +1127,14 @@ func TestScheduleThreeNodes(t *testing.T) {
 	collectionDiscovererChild2 := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild1111_2 := shared.NewStrongCollection("1111", 40, false, true)
 
-	collectionDiscovererChild2.EXPECT().IsCollectionLocallyPresent("1111").Return(true, collChild1111_2)
+	collectionDiscovererChild2.EXPECT().IsCollectionLocallyPresent("1111", 0).Return(true, collChild1111_2, nil)
 
 	schedulerChild2 := scheduler.NewScheduler(collectionDiscovererChild2, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2)
-	serverChild2, err := server.NewServer(os.Stdout, serverInfoChild2, redisClient, tknDecoderChild2, metadataManager, schedulerChild2)
+	serverChild2, err := server.NewServer(os.Stdout, serverInfoChild2)
 	assert.NoError(t, err, "Expected no error when creating server")
+
+	err = schedulerChild2.RegisterRoutes(serverChild2, tknDecoderChild2, metadataManager)
+	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild2 := httptest.NewServer(serverChild2.Handler)
 	defer httpServerChild2.Close()

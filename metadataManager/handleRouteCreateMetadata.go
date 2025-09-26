@@ -1,19 +1,16 @@
-package private
+package metadataManager
 
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"metadataManager"
 	"metadataManager/utils"
 	"net/http"
 	"os"
-	"server/info"
 )
 
-func HandleRouteCreateMetadata(logger *io.Writer, lookupMgr metadataManager.MetadataManager, serverInfo *info.ServerInfo) http.HandlerFunc {
+func (m *MetadataManagerImpl) handleRouteCreateMetadata() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(*logger, "[%s], got /create_metadata \n", serverInfo.MetadataDomain)
+		fmt.Fprintf(m.logger, "[%s], got /create_metadata \n", m.serverInfo.MetadataDomain)
 		defer r.Body.Close()
 
 		collectionId := r.PathValue("collection_id")
@@ -26,14 +23,14 @@ func HandleRouteCreateMetadata(logger *io.Writer, lookupMgr metadataManager.Meta
 			return
 		}
 
-		var reqOrigin metadataManager.PropagationOrigin
-		if serverInfo.Father != nil && reqMetadataDomain == serverInfo.Father.MetadataDomain {
-			reqOrigin = metadataManager.FROM_FATHER
+		var reqOrigin PropagationOrigin
+		if m.serverInfo.Father != nil && reqMetadataDomain == m.serverInfo.Father.MetadataDomain {
+			reqOrigin = FROM_FATHER
 		} else {
-			reqOrigin = metadataManager.FROM_CHILD
+			reqOrigin = FROM_CHILD
 		}
 
-		err = lookupMgr.CreateMetadata(collectionId, meta, reqOrigin)
+		err = m.CreateMetadata(collectionId, meta, reqOrigin)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when creating metadata: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)

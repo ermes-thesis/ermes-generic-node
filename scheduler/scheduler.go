@@ -7,16 +7,19 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"metadataManager"
 	"metadataManager/utils"
 	"net/http"
+	"server"
 	"server/client"
 	"server/info"
+	"tokenDecoder"
 
 	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
 )
 
 type Scheduler interface {
-	Schedule(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, error)
+	Schedule(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, sequentialSeqNumber uint64, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, error)
 }
 
 type FunctionResult struct {
@@ -29,9 +32,10 @@ type SchedulerImpl struct {
 	cache                caches.FunctionCache
 	wasmExecutorPool     wasm.ExecutorPool
 	serverInfo           *info.ServerInfo
+	logger               *io.Writer
 }
 
-func NewScheduler(collectionDiscoverer collectionsDiscoverer.CollectionsDiscoverer, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *info.ServerInfo) Scheduler {
+func NewScheduler(collectionDiscoverer collectionsDiscoverer.CollectionsDiscoverer, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *info.ServerInfo) *SchedulerImpl {
 	return &SchedulerImpl{
 		collectionDiscoverer: collectionDiscoverer,
 		cache:                cache,
@@ -40,7 +44,29 @@ func NewScheduler(collectionDiscoverer collectionsDiscoverer.CollectionsDiscover
 	}
 }
 
-func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, error) {
+func (s *SchedulerImpl) RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager) error {
+	err := server.AddCustomRoute("/invoke-function/{name}/{version}/", false, s.handleFunctionInvocation(tokenDecoder, metadataManager))
+	if err != nil {
+		return fmt.Errorf("error adding route /invoke-function/{name}/{version}/: %v", err)
+	}
+	err = server.AddCustomRoute("/invoke-function/{name}", false, s.handleFunctionInvocation(tokenDecoder, metadataManager))
+	if err != nil {
+		return fmt.Errorf("error adding route /invoke-function/{name}: %v", err)
+	}
+
+	err = server.AddCustomRoute("/offload-function/{name}/{version}/", true, s.handleOffloadFunctionInvocation(tokenDecoder))
+	if err != nil {
+		return fmt.Errorf("error adding route /offload-function/{name}/{version}/: %v", err)
+	}
+	err = server.AddCustomRoute("/offload-function/{name}", true, s.handleOffloadFunctionInvocation(tokenDecoder))
+	if err != nil {
+		return fmt.Errorf("error adding route /offload-function/{name}: %v", err)
+	}
+
+	return nil
+}
+
+func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, sequentialSeqNumber uint64, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, error) {
 	fmt.Println("Scheduling function:", functionName, "version:", functionVersion)
 	fmt.Printf("With collections: %v\n", collections)
 
@@ -54,12 +80,12 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 	eventualHostIds := make(map[string]uint)
 	hostWithMoreEventual := ""
 	if s.serverInfo.Father != nil {
-		hostWithMoreEventual = s.serverInfo.Father.Address
+		hostWithMoreEventual = s.serverInfo.Father.HostName
 	}
 	maxEventual := uint(0)
 	for _, cols := range collections {
 		for _, col := range cols {
-			found, collection := s.collectionDiscoverer.IsCollectionLocallyPresent(col.Id)
+			found, collection, _ := s.collectionDiscoverer.IsCollectionLocallyPresent(col.Id, sequentialSeqNumber)
 			if col.Metadata.Consistency == utils.SequentialConsistent {
 				if sequentialCollectionNeeded {
 					return nil, fmt.Errorf("multiple sequentially consistent collections are not supported")
@@ -79,10 +105,10 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 						}
 					}
 				} else {
-					eventualHostIds[s.serverInfo.Father.Address]++
-					if eventualHostIds[s.serverInfo.Father.Address] > maxEventual {
-						maxEventual = eventualHostIds[s.serverInfo.Father.Address]
-						hostWithMoreEventual = s.serverInfo.Father.Address
+					eventualHostIds[s.serverInfo.Father.HostName]++
+					if eventualHostIds[s.serverInfo.Father.HostName] > maxEventual {
+						maxEventual = eventualHostIds[s.serverInfo.Father.HostName]
+						hostWithMoreEventual = s.serverInfo.Father.HostName
 					}
 				}
 			}
@@ -91,7 +117,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 
 	if sequentialCollectionNeeded {
 		if sequentialCollection == nil {
-			return s.forwardRequest(s.serverInfo.Father.Address, functionName, functionVersion, collections, groupToken)
+			return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, groupToken)
 		}
 
 		functionMetadata, err := s.cache.GetMetadata(functionName, functionVersion)
@@ -122,7 +148,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 				for hostId := range seqCollectionCasted.HostsId() {
 					return s.forwardRequest(hostId, functionName, functionVersion, collections, groupToken)
 				}
-				return s.forwardRequest(s.serverInfo.Father.Address, functionName, functionVersion, collections, groupToken)
+				return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, groupToken)
 			}
 		}
 	} else if eventualCollectionPresent {

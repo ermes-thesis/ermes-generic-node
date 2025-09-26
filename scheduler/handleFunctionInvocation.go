@@ -1,4 +1,4 @@
-package public
+package scheduler
 
 import (
 	"encoding/json"
@@ -8,13 +8,12 @@ import (
 	"metadataManager/utils"
 	"net/http"
 	"os"
-	"scheduler"
 	"tokenDecoder"
 )
 
-func HandleFunctionInvocation(logger *io.Writer, tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager, scheduler scheduler.Scheduler) http.HandlerFunc {
+func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(*logger, "got function invocation \n")
+		fmt.Fprintf(*s.logger, "got function invocation \n")
 		defer r.Body.Close()
 
 		fnName := r.PathValue("name")
@@ -23,10 +22,11 @@ func HandleFunctionInvocation(logger *io.Writer, tokenDecoder tokenDecoder.Token
 			fnVersion = "latest"
 		}
 
-		fmt.Fprintf(*logger, "Function name: %s, version: %s\n", fnName, fnVersion)
+		fmt.Fprintf(*s.logger, "Function name: %s, version: %s\n", fnName, fnVersion)
 
 		queryParams := r.Header.Get("X-ERMES-QUERY")
 		cachedQuery := r.Header.Get("X-ERMES-CACHED-QUERY")
+		sequentialSeqNumberStr := r.Header.Get("X-ERMES-SEQUENTIAL-NUMBER")
 		geolocation := r.Header.Get("X-ERMES-POSITION")
 		groupToken := r.Header.Get("X-ERMES-GROUPS")
 
@@ -74,7 +74,16 @@ func HandleFunctionInvocation(logger *io.Writer, tokenDecoder tokenDecoder.Token
 			return
 		}
 
-		functionResponse, err := scheduler.Schedule(fnName, fnVersion, collections, body, groups, userId, groupToken)
+		var sequentialSeqNumber uint64
+		if sequentialSeqNumberStr != "" {
+			_, err := fmt.Sscanf(sequentialSeqNumberStr, "%d", &sequentialSeqNumber)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error parsing sequential sequence number: %s \n", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+		functionResponse, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, body, groups, userId, groupToken)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when scheduling function: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)

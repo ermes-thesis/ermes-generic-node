@@ -2,39 +2,31 @@ package server
 
 import (
 	"bytes"
-	"db"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"metadataManager"
 	"net/http"
 	"os"
-	"scheduler"
 	"server/client"
 	"server/clientrepo"
 	"server/info"
-	"tokenDecoder"
 )
 
 type ServerType interface {
-	SendGenericHTTPRequest(nodeTo string, pathTo string, messageContent interface{}) (int, error)
+	SendGenericHTTPRequest(nodeTo string, pathTo string, messageContent any) (int, error)
+	SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo string, messageContent any) (*http.Response, error)
 	AddCustomRoute(path string, isPrivate bool, handler http.HandlerFunc) error
 }
 
 type Server struct {
-	Serverinfo      *info.ServerInfo
-	Port            string
-	Logger          io.Writer
-	Handler         *http.ServeMux
-	ClientRepo      *clientrepo.ClientRepo
-	RedisClient     db.GenericDB
-	TokenDecoder    tokenDecoder.TokenDecoder
-	MetadataManager metadataManager.MetadataManager
-	Scheduler       scheduler.Scheduler
+	ServerInfo *info.ServerInfo
+	Logger     io.Writer
+	Handler    *http.ServeMux
+	ClientRepo *clientrepo.ClientRepo
 }
 
-func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.GenericDB, tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager, scheduler scheduler.Scheduler) (*Server, error) {
+func NewServer(logger io.Writer, serverInfo *info.ServerInfo) (*Server, error) {
 
 	fmt.Fprintf(logger, "Creating a new Server instance... \n")
 
@@ -45,15 +37,10 @@ func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.Gen
 	fmt.Fprintf(logger, "Creating server data structure... ")
 
 	ser := &Server{
-		Serverinfo:      serverInfo,
-		Port:            serverInfo.Address,
-		Logger:          logger,
-		Handler:         mux,
-		ClientRepo:      clientrepo.CreateClientRepo(),
-		RedisClient:     redisClient,
-		TokenDecoder:    tokenDecoder,
-		MetadataManager: metadataManager,
-		Scheduler:       scheduler,
+		ServerInfo: serverInfo,
+		Logger:     logger,
+		Handler:    mux,
+		ClientRepo: clientrepo.CreateClientRepo(),
 	}
 
 	fmt.Fprintf(logger, "done \n")
@@ -70,6 +57,14 @@ func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.Gen
 
 // SendGenericHTTPRequest Method to send a generic data transfer request. It returns both the status code of the response and the error.
 func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageContent interface{}) (int, error) {
+	res, err := s.SendGenericHTTPRequestReturnResponse(nodeTo, pathTo, messageContent)
+	if err != nil {
+		return -1, err
+	}
+	return res.StatusCode, nil
+}
+
+func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo string, messageContent interface{}) (*http.Response, error) {
 	// Check if the node to is correctly formatted
 
 	fmt.Fprintf(s.Logger, "got a generic request %s \n", pathTo)
@@ -78,19 +73,19 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 
 	ok := false
 
-	for _, elem := range s.Serverinfo.Children {
-		if elem.Address == nodeTo {
+	for _, elem := range s.ServerInfo.Children {
+		if elem.HostName == nodeTo {
 			ok = true
 		}
 	}
 
-	if s.Serverinfo.Father.Address != nodeTo && !ok {
+	if s.ServerInfo.Father.HostName != nodeTo && !ok {
 		fmt.Fprintf(s.Logger, "request should be sent to %s , which is not a known node. \n", nodeTo)
 
-		return -1, errors.New("node not in the hierarchy, cannot send request")
+		return nil, errors.New("node not in the hierarchy, cannot send request")
 	}
 
-	reqUrl := fmt.Sprintf("http://localhost:%s%s", nodeTo, pathTo)
+	reqUrl := fmt.Sprintf("http://%s%s", nodeTo, pathTo)
 
 	fmt.Fprintf(s.Logger, "Sending request to node: %s \n", reqUrl)
 
@@ -99,7 +94,7 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when marshalling the body of the request: %s \n", err)
 
-		return -1, err
+		return nil, err
 	}
 
 	// Create the request
@@ -109,13 +104,13 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when creating the http request: %s \n", err)
 
-		return -1, err
+		return nil, err
 	}
 
 	// Prepare the headers
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-ERMES-SECRET", s.Serverinfo.Father.Address)
+	req.Header.Set("X-ERMES-SECRET", s.ServerInfo.Secret)
 
 	fmt.Fprintf(s.Logger, "Request is ready, now sending it ...\n")
 
@@ -124,9 +119,9 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when contacting the node: %s \n", err)
 
-		return -1, err
+		return nil, err
 	}
 
-	// If everything went well return the response status code.
-	return res.StatusCode, nil
+	// If everything went well return the response.
+	return res, nil
 }

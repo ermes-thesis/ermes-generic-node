@@ -1,18 +1,16 @@
-package private
+package metadataManager
 
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"metadataManager"
 	"net/http"
 	"os"
 	"tokenDecoder"
 )
 
-func HandleRouteLookup(logger *io.Writer, tokenDecoder tokenDecoder.TokenDecoder, lookupMgr metadataManager.MetadataManager) http.HandlerFunc {
+func (m *MetadataManagerImpl) handleRouteLookup(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(*logger, "got /lookup \n")
+		fmt.Fprintf(m.logger, "got /lookup \n")
 
 		fnName := r.Header.Get("X-ERMES-REQ-FUNCTION")
 		fnVersion := r.Header.Get("X-ERMES-REQ-FUNCTION-VERSION")
@@ -27,14 +25,14 @@ func HandleRouteLookup(logger *io.Writer, tokenDecoder tokenDecoder.TokenDecoder
 			return
 		}
 
-		queryResults, err := lookupMgr.ExecuteQueries(fnName, fnVersion, queryParams, groups, groupToken, geolocation)
+		queryResults, err := m.ExecuteQueries(fnName, fnVersion, queryParams, groups, groupToken, geolocation)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when executing queries: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		fmt.Fprintf(*logger, "Queries executed successfully, returning results.\n")
+		fmt.Fprintf(m.logger, "Queries executed successfully, returning results.\n")
 		w.Header().Set("Content-Type", "application/json")
 		response, err := json.Marshal(queryResults)
 		if err != nil {

@@ -10,13 +10,14 @@ import (
 
 // config data structures
 type Config struct {
-	Node             NodeConfig             `yaml:"node"`
-	Hierarchy        HierarchyConfig        `yaml:"hierarchy"`
-	MigrationManager MigrationManagerConfig `yaml:"migrationManager"`
-	Redis            RedisConfig            `yaml:"redis"`
-	Lru              LruConfig              `yaml:"lru"`
-	FunctionsCache   FunctionsCacheConfig   `yaml:"functionsCache"`
-	Scheduler        SchedulerConfig        `yaml:"scheduler"`
+	Node             NodeConfig               `yaml:"node"`
+	Hierarchy        HierarchyConfig          `yaml:"hierarchy"`
+	MigrationManager MigrationManagerConfig   `yaml:"migrationManager"`
+	Redis            RedisConfig              `yaml:"redis"`
+	Lru              LruConfig                `yaml:"lru"`
+	FunctionsCache   FunctionsCacheConfig     `yaml:"functionsCache"`
+	Scheduler        SchedulerConfig          `yaml:"scheduler"`
+	Collections      []CollectionSettingsInfo `yaml:"collections"`
 }
 
 type MigrationManagerConfig struct {
@@ -61,6 +62,7 @@ type TemplatesCacheConfig struct {
 type NodeConfig struct {
 	Name             string `yaml:"name"`
 	Domain           string `yaml:"domain"`
+	Address          string `yaml:"address"`
 	Port             string `yaml:"port"`
 	Secret           string `yaml:"secret"`
 	MiddlewareSecret string `yaml:"middlewareSecret"`
@@ -116,4 +118,14 @@ func LoadConfig(filename string) Config {
 	}
 
 	return config
+}
+
+type CollectionSettingsInfo struct {
+	CollectionID   string   `yaml:"collection_id"`       // mandatory
+	IsStrong       bool     `yaml:"is_strong"`           // mandatory
+	CollectionSize *uint64  `yaml:"collection_size"`     // mandatory for local collections
+	IsLeader       *bool    `yaml:"is_leader,omitempty"` // optional
+	IsRemote       bool     `yaml:"is_local"`            // mandatory
+	HostsID        []string `yaml:"hosts_id,omitempty"`  // optional
+	LeaderID       *string  `yaml:"leader_id,omitempty"` // optional
 }

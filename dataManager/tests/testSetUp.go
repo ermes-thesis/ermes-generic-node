@@ -62,11 +62,14 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 	}
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{
-		Node:   info.Node{Address: "Name", MetadataDomain: "Domain"},
-		Father: &info.Node{Address: "fName", MetadataDomain: "fDomain"},
+		HostName:       "localhost:0000",
+		MetadataDomain: "domain",
+		Address:        "localhost",
+		Port:           "0000",
+		Father:         &info.Node{HostName: "fName", MetadataDomain: "fDomain"},
 		Children: []info.Node{
-			{Address: "child1", MetadataDomain: "Domain"},
-			{Address: "child2", MetadataDomain: "Domain"},
+			{HostName: "child1", MetadataDomain: "Domain"},
+			{HostName: "child2", MetadataDomain: "Domain"},
 		},
 		Secret: "ermes-secret",
 	}
@@ -85,7 +88,7 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	}
 	lurConfig := config.LruConfig{
 		Size:      10,
-		SafeLevel: 0.9,
+		SafeLevel: 0.95, //to avoid safe leve clean up
 	}
 
 	db := mockDb.NewGenericDB(t)
@@ -107,11 +110,14 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	}
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{
-		Node:   info.Node{Address: "0000", MetadataDomain: "Domain"},
-		Father: &info.Node{Address: "1111", MetadataDomain: "fDomain", Latency: 5},
+		HostName:       "localhost:0000",
+		MetadataDomain: "domain",
+		Address:        "localhost",
+		Port:           "0000",
+		Father:         &info.Node{HostName: "1111", MetadataDomain: "fDomain", Latency: 5},
 		Children: []info.Node{
-			{Address: "2222", MetadataDomain: "Domain", Latency: 3},
-			{Address: "3333", MetadataDomain: "Domain", Latency: 4},
+			{HostName: "localhost:2222", MetadataDomain: "Domain", Latency: 3},
+			{HostName: "localhost:3333", MetadataDomain: "Domain", Latency: 4},
 		},
 		Secret: "ermes-secret",
 	}

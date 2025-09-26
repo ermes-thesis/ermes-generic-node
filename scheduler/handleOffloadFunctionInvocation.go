@@ -1,4 +1,4 @@
-package private
+package scheduler
 
 import (
 	"encoding/json"
@@ -7,13 +7,12 @@ import (
 	"metadataManager/utils"
 	"net/http"
 	"os"
-	"scheduler"
 	"tokenDecoder"
 )
 
-func HandleOffloadFunctionInvocation(logger *io.Writer, tokenDecoder tokenDecoder.TokenDecoder, scheduler scheduler.Scheduler) http.HandlerFunc {
+func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(*logger, "got offloaded function invocation \n")
+		fmt.Fprintf(*s.logger, "got offloaded function invocation \n")
 		defer r.Body.Close()
 
 		fnName := r.PathValue("name")
@@ -22,10 +21,11 @@ func HandleOffloadFunctionInvocation(logger *io.Writer, tokenDecoder tokenDecode
 			fnVersion = "latest"
 		}
 
-		fmt.Fprintf(*logger, "Function name: %s, version: %s\n", fnName, fnVersion)
+		fmt.Fprintf(*s.logger, "Function name: %s, version: %s\n", fnName, fnVersion)
 
 		collectionJson := r.Header.Get("X-ERMES-COLLECTIONS")
 		groupToken := r.Header.Get("X-ERMES-GROUPS")
+		sequentialSeqNumberStr := r.Header.Get("X-ERMES-SEQUENTIAL-NUMBER")
 
 		groups, userId, err := tokenDecoder.DecodeGroupToken(groupToken)
 		if err != nil {
@@ -48,7 +48,16 @@ func HandleOffloadFunctionInvocation(logger *io.Writer, tokenDecoder tokenDecode
 			return
 		}
 
-		functionResponse, err := scheduler.Schedule(fnName, fnVersion, collections, body, groups, userId, groupToken)
+		var sequentialSeqNumber uint64
+		if sequentialSeqNumberStr != "" {
+			_, err := fmt.Sscanf(sequentialSeqNumberStr, "%d", &sequentialSeqNumber)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error parsing sequential sequence number: %s \n", err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+		functionResponse, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, body, groups, userId, groupToken)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when scheduling function: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)

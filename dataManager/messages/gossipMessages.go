@@ -1,4 +1,4 @@
-package gossipmessages
+package messages
 
 import (
 	"encoding/json"

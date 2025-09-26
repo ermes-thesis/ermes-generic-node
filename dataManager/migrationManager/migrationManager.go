@@ -86,7 +86,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.lruCache = lruCache
 		m.config = config
 		//prepare server
-		m.sender = sender.NewMigrationManagerSender(m.logger, server)
+		m.sender = sender.NewMigrationManagerSender(m.logger, server, serverInfo)
 		server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages(logger).ServeHTTP)
 		server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection(logger).ServeHTTP)
 

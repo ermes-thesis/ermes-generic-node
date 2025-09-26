@@ -8,6 +8,7 @@ import (
 	"io"
 	log "logger"
 	"server"
+	info "server/info"
 )
 
 const (
@@ -30,21 +31,25 @@ type MigrationManagerSender interface {
 }
 
 type MigrationManagerSenderImpl struct {
-	server server.ServerType
-	logger log.Logger
+	serverInfo info.ServerInfo
+	server     server.ServerType
+	logger     log.Logger
 }
 
-func NewMigrationManagerSender(logger log.Logger, server server.ServerType) MigrationManagerSender {
+func NewMigrationManagerSender(logger log.Logger, server server.ServerType, serverInfo info.ServerInfo) MigrationManagerSender {
 	return &MigrationManagerSenderImpl{
-		server: server,
-		logger: logger,
+		server:     server,
+		logger:     logger,
+		serverInfo: serverInfo,
 	}
 }
 
 func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]string, groups []string, collectionSize uint64) {
 	//imp
 	s.logger.Println("SENDER", fmt.Sprintf("send collection %s to %s", collection.CollectionId(), destination), log.INFO)
-	collection.AddHost(destination)
+	if destination != s.serverInfo.Father.Address {
+		collection.AddHost(destination)
+	}
 
 	msg := gossip.SendCollectionMessage{
 		CollectionId:   collection.CollectionId(),

@@ -68,15 +68,15 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	clDiscovererInstance.Init(collections)
 
 	wasmExecutorPool := wasm.NewExecutorPool(10)
-	err = scheduler.RegisterHostFns(wasmExecutorPool, redisClient.Client(), serverInfo)
+	err = scheduler.RegisterHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{RedisClient: redisClient, MetadataManager: metadataLookup, ServerInfo: serverInfo})
 	if err != nil {
 		return fmt.Errorf("error registering host functions: %w", err)
 	}
 
-	scheduler := scheduler.NewScheduler(clDiscovererInstance, funcCache, wasmExecutorPool, serverInfo)
+	sched := scheduler.NewScheduler(clDiscovererInstance, funcCache, wasmExecutorPool, serverInfo)
 
 	//Run server
-	ser, err := server.NewServer(w, serverInfo, redisClient, tknDecoder, metadataLookup, scheduler)
+	ser, err := server.NewServer(w, serverInfo, redisClient, tknDecoder, metadataLookup, sched)
 
 	if err != nil {
 		return err

@@ -3,6 +3,7 @@ package scheduler
 import (
 	"bytes"
 	"context"
+	"db"
 	"errors"
 	"fmt"
 	"metadataManager"
@@ -20,9 +21,9 @@ import (
 )
 
 type HostFnsDependencies struct {
-	redisClient     *redis.Client
-	metadataManager metadataManager.MetadataManager
-	serverInfo      *info.ServerInfo
+	RedisClient     db.GenericDB
+	MetadataManager metadataManager.MetadataManager
+	ServerInfo      *info.ServerInfo
 }
 
 const (
@@ -54,18 +55,18 @@ func RegisterHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDependenci
 	// Developers should guarantee the life cycle of the data, and it can be
 	// `nil` if the external data is not needed.
 	// The last parameter can be 0 if developers do not need the cost measuring.
-	hostGetFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostGet, dependencies.redisClient, 0)
-	hostMultipleGetFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostMultipleGet, dependencies.redisClient, 0)
-	hostPutFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostPut, dependencies.redisClient, 0)
-	hostDelFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostDelete, dependencies.redisClient, 0)
+	hostGetFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostGet, dependencies.RedisClient, 0)
+	hostMultipleGetFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostMultipleGet, dependencies.RedisClient, 0)
+	hostPutFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostPut, dependencies.RedisClient, 0)
+	hostDelFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostDelete, dependencies.RedisClient, 0)
 	hostCreateCollectionFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostCreateCollection, dependencies, 0)
-	hostDeleteCollectionFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostDeleteCollection, dependencies.redisClient, 0)
-	hostAddGroupToCollectionFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostAddGroupToCollection, dependencies.redisClient, 0)
-	hostRemoveGroupFromCollectionFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostRemoveGroupFromCollection, dependencies.redisClient, 0)
-	hostAddUserToGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostAddUserToGroup, dependencies.serverInfo, 0)
-	hostRemoveUserFromGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostRemoveUserFromGroup, dependencies.serverInfo, 0)
-	hostCreateGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostCreateGroup, dependencies.serverInfo, 0)
-	hostDeleteGroupFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostDeleteGroup, dependencies.serverInfo, 0)
+	hostDeleteCollectionFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostDeleteCollection, dependencies.RedisClient, 0)
+	hostAddGroupToCollectionFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostAddGroupToCollection, dependencies.RedisClient, 0)
+	hostRemoveGroupFromCollectionFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostRemoveGroupFromCollection, dependencies.RedisClient, 0)
+	hostAddUserToGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostAddUserToGroup, dependencies.ServerInfo, 0)
+	hostRemoveUserFromGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostRemoveUserFromGroup, dependencies.ServerInfo, 0)
+	hostCreateGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostCreateGroup, dependencies.ServerInfo, 0)
+	hostDeleteGroupFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostDeleteGroup, dependencies.ServerInfo, 0)
 
 	// If the function object is not added into a module instance object, it should be released.
 	fnTwoParamOneReturnType.Release()
@@ -442,8 +443,8 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 	collectionId := uuid.NewString()
 	// key := "data:" + collectionId + ":groups"
 
-	//TODO: Sincrono va bene?
-	err = deps.metadataManager.CreateMetadata(collectionId, metadata, metadataManager.FROM_LOCAL)
+	//TODO: Sincrono va bene? --> No deve essere asincrono
+	go deps.MetadataManager.CreateMetadata(collectionId, metadata, metadataManager.FROM_LOCAL)
 
 	// TODO: Substitute with dataManager
 	// err = deps.redisClient.Sadd(context.Background(), key, groups...).Err()

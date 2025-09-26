@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	log "logger"
-	"net"
 	"net/http"
 )
 
@@ -172,13 +171,8 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation(logger log.Lo
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-
-		ip, port, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		address := ip + ":" + port //TODO: verify
+		
+		address := msg.SenderIp
 
 		w.WriteHeader(http.StatusOK) //response
 

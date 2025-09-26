@@ -27,5 +27,6 @@ type CollectionUpdateMessage struct {
 	RecordNames  []string `json:"recordNames"`
 	RecordValues []string `json:"recordValue"`
 	Time         int64    `json:"time"`
-	SenderIp     string   `json:"hostIp"`
+	UpdateHostIp string   `json:"updateHostIp"`
+	SenderIp     string   `json:"senderIp"`
 }

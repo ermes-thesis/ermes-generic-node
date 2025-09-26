@@ -150,7 +150,8 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, strongCollection *shared.StrongCollection, totalForce int, totalReq int) bool {
 	//compute decision
 	feW, req := m.computeElasticForce(buffer, usage.GetWrite)
-	var driverForce = float64(2*feW) - ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(m.policy.serverInfo.Latency)
+	//TODO: TODO: TODO: TODO: TODO: TODO: TODO: TODO: GUARDARE m.policy.serverInfo.Father.Latency l'ho scritto per non fare errore !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	var driverForce = float64(2*feW) - ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(m.policy.serverInfo.Father.Latency)
 	m.policy.logger.Println("DEFAULT-STRONG-POLICY", fmt.Sprintf("leader decision on collection %s result in force %f and resistance %f", outerKey, driverForce, float64(totalForce)), log.INFO)
 	//evaluate decision
 	if driverForce <= float64(totalForce) {
@@ -278,12 +279,12 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 	if collection.IsStrong() {
 		isLeader = collection.(*shared.StrongCollection).IsLeader
 		if isLeader {
-			collection.(*shared.StrongCollection).LeaderId = m.policy.serverInfo.Father.Address
+			collection.(*shared.StrongCollection).LeaderId = m.policy.serverInfo.Father.HostName
 		}
 		//stop keep track of access for a remote collection
 		m.policy.RemoveInfo(collection.CollectionId())
 	}
-	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.Address, collection, isLeader, res, groups, collectionSize)
+	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.HostName, collection, isLeader, res, groups, collectionSize)
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(collection.CollectionId())

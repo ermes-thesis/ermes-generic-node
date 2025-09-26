@@ -62,8 +62,9 @@ def generate_node_configs(input_file, output_dir):
         # === Node Config ===
         node_config = {
             "node": {
-                "name": node_name,
+                "name": node["address"] + ":" + str(common["port"]),
                 "domain": node_domain,
+                "address": node["address"],
                 "port": common["port"],
                 "secret": common["secret"],
             },

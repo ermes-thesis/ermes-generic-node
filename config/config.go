@@ -39,10 +39,11 @@ type RedisConfig struct {
 }
 
 type NodeConfig struct {
-	Name   string `yaml:"name"`
-	Domain string `yaml:"domain"`
-	Port   string `yaml:"port"`
-	Secret string `yaml:"secret"`
+	Name    string `yaml:"name"`
+	Domain  string `yaml:"domain"`
+	Address string `yaml:"address"`
+	Port    string `yaml:"port"`
+	Secret  string `yaml:"secret"`
 }
 
 // The father should look something like:

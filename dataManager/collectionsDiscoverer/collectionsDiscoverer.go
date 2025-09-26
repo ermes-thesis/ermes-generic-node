@@ -120,7 +120,7 @@ func AccessCollection[T any](
 			c.collectionsPartialView.Mutex.Unlock() // lock release
 			return zero, errors.New("collection not found")
 		}
-		addr := c.serverInfo.Father.Address
+		addr := c.serverInfo.Father.HostName
 		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return remoteFn(addr)
 	}
@@ -164,7 +164,7 @@ func UpdateCollection(
 			c.collectionsPartialView.Mutex.Unlock() // lock release
 			return errors.New("strong collection can't be updated remotely")
 		}
-		addr := c.serverInfo.Father.Address
+		addr := c.serverInfo.Father.HostName
 		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return remoteFn(addr)
 	}
@@ -202,7 +202,8 @@ func (c *CollectionsDiscovererImp) PropagateUpdates(updates []messages.Collectio
 			RecordNames:  update.RecordNames,
 			RecordValues: update.RecordValues,
 			Time:         time,
-			SenderIp:     c.serverInfo.Address,
+			UpdateHostIp: c.serverInfo.HostName,
+			SenderIp:     c.serverInfo.HostName,
 		}
 		//sync
 		c.collectionsPartialView.Mutex.Lock()
@@ -214,6 +215,7 @@ func (c *CollectionsDiscovererImp) PropagateUpdates(updates []messages.Collectio
 }
 
 func (c *CollectionsDiscovererImp) propagateUpdate(updateMessage messages.CollectionUpdateMessage, toUpdate bool, ignoredIp []string) {
+	updateMessage.SenderIp = c.serverInfo.HostName
 	collection, exists := c.collectionsPartialView.KnownCollections[updateMessage.CollectionId]
 	if exists {
 		if collection.IsLocal() && !collection.IsStrong() { //check for conflitcs
@@ -238,7 +240,7 @@ func (c *CollectionsDiscovererImp) propagateUpdate(updateMessage messages.Collec
 	if c.serverInfo.Father == nil {
 		return
 	}
-	addr := c.serverInfo.Father.Address
+	addr := c.serverInfo.Father.HostName
 	if !contains(ignoredIp, addr) {
 		c.sender.PropagateUpdate(addr, updateMessage)
 	}
@@ -246,7 +248,7 @@ func (c *CollectionsDiscovererImp) propagateUpdate(updateMessage messages.Collec
 
 func (c *CollectionsDiscovererImp) CheckUpdateConflicts(collection shared.Collection, updateMessage messages.CollectionUpdateMessage) bool {
 	//check conflict
-	res := collection.(*shared.WeakCollection).SetLastUpdate(updateMessage.Time, updateMessage.SenderIp)
+	res := collection.(*shared.WeakCollection).SetLastUpdate(updateMessage.Time, updateMessage.UpdateHostIp)
 	if !res {
 		records, err := c.dbInterface.GetRecords(updateMessage.CollectionId, updateMessage.RecordNames...)
 		if err != nil {
@@ -264,8 +266,8 @@ func (c *CollectionsDiscovererImp) CheckUpdateConflicts(collection shared.Collec
 				}
 				return strRecords
 			}(),
-			Time:     collection.(*shared.WeakCollection).GetLastUpdateTimeStamp(),
-			SenderIp: collection.(*shared.WeakCollection).GetLastUpdateSenderIp(),
+			Time:         collection.(*shared.WeakCollection).GetLastUpdateTimeStamp(),
+			UpdateHostIp: collection.(*shared.WeakCollection).GetLastUpdateSenderIp(),
 		}
 		c.propagateUpdate(updateMessage, false, []string{})
 		return false

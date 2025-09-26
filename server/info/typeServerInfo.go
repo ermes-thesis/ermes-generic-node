@@ -14,7 +14,8 @@ import (
 // Every field of the struct should be treated as a constant value,
 // hence after creation it should not be modified by any goroutine.
 type ServerInfo struct {
-	Name           string
+	HostName       string
+	Address        string
 	Port           string
 	MetadataDomain string
 	// Father contains the address where the father is located (as a string).
@@ -46,7 +47,8 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 
 	// NB: these operations just copy the references !
 	// TODO: careful for the moment we do not manage errors in the configuration
-	name := config.Node.Name
+	hostname := config.Node.Name
+	address := config.Node.Address
 	port := config.Node.Port // All the processes are open on the same port
 	domain := config.Node.Domain
 	parent := config.Hierarchy.Father[0]
@@ -67,7 +69,8 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 	}
 
 	serverinfo := &ServerInfo{
-		Name:           name,
+		HostName:       hostname,
+		Address:        address,
 		Port:           port,
 		MetadataDomain: domain,
 		Secret:         config.Node.Secret, // For the moment leave it hardcoded
@@ -90,8 +93,7 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 func StringifyInfo(infoptr *ServerInfo) string {
 	var sb strings.Builder
 
-	sb.WriteString("Name: " + infoptr.Name + "\n")
-	sb.WriteString("Port: " + infoptr.Port + "\n")
+	sb.WriteString("HostName: " + infoptr.HostName + "\n")
 	sb.WriteString("Domain: " + infoptr.MetadataDomain + "\n")
 	sb.WriteString("Father: " + infoptr.Father.HostName + "\n")
 	sb.WriteString("FatherDomain: " + infoptr.Father.MetadataDomain + "\n")

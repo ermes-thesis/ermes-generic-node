@@ -41,7 +41,7 @@ func NewServer(logger io.Writer, serverInfo *info.ServerInfo, redisClient db.Gen
 
 	ser := &Server{
 		Serverinfo:      serverInfo,
-		Port:            serverInfo.Address,
+		Port:            serverInfo.Port,
 		Logger:          logger,
 		Handler:         mux,
 		ClientRepo:      clientrepo.CreateClientRepo(),
@@ -72,18 +72,18 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 	ok := false
 
 	for _, elem := range s.Serverinfo.Children {
-		if elem.Address == nodeTo {
+		if elem.HostName == nodeTo {
 			ok = true
 		}
 	}
 
-	if s.Serverinfo.Father.Address != nodeTo && !ok {
+	if s.Serverinfo.Father.HostName != nodeTo && !ok {
 		fmt.Fprintf(s.Logger, "request should be sent to %s , which is not a known node. \n", nodeTo)
 
 		return -1, errors.New("node not in the hierarchy, cannot send request")
 	}
 
-	reqUrl := fmt.Sprintf("http://localhost:%s%s", nodeTo, pathTo)
+	reqUrl := fmt.Sprintf("http://%s%s", nodeTo, pathTo)
 
 	fmt.Fprintf(s.Logger, "Sending request to node: %s \n", reqUrl)
 
@@ -108,7 +108,7 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 	// Prepare the headers
 
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-ERMES-SECRET", s.Serverinfo.Father.Address)
+	req.Header.Set("X-ERMES-SECRET", s.Serverinfo.Secret)
 
 	fmt.Fprintf(s.Logger, "Request is ready, now sending it ...\n")
 

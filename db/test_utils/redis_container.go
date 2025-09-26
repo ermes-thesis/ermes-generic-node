@@ -5,42 +5,50 @@ import (
 	"context"
 	"db/redis"
 	"net/url"
-	"os"
-	"runtime"
-	"strings"
 	"testing"
 
 	"github.com/testcontainers/testcontainers-go"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
 
-// IsWSL returns true if the Go code is running inside WSL2.
-func IsWSL() bool {
-	if runtime.GOOS != "linux" {
-		return false
-	}
+// ↓↓↓ UNCOMMENT THIS IF YOU NEED TO EXECUTE THE TESTS ON A CONTAINER ↓↓↓
 
-	// Check /proc/version
-	if content, err := os.ReadFile("/proc/version"); err == nil {
-		if strings.Contains(strings.ToLower(string(content)), "microsoft") {
-			return true
-		}
-	}
-
-	// Optionally check /proc/sys/kernel/osrelease (some WSL versions)
-	if content, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
-		if strings.Contains(strings.ToLower(string(content)), "microsoft") {
-			return true
-		}
-	}
-
-	return false
-}
+//// IsWSL returns true if the Go code is running inside WSL2.
+//func IsWSL() bool {
+//	if runtime.GOOS != "linux" {
+//		return false
+//	}
+//
+//	// Check /proc/version
+//	if content, err := os.ReadFile("/proc/version"); err == nil {
+//		if strings.Contains(strings.ToLower(string(content)), "microsoft") {
+//			return true
+//		}
+//	}
+//
+//	// Optionally check /proc/sys/kernel/osrelease (some WSL versions)
+//	if content, err := os.ReadFile("/proc/sys/kernel/osrelease"); err == nil {
+//		if strings.Contains(strings.ToLower(string(content)), "microsoft") {
+//			return true
+//		}
+//	}
+//
+//	return false
+//}
+//
+//func GetDockerHost() string {
+//	addrs, err := net.LookupHost("host.docker.internal")
+//	if err == nil && len(addrs) > 0 {
+//		return "host.docker.internal"
+//	}
+//
+//	return "172.17.0.1"
+//}
 
 func StartRedisTestContainer(t *testing.T) (*redis.RedisClient, func()) {
-	if IsWSL() {
-		t.Setenv("TESTCONTAINERS_HOST_OVERRIDE", "localhost")
-	}
+	//if !IsWSL() {
+	//	t.Setenv("TESTCONTAINERS_HOST_OVERRIDE", GetDockerHost())
+	//}
 	ctx := context.Background()
 	redisContainer, err := tcredis.Run(ctx,
 		"redis/redis-stack:latest",

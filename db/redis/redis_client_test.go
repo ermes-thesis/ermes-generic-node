@@ -1,6 +1,7 @@
 package redis_test
 
 import (
+	"db"
 	"db/test_utils"
 	"fmt"
 	"metadataManager/utils"
@@ -272,12 +273,14 @@ func TestMemStats(t *testing.T) {
 	// Wait a second to ensure Redis has updated its memory stats
 	time.Sleep(1 * time.Second)
 
-	memStats2, err := redisClient.GetMemoryStats()
-	require.NoError(t, err, "Expected no error getting memory stats")
-
-	availableMemory, err := redisClient.GetAvailableMemory()
-	require.NoError(t, err, "Expected no error getting available memory")
-	require.Equal(t, maxMem-memStats2.CurrentUsedMemory, availableMemory, "Expected available memory to match max memory minus used dataset memory")
+	var memStats2 *db.MemStats
+	require.Eventually(t, func() bool {
+		memStats2, err = redisClient.GetMemoryStats()
+		require.NoError(t, err, "Expected no error getting memory stats")
+		available, err := redisClient.GetAvailableMemory()
+		require.NoError(t, err, "Expected no error getting available memory")
+		return maxMem-memStats2.CurrentUsedMemory == available
+	}, 3*time.Second, 100*time.Millisecond)
 
 	// 15 "Normal record" + 1 metadata record + 3 special records for each collection (that are 2)
 	require.Equal(t, memStats2.KeysCount, uint64(16+3*2))

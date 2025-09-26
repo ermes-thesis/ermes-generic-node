@@ -4,14 +4,14 @@ import (
 	"context"
 	"db/test_utils"
 	"fmt"
+	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
 	"scheduler"
-	"server/info"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
-	"github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
@@ -30,7 +30,12 @@ func TestWasmPool(t *testing.T) {
 	pool := wasm.NewExecutorPool(10)
 	defer pool.Close()
 
-	scheduler.RegisterHostFns(pool, client, &info.ServerInfo{})
+	err := scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{
+		RedisClient:     client,
+		MetadataManager: nil,
+		ServerInfo:      nil,
+	})
+	require.NoError(t, err)
 
 	executor := pool.Acquire()
 	defer executor.Release()
@@ -52,7 +57,9 @@ func TestWasmPool(t *testing.T) {
 }
 
 func BenchmarkWasmPool(b *testing.B) {
-	b.Setenv("TESTCONTAINERS_HOST_OVERRIDE", test_utils.GetDockerHost())
+	//if test_utils.IsWSL() {
+	//	b.Setenv("TESTCONTAINERS_HOST_OVERRIDE", "localhost")
+	//}
 	redisContainer, err := tcredis.Run(context.Background(),
 		"redis:latest",
 		tcredis.WithSnapshotting(10, 1),
@@ -80,7 +87,11 @@ func BenchmarkWasmPool(b *testing.B) {
 	pool := wasm.NewExecutorPool(10)
 	defer pool.Close()
 
-	scheduler.RegisterHostFns(pool, client, &info.ServerInfo{})
+	scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{
+		RedisClient:     nil,
+		MetadataManager: nil,
+		ServerInfo:      nil,
+	})
 
 	for b.Loop() {
 		client.SAdd(context.Background(), "data:255ef4af-3a49-4382-a90d-6524bdee5ad1:groups", "test")

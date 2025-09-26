@@ -3,7 +3,6 @@ package scheduler
 import (
 	"bytes"
 	"context"
-	"db"
 	"errors"
 	"fmt"
 	"metadataManager"
@@ -21,7 +20,7 @@ import (
 )
 
 type HostFnsDependencies struct {
-	RedisClient     db.GenericDB
+	RedisClient     *redis.Client //TODO: Change in DataManager
 	MetadataManager metadataManager.MetadataManager
 	ServerInfo      *info.ServerInfo
 }
@@ -439,15 +438,19 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 		return returns, wasmedge.Result_Success
 	}
 
-	// groups := metadata.Groups
+	groups := make([]interface{}, len(metadata.Groups))
+	for i, v := range metadata.Groups {
+		groups[i] = v
+	}
+
 	collectionId := uuid.NewString()
-	// key := "data:" + collectionId + ":groups"
+	key := "data:" + collectionId + ":groups"
 
 	//TODO: Sincrono va bene? --> No deve essere asincrono
-	go deps.MetadataManager.CreateMetadata(collectionId, metadata, metadataManager.FROM_LOCAL)
+	// go deps.MetadataManager.CreateMetadata(collectionId, metadata, metadataManager.FROM_LOCAL)
 
 	// TODO: Substitute with dataManager
-	// err = deps.redisClient.Sadd(context.Background(), key, groups...).Err()
+	err = deps.RedisClient.SAdd(context.Background(), key, groups...).Err()
 
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(REDIS_ERROR, err)

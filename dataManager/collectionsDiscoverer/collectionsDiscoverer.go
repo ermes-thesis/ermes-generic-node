@@ -83,23 +83,23 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 	return true, collection, nil
 }
 
-func (m *CollectionsDiscovererImp) WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordName string) (string, error) {
-	res, error := m.sender.WeakCollectionRemoteRecordAccess(hostId, collectionId, recordName)
+func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordName string) (string, error) {
+	res, err := c.sender.WeakCollectionRemoteRecordAccess(hostId, collectionId, recordName)
 	if len(res) != 0 {
 		return "", errors.New("unexpected output")
 	}
-	return res[0].(string), error
+	return res[0].(string), err
 }
-func (m *CollectionsDiscovererImp) WeakCollectionRemoteRecordsAccess(hostId string, collectionId string, recordNames ...string) ([]any, error) {
-	return m.sender.WeakCollectionRemoteRecordAccess(hostId, collectionId, recordNames...)
-}
-
-func (m *CollectionsDiscovererImp) WeakCollectionRemoteRecordWrite(hostId string, collectionId string, recordNames string, value string) error {
-	return m.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, []string{recordNames}, []string{value})
+func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordsAccess(hostId string, collectionId string, recordNames ...string) ([]any, error) {
+	return c.sender.WeakCollectionRemoteRecordAccess(hostId, collectionId, recordNames...)
 }
 
-func (m *CollectionsDiscovererImp) WeakCollectionRemoteRecordsWrite(hostId string, collectionId string, recordNames []string, recordValues []string) error {
-	return m.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, recordNames, recordValues)
+func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordWrite(hostId string, collectionId string, recordNames string, value string) error {
+	return c.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, []string{recordNames}, []string{value})
+}
+
+func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordsWrite(hostId string, collectionId string, recordNames []string, recordValues []string) error {
+	return c.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, recordNames, recordValues)
 }
 
 // use generics to preserve type-safety, unfortunately generics are not supported for methods.
@@ -218,7 +218,7 @@ func (c *CollectionsDiscovererImp) propagateUpdate(updateMessage messages.Collec
 	updateMessage.SenderIp = c.serverInfo.HostName
 	collection, exists := c.collectionsPartialView.KnownCollections[updateMessage.CollectionId]
 	if exists {
-		if collection.IsLocal() && !collection.IsStrong() { //check for conflitcs
+		if collection.IsLocal() && !collection.IsStrong() { //check for conflicts
 			res := c.CheckUpdateConflicts(collection, updateMessage)
 			if !res {
 				return
@@ -255,7 +255,7 @@ func (c *CollectionsDiscovererImp) CheckUpdateConflicts(collection shared.Collec
 			return false
 		}
 
-		//propagate back the conflict resoultion
+		//propagate back the conflict resolution
 		updateMessage := messages.CollectionUpdateMessage{
 			CollectionId: updateMessage.CollectionId,
 			RecordNames:  updateMessage.RecordNames,

@@ -154,7 +154,7 @@ func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records 
 		m.logger.Println("MIG-MANAGER", fmt.Sprintf("not enough space in the LRU to place the collection %s", collectionId), log.WARNING)
 		m.freeLru(uint(collectionSize))
 	}
-	//check size befoure set collection
+	//check size before set collection
 
 	err := m.dbInterface.SetCollection(collectionId, records, groups) //add collection to redis
 	if err != nil {

@@ -45,7 +45,7 @@ func (m *MigrationManagerDecisionState) Setup(args ...any) {
 
 // ManageNewStrongRequest save strong request in a buffer for future consumption
 func (m *MigrationManagerDecisionState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
-	//sync -> all op in MigrationManagerDecisionState are sync => lock == wait until all decsion are taken
+	//sync -> all op in MigrationManagerDecisionState are sync => lock == wait until all decision are taken
 	m.requestStack.Push(func() { m.policy.idleState.ManageNewStrongRequest(collectionId, childName, isWrite, requestLatency) })
 }
 

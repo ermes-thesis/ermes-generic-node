@@ -117,7 +117,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 				return s.forwardRequest(seqCollectionCasted.LeaderId, functionName, functionVersion, collections, groupToken)
 			} else {
 				// Forward to any node that has the collection
-				//TODO: check if maps in Go are iterated consistently
+				//TODO: check if maps in Go are iterated consistently --> No, it matters here?
 				for hostId := range seqCollectionCasted.HostsId() {
 					return s.forwardRequest(hostId, functionName, functionVersion, collections, groupToken)
 				}
@@ -146,6 +146,13 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 
 	resp := executor.Invoke(functionName+"@"+functionVersion, "entry", reqBody, ctxJson)
 	repBody, err := json.Marshal(resp.Response)
+
+	// TODO: Use resp.CollectionsToCommit to create goroutines that calls dataManager remote write method
+	// dataManager.RemoteWrite(resp.CollectionsToCommit)
+
+	// TODO: Use resp.DeleteRecords to create goroutines that calls dataManager remote delete method
+	// dataManager.RemoteDelete(resp.DeletedRecords)
+
 	if err != nil {
 		return nil, fmt.Errorf("error marshalling response body: %v", err)
 	}

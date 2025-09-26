@@ -97,8 +97,6 @@ func NewBaseCacheWithEviction[T any](size int, ttl time.Duration, evictFn func(s
 // Returns:
 //   - T: the value stored under the key (zero value if not found or expired)
 //   - bool: true if the key was found and not expired, false otherwise
-
-// TODO: Check if lock implementation is correct
 func (c *BaseCache[T]) Get(key string) (T, bool) {
 	var zero T
 	c.mu.RLock()

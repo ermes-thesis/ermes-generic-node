@@ -5,6 +5,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"metadataManager"
+	"metadataManager/utils"
 	"net/http"
 	"server/info"
 	"slices"
@@ -16,6 +18,12 @@ import (
 	"github.com/second-state/WasmEdge-go/wasmedge"
 )
 
+type HostFnsDependencies struct {
+	redisClient     *redis.Client
+	metadataManager metadataManager.MetadataManager
+	serverInfo      *info.ServerInfo
+}
+
 const (
 	UNAUTHORIZED wasm.ResponseCode = iota + 100
 	NOT_FOUND
@@ -24,7 +32,7 @@ const (
 	HTTP_ERROR
 )
 
-func RegisterHostFns(pool *wasm.WasmExecutorPool, redisClient *redis.Client, serverInfo *info.ServerInfo) error {
+func RegisterHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDependencies) error {
 	// Create the module instance with the module name "extern".
 	externMod := wasmedge.NewModule("extern")
 
@@ -45,18 +53,18 @@ func RegisterHostFns(pool *wasm.WasmExecutorPool, redisClient *redis.Client, ser
 	// Developers should guarantee the life cycle of the data, and it can be
 	// `nil` if the external data is not needed.
 	// The last parameter can be 0 if developers do not need the cost measuring.
-	hostGetFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostGet, redisClient, 0)
-	hostMultipleGetFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostMultipleGet, redisClient, 0)
-	hostPutFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostPut, redisClient, 0)
-	hostDelFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostDelete, redisClient, 0)
-	hostCreateCollectionFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostCreateCollection, redisClient, 0)
-	hostDeleteCollectionFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostDeleteCollection, redisClient, 0)
-	hostAddGroupToCollectionFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostAddGroupToCollection, redisClient, 0)
-	hostRemoveGroupFromCollectionFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostRemoveGroupFromCollection, redisClient, 0)
-	hostAddUserToGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostAddUserToGroup, serverInfo, 0)
-	hostRemoveUserFromGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostRemoveUserFromGroup, serverInfo, 0)
-	hostCreateGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostCreateGroup, serverInfo, 0)
-	hostDeleteGroupFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostDeleteGroup, serverInfo, 0)
+	hostGetFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostGet, dependencies.redisClient, 0)
+	hostMultipleGetFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostMultipleGet, dependencies.redisClient, 0)
+	hostPutFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostPut, dependencies.redisClient, 0)
+	hostDelFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostDelete, dependencies.redisClient, 0)
+	hostCreateCollectionFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostCreateCollection, dependencies, 0)
+	hostDeleteCollectionFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostDeleteCollection, dependencies.redisClient, 0)
+	hostAddGroupToCollectionFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostAddGroupToCollection, dependencies.redisClient, 0)
+	hostRemoveGroupFromCollectionFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostRemoveGroupFromCollection, dependencies.redisClient, 0)
+	hostAddUserToGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostAddUserToGroup, dependencies.serverInfo, 0)
+	hostRemoveUserFromGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostRemoveUserFromGroup, dependencies.serverInfo, 0)
+	hostCreateGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostCreateGroup, dependencies.serverInfo, 0)
+	hostDeleteGroupFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostDeleteGroup, dependencies.serverInfo, 0)
 
 	// If the function object is not added into a module instance object, it should be released.
 	fnTwoParamOneReturnType.Release()
@@ -412,7 +420,7 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 	metadataPointer := params[0].(int32)
 	metadataLength := params[1].(int32)
 
-	client := data.(*redis.Client)
+	deps := data.(HostFnsDependencies)
 
 	wasmComponent := wasm.WasmComponents{
 		Memory:     callframe.GetMemoryByIndex(0),
@@ -422,20 +430,22 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 
 	returns := make([]any, 1)
 
-	var metadata map[string]any
+	var metadata utils.Metadata
 	err := wasmComponent.GetWasmObject(metadataPointer, metadataLength, &metadata)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
 		return returns, wasmedge.Result_Success
 	}
 
-	groups := metadata["groups"].([]any)
+	// groups := metadata.Groups
 	collectionId := uuid.NewString()
-	key := "data:" + collectionId + ":groups"
+	// key := "data:" + collectionId + ":groups"
 
-	//TODO: mandare i metadati al cloud, che poi li manderà a sua volta al nodo con la geolocation specificata
+	//TODO: Sincrono va bene?
+	err = deps.metadataManager.CreateMetadata(collectionId, metadata, metadataManager.FROM_LOCAL)
 
-	err = client.SAdd(context.Background(), key, groups...).Err()
+	// TODO: Substitute with dataManager
+	// err = deps.redisClient.Sadd(context.Background(), key, groups...).Err()
 
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(REDIS_ERROR, err)

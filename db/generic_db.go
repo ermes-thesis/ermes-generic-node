@@ -13,7 +13,7 @@ import (
 // collections, collections can have associated metadata and group memberships, and
 // the system provides full search capabilities across this metadata
 //
-// TODO: All operations are designed to be atomic and thread-safe.
+// All operations are designed to be atomic and thread-safe.
 type GenericDB interface {
 	// GetRecord retrieves a single record from the specified collection.
 	//

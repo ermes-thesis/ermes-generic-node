@@ -29,13 +29,13 @@ const (
 )
 
 type Metadata struct {
-	Name           string
-	Owner          string
-	CreatedAt      time.Time
-	Groups         []string
-	Consistency    Consistency
-	Geolocation    string
-	CustomMetadata map[string]string
+	Name           string            `json:"name"`
+	Owner          string            `json:"owner"`
+	CreatedAt      time.Time         `json:"createdAt"`
+	Groups         []string          `json:"groups"`
+	Consistency    Consistency       `json:"consistency"`
+	Geolocation    string            `json:"geolocation"`
+	CustomMetadata map[string]string `json:"custom,omitempty"`
 }
 
 func (m Metadata) ToList() []any {

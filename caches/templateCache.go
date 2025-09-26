@@ -5,10 +5,6 @@ import (
 	"metadataManager/utils"
 )
 
-// TODO: In the template cache we store functionName -> [<tmpl1_name, tmpl1_value>, <tmpl2_name, tmpl2_value>, ...]
-//
-//	or tmpl1_name -> tmpl1_value, tmpl2_name -> tmpl2_value, ...
-
 // TemplatesCache stores compiled templates for functions. Each function
 // name maps to a dictionary of template names and their corresponding structure.
 //

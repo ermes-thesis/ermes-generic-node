@@ -7,6 +7,7 @@ import (
 	"io"
 	"metadataManager/utils"
 	"net/http"
+	"server/client"
 )
 
 type FunctionBundle struct {
@@ -36,7 +37,7 @@ func (f *RemoteBundleFetcher) Fetch(functionName string, functionVersion string)
 		return nil, err
 	}
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.CustomClient.Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +66,7 @@ func (f *RemoteBundleFetcher) FetchLatest(functionName string, cachedVersion str
 
 	req.Header.Set("X-ERMES-SECRET", f.ErmesSecret)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.CustomClient.Do(req)
 	if err != nil {
 		return nil, err
 	}

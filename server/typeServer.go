@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"scheduler"
+	"server/client"
 	"server/clientrepo"
 	"server/info"
 	"tokenDecoder"
@@ -118,7 +119,7 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 
 	fmt.Fprintf(s.Logger, "Request is ready, now sending it ...\n")
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := client.CustomClient.Do(req)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when contacting the node: %s \n", err)

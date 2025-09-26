@@ -8,6 +8,7 @@ import (
 	"metadataManager"
 	"metadataManager/utils"
 	"net/http"
+	"server/client"
 	"server/info"
 	"slices"
 	"strings"
@@ -525,7 +526,7 @@ func hostRemoveUserFromGroup(data any, callframe *wasmedge.CallingFrame, params 
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("X-ERMES-SECRET", serverInfo.Secret)
-	res, err := http.DefaultClient.Do(req)
+	res, err := client.CustomClient.Do(req)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
 		return returns, wasmedge.Result_Success
@@ -569,7 +570,7 @@ func hostAddUserToGroup(data any, callframe *wasmedge.CallingFrame, params []any
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("X-ERMES-SECRET", serverInfo.Secret)
-	res, err := http.DefaultClient.Do(req)
+	res, err := client.CustomClient.Do(req)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
 		return returns, wasmedge.Result_Success
@@ -614,7 +615,7 @@ func hostCreateGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-ERMES-SECRET", serverInfo.Secret)
-	res, err := http.DefaultClient.Do(req)
+	res, err := client.CustomClient.Do(req)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
 		return returns, wasmedge.Result_Success
@@ -655,7 +656,7 @@ func hostDeleteGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("X-ERMES-SECRET", serverInfo.Secret)
-	res, err := http.DefaultClient.Do(req)
+	res, err := client.CustomClient.Do(req)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
 		return returns, wasmedge.Result_Success

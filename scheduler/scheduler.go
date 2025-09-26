@@ -9,6 +9,7 @@ import (
 	"io"
 	"metadataManager/utils"
 	"net/http"
+	"server/client"
 	"server/info"
 
 	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
@@ -175,7 +176,7 @@ func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functio
 	req.Header.Set("X-ERMES-COLLECTIONS", string(collectionsJson))
 	req.Header.Set("X-ERMES-SECRET", s.serverInfo.Secret)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.CustomClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("error forwarding request to leader: %v", err)
 	}

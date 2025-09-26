@@ -8,6 +8,7 @@ import (
 	"metadataManager/utils"
 	"net/http"
 	"os"
+	"server/client"
 	"server/info"
 	"strings"
 )
@@ -60,7 +61,7 @@ func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion str
 	req.Header.Set("X-ERMES-POSITION", geolocation)
 	req.Header.Set("X-ERMES-QUERY", templateParamsMappings)
 
-	res, err := http.DefaultClient.Do(req)
+	res, err := client.CustomClient.Do(req)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when contacting the cloud node: %s \n", err)
 		return nil, err
@@ -167,7 +168,7 @@ func (p *MetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId str
 	req.Header.Set("X-ERMES-SECRET", p.serverInfo.Secret)
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", p.serverInfo.MetadataDomain)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := client.CustomClient.Do(req)
 	if err != nil {
 		fmt.Fprintf(*p.logger, "[%s] Error sending request: %v\n", p.serverInfo.MetadataDomain, err)
 		return err

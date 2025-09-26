@@ -12,6 +12,7 @@ type CollectionState interface {
 	IsLocal() bool
 	HostsId() map[string]struct{}
 	AddHost(hostId string)
+	RemoveHost(hostId string)
 }
 
 type LocalCollection struct {
@@ -40,6 +41,10 @@ func (l *LocalCollection) HostsId() map[string]struct{} {
 	return l.hostsId
 }
 
+func (l *LocalCollection) RemoveHost(hostId string) {
+	delete(l.hostsId, hostId)
+}
+
 type RemoteCollection struct {
 	hostsId map[string]struct{} //map to guarantee univocity
 	//TODO maybe insert latency with host or maybe not idk
@@ -59,6 +64,10 @@ func (l *RemoteCollection) AddHost(hostId string) {
 }
 func (l *RemoteCollection) HostsId() map[string]struct{} {
 	return l.hostsId
+}
+
+func (l *RemoteCollection) RemoveHost(hostId string) {
+	delete(l.hostsId, hostId)
 }
 
 type CollectionPartialView struct {

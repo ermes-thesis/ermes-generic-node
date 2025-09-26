@@ -173,18 +173,19 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation(logger log.Lo
 			return
 		}
 
-		ip, _, err := net.SplitHostPort(r.RemoteAddr) //TODO: verify
+		ip, port, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
+		address := ip + ":" + port //TODO: verify
 
 		w.WriteHeader(http.StatusOK) //response
 
 		//sync
 		c.collectionsPartialView.Mutex.Lock()
 
-		c.propagateUpdate(msg, true, []string{ip})
+		c.propagateUpdate(msg, true, []string{address})
 
 		c.collectionsPartialView.Mutex.Unlock() // lock release
 	})

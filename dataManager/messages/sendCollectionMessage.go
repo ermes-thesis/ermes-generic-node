@@ -7,4 +7,5 @@ type SendCollectionMessage struct {
 	IsStrong       bool              `json:"isStrong"`
 	IsLeader       bool              `json:"isLeader"`
 	CollectionSize uint64            `json:"collectionSize"`
+	HostToRemove   bool              `json:"hostToRemove"`
 }

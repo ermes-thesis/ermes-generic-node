@@ -29,7 +29,7 @@ type MigrationManager interface {
 	ManageGossipMessage(gossip.GossipMessage)
 	// NewCollectionReceived used when the node receive  a collection from one of the directly connected nodes (collectionID,isStrong,leader)
 	//return True if the collection is already stored locally and must not be stored in Redis
-	NewCollectionReceived(string, bool, bool, map[string]string, []string, uint64) bool
+	NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string, collectionSize uint64, hostToRemove bool, hostAddress string) bool
 	// NewCollectionCreated used when user create a new collection in the local node (collectionID,size,isStrong)
 	//throw an error if the collection already exists locally
 	NewCollectionCreated(string, uint64, bool) error
@@ -106,21 +106,22 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 }
 
 // methods
-func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string, collectionSize uint64) bool {
+func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string, collectionSize uint64, hostToRemove bool, hostAddress string) bool {
 	//sync
 	m.collectionsLock.Lock()
 	defer m.collectionsLock.Unlock()
-
-	//TODO: verify size befoure add.
 
 	//imp
 	m.logger.Println("MIG-MANAGER", "new local collection received", log.INFO)
 	collection := m.collectionsPartialView.KnownCollections[collectionId]
 	if collection != nil {
+		if hostToRemove {
+			collection.RemoveHost(hostAddress)
+		}
+
 		if collection.IsLocal() {
 			m.logger.Println("MIG-MANAGER", "new collection already present locally", log.WARNING)
 			return true
-			//TODO probably for weak collections conflict must be solved in this case
 		}
 		m.addCollectionInRedis(collectionId, records, groups, collectionSize)
 

@@ -6,6 +6,7 @@ type Collection interface {
 	IsLocal() bool
 	IsStrong() bool
 	AddHost(hostId string)
+	RemoveHost(hostId string)
 	HostsId() map[string]struct{}
 	SetToLocal(uint64)
 	SetToRemote()
@@ -74,6 +75,10 @@ func (s *StrongCollection) IsStrong() bool {
 }
 func (s *StrongCollection) HostsId() map[string]struct{} {
 	return s.collectionState.HostsId()
+}
+
+func (s *StrongCollection) RemoveHost(hostId string) {
+	s.collectionState.RemoveHost(hostId)
 }
 
 // WeakCollection weak collection
@@ -149,4 +154,8 @@ func (w *WeakCollection) IsStrong() bool {
 }
 func (w *WeakCollection) HostsId() map[string]struct{} {
 	return w.collectionState.HostsId()
+}
+
+func (s *WeakCollection) RemoveHost(hostId string) {
+	s.collectionState.RemoveHost(hostId)
 }

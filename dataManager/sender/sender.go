@@ -50,6 +50,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 	if destination != s.serverInfo.Father.Address {
 		collection.AddHost(destination)
 	}
+	hostToRemove := destination == s.serverInfo.Father.Address && len(collection.HostsId()) == 0
 
 	msg := gossip.SendCollectionMessage{
 		CollectionId:   collection.CollectionId(),
@@ -57,6 +58,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		Groups:         groups,
 		IsStrong:       collection.IsStrong(),
 		CollectionSize: collectionSize,
+		HostToRemove:   hostToRemove,
 	}
 	if collection.IsStrong() {
 		msg.IsLeader = collection.(*shared.StrongCollection).IsLeader && sendAsLeader

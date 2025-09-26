@@ -262,12 +262,12 @@ func (m *MigrationManagerImp) SendCollectionAndRemove(collection shared.Collecti
 	if collection.IsStrong() {
 		isLeader = collection.(*shared.StrongCollection).IsLeader
 		if isLeader {
-			collection.(*shared.StrongCollection).LeaderId = m.serverInfo.Father.Address
+			collection.(*shared.StrongCollection).LeaderId = m.serverInfo.Father.HostName
 		}
 		//stop keep track of access for a remote collection
 		m.StrongCollectionPolicy.RemoveInfo(collection.CollectionId())
 	}
-	m.sender.SendRemoteCollectionTo(m.serverInfo.Father.Address, collection, isLeader, res, groups, collectionSize)
+	m.sender.SendRemoteCollectionTo(m.serverInfo.Father.HostName, collection, isLeader, res, groups, collectionSize)
 
 	//remove collection from redis instance
 	m.dbInterface.DeleteCollection(collection.CollectionId())

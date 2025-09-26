@@ -47,10 +47,10 @@ func NewMigrationManagerSender(logger log.Logger, server server.ServerType, serv
 func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]string, groups []string, collectionSize uint64) {
 	//imp
 	s.logger.Println("SENDER", fmt.Sprintf("send collection %s to %s", collection.CollectionId(), destination), log.INFO)
-	if destination != s.serverInfo.Father.Address {
+	if destination != s.serverInfo.Father.HostName {
 		collection.AddHost(destination)
 	}
-	hostToRemove := destination == s.serverInfo.Father.Address && len(collection.HostsId()) == 0
+	hostToRemove := destination == s.serverInfo.Father.HostName && len(collection.HostsId()) == 0
 
 	msg := gossip.SendCollectionMessage{
 		CollectionId:   collection.CollectionId(),
@@ -59,6 +59,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		IsStrong:       collection.IsStrong(),
 		CollectionSize: collectionSize,
 		HostToRemove:   hostToRemove,
+		SenderIp: s.serverInfo.HostName,
 	}
 	if collection.IsStrong() {
 		msg.IsLeader = collection.(*shared.StrongCollection).IsLeader && sendAsLeader

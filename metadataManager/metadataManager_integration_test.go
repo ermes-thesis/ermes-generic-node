@@ -6,9 +6,6 @@ import (
 	"db"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"github.com/testcontainers/testcontainers-go"
-	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 	"io"
 	"metadataManager"
 	"net/http"
@@ -20,6 +17,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/testcontainers/testcontainers-go"
+	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
 
 func TestMetadataManagerIntegration(t *testing.T) {
@@ -32,12 +33,10 @@ func TestMetadataManagerIntegration(t *testing.T) {
 	defer redisClient2.Close()
 
 	serverinfo1 := &info.ServerInfo{
-		Father:    nil,
-		CloudNode: nil,
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
-		Secret: "secret",
+		Father:         nil,
+		CloudNode:      nil,
+		MetadataDomain: "IT",
+		Secret:         "secret",
 	}
 	metadataManager1 := metadataManager.NewMetadataManager(redisClient1, serverinfo1, os.Stdout)
 
@@ -49,12 +48,11 @@ func TestMetadataManagerIntegration(t *testing.T) {
 
 	serverinfo2 := &info.ServerInfo{
 		Father: &info.Node{
-			Address: strings.Split(srv1.URL, ":")[2],
+			HostName: strings.Split(srv1.URL, ":")[2],
 		},
-		Children: []info.Node{},
-		Node: info.Node{
-			MetadataDomain: "IT/Milan",
-		},
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+
 		Secret: "secret",
 	}
 	metadataManager2 := metadataManager.NewMetadataManager(redisClient2, serverinfo2, os.Stdout)
@@ -67,7 +65,7 @@ func TestMetadataManagerIntegration(t *testing.T) {
 
 	serverinfo1.Children = []info.Node{
 		{
-			Address: strings.Split(srv2.URL, ":")[2],
+			HostName: strings.Split(srv2.URL, ":")[2],
 		},
 	}
 

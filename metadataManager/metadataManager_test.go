@@ -3,14 +3,15 @@ package metadataManager_test
 import (
 	"db"
 	"encoding/json"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"metadataManager"
 	metadataManager_mock "metadataManager/mocks"
 	"os"
 	"server/info"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExecuteQueries(t *testing.T) {
@@ -22,9 +23,7 @@ func TestExecuteQueries(t *testing.T) {
 	defer redisClient.Close()
 
 	srvInfo := &info.ServerInfo{
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		MetadataDomain: "IT",
 	}
 
 	// Create a new MetadataManager instance
@@ -61,9 +60,7 @@ func TestCreateMetadata(t *testing.T) {
 	defer redisClient.Close()
 
 	srvInfo := &info.ServerInfo{
-		Node: info.Node{
-			MetadataDomain: "IT",
-		},
+		MetadataDomain: "IT",
 	}
 
 	tm := time.Now().Truncate(time.Millisecond)

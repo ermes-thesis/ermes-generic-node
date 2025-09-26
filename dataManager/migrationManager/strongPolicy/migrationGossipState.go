@@ -43,13 +43,13 @@ func (m *MigrationManagerGossipState) SendGossipMessages() {
 	redisFreeSize := 1.0 - memStats.UsedMemoryDatasetPercentage
 
 	for value := range m.policy.serverInfo.Children {
-		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.Address, redisFreeSize)
-		m.policy.sender.SendGossipMessages(msgToChild, m.policy.serverInfo.Children[value].Address)
+		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.HostName, redisFreeSize)
+		m.policy.sender.SendGossipMessages(msgToChild, m.policy.serverInfo.Children[value].HostName)
 	}
 
 	if m.policy.serverInfo.Father != nil {
-		msgToFather := gossip.NewChildStateMessage(m.policy.serverInfo.Address, redisFreeSize)
-		m.policy.sender.SendGossipMessages(msgToFather, m.policy.serverInfo.Father.Address)
+		msgToFather := gossip.NewChildStateMessage(m.policy.serverInfo.HostName, redisFreeSize)
+		m.policy.sender.SendGossipMessages(msgToFather, m.policy.serverInfo.Father.HostName)
 	}
 }
 

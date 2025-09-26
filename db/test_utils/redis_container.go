@@ -4,7 +4,6 @@ import (
 	"config"
 	"context"
 	"db/redis"
-	"net"
 	"net/url"
 	"os"
 	"runtime"
@@ -38,18 +37,9 @@ func IsWSL() bool {
 	return false
 }
 
-func GetDockerHost() string {
-	addrs, err := net.LookupHost("host.docker.internal")
-	if err == nil && len(addrs) > 0 {
-		return "host.docker.internal"
-	}
-
-	return "172.17.0.1"
-}
-
 func StartRedisTestContainer(t *testing.T) (*redis.RedisClient, func()) {
-	if !IsWSL() {
-		t.Setenv("TESTCONTAINERS_HOST_OVERRIDE", GetDockerHost())
+	if IsWSL() {
+		t.Setenv("TESTCONTAINERS_HOST_OVERRIDE", "localhost")
 	}
 	ctx := context.Background()
 	redisContainer, err := tcredis.Run(ctx,

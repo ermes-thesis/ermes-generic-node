@@ -5,8 +5,8 @@ package tests
 
 import (
 	clDiscoverer "dataManager/collectionsDiscoverer"
+	gossip "dataManager/messages"
 	migrationManager "dataManager/migrationManager"
-	gossip "dataManager/migrationManager/gossipMessages"
 	penality "dataManager/migrationManager/penalityFunction"
 	"fmt"
 	"io"
@@ -26,18 +26,18 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 	mig := migrationManager.GetMigrationManagerInstance(*logger)
 	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
 	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
-	clDiscovererImp.Init(collections)
+	clDiscovererImp.Init(collections, serverinfo, ser, *logger, db)
 	mig.ManageNewRequest("repoId", "childName", true, 3)
 
-	b, c := clDiscovererImp.IsCollectionLocallyPresent("repoId")
+	b, c, d := clDiscovererImp.IsCollectionLocallyPresent("repoId", 0)
 
-	if c != nil {
+	if c != nil || d != nil {
 		t.Fatal("unexpected non null collection")
 	}
 
-	mig.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 13)
-	b, c = clDiscovererImp.IsCollectionLocallyPresent("repoId")
-	if c == nil {
+	mig.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 13, false, "host")
+	b, c, d = clDiscovererImp.IsCollectionLocallyPresent("repoId", 0)
+	if c == nil || d != nil {
 		t.Fatal("unexpected null collection")
 	}
 	if !b {
@@ -59,7 +59,7 @@ func TestIterationModule(t *testing.T) {
 	mig := migrationManager.GetMigrationManagerInstance(*logger)
 	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
 	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
-	clDiscovererImp.Init(collections)
+	clDiscovererImp.Init(collections, serverinfo, ser, *logger, db)
 
 	// SET INITIAL STATE
 	fmt.Println("SET INITIAL STATE")
@@ -99,7 +99,7 @@ func TestIterationModule(t *testing.T) {
 	child2Gossip1 := gossip.NewChildStateMessage("2222", 0.10)
 	mig.ManageGossipMessage(child2Gossip1)
 	// decisionState
-	mig.NewCollectionReceived("repoId3", true, false, make(map[string]string), []string{}, 1)
+	mig.NewCollectionReceived("repoId3", true, false, make(map[string]string), []string{}, 1, false, "host")
 
 	// verify first cycle
 	time.Sleep(1 * time.Second)
@@ -133,8 +133,8 @@ func TestIterationModule(t *testing.T) {
 	mig.ManageGossipMessage(child2Gossip1)
 
 	// decisionState
-	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 4)
-	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 4)
+	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 4, false, "host")
+	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 4, false, "host")
 
 	// verify second cycle
 	time.Sleep(1 * time.Second)
@@ -174,7 +174,7 @@ func TestIterationModule(t *testing.T) {
 	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/gossip", mock.Anything).Return(200, nil).Times(3)
 
 	// idle
-	mig.NewCollectionReceived("repoId5", true, true, make(map[string]string), []string{}, 10)
+	mig.NewCollectionReceived("repoId5", true, true, make(map[string]string), []string{}, 10, false, "host")
 
 	// verify fourth cycle p1
 	time.Sleep(1 * time.Second)

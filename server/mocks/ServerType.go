@@ -172,35 +172,76 @@ func (_c *ServerType_SendGenericHTTPRequest_Call) RunAndReturn(run func(nodeTo s
 	return _c
 }
 
-// compileRoutes provides a mock function for the type ServerType
-func (_mock *ServerType) compileRoutes() {
-	_mock.Called()
-	return
+// SendGenericHTTPRequestRetrunResponse provides a mock function for the type ServerType
+func (_mock *ServerType) SendGenericHTTPRequestRetrunResponse(nodeTo string, pathTo string, messageContent interface{}) (*http.Response, error) {
+	ret := _mock.Called(nodeTo, pathTo, messageContent)
+
+	if len(ret) == 0 {
+		panic("no return value specified for SendGenericHTTPRequestRetrunResponse")
+	}
+
+	var r0 *http.Response
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(string, string, interface{}) (*http.Response, error)); ok {
+		return returnFunc(nodeTo, pathTo, messageContent)
+	}
+	if returnFunc, ok := ret.Get(0).(func(string, string, interface{}) *http.Response); ok {
+		r0 = returnFunc(nodeTo, pathTo, messageContent)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).(*http.Response)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(string, string, interface{}) error); ok {
+		r1 = returnFunc(nodeTo, pathTo, messageContent)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
 }
 
-// ServerType_compileRoutes_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'compileRoutes'
-type ServerType_compileRoutes_Call struct {
+// ServerType_SendGenericHTTPRequestRetrunResponse_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'SendGenericHTTPRequestRetrunResponse'
+type ServerType_SendGenericHTTPRequestRetrunResponse_Call struct {
 	*mock.Call
 }
 
-// compileRoutes is a helper method to define mock.On call
-func (_e *ServerType_Expecter) compileRoutes() *ServerType_compileRoutes_Call {
-	return &ServerType_compileRoutes_Call{Call: _e.mock.On("compileRoutes")}
+// SendGenericHTTPRequestRetrunResponse is a helper method to define mock.On call
+//   - nodeTo string
+//   - pathTo string
+//   - messageContent interface{}
+func (_e *ServerType_Expecter) SendGenericHTTPRequestRetrunResponse(nodeTo interface{}, pathTo interface{}, messageContent interface{}) *ServerType_SendGenericHTTPRequestRetrunResponse_Call {
+	return &ServerType_SendGenericHTTPRequestRetrunResponse_Call{Call: _e.mock.On("SendGenericHTTPRequestRetrunResponse", nodeTo, pathTo, messageContent)}
 }
 
-func (_c *ServerType_compileRoutes_Call) Run(run func()) *ServerType_compileRoutes_Call {
+func (_c *ServerType_SendGenericHTTPRequestRetrunResponse_Call) Run(run func(nodeTo string, pathTo string, messageContent interface{})) *ServerType_SendGenericHTTPRequestRetrunResponse_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run()
+		var arg0 string
+		if args[0] != nil {
+			arg0 = args[0].(string)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		var arg2 interface{}
+		if args[2] != nil {
+			arg2 = args[2].(interface{})
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
 	})
 	return _c
 }
 
-func (_c *ServerType_compileRoutes_Call) Return() *ServerType_compileRoutes_Call {
-	_c.Call.Return()
+func (_c *ServerType_SendGenericHTTPRequestRetrunResponse_Call) Return(response *http.Response, err error) *ServerType_SendGenericHTTPRequestRetrunResponse_Call {
+	_c.Call.Return(response, err)
 	return _c
 }
 
-func (_c *ServerType_compileRoutes_Call) RunAndReturn(run func()) *ServerType_compileRoutes_Call {
-	_c.Run(run)
+func (_c *ServerType_SendGenericHTTPRequestRetrunResponse_Call) RunAndReturn(run func(nodeTo string, pathTo string, messageContent interface{}) (*http.Response, error)) *ServerType_SendGenericHTTPRequestRetrunResponse_Call {
+	_c.Call.Return(run)
 	return _c
 }

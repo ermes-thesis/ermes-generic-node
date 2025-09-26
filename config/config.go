@@ -9,11 +9,12 @@ import (
 
 // config data structures
 type Config struct {
-	Node             NodeConfig             `yaml:"node"`
-	Hierarchy        HierarchyConfig        `yaml:"hierarchy"`
-	MigrationManager MigrationManagerConfig `yaml:"migrationManager"`
-	Redis            RedisConfig            `yaml:"redis"`
-	Lru              LruConfig              `yaml:"lru"`
+	Node             NodeConfig               `yaml:"node"`
+	Hierarchy        HierarchyConfig          `yaml:"hierarchy"`
+	MigrationManager MigrationManagerConfig   `yaml:"migrationManager"`
+	Redis            RedisConfig              `yaml:"redis"`
+	Lru              LruConfig                `yaml:"lru"`
+	Collections      []CollectionSettingsInfo `yaml:"collections"`
 }
 
 type MigrationManagerConfig struct {
@@ -86,4 +87,14 @@ func LoadConfig(filename string) Config {
 
 	return config
 	// Stampa i valori
+}
+
+type CollectionSettingsInfo struct {
+	CollectionID   string   `yaml:"collection_id"`       // mandatory
+	IsStrong       bool     `yaml:"is_strong"`           // mandatory
+	CollectionSize *uint64  `yaml:"collection_size"`     // mandatory for local collections
+	IsLeader       *bool    `yaml:"is_leader,omitempty"` // optional
+	IsRemote       bool     `yaml:"is_local"`            // mandatory
+	HostsID        []string `yaml:"hosts_id,omitempty"`  // optional
+	LeaderID       *string  `yaml:"leader_id,omitempty"` // optional
 }

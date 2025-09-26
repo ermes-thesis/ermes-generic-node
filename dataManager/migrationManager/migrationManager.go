@@ -3,11 +3,11 @@ package migrationManager
 import (
 	"config"
 	"dataManager/lru"
-	gossip "dataManager/migrationManager/gossipMessages"
-	sender "dataManager/migrationManager/migrationSender"
+	gossip "dataManager/messages"
 	penality "dataManager/migrationManager/penalityFunction"
 	"dataManager/migrationManager/strongPolicy"
 	weakpolicy "dataManager/migrationManager/weakPolicy"
+	sender "dataManager/sender"
 	shared "dataManager/shared"
 	"db"
 	"errors"
@@ -29,7 +29,7 @@ type MigrationManager interface {
 	ManageGossipMessage(gossip.GossipMessage)
 	// NewCollectionReceived used when the node receive  a collection from one of the directly connected nodes (collectionID,isStrong,leader)
 	//return True if the collection is already stored locally and must not be stored in Redis
-	NewCollectionReceived(string, bool, bool, map[string]string, []string, uint64) bool
+	NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string, collectionSize uint64, hostToRemove bool, hostAddress string) bool
 	// NewCollectionCreated used when user create a new collection in the local node (collectionID,size,isStrong)
 	//throw an error if the collection already exists locally
 	NewCollectionCreated(string, uint64, bool) error
@@ -58,7 +58,7 @@ type MigrationManagerImp struct {
 	lruCache    *lru.LRUCache[shared.Collection]
 	dbInterface db.GenericDB
 
-	sender sender.Sender
+	sender sender.MigrationManagerSender
 }
 
 // Singleton pattern
@@ -86,7 +86,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.lruCache = lruCache
 		m.config = config
 		//prepare server
-		m.sender = sender.NewSender(m.logger, server)
+		m.sender = sender.NewMigrationManagerSender(m.logger, server, serverInfo)
 		server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages(logger).ServeHTTP)
 		server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection(logger).ServeHTTP)
 
@@ -106,21 +106,22 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 }
 
 // methods
-func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string, collectionSize uint64) bool {
+func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string, collectionSize uint64, hostToRemove bool, hostAddress string) bool {
 	//sync
 	m.collectionsLock.Lock()
 	defer m.collectionsLock.Unlock()
-
-	//TODO: verify size befoure add.
 
 	//imp
 	m.logger.Println("MIG-MANAGER", "new local collection received", log.INFO)
 	collection := m.collectionsPartialView.KnownCollections[collectionId]
 	if collection != nil {
+		if hostToRemove {
+			collection.RemoveHost(hostAddress)
+		}
+
 		if collection.IsLocal() {
 			m.logger.Println("MIG-MANAGER", "new collection already present locally", log.WARNING)
 			return true
-			//TODO probably for weak collections conflict must be solved in this case
 		}
 		m.addCollectionInRedis(collectionId, records, groups, collectionSize)
 

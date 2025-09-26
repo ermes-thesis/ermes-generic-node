@@ -6,6 +6,7 @@ type Collection interface {
 	IsLocal() bool
 	IsStrong() bool
 	AddHost(hostId string)
+	RemoveHost(hostId string)
 	HostsId() map[string]struct{}
 	SetToLocal(uint64)
 	SetToRemote()
@@ -16,10 +17,11 @@ type Collection interface {
 
 // StrongCollection strong collection
 type StrongCollection struct {
-	collectionId    string
-	collectionState CollectionState
-	IsLeader        bool
-	LeaderId        string
+	collectionId     string
+	collectionState  CollectionState
+	IsLeader         bool
+	LeaderId         string
+	ConsistencyClock uint
 }
 
 func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLeader bool) Collection {
@@ -75,10 +77,16 @@ func (s *StrongCollection) HostsId() map[string]struct{} {
 	return s.collectionState.HostsId()
 }
 
+func (s *StrongCollection) RemoveHost(hostId string) {
+	s.collectionState.RemoveHost(hostId)
+}
+
 // WeakCollection weak collection
 type WeakCollection struct {
-	collectionId    string
-	collectionState CollectionState
+	collectionId        string
+	collectionState     CollectionState
+	lastUpdateTimeStamp int64
+	lastUpdateSenderIp  string
 }
 
 func NewWeakCollection(collectionId string, size uint64, isRemote bool) Collection {
@@ -97,6 +105,23 @@ func NewWeakCollection(collectionId string, size uint64, isRemote bool) Collecti
 
 func (w *WeakCollection) GetCollectionState() CollectionState {
 	return w.collectionState
+}
+
+func (w *WeakCollection) SetLastUpdate(time int64, senderIp string) bool {
+	if time >= w.lastUpdateTimeStamp || senderIp >= w.lastUpdateSenderIp {
+		w.lastUpdateTimeStamp = time
+		w.lastUpdateSenderIp = senderIp
+		return true
+	}
+	return false
+}
+
+func (w *WeakCollection) GetLastUpdateTimeStamp() int64 {
+	return w.lastUpdateTimeStamp
+}
+
+func (w *WeakCollection) GetLastUpdateSenderIp() string {
+	return w.lastUpdateSenderIp
 }
 
 func (w *WeakCollection) SetToLocal(size uint64) {
@@ -129,4 +154,8 @@ func (w *WeakCollection) IsStrong() bool {
 }
 func (w *WeakCollection) HostsId() map[string]struct{} {
 	return w.collectionState.HostsId()
+}
+
+func (s *WeakCollection) RemoveHost(hostId string) {
+	s.collectionState.RemoveHost(hostId)
 }

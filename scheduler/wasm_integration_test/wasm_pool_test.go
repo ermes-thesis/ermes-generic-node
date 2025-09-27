@@ -4,14 +4,15 @@ import (
 	"context"
 	"db/test_utils"
 	"fmt"
-	"github.com/redis/go-redis/v9"
-	"github.com/stretchr/testify/require"
+	datamanager_mock "mocks/dataManager"
 	"scheduler"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
+	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
@@ -30,8 +31,12 @@ func TestWasmPool(t *testing.T) {
 	pool := wasm.NewExecutorPool(10)
 	defer pool.Close()
 
+	dataManager := datamanager_mock.NewDataManager(t)
+	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+
 	err := scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{
 		RedisClient:     client,
+		DataManager:     dataManager,
 		MetadataManager: nil,
 		ServerInfo:      nil,
 	})

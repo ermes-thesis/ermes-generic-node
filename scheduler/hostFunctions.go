@@ -3,6 +3,8 @@ package scheduler
 import (
 	"bytes"
 	"context"
+	datamanager "dataManager"
+	shared "dataManager/shared"
 	"errors"
 	"fmt"
 	"metadataManager"
@@ -20,17 +22,18 @@ import (
 )
 
 type HostFnsDependencies struct {
+	DataManager     datamanager.DataManager
 	RedisClient     *redis.Client //TODO: Change in DataManager
 	MetadataManager metadataManager.MetadataManager
 	ServerInfo      *info.ServerInfo
 }
 
 const (
-	UNAUTHORIZED wasm.ResponseCode = iota + 100
-	NOT_FOUND
-	REDIS_ERROR
-	GROUP_TOKEN_PROVIDER_ERROR
-	HTTP_ERROR
+	Unauthorized wasm.ResponseCode = iota + 100
+	NotFound
+	RedisError
+	GroupTokenProviderError
+	HttpError
 )
 
 func RegisterHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDependencies) error {
@@ -54,7 +57,7 @@ func RegisterHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDependenci
 	// Developers should guarantee the life cycle of the data, and it can be
 	// `nil` if the external data is not needed.
 	// The last parameter can be 0 if developers do not need the cost measuring.
-	hostGetFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostGet, dependencies.RedisClient, 0)
+	hostGetFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostGet, &dependencies, 0)
 	hostMultipleGetFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostMultipleGet, dependencies.RedisClient, 0)
 	hostPutFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostPut, dependencies.RedisClient, 0)
 	hostDelFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostDelete, dependencies.RedisClient, 0)
@@ -92,12 +95,14 @@ func RegisterHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDependenci
 }
 
 func hostGet(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, wasmedge.Result) {
-	keyPointer := params[0].(int32)
-	keyLength := params[1].(int32)
-	tokenPointer := params[2].(int32)
-	tokenLength := params[3].(int32)
+	collIdPtr := params[0].(int32)
+	collIdLength := params[1].(int32)
+	recordNamePtr := params[2].(int32)
+	recordNameLength := params[3].(int32)
+	tokenPointer := params[4].(int32)
+	tokenLength := params[5].(int32)
 
-	client := data.(*redis.Client)
+	deps := data.(*HostFnsDependencies)
 
 	wasmComponent := wasm.WasmComponents{
 		Memory:     callframe.GetMemoryByIndex(0),
@@ -107,36 +112,38 @@ func hostGet(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 
 	returns := make([]any, 1)
 
-	var groupToken []any
-	err := wasmComponent.GetWasmObject(tokenPointer, tokenLength, &groupToken)
+	var groups []string
+	err := wasmComponent.GetWasmObject(tokenPointer, tokenLength, &groups)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	// Read the result of the function.
-	key, err := wasmComponent.GetWasmString(keyPointer, keyLength)
+	collId, err := wasmComponent.GetWasmString(collIdPtr, collIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
-	collId := strings.Split(key, ":")[1]
-	res, err := client.SMIsMember(context.Background(), "data:"+collId+":groups", groupToken...).Result()
-	authorized := slices.Contains(res, true)
+	recordName, err := wasmComponent.GetWasmString(recordNamePtr, recordNameLength)
+	if err != nil {
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		return returns, wasmedge.Result_Success
+	}
+
+	value, err := deps.DataManager.GetRecord(collId, recordName, groups)
 
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(REDIS_ERROR, err)
-	} else if !authorized {
-		returns[0] = wasmComponent.WriteError(UNAUTHORIZED, errors.New("current user is not authorized"))
-	} else {
-		//TODO: fare una chiamata remota se la collection non è presente in questo nodo
-		value, err := client.Get(context.Background(), key).Result()
-		if err != nil {
-			returns[0] = wasmComponent.WriteError(NOT_FOUND, err)
+		if errors.Is(err, &shared.UnauthorizedError{}) {
+			returns[0] = wasmComponent.WriteError(Unauthorized, err)
+		} else if errors.Is(err, redis.Nil) {
+			returns[0] = wasmComponent.WriteError(NotFound, err)
 		} else {
-			returns[0] = wasmComponent.WriteResult(value)
+			returns[0] = wasmComponent.WriteError(RedisError, err)
 		}
+	} else {
+		returns[0] = wasmComponent.WriteResult(value)
 	}
 
 	return returns, wasmedge.Result_Success
@@ -160,14 +167,14 @@ func hostMultipleGet(data interface{}, callframe *wasmedge.CallingFrame, params 
 	var keys []string
 	err := wasmComponent.GetWasmObject(keysPointer, keysLength, &keys)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	var groupToken []string
 	err = wasmComponent.GetWasmObject(tokenPointer, tokenLength, &groupToken)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 	collId := strings.Split(keys[0], ":")[1]
@@ -176,9 +183,9 @@ func hostMultipleGet(data interface{}, callframe *wasmedge.CallingFrame, params 
 
 	var resPtr any
 	if err != nil {
-		resPtr = wasmComponent.WriteError(REDIS_ERROR, err)
+		resPtr = wasmComponent.WriteError(RedisError, err)
 	} else if !authorized {
-		resPtr = wasmComponent.WriteError(UNAUTHORIZED, errors.New("current user is not authorized"))
+		resPtr = wasmComponent.WriteError(Unauthorized, errors.New("current user is not authorized"))
 	} else {
 		values, _ := client.MGet(context.Background(), keys...).Result()
 		resPtr = wasmComponent.WriteArrayResult(values)
@@ -209,39 +216,39 @@ func hostPut(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 	var groupToken []any
 	err := wasmComponent.GetWasmObject(tokenPointer, tokenLength, &groupToken)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	key, err := wasmComponent.GetWasmString(keyPointer, keyLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	collId := strings.Split(key, ":")[1]
 	res, err := client.SMIsMember(context.Background(), "data:"+collId+":groups", groupToken...).Result()
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(REDIS_ERROR, err)
+		returns[0] = wasmComponent.WriteError(RedisError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	authorized := slices.Contains(res, true)
 
 	if !authorized {
-		returns[0] = wasmComponent.WriteError(UNAUTHORIZED, errors.New("current user is not authorized"))
+		returns[0] = wasmComponent.WriteError(Unauthorized, errors.New("current user is not authorized"))
 	} else {
 		value, err := wasmComponent.GetWasmString(valuePointer, valueLength)
 		if err != nil {
-			returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+			returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 			return returns, wasmedge.Result_Success
 		}
 		err = client.Set(context.Background(), key, value, 0).Err()
 		//TODO: inoltrare la put agli altri nodi
 		if err != nil {
-			returns[0] = wasmComponent.WriteError(REDIS_ERROR, err)
+			returns[0] = wasmComponent.WriteError(RedisError, err)
 		} else {
-			returns[0] = int32(wasm.SUCCESS)
+			returns[0] = int32(wasm.Success)
 		}
 	}
 
@@ -274,17 +281,17 @@ func hostDelete(data any, callframe *wasmedge.CallingFrame, params []any) ([]any
 
 	returns := make([]any, 1)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(REDIS_ERROR, err)
+		returns[0] = wasmComponent.WriteError(RedisError, err)
 	} else if !authorized {
-		returns[0] = wasmComponent.WriteError(UNAUTHORIZED, errors.New("current user is not authorized"))
+		returns[0] = wasmComponent.WriteError(Unauthorized, errors.New("current user is not authorized"))
 	} else {
 		err = client.Del(context.Background(), key).Err()
 
 		//TODO: inoltrare la l'eliminazione agli altri nodi
 		if err != nil {
-			returns[0] = wasmComponent.WriteError(NOT_FOUND, err)
+			returns[0] = wasmComponent.WriteError(NotFound, err)
 		} else {
-			returns[0] = int32(wasm.SUCCESS)
+			returns[0] = int32(wasm.Success)
 		}
 	}
 
@@ -311,31 +318,31 @@ func hostAddGroupToCollection(data any, callframe *wasmedge.CallingFrame, params
 	var groupToken []any
 	err := wasmComponent.GetWasmObject(tokenPointer, tokenLength, &groupToken)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	collectionId, err := wasmComponent.GetWasmString(collectionIdPointer, collectionIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	key := "data:" + collectionId + ":groups"
 	res, err := client.SMIsMember(context.Background(), key, groupToken...).Result()
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(REDIS_ERROR, err)
+		returns[0] = wasmComponent.WriteError(RedisError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	authorized := slices.Contains(res, true)
 
 	if !authorized {
-		returns[0] = wasmComponent.WriteError(UNAUTHORIZED, errors.New("current user is not authorized"))
+		returns[0] = wasmComponent.WriteError(Unauthorized, errors.New("current user is not authorized"))
 	} else {
 		groupName, err := wasmComponent.GetWasmString(groupNamePointer, groupNameLength)
 		if err != nil {
-			returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+			returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 			return returns, wasmedge.Result_Success
 		}
 
@@ -345,9 +352,9 @@ func hostAddGroupToCollection(data any, callframe *wasmedge.CallingFrame, params
 		//TODO: aggiungere il gruppo anche nei metadati
 
 		if err != nil {
-			returns[0] = wasmComponent.WriteError(REDIS_ERROR, err)
+			returns[0] = wasmComponent.WriteError(RedisError, err)
 		} else {
-			returns[0] = int32(wasm.SUCCESS)
+			returns[0] = int32(wasm.Success)
 		}
 	}
 
@@ -374,31 +381,31 @@ func hostRemoveGroupFromCollection(data any, callframe *wasmedge.CallingFrame, p
 	var groupToken []any
 	err := wasmComponent.GetWasmObject(tokenPointer, tokenLength, &groupToken)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	collectionId, err := wasmComponent.GetWasmString(collectionIdPointer, collectionIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	key := "data:" + collectionId + ":groups"
 	res, err := client.SMIsMember(context.Background(), key, groupToken...).Result()
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(REDIS_ERROR, err)
+		returns[0] = wasmComponent.WriteError(RedisError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	authorized := slices.Contains(res, true)
 
 	if !authorized {
-		returns[0] = wasmComponent.WriteError(UNAUTHORIZED, errors.New("current user is not authorized"))
+		returns[0] = wasmComponent.WriteError(Unauthorized, errors.New("current user is not authorized"))
 	} else {
 		groupName, err := wasmComponent.GetWasmString(groupNamePointer, groupNameLength)
 		if err != nil {
-			returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+			returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 			return returns, wasmedge.Result_Success
 		}
 
@@ -408,9 +415,9 @@ func hostRemoveGroupFromCollection(data any, callframe *wasmedge.CallingFrame, p
 		//TODO: rimuovere il gruppo anche dai metadati
 
 		if err != nil {
-			returns[0] = wasmComponent.WriteError(REDIS_ERROR, err)
+			returns[0] = wasmComponent.WriteError(RedisError, err)
 		} else {
-			returns[0] = int32(wasm.SUCCESS)
+			returns[0] = int32(wasm.Success)
 		}
 	}
 
@@ -434,7 +441,7 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 	var metadata utils.Metadata
 	err := wasmComponent.GetWasmObject(metadataPointer, metadataLength, &metadata)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
@@ -453,7 +460,7 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 	err = deps.RedisClient.SAdd(context.Background(), key, groups...).Err()
 
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(REDIS_ERROR, err)
+		returns[0] = wasmComponent.WriteError(RedisError, err)
 	} else {
 		returns[0] = wasmComponent.WriteResult(collectionId)
 	}
@@ -476,7 +483,7 @@ func hostDeleteCollection(data any, callframe *wasmedge.CallingFrame, params []a
 	collectionId, err := wasmComponent.GetWasmString(collectionIdPtr, collectionIdLength)
 	returns := make([]any, 1)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
@@ -485,7 +492,7 @@ func hostDeleteCollection(data any, callframe *wasmedge.CallingFrame, params []a
 		var keys []string
 		keys, cursor, err = client.Scan(context.Background(), cursor, "data:"+collectionId+":*", 10).Result()
 		if err != nil {
-			returns[0] = wasmComponent.WriteError(REDIS_ERROR, err)
+			returns[0] = wasmComponent.WriteError(RedisError, err)
 			return returns, wasmedge.Result_Success
 		}
 
@@ -497,7 +504,7 @@ func hostDeleteCollection(data any, callframe *wasmedge.CallingFrame, params []a
 
 	//TODO: Forward the deletion process to other nodes with HTTP
 
-	returns[0] = int32(wasm.SUCCESS)
+	returns[0] = int32(wasm.Success)
 	return returns, wasmedge.Result_Success
 }
 
@@ -518,7 +525,7 @@ func hostRemoveUserFromGroup(data any, callframe *wasmedge.CallingFrame, params 
 	returns := make([]any, 1)
 	userId, err := wasmComponent.GetWasmString(userIdPtr, userIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 	groupName, err := wasmComponent.GetWasmString(groupNamePtr, groupNameLength)
@@ -526,21 +533,21 @@ func hostRemoveUserFromGroup(data any, callframe *wasmedge.CallingFrame, params 
 	groupTokenProviderAddr := fmt.Sprintf("http://%s", serverInfo.GroupTokenProvider)
 	req, err := http.NewRequest(http.MethodDelete, groupTokenProviderAddr+"/group/"+groupName+"/"+userId, nil)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
+		returns[0] = wasmComponent.WriteError(HttpError, err)
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("X-ERMES-SECRET", serverInfo.Secret)
 	res, err := client.CustomClient.Do(req)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
+		returns[0] = wasmComponent.WriteError(HttpError, err)
 		return returns, wasmedge.Result_Success
 	}
 	_ = res.Body.Close()
 
 	if res.StatusCode == http.StatusOK {
-		returns[0] = int32(wasm.SUCCESS)
+		returns[0] = int32(wasm.Success)
 	} else {
-		returns[0] = wasmComponent.WriteError(GROUP_TOKEN_PROVIDER_ERROR, errors.New(res.Status))
+		returns[0] = wasmComponent.WriteError(GroupTokenProviderError, errors.New(res.Status))
 	}
 	return returns, wasmedge.Result_Success
 }
@@ -562,7 +569,7 @@ func hostAddUserToGroup(data any, callframe *wasmedge.CallingFrame, params []any
 	returns := make([]any, 1)
 	userId, err := wasmComponent.GetWasmString(userIdPtr, userIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 	groupName, err := wasmComponent.GetWasmString(groupNamePtr, groupNameLength)
@@ -570,21 +577,21 @@ func hostAddUserToGroup(data any, callframe *wasmedge.CallingFrame, params []any
 	groupTokenProviderAddr := fmt.Sprintf("http://%s", serverInfo.GroupTokenProvider)
 	req, err := http.NewRequest(http.MethodPost, groupTokenProviderAddr+"/group/"+groupName+"/"+userId, nil)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
+		returns[0] = wasmComponent.WriteError(HttpError, err)
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("X-ERMES-SECRET", serverInfo.Secret)
 	res, err := client.CustomClient.Do(req)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
+		returns[0] = wasmComponent.WriteError(HttpError, err)
 		return returns, wasmedge.Result_Success
 	}
 	_ = res.Body.Close()
 
 	if res.StatusCode == http.StatusOK {
-		returns[0] = int32(wasm.SUCCESS)
+		returns[0] = int32(wasm.Success)
 	} else {
-		returns[0] = wasmComponent.WriteError(GROUP_TOKEN_PROVIDER_ERROR, errors.New(res.Status))
+		returns[0] = wasmComponent.WriteError(GroupTokenProviderError, errors.New(res.Status))
 	}
 	return returns, wasmedge.Result_Success
 }
@@ -606,7 +613,7 @@ func hostCreateGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	returns := make([]any, 1)
 	participantIDsJsonStr, err := wasmComponent.GetWasmString(participantIDsJsonPtr, participantIDsJsonLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 	groupName, err := wasmComponent.GetWasmString(groupNamePtr, groupNameLength)
@@ -614,22 +621,22 @@ func hostCreateGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	groupTokenProviderAddr := fmt.Sprintf("http://%s", serverInfo.GroupTokenProvider)
 	req, err := http.NewRequest(http.MethodPost, groupTokenProviderAddr+"/group/"+groupName, bytes.NewBufferString(participantIDsJsonStr))
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
+		returns[0] = wasmComponent.WriteError(HttpError, err)
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-ERMES-SECRET", serverInfo.Secret)
 	res, err := client.CustomClient.Do(req)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
+		returns[0] = wasmComponent.WriteError(HttpError, err)
 		return returns, wasmedge.Result_Success
 	}
 	_ = res.Body.Close()
 
 	if res.StatusCode == http.StatusCreated {
-		returns[0] = int32(wasm.SUCCESS)
+		returns[0] = int32(wasm.Success)
 	} else {
-		returns[0] = wasmComponent.WriteError(GROUP_TOKEN_PROVIDER_ERROR, errors.New(res.Status))
+		returns[0] = wasmComponent.WriteError(GroupTokenProviderError, errors.New(res.Status))
 	}
 	return returns, wasmedge.Result_Success
 }
@@ -649,28 +656,28 @@ func hostDeleteGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	returns := make([]any, 1)
 	groupName, err := wasmComponent.GetWasmString(groupNamePtr, groupNameLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WASM_RUNTIME_ERROR, err)
+		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	groupTokenProviderAddr := fmt.Sprintf("http://%s", serverInfo.GroupTokenProvider)
 	req, err := http.NewRequest(http.MethodDelete, groupTokenProviderAddr+"/group/"+groupName, nil)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
+		returns[0] = wasmComponent.WriteError(HttpError, err)
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("X-ERMES-SECRET", serverInfo.Secret)
 	res, err := client.CustomClient.Do(req)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(HTTP_ERROR, err)
+		returns[0] = wasmComponent.WriteError(HttpError, err)
 		return returns, wasmedge.Result_Success
 	}
 	_ = res.Body.Close()
 
 	if res.StatusCode == http.StatusOK {
-		returns[0] = int32(wasm.SUCCESS)
+		returns[0] = int32(wasm.Success)
 	} else {
-		returns[0] = wasmComponent.WriteError(GROUP_TOKEN_PROVIDER_ERROR, errors.New(res.Status))
+		returns[0] = wasmComponent.WriteError(GroupTokenProviderError, errors.New(res.Status))
 	}
 	return returns, wasmedge.Result_Success
 }

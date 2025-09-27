@@ -14,7 +14,6 @@ import (
 	"io"
 	"logger"
 	"metadataManager"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -43,7 +42,7 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 		return fmt.Errorf("error creating server info: %w", err)
 	}
 
-	ser, err := server.NewServer(w, serverInfo)
+	httpServer, err := server.NewServer(w, serverInfo)
 	if err != nil {
 		return err
 	}
@@ -59,7 +58,7 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 		return fmt.Errorf("error creating token decoder: %w", err)
 	}
 	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w, funcCache)
-	err = metadataLookup.RegisterRoutes(ser, tknDecoder)
+	err = metadataLookup.RegisterRoutes(httpServer, tknDecoder)
 	if err != nil {
 		return fmt.Errorf("error registering metadata routes: %w", err)
 	}
@@ -73,7 +72,7 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 		return fmt.Errorf("error restoring collections from settings: %w", err)
 	}
 	dataManager := datamanager.GetDataManagerInstance(*log)
-	dataManager.Init(collections, penality.LogPenalty(2), cfg.MigrationManager, cfg.Lru, ser, *ser.ServerInfo, &lruCache, redisClient, *log)
+	dataManager.Init(collections, penality.LogPenalty(2), cfg.MigrationManager, cfg.Lru, httpServer, *httpServer.ServerInfo, &lruCache, redisClient, *log)
 
 	wasmExecutorPool := wasm.NewExecutorPool(10)
 	err = scheduler.RegisterHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{RedisClient: redisClient.Client(), MetadataManager: metadataLookup, ServerInfo: serverInfo})
@@ -82,14 +81,9 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	}
 
 	sched := scheduler.NewScheduler(dataManager.GetCollectionsDiscoverer(), funcCache, wasmExecutorPool, serverInfo, w)
-	err = sched.RegisterRoutes(ser, tknDecoder, metadataLookup)
+	err = sched.RegisterRoutes(httpServer, tknDecoder, metadataLookup)
 	if err != nil {
 		return fmt.Errorf("error registering scheduler routes: %w", err)
-	}
-
-	httpServer := &http.Server{
-		Addr:    net.JoinHostPort("localhost", serverInfo.Port),
-		Handler: ser.Handler,
 	}
 
 	go func() {

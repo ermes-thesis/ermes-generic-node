@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"server/client"
@@ -20,6 +21,7 @@ type ServerType interface {
 }
 
 type Server struct {
+	*http.Server
 	ServerInfo *info.ServerInfo
 	Logger     io.Writer
 	Handler    *http.ServeMux
@@ -39,8 +41,12 @@ func NewServer(logger io.Writer, serverInfo *info.ServerInfo) (*Server, error) {
 	ser := &Server{
 		ServerInfo: serverInfo,
 		Logger:     logger,
-		Handler:    mux,
 		ClientRepo: clientrepo.CreateClientRepo(),
+		Handler:    mux,
+		Server: &http.Server{
+			Addr:    net.JoinHostPort("localhost", serverInfo.Port),
+			Handler: mux,
+		},
 	}
 
 	fmt.Fprintf(logger, "done \n")

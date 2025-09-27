@@ -21,10 +21,8 @@ type DataManager interface {
 
 	//sub components
 	GetMigrationManager() migrationManager.MigrationManager
-	setMigrationManager(migrationManager.MigrationManager)
 
 	GetCollectionsDiscoverer() collectionsDiscoverer.CollectionsDiscoverer
-	setCollectionsDiscoverer(collectionsDiscoverer.CollectionsDiscoverer)
 
 	//methods
 	GetRecord(collectionId string, recordName string) (string, error)
@@ -42,7 +40,7 @@ type DataManagerImp struct {
 }
 
 // Singleton pattern
-var dataManagerInstance DataManager
+var dataManagerInstance *DataManagerImp
 var once sync.Once
 var initOnce sync.Once
 

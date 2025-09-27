@@ -25,10 +25,10 @@ type DataManager interface {
 	GetCollectionsDiscoverer() collectionsDiscoverer.CollectionsDiscoverer
 
 	//methods
-	GetRecord(collectionId string, recordName string) (string, error)
-	SetRecord(collectionId string, recordName string, recordValue string) error
-	GetRecords(collectionId string, recordNames ...string) ([]any, error)
-	SetRecords(collectionId string, recordNames []string, recordValues []string) error
+	GetRecord(collectionId string, recordName string, groups []string) (string, error)
+	SetRecord(collectionId string, recordName string, recordValue string, groups []string) error
+	GetRecords(collectionId string, groups []string, recordNames ...string) ([]any, error)
+	SetRecords(collectionId string, groups []string, recordNames []string, recordValues []string) error
 	PropagateUpdates(updates []messages.CollectionUpdate)
 }
 
@@ -78,54 +78,85 @@ func (m *DataManagerImp) GetCollectionsDiscoverer() collectionsDiscoverer.Collec
 	return m.collectionsDiscoverer
 }
 
-func (m *DataManagerImp) GetRecord(collectionId string, recordName string) (string, error) {
+func (m *DataManagerImp) GetRecord(collectionId string, recordName string, groups []string) (string, error) {
 	return collectionsDiscoverer.AccessCollection(
 		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
 		collectionId,
 		func() (string, error) {
+			authorized, err := m.dbInterface.IsInGroups(collectionId, groups...)
+			if err != nil {
+				return "", err
+			}
+			if !authorized {
+				return "", &shared.UnauthorizedError{}
+			}
+
 			return m.dbInterface.GetRecord(collectionId, recordName)
 		},
 		func(addr string) (string, error) {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordAccess(addr, collectionId, recordName)
+			return m.collectionsDiscoverer.WeakCollectionRemoteRecordAccess(addr, collectionId, groups, recordName)
 		},
 	)
 }
 
-func (m *DataManagerImp) SetRecord(collectionId string, recordName string, recordValue string) error {
+func (m *DataManagerImp) SetRecord(collectionId string, recordName string, recordValue string, groups []string) error {
 	return collectionsDiscoverer.UpdateCollection(
 		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
 		collectionId,
 		func() error {
+			authorized, err := m.dbInterface.IsInGroups(collectionId, groups...)
+			if err != nil {
+				return err
+			}
+			if !authorized {
+				return &shared.UnauthorizedError{}
+			}
 			return m.dbInterface.SetRecord(collectionId, recordName, recordValue)
 		},
 		func(addr string) error {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordWrite(addr, collectionId, recordName, recordValue)
+			return m.collectionsDiscoverer.WeakCollectionRemoteRecordWrite(addr, collectionId, groups, recordName, recordValue)
 		},
 	)
 }
 
-func (m *DataManagerImp) GetRecords(collectionId string, recordNames ...string) ([]any, error) {
+func (m *DataManagerImp) GetRecords(collectionId string, groups []string, recordNames ...string) ([]any, error) {
 	return collectionsDiscoverer.AccessCollection(
 		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
 		collectionId,
 		func() ([]any, error) {
+			authorized, err := m.dbInterface.IsInGroups(collectionId, groups...)
+			if err != nil {
+				return nil, err
+			}
+			if !authorized {
+				return nil, &shared.UnauthorizedError{}
+			}
+
 			return m.dbInterface.GetRecords(collectionId, recordNames...)
 		},
 		func(addr string) ([]any, error) {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsAccess(addr, collectionId, recordNames...)
+			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsAccess(addr, collectionId, groups, recordNames...)
 		},
 	)
 }
 
-func (m *DataManagerImp) SetRecords(collectionId string, recordNames []string, recordValues []string) error {
+func (m *DataManagerImp) SetRecords(collectionId string, groups []string, recordNames []string, recordValues []string) error {
 	return collectionsDiscoverer.UpdateCollection(
 		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
 		collectionId,
 		func() error {
+			authorized, err := m.dbInterface.IsInGroups(collectionId, groups...)
+			if err != nil {
+				return err
+			}
+			if !authorized {
+				return &shared.UnauthorizedError{}
+			}
+
 			return m.dbInterface.SetRecords(collectionId, recordNames, recordValues)
 		},
 		func(addr string) error {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsWrite(addr, collectionId, recordNames, recordValues)
+			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsWrite(addr, collectionId, groups, recordNames, recordValues)
 		},
 	)
 }

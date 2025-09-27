@@ -3,6 +3,7 @@ package messages
 type RemoteAccessRequest struct {
 	CollectionId string   `json:"collectionId"`
 	RecordNames  []string `json:"recordNames"`
+	Groups       []string `json:"groups"`
 }
 
 type RemoteAccessResponse struct {
@@ -13,6 +14,7 @@ type RemoteUpdateRequest struct {
 	CollectionId string   `json:"collectionId"`
 	RecordNames  []string `json:"recordNames"`
 	Record       []string `json:"records"`
+	Groups       []string `json:"groups"`
 }
 
 type CollectionUpdate struct {

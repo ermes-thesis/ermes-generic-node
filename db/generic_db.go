@@ -162,7 +162,7 @@ type GenericDB interface {
 	// Returns:
 	//	- error: non-nil if the operation fails
 	AddGroups(collectionId string, groups ...string) error
-	// IsInGroups checks if anu of the specified members belong to the collection's
+	// IsInGroups checks if any of the specified members belong to the collection's
 	// groups. Returns true if al least one member is found.
 	//
 	// Parameters:

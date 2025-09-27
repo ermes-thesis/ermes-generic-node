@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	log "logger"
+	"net/http"
 	"server"
 	info "server/info"
 )
@@ -87,8 +88,8 @@ func (s *MigrationManagerSenderImpl) RepoPath() string {
 //###############################################################
 
 type CollectionDiscovererSender interface {
-	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames ...string) ([]any, error)
-	WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string) error
+	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, recordNames ...string) ([]any, error)
+	WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, groups []string, recordNames []string, value []string) error
 	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessage)
 
 	RemoteAccessPath() string
@@ -108,12 +109,13 @@ func NewCollectionDiscovererSender(logger log.Logger, server server.ServerType) 
 	}
 }
 
-func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames ...string) ([]any, error) {
+func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, recordNames ...string) ([]any, error) {
 	s.logger.Println("SENDER", fmt.Sprintf("request collection %s access to %s", collectionId, hostId), log.INFO)
 
 	msg := gossip.RemoteAccessRequest{
 		CollectionId: collectionId,
 		RecordNames:  recordNames,
+		Groups:       groups,
 	}
 
 	res, err := s.server.SendGenericHTTPRequestReturnResponse(hostId, remoteAccessPath, msg)
@@ -123,6 +125,15 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId
 	}
 
 	defer res.Body.Close()
+
+	if res.StatusCode == http.StatusUnauthorized {
+		s.logger.Println("HTTP-REQ", "Received unauthorized response", log.WARNING)
+		return nil, &shared.UnauthorizedError{}
+	}
+	if res.StatusCode != 200 {
+		s.logger.Println("HTTP-REQ", fmt.Sprintf("Received non-200 response: %d", res.StatusCode), log.ERROR)
+		return nil, fmt.Errorf("non-200 response: %d", res.StatusCode)
+	}
 
 	bodyBytes, err := io.ReadAll(res.Body)
 	if err != nil {
@@ -138,13 +149,14 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId
 	return resp.Records, err
 }
 
-func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string) error {
+func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, groups []string, recordNames []string, value []string) error {
 	s.logger.Println("SENDER", fmt.Sprintf("request collection %s update to %s", collectionId, hostId), log.INFO)
 
 	msg := gossip.RemoteUpdateRequest{
 		CollectionId: collectionId,
 		RecordNames:  recordNames,
 		Record:       value,
+		Groups:       groups,
 	}
 
 	res, err := s.server.SendGenericHTTPRequestReturnResponse(hostId, remoteUpdatePath, msg)
@@ -155,6 +167,14 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordUpdate(hostId
 
 	defer res.Body.Close()
 
+	if res.StatusCode == http.StatusUnauthorized {
+		s.logger.Println("HTTP-REQ", "Received unauthorized response", log.WARNING)
+		return &shared.UnauthorizedError{}
+	}
+	if res.StatusCode != 200 {
+		s.logger.Println("HTTP-REQ", fmt.Sprintf("Received non-200 response: %d", res.StatusCode), log.ERROR)
+		return fmt.Errorf("non-200 response: %d", res.StatusCode)
+	}
 	return nil
 }
 

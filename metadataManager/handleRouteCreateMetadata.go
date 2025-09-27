@@ -10,7 +10,7 @@ import (
 
 func (m *MetadataManagerImpl) handleRouteCreateMetadata() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(m.logger, "[%s], got /create_metadata \n", m.serverInfo.MetadataDomain)
+		fmt.Fprintf(m.logger, "[%s], got /pvt-create-metadata \n", m.serverInfo.MetadataDomain)
 		defer r.Body.Close()
 
 		collectionId := r.PathValue("collection_id")

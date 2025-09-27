@@ -49,7 +49,7 @@ func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion str
 		receiver = p.serverInfo.CloudNode.HostName
 	}
 
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/lookup", receiver), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/pvt-lookup", receiver), nil)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when creating the http request: %s \n", err)
 		return nil, err
@@ -159,7 +159,7 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, metadata utils.M
 }
 
 func (p *MetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, body []byte) error {
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/create_metadata/%s", dest, collectionId), bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/pvt-create-metadata/%s", dest, collectionId), bytes.NewReader(body))
 	if err != nil {
 		fmt.Fprintf(*p.logger, "Error creating request: %v\n", err)
 		return err

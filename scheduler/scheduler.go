@@ -54,13 +54,13 @@ func (s *SchedulerImpl) RegisterRoutes(server server.ServerType, tokenDecoder to
 		return fmt.Errorf("error adding route /invoke-function/{name}: %v", err)
 	}
 
-	err = server.AddCustomRoute("/offload-function/{name}/{version}/", true, s.handleOffloadFunctionInvocation(tokenDecoder))
+	err = server.AddCustomRoute("/pvt-offload-function/{name}/{version}/", true, s.handleOffloadFunctionInvocation(tokenDecoder))
 	if err != nil {
-		return fmt.Errorf("error adding route /offload-function/{name}/{version}/: %v", err)
+		return fmt.Errorf("error adding route /pvt-offload-function/{name}/{version}/: %v", err)
 	}
-	err = server.AddCustomRoute("/offload-function/{name}", true, s.handleOffloadFunctionInvocation(tokenDecoder))
+	err = server.AddCustomRoute("/pvt-offload-function/{name}", true, s.handleOffloadFunctionInvocation(tokenDecoder))
 	if err != nil {
-		return fmt.Errorf("error adding route /offload-function/{name}: %v", err)
+		return fmt.Errorf("error adding route /pvt-offload-function/{name}: %v", err)
 	}
 
 	return nil
@@ -190,7 +190,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 }
 
 func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, groupToken string) (*FunctionResult, error) {
-	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/offload-function/%s/%s", dest, functionName, functionVersion), nil)
+	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/pvt-offload-function/%s/%s", dest, functionName, functionVersion), nil)
 	if err != nil {
 		return nil, fmt.Errorf("error creating request to leader: %v", err)
 	}

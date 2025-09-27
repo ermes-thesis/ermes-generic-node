@@ -46,13 +46,13 @@ func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, logger 
 }
 
 func (m *MetadataManagerImpl) RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder) error {
-	err := server.AddCustomRoute("/lookup", true, m.handleRouteLookup(tokenDecoder))
+	err := server.AddCustomRoute("/pvt-lookup", true, m.handleRouteLookup(tokenDecoder))
 	if err != nil {
-		return fmt.Errorf("Error while registering /lookup route: %v\n", err)
+		return fmt.Errorf("Error while registering /pvt-lookup route: %v\n", err)
 	}
-	err = server.AddCustomRoute("/create_metadata/{collection_id}", true, m.handleRouteCreateMetadata())
+	err = server.AddCustomRoute("/pvt-create-metadata/{collection_id}", true, m.handleRouteCreateMetadata())
 	if err != nil {
-		return fmt.Errorf("Error while registering /create_metadata/{collection_id} route: %v\n", err)
+		return fmt.Errorf("Error while registering /pvt-create-metadata/{collection_id} route: %v\n", err)
 	}
 	return nil
 }

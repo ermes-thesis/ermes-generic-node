@@ -75,7 +75,7 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 	dataManager.Init(collections, penality.LogPenalty(2), cfg.MigrationManager, cfg.Lru, httpServer, *httpServer.ServerInfo, &lruCache, redisClient, *log)
 
 	wasmExecutorPool := wasm.NewExecutorPool(10)
-	err = scheduler.RegisterHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{RedisClient: redisClient.Client(), MetadataManager: metadataLookup, ServerInfo: serverInfo})
+	err = scheduler.RegisterHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{RedisClient: redisClient.Client(), MetadataManager: metadataLookup, ServerInfo: serverInfo, DataManager: dataManager})
 	if err != nil {
 		return fmt.Errorf("error registering host functions: %w", err)
 	}

@@ -11,6 +11,8 @@ To install WasmEdge run
 curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | sudo bash -s -- -p /usr/local
 ```
 
+In alternative, you can use the provided DevContainer, which already has all the dependencies installed.
+
 ## How to build and run
 
 ```bash
@@ -38,6 +40,9 @@ You can run tests of each module with
 ```bash
 $ go test {moduleName}
 ```
+
+
+## Outdated stuff
 
 An example architecture structured like:
 

@@ -32,15 +32,16 @@ type SchedulerImpl struct {
 	cache                caches.FunctionCache
 	wasmExecutorPool     wasm.ExecutorPool
 	serverInfo           *info.ServerInfo
-	logger               *io.Writer
+	logger               io.Writer
 }
 
-func NewScheduler(collectionDiscoverer collectionsDiscoverer.CollectionsDiscoverer, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *info.ServerInfo) *SchedulerImpl {
+func NewScheduler(collectionDiscoverer collectionsDiscoverer.CollectionsDiscoverer, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *info.ServerInfo, logger io.Writer) *SchedulerImpl {
 	return &SchedulerImpl{
 		collectionDiscoverer: collectionDiscoverer,
 		cache:                cache,
 		wasmExecutorPool:     wasmExecutorPool,
 		serverInfo:           serverInfo,
+		logger:               logger,
 	}
 }
 

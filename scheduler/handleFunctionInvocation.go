@@ -13,7 +13,7 @@ import (
 
 func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(*s.logger, "got function invocation \n")
+		fmt.Fprintf(s.logger, "got function invocation \n")
 		defer r.Body.Close()
 
 		fnName := r.PathValue("name")
@@ -22,7 +22,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			fnVersion = "latest"
 		}
 
-		fmt.Fprintf(*s.logger, "Function name: %s, version: %s\n", fnName, fnVersion)
+		fmt.Fprintf(s.logger, "Function name: %s, version: %s\n", fnName, fnVersion)
 
 		queryParams := r.Header.Get("X-ERMES-QUERY")
 		cachedQuery := r.Header.Get("X-ERMES-CACHED-QUERY")

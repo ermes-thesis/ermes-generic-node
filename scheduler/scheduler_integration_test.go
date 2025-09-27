@@ -7,7 +7,9 @@ import (
 	"io"
 	"metadataManager/utils"
 	"mocks/caches"
+	datamanager_mock "mocks/dataManager"
 	"mocks/dataManager/collectionsDiscoverer"
+	migrationManager_mock "mocks/dataManager/migrationManager"
 	"mocks/ermes-wasm-pool/wasm-pool"
 	"mocks/metadataManager"
 	"mocks/tokenDecoder"
@@ -73,20 +75,14 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 
 	fnCacheFather := caches_mock.NewFunctionCache(t)
 
-	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-
-	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild12345 := shared.NewWeakCollection("12345", 40, false)
-	collChild1111 := shared.NewStrongCollection("1111", 40, false, false)
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
-
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
+
+	dataManagerFather := datamanager_mock.NewDataManager(t)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
-	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -115,6 +111,19 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 		StrongCollWriteAccess: false,
 	}, nil)
 
+	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
+	collChild12345 := shared.NewWeakCollection("12345", 40, false)
+	collChild1111 := shared.NewStrongCollection("1111", 40, false, false)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
+	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
+
+	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+
+	dataManagerChild := datamanager_mock.NewDataManager(t)
+	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
+
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
@@ -128,7 +137,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
 	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
-	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
 	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
@@ -226,6 +235,13 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(false, collFather12345, nil)
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collFather1111, nil)
 
+	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerFather.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+
+	dataManagerFather := datamanager_mock.NewDataManager(t)
+	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
+	dataManagerFather.EXPECT().GetMigrationManager().Return(migrationManagerFather)
+
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
@@ -241,7 +257,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 	wasmExecutorPoolFather.EXPECT().Acquire().Return(wasmExecutorFather)
 
-	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -286,7 +302,10 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
 
-	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
+	dataManagerChild := datamanager_mock.NewDataManager(t)
+	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
 	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
@@ -363,7 +382,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 
 	fnCacheFather := caches_mock.NewFunctionCache(t)
 
-	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
+	dataManagerFather := datamanager_mock.NewDataManager(t)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 
@@ -371,7 +390,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
-	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -411,7 +430,10 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
 
-	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
+	dataManagerChild := datamanager_mock.NewDataManager(t)
+	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
 	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
@@ -489,6 +511,9 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	collFather12345 := shared.NewWeakCollection("12345", 40, false)
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collFather12345, nil)
 
+	dataManagerFather := datamanager_mock.NewDataManager(t)
+	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
+
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
@@ -504,7 +529,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 	wasmExecutorPoolFather.EXPECT().Acquire().Return(wasmExecutorFather)
 
-	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -538,7 +563,10 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(false, nil, nil)
 
-	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
+	dataManagerChild := datamanager_mock.NewDataManager(t)
+	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
 	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
@@ -622,7 +650,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 
 	fnCacheFather := caches_mock.NewFunctionCache(t)
 
-	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
+	dataManagerFather := datamanager_mock.NewDataManager(t)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 
@@ -630,7 +658,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
-	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -672,7 +700,10 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("54321", uint64(0)).Return(false, collChild54321, nil)
 
-	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
+	dataManagerChild := datamanager_mock.NewDataManager(t)
+	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
 	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
@@ -747,8 +778,10 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345 := shared.NewWeakCollection("12345", 40, true)
-
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(false, collChild12345, nil)
+
+	dataManagerFather := datamanager_mock.NewDataManager(t)
+	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
@@ -757,7 +790,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
-	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -797,7 +830,10 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345Child, nil)
 
-	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
+	dataManagerChild := datamanager_mock.NewDataManager(t)
+	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
 	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
@@ -894,6 +930,9 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collFather12345, nil)
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collFather1111, nil)
 
+	dataManagerFather := datamanager_mock.NewDataManager(t)
+	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
+
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
@@ -901,7 +940,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
-	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -950,7 +989,14 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(false, nil, nil)
 
-	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
+	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+
+	dataManagerChild := datamanager_mock.NewDataManager(t)
+	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
+
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
 	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
@@ -1035,6 +1081,9 @@ func TestScheduleThreeNodes(t *testing.T) {
 
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(false, collFather1111, nil)
 
+	dataManagerFather := datamanager_mock.NewDataManager(t)
+	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
+
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
@@ -1042,7 +1091,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
-	schedulerFather := scheduler.NewScheduler(collectionDiscovererFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
 
 	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
@@ -1082,7 +1131,10 @@ func TestScheduleThreeNodes(t *testing.T) {
 
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(false, collChild1111, nil)
 
-	schedulerChild := scheduler.NewScheduler(collectionDiscovererChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
+	dataManagerChild := datamanager_mock.NewDataManager(t)
+	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
 	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
@@ -1129,7 +1181,14 @@ func TestScheduleThreeNodes(t *testing.T) {
 
 	collectionDiscovererChild2.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111_2, nil)
 
-	schedulerChild2 := scheduler.NewScheduler(collectionDiscovererChild2, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, os.Stdout)
+	migrationManagerChild2 := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerChild2.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+
+	dataManagerChild2 := datamanager_mock.NewDataManager(t)
+	dataManagerChild2.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild2)
+	dataManagerChild2.EXPECT().GetMigrationManager().Return(migrationManagerChild2)
+
+	schedulerChild2 := scheduler.NewScheduler(dataManagerChild2, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, os.Stdout)
 	serverChild2, err := server.NewServer(os.Stdout, serverInfoChild2)
 	assert.NoError(t, err, "Expected no error when creating server")
 

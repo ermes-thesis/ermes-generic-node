@@ -83,7 +83,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 				return
 			}
 		}
-		functionResponse, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, body, groups, userId, groupToken)
+		functionResponse, resSeqNumber, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, body, groups, userId, groupToken)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when scheduling function: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)
@@ -98,6 +98,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-ERMES-CACHE", string(jsonToCache))
+		w.Header().Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", resSeqNumber))
 		w.WriteHeader(functionResponse.StatusCode)
 		w.Write(functionResponse.Body)
 	}

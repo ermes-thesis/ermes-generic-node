@@ -2,7 +2,7 @@ package scheduler
 
 import (
 	"caches"
-	"dataManager/collectionsDiscoverer"
+	datamanager "dataManager"
 	shared "dataManager/shared"
 	"encoding/json"
 	"fmt"
@@ -13,6 +13,7 @@ import (
 	"server"
 	"server/client"
 	"server/info"
+	"time"
 	"tokenDecoder"
 
 	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
@@ -28,20 +29,20 @@ type FunctionResult struct {
 }
 
 type SchedulerImpl struct {
-	collectionDiscoverer collectionsDiscoverer.CollectionsDiscoverer
-	cache                caches.FunctionCache
-	wasmExecutorPool     wasm.ExecutorPool
-	serverInfo           *info.ServerInfo
-	logger               io.Writer
+	dataManager      datamanager.DataManager
+	cache            caches.FunctionCache
+	wasmExecutorPool wasm.ExecutorPool
+	serverInfo       *info.ServerInfo
+	logger           io.Writer
 }
 
-func NewScheduler(collectionDiscoverer collectionsDiscoverer.CollectionsDiscoverer, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *info.ServerInfo, logger io.Writer) *SchedulerImpl {
+func NewScheduler(dataManager datamanager.DataManager, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *info.ServerInfo, logger io.Writer) *SchedulerImpl {
 	return &SchedulerImpl{
-		collectionDiscoverer: collectionDiscoverer,
-		cache:                cache,
-		wasmExecutorPool:     wasmExecutorPool,
-		serverInfo:           serverInfo,
-		logger:               logger,
+		dataManager:      dataManager,
+		cache:            cache,
+		wasmExecutorPool: wasmExecutorPool,
+		serverInfo:       serverInfo,
+		logger:           logger,
 	}
 }
 
@@ -67,12 +68,36 @@ func (s *SchedulerImpl) RegisterRoutes(server server.ServerType, tokenDecoder to
 	return nil
 }
 
-func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, sequentialSeqNumber uint64, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, error) {
+func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
+	colId string,
+	seqNum uint64,
+	retries int,
+	delay time.Duration,
+) (bool, shared.Collection, error) {
+	var (
+		found      bool
+		collection shared.Collection
+		err        error
+	)
+
+	for i := 0; i < retries; i++ {
+		found, collection, err = s.dataManager.GetCollectionsDiscoverer().IsCollectionLocallyPresent(colId, seqNum)
+		if err == nil {
+			return found, collection, nil
+		}
+		if i < retries-1 {
+			time.Sleep(delay)
+		}
+	}
+	return found, collection, fmt.Errorf("after %d retries: %w", retries, err)
+}
+
+func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, sequentialSeqNumber uint64, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, uint64, error) {
 	fmt.Println("Scheduling function:", functionName, "version:", functionVersion)
 	fmt.Printf("With collections: %v\n", collections)
 
 	if len(collections) == 0 {
-		return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId)
+		return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId, "")
 	}
 
 	var sequentialCollection shared.Collection
@@ -86,10 +111,13 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 	maxEventual := uint(0)
 	for _, cols := range collections {
 		for _, col := range cols {
-			found, collection, _ := s.collectionDiscoverer.IsCollectionLocallyPresent(col.Id, sequentialSeqNumber)
+			found, collection, err := s.retryIsCollectionLocallyPresent(col.Id, sequentialSeqNumber, 10, 500*time.Millisecond)
+			if err != nil {
+				return nil, 0, fmt.Errorf("wrong sequence number for collection: %v, %w", col.Id, err)
+			}
 			if col.Metadata.Consistency == utils.SequentialConsistent {
 				if sequentialCollectionNeeded {
-					return nil, fmt.Errorf("multiple sequentially consistent collections are not supported")
+					return nil, 0, fmt.Errorf("multiple sequentially consistent collections are not supported")
 				}
 				sequentialCollection = collection
 				sequentialCollectionNeeded = true
@@ -118,48 +146,48 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 
 	if sequentialCollectionNeeded {
 		if sequentialCollection == nil {
-			return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, groupToken)
+			return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
 		}
 
 		functionMetadata, err := s.cache.GetMetadata(functionName, functionVersion)
 		if err != nil {
-			return nil, fmt.Errorf("error retrieving function metadata: %v", err)
+			return nil, 0, fmt.Errorf("error retrieving function metadata: %v", err)
 		}
 
 		seqCollectionCasted, ok := sequentialCollection.(*shared.StrongCollection)
 		if sequentialCollection.IsLocal() {
 			if !ok {
-				return nil, fmt.Errorf("collection %s is not a strong collection", sequentialCollection)
+				return nil, 0, fmt.Errorf("collection %s is not a strong collection", sequentialCollection)
 			}
 
 			if seqCollectionCasted.IsLeader || !functionMetadata.StrongCollWriteAccess {
-				return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId)
+				return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId, seqCollectionCasted.CollectionId())
 			} else {
 				// Forward to seqCollectionCasted.LeaderId
-				return s.forwardRequest(seqCollectionCasted.LeaderId, functionName, functionVersion, collections, groupToken)
+				return s.forwardRequest(seqCollectionCasted.LeaderId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
 			}
 		} else {
 			// Forward to the leader or to a replica based on the functionMetadata.StrongCollWriteAccess
 			if functionMetadata.StrongCollWriteAccess {
 				// Forward to seqCollectionCasted.LeaderId
-				return s.forwardRequest(seqCollectionCasted.LeaderId, functionName, functionVersion, collections, groupToken)
+				return s.forwardRequest(seqCollectionCasted.LeaderId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
 			} else {
 				// Forward to any node that has the collection
 				//TODO: check if maps in Go are iterated consistently --> No, it matters here?
 				for hostId := range seqCollectionCasted.HostsId() {
-					return s.forwardRequest(hostId, functionName, functionVersion, collections, groupToken)
+					return s.forwardRequest(hostId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
 				}
-				return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, groupToken)
+				return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
 			}
 		}
 	} else if eventualCollectionPresent {
-		return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId)
+		return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId, "")
 	} else {
-		return s.forwardRequest(hostWithMoreEventual, functionName, functionVersion, collections, groupToken)
+		return s.forwardRequest(hostWithMoreEventual, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
 	}
 }
 
-func (s *SchedulerImpl) executeLocally(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, reqBody []byte, groups []string, userId string) (*FunctionResult, error) {
+func (s *SchedulerImpl) executeLocally(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, reqBody []byte, groups []string, userId string, sequentialCollId string) (*FunctionResult, uint64, error) {
 	executor := s.wasmExecutorPool.Acquire()
 	defer executor.Release()
 	ctx := WasmContext{
@@ -169,7 +197,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 	}
 	ctxJson, err := json.Marshal(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("error marshalling wasm context: %v", err)
+		return nil, 0, fmt.Errorf("error marshalling wasm context: %v", err)
 	}
 
 	resp := executor.Invoke(functionName+"@"+functionVersion, "entry", reqBody, ctxJson)
@@ -182,39 +210,58 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 	// dataManager.RemoteDelete(resp.DeletedRecords)
 
 	if err != nil {
-		return nil, fmt.Errorf("error marshalling response body: %v", err)
+		return nil, 0, fmt.Errorf("error marshalling response body: %v", err)
 	}
+
+	var seqNumber uint64
+	if sequentialCollId != "" {
+		seqNumber, err = s.dataManager.GetMigrationManager().GetCollectionVectorClockValue(sequentialCollId)
+		if err != nil {
+			return nil, 0, fmt.Errorf("error getting sequential collection vector clock value: %v", err)
+		}
+	}
+
 	return &FunctionResult{
 		StatusCode: resp.HttpCode,
 		Body:       repBody,
-	}, nil
+	}, seqNumber, nil
 }
 
-func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, groupToken string) (*FunctionResult, error) {
+func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, groupToken string, seqNumber uint64) (*FunctionResult, uint64, error) {
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/pvt-offload-function/%s/%s", dest, functionName, functionVersion), nil)
 	if err != nil {
-		return nil, fmt.Errorf("error creating request to leader: %v", err)
+		return nil, 0, fmt.Errorf("error creating request to leader: %v", err)
 	}
 	req.Header.Set("X-ERMES-GROUPS", groupToken)
 	collectionsJson, err := json.Marshal(collections)
 	if err != nil {
-		return nil, fmt.Errorf("error marshalling collections: %v", err)
+		return nil, 0, fmt.Errorf("error marshalling collections: %v", err)
 	}
 	req.Header.Set("X-ERMES-COLLECTIONS", string(collectionsJson))
 	req.Header.Set("X-ERMES-SECRET", s.serverInfo.Secret)
+	req.Header.Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", seqNumber))
 
 	resp, err := client.CustomClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("error forwarding request to leader: %v", err)
+		return nil, 0, fmt.Errorf("error forwarding request to leader: %v", err)
+	}
+
+	sequentialSeqNumberStr := resp.Header.Get("X-ERMES-SEQUENTIAL-NUMBER")
+	var sequentialSeqNumber uint64
+	if sequentialSeqNumberStr != "" {
+		_, err = fmt.Sscanf(sequentialSeqNumberStr, "%d", &sequentialSeqNumber)
+		if err != nil {
+			return nil, 0, fmt.Errorf("error parsing sequential sequence number: %v", err)
+		}
 	}
 
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("error reading response from leader: %v", err)
+		return nil, 0, fmt.Errorf("error reading response from leader: %v", err)
 	}
 	return &FunctionResult{
 		StatusCode: resp.StatusCode,
 		Body:       body,
-	}, nil
+	}, sequentialSeqNumber, nil
 }

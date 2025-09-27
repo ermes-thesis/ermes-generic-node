@@ -13,10 +13,10 @@ import (
 	"mocks/tokenDecoder"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"server"
 	"server/info"
-	"strings"
 	"testing"
 	"time"
 
@@ -62,49 +62,6 @@ var templates = map[string]utils.QueryTemplate{
 	},
 }
 
-//var templates = map[string]string{
-//	"private_data_query": `
-//			{
-//			  "SELECT": "ALL",
-//			  "AS": "private_data",
-//			  "WHERE": {
-//				"AND": [
-//				  {
-//					"field": "owner",
-//					"eq": "12345"
-//				  },
-//				  {
-//					"field": "name",
-//					"eq": "<name>"
-//				  }
-//				]
-//			  }
-//			}
-//	`,
-//	"gt_data_query": `
-//			{
-//			  "SELECT": "ALL",
-//			  "AS": "gt_data",
-//			  "WHERE": {
-//				"AND": [
-//				  {
-//					"field": "owner",
-//					"eq": "12345"
-//				  },
-//				  {
-//					"field": "name",
-//					"eq": "DATI_PRIVATE"
-//				  },
-//				  {
-//					"field": "created_at",
-//					"gt": 1745747999
-//				  }
-//				]
-//			  }
-//			}
-//	`,
-//}
-
 func TestMetadataLookupIntegration(t *testing.T) {
 	redisClient1, shutdownFunc1 := startRedisContainer(t, false)
 	defer shutdownFunc1()
@@ -143,9 +100,12 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoder)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
+	urlFather, err := url.Parse(httpServerFather.URL)
+	assert.NoError(t, err, "Expected no error when parsing URL")
+
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			HostName: strings.Split(httpServerFather.URL, ":")[2],
+			HostName: urlFather.Host,
 		},
 		Children:       []info.Node{},
 		MetadataDomain: "IT/Milan",
@@ -167,13 +127,16 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
+	urlChild, err := url.Parse(httpServerChild.URL)
+	assert.NoError(t, err, "Expected no error when parsing URL")
+
 	serverInfoFather.Children = []info.Node{
 		{
-			HostName: strings.Split(httpServerChild.URL, ":")[2],
+			HostName: urlChild.Host,
 		},
 	}
 
-	req, err := http.NewRequest(http.MethodPost, httpServerChild.URL+"/lookup", nil)
+	req, err := http.NewRequest(http.MethodPost, httpServerChild.URL+"/pvt-lookup", nil)
 	assert.NoError(t, err, "Expected no error when creating request")
 
 	queryParams, _ := json.Marshal(map[string]map[string]any{
@@ -254,9 +217,12 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoder)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
+	urlFather, err := url.Parse(httpServerFather.URL)
+	assert.NoError(t, err, "Expected no error when parsing URL")
+
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			HostName:       strings.Split(httpServerFather.URL, ":")[2],
+			HostName:       urlFather.Host,
 			MetadataDomain: "IT",
 		},
 		Children:       []info.Node{},
@@ -277,9 +243,12 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
+	urlChild, err := url.Parse(httpServerChild.URL)
+	assert.NoError(t, err, "Expected no error when parsing URL")
+
 	serverInfoFather.Children = []info.Node{
 		{
-			HostName:       strings.Split(httpServerChild.URL, ":")[2],
+			HostName:       urlChild.Host,
 			MetadataDomain: "IT/Milan",
 		},
 	}
@@ -296,7 +265,7 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	jsonMetadata, err := json.Marshal(metadata)
 	assert.NoError(t, err, "Expected no error when marshalling metadata")
 
-	req, err := http.NewRequest(http.MethodPost, httpServerChild.URL+"/create_metadata/12345678", bytes.NewBuffer(jsonMetadata))
+	req, err := http.NewRequest(http.MethodPost, httpServerChild.URL+"/pvt-create-metadata/12345678", bytes.NewBuffer(jsonMetadata))
 	assert.NoError(t, err, "Expected no error when creating request")
 	req.Header.Set("X-ERMES-SECRET", "secret")
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", "IT/Milan/test")
@@ -355,9 +324,12 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
+	urlFather, err := url.Parse(httpServerFather.URL)
+	assert.NoError(t, err, "Expected no error when parsing URL")
+
 	serverInfoChild := &info.ServerInfo{
 		Father: &info.Node{
-			HostName:       strings.Split(httpServerFather.URL, ":")[2],
+			HostName:       urlFather.Host,
 			MetadataDomain: "IT",
 		},
 		Children:       []info.Node{},
@@ -378,9 +350,12 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
+	urlChild, err := url.Parse(httpServerChild.URL)
+	assert.NoError(t, err, "Expected no error when parsing URL")
+
 	serverInfoFather.Children = []info.Node{
 		{
-			HostName:       strings.Split(httpServerChild.URL, ":")[2],
+			HostName:       urlChild.Host,
 			MetadataDomain: "IT/Milan",
 		},
 	}
@@ -397,7 +372,7 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	jsonMetadata, err := json.Marshal(metadata)
 	assert.NoError(t, err, "Expected no error when marshalling metadata")
 
-	req, err := http.NewRequest(http.MethodPost, httpServerFather.URL+"/create_metadata/12345678", bytes.NewBuffer(jsonMetadata))
+	req, err := http.NewRequest(http.MethodPost, httpServerFather.URL+"/pvt-create-metadata/12345678", bytes.NewBuffer(jsonMetadata))
 	assert.NoError(t, err, "Expected no error when creating request")
 	req.Header.Set("X-ERMES-SECRET", "secret")
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", "")
@@ -485,14 +460,20 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
+	urlFather, err := url.Parse(httpServerFather.URL)
+	assert.NoError(t, err, "Expected no error when parsing URL")
+
+	urlChild, err := url.Parse(httpServerChild.URL)
+	assert.NoError(t, err, "Expected no error when parsing URL")
+
 	serverInfoLocal := &info.ServerInfo{
 		Father: &info.Node{
-			HostName:       strings.Split(httpServerFather.URL, ":")[2],
+			HostName:       urlFather.Host,
 			MetadataDomain: "IT",
 		},
 		Children: []info.Node{
 			{
-				HostName:       strings.Split(httpServerChild.URL, ":")[2],
+				HostName:       urlChild.Host,
 				MetadataDomain: "IT/Milan/Polimi",
 			},
 		},

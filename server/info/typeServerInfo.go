@@ -35,7 +35,7 @@ type ServerInfo struct {
 	CloudNode *Node
 
 	// Address:port of the Group Token Provider
-	GroupTokenProvider string
+	GroupTokenProviderHostName string
 }
 
 type Node struct {
@@ -88,8 +88,8 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 			MetadataDomain: parentDomain,
 			Latency:        parentLatency,
 		},
-		Children:           children,
-		GroupTokenProvider: config.Scheduler.GroupTokenProviderAddress + ":" + config.Scheduler.GroupTokenProviderPort,
+		Children:                   children,
+		GroupTokenProviderHostName: config.Scheduler.GroupTokenProviderAddress + ":" + config.Scheduler.GroupTokenProviderPort,
 	}
 
 	return serverinfo, nil

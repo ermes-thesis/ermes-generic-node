@@ -29,10 +29,6 @@ func NewRedisClient(config config.RedisConfig, ctx context.Context) *RedisClient
 	return &RedisClient{client: rdb, ctx: ctx}
 }
 
-func (r *RedisClient) Client() *redis.Client {
-	return r.client
-}
-
 func (r *RedisClient) GetRecord(collectionId string, recordName string) (string, error) {
 	return r.client.Get(r.ctx, buildKey(collectionId, recordName)).Result()
 }

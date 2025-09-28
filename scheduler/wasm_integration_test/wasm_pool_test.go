@@ -1,43 +1,34 @@
 package wasm_integration_test
 
 import (
-	"context"
-	"db/test_utils"
 	"fmt"
+	metadataManager2 "metadataManager"
 	datamanager_mock "mocks/dataManager"
+	metadataManager_mock "mocks/metadataManager"
 	"scheduler"
-	"strings"
 	"testing"
 	"time"
 
 	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
-	"github.com/redis/go-redis/v9"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
-	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"
 )
 
 func TestWasmPool(t *testing.T) {
-	redisClient, shutdownFn := test_utils.StartRedisTestContainer(t)
-	defer shutdownFn()
-
-	client := redisClient.Client()
-
-	client.SAdd(context.Background(), "data:255ef4af-3a49-4382-a90d-6524bdee5ad1:groups", "test")
-	client.Set(context.Background(), "data:255ef4af-3a49-4382-a90d-6524bdee5ad1:battiti", "100", 0)
-	client.Set(context.Background(), "data:255ef4af-3a49-4382-a90d-6524bdee5ad1:testMGET", "200", 0)
-	client.Set(context.Background(), "data:255ef4af-3a49-4382-a90d-6524bdee5ad1:testMGET2", "300", 0)
-
 	pool := wasm.NewExecutorPool(10)
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(t)
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
 
+	metadataManager := metadataManager_mock.NewMetadataManager(t)
+	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
+	metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
+	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
+
 	err := scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{
-		RedisClient:     client,
 		DataManager:     dataManager,
-		MetadataManager: nil,
+		MetadataManager: metadataManager,
 		ServerInfo:      nil,
 	})
 	require.NoError(t, err)
@@ -62,45 +53,24 @@ func TestWasmPool(t *testing.T) {
 }
 
 func BenchmarkWasmPool(b *testing.B) {
-	//if test_utils.IsWSL() {
-	//	b.Setenv("TESTCONTAINERS_HOST_OVERRIDE", "localhost")
-	//}
-	redisContainer, err := tcredis.Run(context.Background(),
-		"redis:latest",
-		tcredis.WithSnapshotting(10, 1),
-		tcredis.WithLogLevel(tcredis.LogLevelVerbose),
-		//tcredis.WithConfigFile(filepath.Join("testdata", "redis7.conf")),
-	)
-	defer func() {
-		if err := testcontainers.TerminateContainer(redisContainer); err != nil {
-			b.Fatalf("failed to terminate container: %s", err)
-		}
-	}()
-	if err != nil {
-		b.Fatalf("failed to start container: %s", err)
-		return
-	}
-
-	connectionString, _ := redisContainer.ConnectionString(context.Background())
-	client := redis.NewClient(&redis.Options{
-		Addr: strings.Split(connectionString, "//")[1],
-	})
-
-	client.Set(context.Background(), "data:255ef4af-3a49-4382-a90d-6524bdee5ad1:battiti", "100", 0)
-	client.Set(context.Background(), "data:255ef4af-3a49-4382-a90d-6524bdee5ad1:testMGET", "200", 0)
-
 	pool := wasm.NewExecutorPool(10)
 	defer pool.Close()
 
+	dataManager := datamanager_mock.NewDataManager(b)
+	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+
+	metadataManager := metadataManager_mock.NewMetadataManager(b)
+	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
+	metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
+	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
+
 	scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{
-		RedisClient:     nil,
-		MetadataManager: nil,
+		MetadataManager: metadataManager,
+		DataManager:     dataManager,
 		ServerInfo:      nil,
 	})
 
 	for b.Loop() {
-		client.SAdd(context.Background(), "data:255ef4af-3a49-4382-a90d-6524bdee5ad1:groups", "test")
-
 		executor := pool.Acquire()
 
 		resp := executor.Invoke("auth_function", "authEntry", []byte("token"))

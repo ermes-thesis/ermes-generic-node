@@ -111,7 +111,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate(logger log.Logger)
 					RecordNames:  msg.RecordNames,
 					RecordValues: msg.Record,
 				}
-				c.PropagateUpdates([]gossip.CollectionUpdate{update})
+				c.PropagateUpdates([]gossip.CollectionUpdate{update}, false)
 
 				return nil
 			}
@@ -133,7 +133,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate(logger log.Logger)
 					RecordNames:  msg.RecordNames,
 					RecordValues: msg.Record,
 				}
-				c.PropagateUpdates([]gossip.CollectionUpdate{update})
+				c.PropagateUpdates([]gossip.CollectionUpdate{update}, false)
 
 				return nil
 			}
@@ -180,7 +180,7 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation(logger log.Lo
 		//sync
 		c.collectionsPartialView.Mutex.Lock()
 
-		c.propagateUpdate(msg, true, []string{address})
+		c.propagateUpdate(msg, true, []string{address}, msg.IsDelete)
 
 		c.collectionsPartialView.Mutex.Unlock() // lock release
 	})

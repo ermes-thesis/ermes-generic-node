@@ -31,7 +31,7 @@ type DataManager interface {
 	SetRecord(collectionId string, recordName string, recordValue string) error
 	GetRecords(collectionId string, recordNames ...string) ([]any, error)
 	SetRecords(collectionId string, recordNames []string, recordValues []string) error
-	PropagateUpdates(updates []messages.CollectionUpdate)
+	PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool) //if isDelete true -> RecordValues can be empty
 	SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, isStrong bool) error
 }
 
@@ -133,8 +133,8 @@ func (m *DataManagerImp) SetRecords(collectionId string, recordNames []string, r
 	)
 }
 
-func (m *DataManagerImp) PropagateUpdates(updates []messages.CollectionUpdate) {
-	m.collectionsDiscoverer.PropagateUpdates(updates)
+func (m *DataManagerImp) PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool) { //if isDelete true -> RecordValues can be empty
+	m.collectionsDiscoverer.PropagateUpdates(updates, isDelete)
 }
 
 func (m *DataManagerImp) SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, isStrong bool) error {

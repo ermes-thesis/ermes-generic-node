@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	gossipPath            = "/gossip"
-	repoPath              = "/repo"
-	remoteAccessPath      = "/dataRemoteAccess"
-	remoteUpdatePath      = "/dataRemoteUpdate"
-	updatePropagationPath = "/dataUpdatePropagation"
+	gossipPath                      = "/gossip"
+	repoPath                        = "/repo"
+	remoteAccessPath                = "/dataRemoteAccess"
+	remoteUpdatePath                = "/dataRemoteUpdate"
+	updatePropagationPath           = "/dataUpdatePropagation"
+	createCollectionPropagationPath = "/newCollection"
 )
 
 //###############################################################
@@ -59,7 +60,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		IsStrong:       collection.IsStrong(),
 		CollectionSize: collectionSize,
 		HostToRemove:   hostToRemove,
-		SenderIp: s.serverInfo.HostName,
+		SenderIp:       s.serverInfo.HostName,
 	}
 	if collection.IsStrong() {
 		msg.IsLeader = collection.(*shared.StrongCollection).IsLeader && sendAsLeader
@@ -90,10 +91,12 @@ type CollectionDiscovererSender interface {
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames ...string) ([]any, error)
 	WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string) error
 	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessage)
+	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage)
 
 	RemoteAccessPath() string
 	RemoteUpdatePath() string
 	UpdatePropagationPath() string
+	CreateCollectionPropagationPath() string
 }
 
 type CollectionDiscovererSenderImpl struct {
@@ -158,6 +161,12 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordUpdate(hostId
 	return nil
 }
 
+func (s *CollectionDiscovererSenderImpl) NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage) {
+	s.logger.Println("SENDER", fmt.Sprintf("notify new collection %s to %s", newCollection.CollectionId, hostId), log.INFO)
+
+	s.server.SendGenericHTTPRequest(hostId, createCollectionPropagationPath, newCollection)
+}
+
 func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessage) {
 	s.logger.Println("SENDER", fmt.Sprintf("request collection update propagation to %s", hostId), log.INFO)
 
@@ -174,4 +183,8 @@ func (s *CollectionDiscovererSenderImpl) RemoteUpdatePath() string {
 
 func (s *CollectionDiscovererSenderImpl) UpdatePropagationPath() string {
 	return updatePropagationPath
+}
+
+func (s *CollectionDiscovererSenderImpl) CreateCollectionPropagationPath() string {
+	return createCollectionPropagationPath
 }

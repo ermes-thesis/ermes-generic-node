@@ -2,6 +2,7 @@ package collectionsDiscoverer
 
 import (
 	"dataManager/messages"
+	"dataManager/migrationManager"
 	"dataManager/sender"
 	shared "dataManager/shared"
 	"db"
@@ -24,6 +25,8 @@ type CollectionsDiscoverer interface {
 	WeakCollectionRemoteRecordsWrite(hostId string, collectionId string, recordNames []string, recordValues []string) error
 
 	PropagateUpdates(updates []messages.CollectionUpdate)
+
+	SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error
 }
 
 type CollectionsDiscovererImp struct {
@@ -58,6 +61,7 @@ func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialVie
 		server.AddCustomRoute(c.sender.RemoteAccessPath(), true, c.handleIncomingRemoteAccess(logger).ServeHTTP)
 		server.AddCustomRoute(c.sender.RemoteUpdatePath(), true, c.handleIncomingRemoteUpdate(logger).ServeHTTP)
 		server.AddCustomRoute(c.sender.UpdatePropagationPath(), true, c.handleIncomingUpdatePropagation(logger).ServeHTTP)
+		server.AddCustomRoute(c.sender.CreateCollectionPropagationPath(), true, c.handleIncomingNewCollection(logger).ServeHTTP)
 	})
 }
 
@@ -282,4 +286,47 @@ func contains(slice []string, str string) bool {
 		}
 	}
 	return false
+}
+
+func (c *CollectionsDiscovererImp) SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error {
+	//sync
+	c.collectionsPartialView.Mutex.Lock()
+	defer c.collectionsPartialView.Mutex.Unlock()
+	//imp
+
+	//if collection  already exists return error
+	_, exists := c.collectionsPartialView.KnownCollections[collectionId]
+	if exists {
+		return errors.New("collection already exists")
+	}
+
+	//try to add collection in redis
+	dbErr := c.dbInterface.SetCollection(collectionId, records, groups)
+	if dbErr != nil {
+		return dbErr
+	}
+
+	//get size of collection in db
+	size, sizeErr := c.dbInterface.GetCollectionMemoryUsage(collectionId)
+	if sizeErr != nil {
+		return sizeErr
+	}
+
+	//add collection in local view
+	migrationManagerErr := migrationManager.NewCollectionCreated(collectionId, size, isStrong)
+	if migrationManagerErr != nil {
+		return migrationManagerErr
+	}
+
+	//propagate update to father
+	if c.serverInfo.Father != nil {
+		newCollectionMessage := messages.NewCollectionMessage{
+			CollectionId: collectionId,
+			IsStrong:     isStrong,
+			SenderIp:     c.serverInfo.HostName,
+		}
+		c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, newCollectionMessage)
+	}
+
+	return nil
 }

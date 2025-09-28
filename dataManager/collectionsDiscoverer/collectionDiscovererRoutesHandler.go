@@ -2,6 +2,7 @@ package collectionsDiscoverer
 
 import (
 	gossip "dataManager/messages"
+	shared "dataManager/shared"
 	"encoding/json"
 	"io"
 	log "logger"
@@ -171,7 +172,7 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation(logger log.Lo
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		
+
 		address := msg.SenderIp
 
 		w.WriteHeader(http.StatusOK) //response
@@ -182,5 +183,57 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation(logger log.Lo
 		c.propagateUpdate(msg, true, []string{address})
 
 		c.collectionsPartialView.Mutex.Unlock() // lock release
+	})
+}
+
+func (c *CollectionsDiscovererImp) handleIncomingNewCollection(logger log.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger.Println("HTTP-REQ", "New collection creation request received through HTTP request", log.INFO)
+
+		defer r.Body.Close()
+
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var msg gossip.NewCollectionMessage
+		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
+			logger.Println("HTTP-REQ", "Error parsing new collection message", log.ERROR)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		collectionId := msg.CollectionId
+		isStrong := msg.IsStrong
+
+		//sync
+		c.collectionsPartialView.Mutex.Lock()
+		defer c.collectionsPartialView.Mutex.Unlock()
+
+		_, exists := c.collectionsPartialView.KnownCollections[collectionId]
+		if exists {
+			logger.Println("HTTP-REQ", "Collection already exists", log.ERROR)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+
+		// Process the new collection creation
+		if isStrong {
+			c.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, 0, true, false) // remote strong collection
+		} else {
+			c.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, 0, true) // remote weak collection
+		}
+		c.collectionsPartialView.KnownCollections[collectionId].AddHost(msg.SenderIp)
+
+		//propagate update to father
+		if c.serverInfo.Father != nil {
+			msg.SenderIp = c.serverInfo.HostName
+			c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, msg)
+		}
+
 	})
 }

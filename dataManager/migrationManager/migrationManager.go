@@ -86,6 +86,9 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.dbInterface = dbInterface
 		m.lruCache = lruCache
 		m.config = config
+
+		//m.collectionsLock = &collections.Mutex
+		m.collectionsLock = &sync.Mutex{}
 		//prepare server
 		m.sender = sender.NewMigrationManagerSender(m.logger, server, serverInfo)
 		server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages(logger).ServeHTTP)

@@ -32,6 +32,7 @@ type DataManager interface {
 	GetRecords(collectionId string, recordNames ...string) ([]any, error)
 	SetRecords(collectionId string, recordNames []string, recordValues []string) error
 	PropagateUpdates(updates []messages.CollectionUpdate)
+	SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, isStrong bool) error
 }
 
 type DataManagerImp struct {
@@ -134,4 +135,14 @@ func (m *DataManagerImp) SetRecords(collectionId string, recordNames []string, r
 
 func (m *DataManagerImp) PropagateUpdates(updates []messages.CollectionUpdate) {
 	m.collectionsDiscoverer.PropagateUpdates(updates)
+}
+
+func (m *DataManagerImp) SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, isStrong bool) error {
+	return m.collectionsDiscoverer.SetCollectionAndProgate(
+		collectionId,
+		records,
+		groups,
+		m.migrationManager,
+		isStrong,
+	)
 }

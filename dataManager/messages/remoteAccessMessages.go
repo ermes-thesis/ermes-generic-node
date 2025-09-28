@@ -30,3 +30,9 @@ type CollectionUpdateMessage struct {
 	UpdateHostIp string   `json:"updateHostIp"`
 	SenderIp     string   `json:"senderIp"`
 }
+
+type NewCollectionMessage struct {
+	CollectionId string `json:"collectionId"`
+	IsStrong     bool   `json:"isStrong"`
+	SenderIp     string `json:"senderIp"`
+}

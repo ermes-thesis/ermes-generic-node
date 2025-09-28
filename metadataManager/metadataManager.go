@@ -15,11 +15,19 @@ import (
 	"tokenDecoder"
 )
 
-// map[tmpl_name]map[param_name]param_value
+// QueryTemplatesParamsMapping map[tmpl_name]map[param_name]param_value
 type QueryTemplatesParamsMapping[T any] map[string]map[string]T
+
+type GroupMessage []string
+
+func (g GroupMessage) IsPropagable() bool {
+	return true
+}
 
 type MetadataManager interface {
 	CreateMetadata(collectionId string, metadata utils.Metadata, reqOrigin PropagationOrigin) error
+	AddGroupToCollection(collectionId string, reqOrigin PropagationOrigin, groups ...string) error
+	RemoveGroupFromCollection(collectionId string, reqOrigin PropagationOrigin, groups ...string) error
 	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error)
 }
 
@@ -54,6 +62,14 @@ func (m *MetadataManagerImpl) RegisterRoutes(server server.ServerType, tokenDeco
 	if err != nil {
 		return fmt.Errorf("Error while registering /pvt-create-metadata/{collection_id} route: %v\n", err)
 	}
+	err = server.AddCustomRoute("/pvt-add-group/{collection_id}", true, m.handleRouteAddGroup())
+	if err != nil {
+		return fmt.Errorf("Error while registering /pvt-add-group/{collection_id} route: %v\n", err)
+	}
+	err = server.AddCustomRoute("/pvt-remove-group/{collection_id}", true, m.handleRouteRemoveGroup())
+	if err != nil {
+		return fmt.Errorf("Error while registering /pvt-remove-group/{collection_id} route: %v\n", err)
+	}
 	return nil
 }
 
@@ -81,13 +97,49 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata utils
 		}
 	}
 
-	err := m.metadataPropagator.Propagate(collectionId, metadata, reqOrigin)
+	err := m.metadataPropagator.Propagate(collectionId, metadata, metadata.Geolocation, reqOrigin, CREATE)
 	if err != nil {
 		fmt.Fprintf(m.logger, "Error propagating metadata: %v\n", err)
 		return err
 	}
 
 	return nil
+}
+
+func (m *MetadataManagerImpl) AddGroupToCollection(collectionId string, reqOrigin PropagationOrigin, groups ...string) error {
+	metadata, err := m.redis.GetMetadata(collectionId)
+	if err != nil {
+		return err
+	}
+
+	var geolocation string
+	if metadata != nil {
+		geolocation = metadata.Geolocation
+		err = m.redis.AddGroups(collectionId, groups...)
+		if err != nil {
+			return err
+		}
+	}
+
+	return m.metadataPropagator.Propagate(collectionId, GroupMessage(groups), geolocation, reqOrigin, UPDATE)
+}
+
+func (m *MetadataManagerImpl) RemoveGroupFromCollection(collectionId string, reqOrigin PropagationOrigin, groups ...string) error {
+	metadata, err := m.redis.GetMetadata(collectionId)
+	if err != nil {
+		return err
+	}
+
+	var geolocation string
+	if metadata != nil {
+		geolocation = metadata.Geolocation
+		err = m.redis.RemoveGroups(collectionId, groups...)
+		if err != nil {
+			return err
+		}
+	}
+
+	return m.metadataPropagator.Propagate(collectionId, GroupMessage(groups), geolocation, reqOrigin, DELETE)
 }
 
 func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error) {

@@ -37,7 +37,7 @@ func TestWasmPool(t *testing.T) {
 	executor := pool.Acquire()
 	defer executor.Release()
 
-	resp := executor.Invoke("auth_aot", "authEntry", []byte("token"))
+	resp := executor.Invoke("auth", "authEntry", []byte("token"))
 
 	fmt.Println("Auth function:", resp.HttpCode, resp.Response)
 
@@ -45,7 +45,7 @@ func TestWasmPool(t *testing.T) {
 	//response, resCode := executor.InvokeFn("function", req, ctx)
 	//fmt.Println("Invoke function:", string(response), resCode)
 
-	response := executor.Invoke("fun_aot", "entry", req, ctx)
+	response := executor.Invoke("fun", "entry", req, ctx)
 	fmt.Println("Invoke function:", response.Response, response.HttpCode)
 
 	if response.HttpCode != 200 {

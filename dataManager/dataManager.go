@@ -168,6 +168,14 @@ func (m *DataManagerImp) DeleteRecords(collectionId string, groups []string, rec
 		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
 		collectionId,
 		func() error {
+			authorized, err := m.dbInterface.IsInGroups(collectionId, groups...)
+			if err != nil {
+				return err
+			}
+			if !authorized {
+				return &shared.UnauthorizedError{}
+			}
+
 			return m.dbInterface.DeleteRecords(collectionId, recordNames...)
 		},
 		func(addr string) error {

@@ -15,6 +15,8 @@ type RemoteUpdateRequest struct {
 	RecordNames  []string `json:"recordNames"`
 	Record       []string `json:"records"`
 	Groups       []string `json:"groups"`
+	SenderIp     string   `json:"senderIp"`
+	IsDelete     bool     `json:"isDelete"`
 }
 
 type CollectionUpdate struct {
@@ -23,7 +25,6 @@ type CollectionUpdate struct {
 	RecordValues []string `json:"recordValue"`
 }
 
-// TODO: add machine id for disambiguity
 type CollectionUpdateMessage struct {
 	CollectionId string   `json:"collectionId"`
 	RecordNames  []string `json:"recordNames"`
@@ -31,4 +32,11 @@ type CollectionUpdateMessage struct {
 	Time         int64    `json:"time"`
 	UpdateHostIp string   `json:"updateHostIp"`
 	SenderIp     string   `json:"senderIp"`
+	IsDelete     bool     `json:"isDelete"`
+}
+
+type NewCollectionMessage struct {
+	CollectionId string `json:"collectionId"`
+	IsStrong     bool   `json:"isStrong"`
+	SenderIp     string `json:"senderIp"`
 }

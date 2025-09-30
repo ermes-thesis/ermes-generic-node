@@ -2,6 +2,7 @@ package collectionsDiscoverer
 
 import (
 	"dataManager/messages"
+	"dataManager/migrationManager"
 	"dataManager/sender"
 	shared "dataManager/shared"
 	"db"
@@ -23,7 +24,11 @@ type CollectionsDiscoverer interface {
 	WeakCollectionRemoteRecordWrite(hostId string, collectionId string, groups []string, recordNames string, value string) error
 	WeakCollectionRemoteRecordsWrite(hostId string, collectionId string, groups []string, recordNames []string, recordValues []string) error
 
-	PropagateUpdates(updates []messages.CollectionUpdate)
+	WeakCollectionRemoteRecordDelete(hostId string, collectionId string, groups []string, recordNames []string) error
+
+	PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool)
+
+	SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error
 }
 
 type CollectionsDiscovererImp struct {
@@ -58,6 +63,7 @@ func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialVie
 		server.AddCustomRoute(c.sender.RemoteAccessPath(), true, c.handleIncomingRemoteAccess().ServeHTTP)
 		server.AddCustomRoute(c.sender.RemoteUpdatePath(), true, c.handleIncomingRemoteUpdate().ServeHTTP)
 		server.AddCustomRoute(c.sender.UpdatePropagationPath(), true, c.handleIncomingUpdatePropagation().ServeHTTP)
+		server.AddCustomRoute(c.sender.CreateCollectionPropagationPath(), true, c.handleIncomingNewCollection().ServeHTTP)
 	})
 }
 
@@ -95,15 +101,19 @@ func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordsAccess(hostId stri
 }
 
 func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordWrite(hostId string, collectionId string, groups []string, recordName string, value string) error {
-	return c.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, groups, []string{recordName}, []string{value})
+	return c.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, groups, []string{recordName}, []string{value}, false, c.serverInfo)
 }
 
 func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordsWrite(hostId string, collectionId string, groups []string, recordNames []string, recordValues []string) error {
-	return c.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, groups, recordNames, recordValues)
+	return c.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, groups, recordNames, recordValues, false, c.serverInfo)
+}
+
+func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordDelete(hostId string, collectionId string, groups []string, recordNames []string) error {
+	return c.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, groups, recordNames, []string{}, true, c.serverInfo)
 }
 
 // use generics to preserve type-safety, unfortunately generics are not supported for methods.
-func AccessCollection[T any](
+func AccessRecords[T any](
 	c *CollectionsDiscovererImp,
 	collectionId string,
 	dbFn func() (T, error),
@@ -144,7 +154,7 @@ func AccessCollection[T any](
 	return remoteFn(oneKey)
 }
 
-func UpdateCollection(
+func UpdateRecords(
 	c *CollectionsDiscovererImp,
 	collectionId string,
 	dbFn func() error,
@@ -191,10 +201,10 @@ func UpdateCollection(
 	}
 
 	c.collectionsPartialView.Mutex.Unlock() // lock release
-	return dbFn()
+	return dbFn()                           // update in local db
 }
 
-func (c *CollectionsDiscovererImp) PropagateUpdates(updates []messages.CollectionUpdate) {
+func (c *CollectionsDiscovererImp) PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool) {
 	time := time.Now().Unix()
 	for _, update := range updates {
 		updateMessage := messages.CollectionUpdateMessage{
@@ -204,28 +214,34 @@ func (c *CollectionsDiscovererImp) PropagateUpdates(updates []messages.Collectio
 			Time:         time,
 			UpdateHostIp: c.serverInfo.HostName,
 			SenderIp:     c.serverInfo.HostName,
+			IsDelete:     isDelete,
+		}
+		if isDelete {
+			updateMessage.RecordValues = []string{}
 		}
 		//sync
 		c.collectionsPartialView.Mutex.Lock()
 		//imp
-		c.propagateUpdate(updateMessage, false, []string{})
+		c.propagateUpdate(updateMessage, false, []string{}, isDelete)
 
 		c.collectionsPartialView.Mutex.Unlock() // lock release
 	}
 }
 
-func (c *CollectionsDiscovererImp) propagateUpdate(updateMessage messages.CollectionUpdateMessage, toUpdate bool, ignoredIp []string) {
+func (c *CollectionsDiscovererImp) propagateUpdate(updateMessage messages.CollectionUpdateMessage, toUpdate bool, ignoredIp []string, isDelete bool) {
 	updateMessage.SenderIp = c.serverInfo.HostName
 	collection, exists := c.collectionsPartialView.KnownCollections[updateMessage.CollectionId]
 	if exists {
 		if collection.IsLocal() && !collection.IsStrong() { //check for conflicts
-			res := c.CheckUpdateConflicts(collection, updateMessage)
+			res := c.CheckUpdateConflicts(collection, updateMessage, isDelete)
 			if !res {
 				return
 			}
 		}
-		if toUpdate {
+		if toUpdate && !isDelete {
 			c.dbInterface.SetRecords(updateMessage.CollectionId, updateMessage.RecordNames, updateMessage.RecordValues)
+		} else if toUpdate && isDelete {
+			c.dbInterface.DeleteRecords(updateMessage.CollectionId, updateMessage.RecordNames...)
 		}
 
 		hosts := collection.HostsId()
@@ -246,7 +262,7 @@ func (c *CollectionsDiscovererImp) propagateUpdate(updateMessage messages.Collec
 	}
 }
 
-func (c *CollectionsDiscovererImp) CheckUpdateConflicts(collection shared.Collection, updateMessage messages.CollectionUpdateMessage) bool {
+func (c *CollectionsDiscovererImp) CheckUpdateConflicts(collection shared.Collection, updateMessage messages.CollectionUpdateMessage, isDelete bool) bool {
 	//check conflict
 	res := collection.(*shared.WeakCollection).SetLastUpdate(updateMessage.Time, updateMessage.UpdateHostIp)
 	if !res {
@@ -259,6 +275,7 @@ func (c *CollectionsDiscovererImp) CheckUpdateConflicts(collection shared.Collec
 		updateMessage := messages.CollectionUpdateMessage{
 			CollectionId: updateMessage.CollectionId,
 			RecordNames:  updateMessage.RecordNames,
+			IsDelete:     isDelete,
 			RecordValues: func() []string {
 				strRecords := make([]string, len(records))
 				for i, r := range records {
@@ -269,7 +286,7 @@ func (c *CollectionsDiscovererImp) CheckUpdateConflicts(collection shared.Collec
 			Time:         collection.(*shared.WeakCollection).GetLastUpdateTimeStamp(),
 			UpdateHostIp: collection.(*shared.WeakCollection).GetLastUpdateSenderIp(),
 		}
-		c.propagateUpdate(updateMessage, false, []string{})
+		c.propagateUpdate(updateMessage, false, []string{}, isDelete)
 		return false
 	}
 	return true
@@ -282,4 +299,47 @@ func contains(slice []string, str string) bool {
 		}
 	}
 	return false
+}
+
+func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error {
+	//sync
+	c.collectionsPartialView.Mutex.Lock()
+	defer c.collectionsPartialView.Mutex.Unlock()
+	//imp
+
+	//if collection  already exists return error
+	_, exists := c.collectionsPartialView.KnownCollections[collectionId]
+	if exists {
+		return errors.New("collection already exists")
+	}
+
+	//try to add collection in redis
+	dbErr := c.dbInterface.SetCollection(collectionId, records, groups)
+	if dbErr != nil {
+		return dbErr
+	}
+
+	//get size of collection in db
+	size, sizeErr := c.dbInterface.GetCollectionMemoryUsage(collectionId)
+	if sizeErr != nil {
+		return sizeErr
+	}
+
+	//add collection in local view
+	migrationManagerErr := migrationManager.NewCollectionCreated(collectionId, size, isStrong)
+	if migrationManagerErr != nil {
+		return migrationManagerErr
+	}
+
+	//propagate update to father
+	if c.serverInfo.Father != nil {
+		newCollectionMessage := messages.NewCollectionMessage{
+			CollectionId: collectionId,
+			IsStrong:     isStrong,
+			SenderIp:     c.serverInfo.HostName,
+		}
+		c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, newCollectionMessage)
+	}
+
+	return nil
 }

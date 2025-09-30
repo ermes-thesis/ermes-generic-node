@@ -51,7 +51,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 			remoteFn := func(addr string) (interface{}, error) {
 				return c.WeakCollectionRemoteRecordAccess(addr, msg.CollectionId, msg.Groups, msg.RecordNames[0])
 			}
-			res, dbErr = AccessCollection(c, msg.CollectionId, dbFn, remoteFn)
+			res, dbErr = AccessRecords(c, msg.CollectionId, dbFn, remoteFn)
 		} else {
 			dbFn := func() (interface{}, error) {
 				authorized, err := c.dbInterface.IsInGroups(msg.CollectionId, msg.Groups...)
@@ -69,7 +69,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 			remoteFn := func(addr string) (interface{}, error) {
 				return c.WeakCollectionRemoteRecordsAccess(addr, msg.CollectionId, msg.Groups, msg.RecordNames...)
 			}
-			res, dbErr = AccessCollection(c, msg.CollectionId, dbFn, remoteFn)
+			res, dbErr = AccessRecords(c, msg.CollectionId, dbFn, remoteFn)
 		}
 
 		resp := gossip.RemoteAccessResponse{
@@ -128,8 +128,12 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate() http.Handler {
 					return &shared.UnauthorizedError{}
 				}
 
-				//write in db
-				err = c.dbInterface.SetRecord(msg.CollectionId, msg.RecordNames[0], msg.Record[0])
+				//write or delete in db
+				if msg.IsDelete {
+					err = c.dbInterface.DeleteRecords(msg.CollectionId, msg.RecordNames[0])
+				} else {
+					err = c.dbInterface.SetRecord(msg.CollectionId, msg.RecordNames[0], msg.Record[0])
+				}
 				if err != nil {
 					return err
 				}
@@ -140,14 +144,21 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate() http.Handler {
 					RecordNames:  msg.RecordNames,
 					RecordValues: msg.Record,
 				}
-				c.PropagateUpdates([]gossip.CollectionUpdate{update})
+				c.PropagateUpdates([]gossip.CollectionUpdate{update}, msg.IsDelete)
 
 				return nil
 			}
-			remoteFn := func(addr string) error {
-				return c.WeakCollectionRemoteRecordWrite(addr, msg.CollectionId, msg.Groups, msg.RecordNames[0], msg.Record[0])
+			var remoteFn func(addr string) error
+			if msg.IsDelete {
+				remoteFn = func(addr string) error {
+					return c.WeakCollectionRemoteRecordDelete(addr, msg.CollectionId, msg.Groups, msg.RecordNames)
+				}
+			} else {
+				remoteFn = func(addr string) error {
+					return c.WeakCollectionRemoteRecordWrite(addr, msg.CollectionId, msg.Groups, msg.RecordNames[0], msg.Record[0])
+				}
 			}
-			dbErr = UpdateCollection(c, msg.CollectionId, dbFn, remoteFn)
+			dbErr = UpdateRecords(c, msg.CollectionId, dbFn, remoteFn)
 		} else {
 			dbFn := func() error {
 				authorized, err := c.dbInterface.IsInGroups(msg.CollectionId, msg.Groups...)
@@ -160,8 +171,12 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate() http.Handler {
 					return &shared.UnauthorizedError{}
 				}
 
-				//write in db
-				err = c.dbInterface.SetRecords(msg.CollectionId, msg.RecordNames, msg.Record)
+				//write or delete in db
+				if msg.IsDelete {
+					err = c.dbInterface.DeleteRecords(msg.CollectionId, msg.RecordNames...)
+				} else {
+					err = c.dbInterface.SetRecords(msg.CollectionId, msg.RecordNames, msg.Record)
+				}
 				if err != nil {
 					return err
 				}
@@ -172,14 +187,21 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate() http.Handler {
 					RecordNames:  msg.RecordNames,
 					RecordValues: msg.Record,
 				}
-				c.PropagateUpdates([]gossip.CollectionUpdate{update})
+				c.PropagateUpdates([]gossip.CollectionUpdate{update}, msg.IsDelete)
 
 				return nil
 			}
-			remoteFn := func(addr string) error {
-				return c.WeakCollectionRemoteRecordsWrite(addr, msg.CollectionId, msg.Groups, msg.RecordNames, msg.Record)
+			var remoteFn func(addr string) error
+			if msg.IsDelete {
+				remoteFn = func(addr string) error {
+					return c.WeakCollectionRemoteRecordDelete(addr, msg.CollectionId, msg.Groups, msg.RecordNames)
+				}
+			} else {
+				remoteFn = func(addr string) error {
+					return c.WeakCollectionRemoteRecordsWrite(addr, msg.CollectionId, msg.Groups, msg.RecordNames, msg.Record)
+				}
 			}
-			dbErr = UpdateCollection(c, msg.CollectionId, dbFn, remoteFn)
+			dbErr = UpdateRecords(c, msg.CollectionId, dbFn, remoteFn)
 		}
 
 		if dbErr != nil {
@@ -219,8 +241,60 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation() http.Handle
 		//sync
 		c.collectionsPartialView.Mutex.Lock()
 
-		c.propagateUpdate(msg, true, []string{address})
+		c.propagateUpdate(msg, true, []string{address}, msg.IsDelete)
 
 		c.collectionsPartialView.Mutex.Unlock() // lock release
+	})
+}
+
+func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c.log.Info("HTTP-REQ: New collection creation request received through HTTP request")
+
+		defer r.Body.Close()
+
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			c.log.Error("HTTP-REQ: Error reading request body")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var msg gossip.NewCollectionMessage
+		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
+			c.log.Error("HTTP-REQ: Error parsing new collection message")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		collectionId := msg.CollectionId
+		isStrong := msg.IsStrong
+
+		//sync
+		c.collectionsPartialView.Mutex.Lock()
+		defer c.collectionsPartialView.Mutex.Unlock()
+
+		_, exists := c.collectionsPartialView.KnownCollections[collectionId]
+		if exists {
+			c.log.Error("HTTP-REQ: Collection already exists")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+
+		// Process the new collection creation
+		if isStrong {
+			c.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, 0, true, false) // remote strong collection
+		} else {
+			c.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, 0, true) // remote weak collection
+		}
+		c.collectionsPartialView.KnownCollections[collectionId].AddHost(msg.SenderIp)
+
+		//propagate update to father
+		if c.serverInfo.Father != nil {
+			msg.SenderIp = c.serverInfo.HostName
+			c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, msg)
+		}
+
 	})
 }

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+	"logger"
 	"net"
 	"net/http"
 	"os"
@@ -23,24 +23,23 @@ type ServerType interface {
 type Server struct {
 	*http.Server
 	ServerInfo *info.ServerInfo
-	Logger     io.Writer
+	logger     *logger.Logger
 	Handler    *http.ServeMux
 	ClientRepo *clientrepo.ClientRepo
 }
 
-func NewServer(logger io.Writer, serverInfo *info.ServerInfo) (*Server, error) {
-
-	fmt.Fprintf(logger, "Creating a new Server instance... \n")
+func NewServer(log *logger.Logger, serverInfo *info.ServerInfo) (*Server, error) {
+	log.Info("Creating a new Server instance...")
 
 	mux := http.NewServeMux()
 
-	fmt.Fprintf(logger, "Mux created correctly \n")
+	log.Info("Mux created correctly")
 
-	fmt.Fprintf(logger, "Creating server data structure... ")
+	log.Info("Creating server data structure...")
 
 	ser := &Server{
 		ServerInfo: serverInfo,
-		Logger:     logger,
+		logger:     log,
 		ClientRepo: clientrepo.CreateClientRepo(),
 		Handler:    mux,
 		Server: &http.Server{
@@ -49,13 +48,13 @@ func NewServer(logger io.Writer, serverInfo *info.ServerInfo) (*Server, error) {
 		},
 	}
 
-	fmt.Fprintf(logger, "done \n")
+	log.Info("done")
 
-	fmt.Fprintf(logger, "Adding correct routes to the server... ")
+	log.Info("Adding correct routes to the server...")
 
 	ser.compileRoutes()
 
-	fmt.Fprintf(logger, "done \n")
+	log.Info("done")
 
 	return ser, nil
 
@@ -73,7 +72,7 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo string, messageContent interface{}) (*http.Response, error) {
 	// Check if the node to is correctly formatted
 
-	fmt.Fprintf(s.Logger, "got a generic request %s \n", pathTo)
+	s.logger.Infof("got a generic request %s", pathTo)
 
 	// Check if the node is valid TODO: refactor with slices if possible
 
@@ -86,14 +85,14 @@ func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo stri
 	}
 
 	if s.ServerInfo.Father.HostName != nodeTo && !ok {
-		fmt.Fprintf(s.Logger, "request should be sent to %s , which is not a known node. \n", nodeTo)
+		s.logger.Infof("request should be sent to %s , which is not a known node.", nodeTo)
 
 		return nil, errors.New("node not in the hierarchy, cannot send request")
 	}
 
 	reqUrl := fmt.Sprintf("http://%s%s", nodeTo, pathTo)
 
-	fmt.Fprintf(s.Logger, "Sending request to node: %s \n", reqUrl)
+	s.logger.Infof("Sending request to node: %s \n", reqUrl)
 
 	jsonBody, err := json.Marshal(messageContent)
 
@@ -118,7 +117,7 @@ func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo stri
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-ERMES-SECRET", s.ServerInfo.Secret)
 
-	fmt.Fprintf(s.Logger, "Request is ready, now sending it ...\n")
+	s.logger.Info("Request is ready, now sending it ...")
 
 	res, err := client.CustomClient.Do(req)
 

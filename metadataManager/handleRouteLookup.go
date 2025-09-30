@@ -10,7 +10,7 @@ import (
 
 func (m *MetadataManagerImpl) handleRouteLookup(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(m.logger, "got /pvt-lookup \n")
+		m.log.Info("got /pvt-lookup")
 
 		fnName := r.Header.Get("X-ERMES-REQ-FUNCTION")
 		fnVersion := r.Header.Get("X-ERMES-REQ-FUNCTION-VERSION")
@@ -32,7 +32,7 @@ func (m *MetadataManagerImpl) handleRouteLookup(tokenDecoder tokenDecoder.TokenD
 			return
 		}
 
-		fmt.Fprintf(m.logger, "Queries executed successfully, returning results.\n")
+		m.log.Info("Queries executed successfully, returning results.")
 		w.Header().Set("Content-Type", "application/json")
 		response, err := json.Marshal(queryResults)
 		if err != nil {

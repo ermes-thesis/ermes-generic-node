@@ -2,17 +2,16 @@ package private
 
 import (
 	"errors"
-	"fmt"
-	"io"
+	"logger"
 	"net/http"
 	"server/helper"
 	"server/info"
 )
 
-func HandleRoutePvtDataTransferRequest(logger *io.Writer, serverInfo *info.ServerInfo) http.HandlerFunc {
+func HandleRoutePvtDataTransferRequest(logger *logger.Logger, serverInfo *info.ServerInfo) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 
-		fmt.Fprintf(*logger, "got /data-transfer-request")
+		logger.Info("got /data-transfer-request")
 
 		// I received the request and it has already been authorized
 
@@ -27,10 +26,10 @@ func HandleRoutePvtDataTransferRequest(logger *io.Writer, serverInfo *info.Serve
 		if err != nil {
 			var mr *helper.MalformedRequest
 			if errors.As(err, &mr) {
-				fmt.Fprintf(*logger, "The request could not be decoded correctly.\n")
+				logger.Error("The request could not be decoded correctly.")
 				http.Error(w, mr.Msg, mr.Status)
 			} else {
-				fmt.Fprintln(*logger, err.Error())
+				logger.Error(err.Error())
 				http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			}
 

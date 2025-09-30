@@ -9,24 +9,32 @@ import (
 	migrationManager "dataManager/migrationManager"
 	penality "dataManager/migrationManager/penalityFunction"
 	"fmt"
-	"io"
-	logger "logger"
-	"os"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
+	"logger"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/mock"
 )
 
+func createNewLogger(t *testing.T) *logger.Logger {
+	log, err := logger.NewLogger(logger.Config{
+		Level:  zerolog.DebugLevel,
+		Format: "text",
+	})
+	require.NoError(t, err)
+	return log
+}
+
 func TestFromRemoteToLocalCollection(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
-	var loggerFile io.Writer = os.Stdout //TODO replace with file
-	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
-	mig := migrationManager.GetMigrationManagerInstance(*logger)
-	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
-	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
-	clDiscovererImp.Init(collections, serverinfo, ser, *logger, db)
+	log := createNewLogger(t)
+	mig := migrationManager.GetMigrationManagerInstance()
+	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
+	clDiscovererImp.Init(collections, serverinfo, ser, db, log)
 	mig.ManageNewRequest("repoId", "childName", true, 3)
 
 	b, c, d := clDiscovererImp.IsCollectionLocallyPresent("repoId", 0)
@@ -52,14 +60,12 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 
 func TestIterationModule(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := CycleTestSetUp(t)
-	var loggerFile io.Writer = os.Stdout //TODO replace with file
-	var logger = logger.NewLogger(logger.INFO, &loggerFile)
-	logger.SetAllowList([]string{"SENDER"}) // , "DEFAULT-STRONG-POLICY"
+	log := createNewLogger(t)
 
-	mig := migrationManager.GetMigrationManagerInstance(*logger)
-	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
-	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
-	clDiscovererImp.Init(collections, serverinfo, ser, *logger, db)
+	mig := migrationManager.GetMigrationManagerInstance()
+	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
+	clDiscovererImp.Init(collections, serverinfo, ser, db, log)
 
 	// SET INITIAL STATE
 	fmt.Println("SET INITIAL STATE")

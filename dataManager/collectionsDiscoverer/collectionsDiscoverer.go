@@ -6,7 +6,7 @@ import (
 	shared "dataManager/shared"
 	"db"
 	"errors"
-	log "logger"
+	"logger"
 	"server"
 	"server/info"
 	"sync"
@@ -15,7 +15,7 @@ import (
 
 type CollectionsDiscoverer interface {
 	IsCollectionLocallyPresent(collectionId string, consistencyClock uint64) (bool, shared.Collection, error)
-	Init(*shared.CollectionPartialView, info.ServerInfo, server.ServerType, log.Logger, db.GenericDB)
+	Init(*shared.CollectionPartialView, info.ServerInfo, server.ServerType, db.GenericDB, *logger.Logger)
 
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, recordNames string) (string, error)
 	WeakCollectionRemoteRecordsAccess(hostId string, collectionId string, groups []string, recordNames ...string) ([]any, error)
@@ -31,7 +31,7 @@ type CollectionsDiscovererImp struct {
 	collectionsPartialView *shared.CollectionPartialView
 	serverInfo             info.ServerInfo
 	sender                 sender.CollectionDiscovererSender
-	logger                 log.Logger
+	log                    *logger.Logger
 	dbInterface            db.GenericDB
 }
 
@@ -40,24 +40,24 @@ var collectionsDiscovererInstance CollectionsDiscoverer
 var once sync.Once
 var initOnce sync.Once
 
-func GetCollectionsDiscovererInstance(logger log.Logger) CollectionsDiscoverer {
+func GetCollectionsDiscovererInstance() CollectionsDiscoverer {
 	once.Do(func() {
 		collectionsDiscovererInstance = &CollectionsDiscovererImp{}
 	})
 	return collectionsDiscovererInstance
 }
 
-func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo info.ServerInfo, server server.ServerType, logger log.Logger, dbInterface db.GenericDB) {
+func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo info.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger *logger.Logger) {
 	initOnce.Do(func() {
 		c.collectionsPartialView = collections
 		c.serverInfo = serverInfo
-		c.logger = logger
+		c.log = logger
 		c.sender = sender.NewCollectionDiscovererSender(logger, server)
 		c.dbInterface = dbInterface
 
-		server.AddCustomRoute(c.sender.RemoteAccessPath(), true, c.handleIncomingRemoteAccess(logger).ServeHTTP)
-		server.AddCustomRoute(c.sender.RemoteUpdatePath(), true, c.handleIncomingRemoteUpdate(logger).ServeHTTP)
-		server.AddCustomRoute(c.sender.UpdatePropagationPath(), true, c.handleIncomingUpdatePropagation(logger).ServeHTTP)
+		server.AddCustomRoute(c.sender.RemoteAccessPath(), true, c.handleIncomingRemoteAccess().ServeHTTP)
+		server.AddCustomRoute(c.sender.RemoteUpdatePath(), true, c.handleIncomingRemoteUpdate().ServeHTTP)
+		server.AddCustomRoute(c.sender.UpdatePropagationPath(), true, c.handleIncomingUpdatePropagation().ServeHTTP)
 	})
 }
 

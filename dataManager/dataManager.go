@@ -4,12 +4,12 @@ import (
 	"config"
 	"dataManager/collectionsDiscoverer"
 	"dataManager/lru"
-	messages "dataManager/messages"
+	"dataManager/messages"
 	"dataManager/migrationManager"
 	penality "dataManager/migrationManager/penalityFunction"
 	shared "dataManager/shared"
 	"db"
-	log "logger"
+	"logger"
 	"server"
 	"server/info"
 	"sync"
@@ -17,7 +17,7 @@ import (
 
 type DataManager interface {
 	// Init initialize the singleton pattern
-	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger log.Logger)
+	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger)
 
 	//sub components
 	GetMigrationManager() migrationManager.MigrationManager
@@ -44,19 +44,19 @@ var dataManagerInstance *DataManagerImp
 var once sync.Once
 var initOnce sync.Once
 
-func GetDataManagerInstance(logger log.Logger) DataManager {
+func GetDataManagerInstance() DataManager {
 	once.Do(func() {
 		dataManagerInstance = &DataManagerImp{}
-		dataManagerInstance.setMigrationManager(migrationManager.GetMigrationManagerInstance(logger))
-		dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererInstance(logger))
+		dataManagerInstance.setMigrationManager(migrationManager.GetMigrationManagerInstance())
+		dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererInstance())
 	})
 	return dataManagerInstance
 }
 
-func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger log.Logger) {
+func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger) {
 	initOnce.Do(func() {
 		m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger)
-		m.collectionsDiscoverer.Init(collections, serverInfo, server, logger, dbInterface)
+		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger)
 
 		m.dbInterface = dbInterface
 	})

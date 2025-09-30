@@ -4,7 +4,6 @@ import (
 	gossip "dataManager/messages"
 	"db"
 	"fmt"
-	"logger"
 )
 
 // MigrationManagerGossipState
@@ -38,7 +37,7 @@ func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string
 func (m *MigrationManagerGossipState) SendGossipMessages() {
 	memStats, err := m.dbInterface.GetMemoryStats()
 	if err != nil {
-		m.policy.logger.Println("GOSSIP-STATE", fmt.Sprintf("failed to get memory stats: %v", err), logger.ERROR)
+		m.policy.log.Errorf("GOSSIP-STATE, failed to get memory stats: %v", err)
 	}
 	redisFreeSize := 1.0 - memStats.UsedMemoryDatasetPercentage
 

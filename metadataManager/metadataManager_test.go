@@ -6,7 +6,6 @@ import (
 	"metadataManager/utils"
 	"mocks/caches"
 	"mocks/metadataManager"
-	"os"
 	"server/info"
 	"testing"
 	"time"
@@ -16,8 +15,6 @@ import (
 )
 
 func TestExecuteQueries(t *testing.T) {
-	// Create a logger
-	logger := os.Stdout
 
 	redisClient, shutdownFun := startRedisContainer(t, false)
 	defer shutdownFun()
@@ -82,7 +79,8 @@ func TestExecuteQueries(t *testing.T) {
 	fnCache.EXPECT().GetTemplate(requestedFnName, requestedFnVersion, "gt_data_query").Return(&q2, nil)
 
 	// Create a new MetadataManager instance
-	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, logger, fnCache)
+	metadataLog := createNewLogger(t)
+	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, metadataLog, fnCache)
 
 	// Execute the query
 	result, err := manager.ExecuteQueries(requestedFnName, requestedFnVersion, string(queryParams), []string{"groupC"}, "boh", "IT/Milan")
@@ -105,9 +103,6 @@ func TestExecuteQueries(t *testing.T) {
 }
 
 func TestCreateMetadata(t *testing.T) {
-	// Create a logger
-	logger := os.Stdout
-
 	redisClient, shutdownFun := startRedisContainer(t, false)
 	defer shutdownFun()
 	defer redisClient.Close()
@@ -133,7 +128,8 @@ func TestCreateMetadata(t *testing.T) {
 	mPropagator.EXPECT().Propagate("collection_id_test", metadata, metadata.Geolocation, metadataManager.FROM_LOCAL, metadataManager.CREATE).Return(nil).Once()
 
 	fnCache := &caches_mock.FunctionCache{}
-	manager := metadataManager.CreateMetadataManagerWithMocks(redisClient, srvInfo, logger, nil, mPropagator, fnCache)
+	log := createNewLogger(t)
+	manager := metadataManager.CreateMetadataManagerWithMocks(redisClient, srvInfo, log, nil, mPropagator, fnCache)
 
 	// Execute the query
 	err := manager.CreateMetadata("collection_id_test", metadata, metadataManager.FROM_LOCAL)

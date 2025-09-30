@@ -5,7 +5,7 @@ import (
 	"db"
 	"encoding/json"
 	"fmt"
-	"io"
+	"logger"
 	"metadataManager/utils"
 	"os"
 	"server"
@@ -33,7 +33,7 @@ type MetadataManager interface {
 
 type MetadataManagerImpl struct {
 	redis              db.GenericDB
-	logger             io.Writer
+	log                *logger.Logger
 	templateCache      caches.FunctionCache
 	serverInfo         *info.ServerInfo
 	queryPropagator    QueryPropagator
@@ -41,14 +41,14 @@ type MetadataManagerImpl struct {
 	customMetadataKeys []string
 }
 
-func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, logger io.Writer, cache caches.FunctionCache) *MetadataManagerImpl {
+func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, log *logger.Logger, cache caches.FunctionCache) *MetadataManagerImpl {
 	return &MetadataManagerImpl{
 		redis:              redis,
-		logger:             logger,
+		log:                log,
 		templateCache:      cache,
 		serverInfo:         serverInfo,
-		queryPropagator:    NewQueryPropagator(serverInfo, &logger),
-		metadataPropagator: NewMetadataPropagator(serverInfo, &logger),
+		queryPropagator:    NewQueryPropagator(serverInfo, log),
+		metadataPropagator: NewMetadataPropagator(serverInfo, log),
 		customMetadataKeys: []string{},
 	}
 }
@@ -84,7 +84,7 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata utils
 		if len(newMetadata) > 0 {
 			err := m.redis.AlterIndex(newMetadata...)
 			if err != nil {
-				fmt.Fprintf(m.logger, "Error altering index in Redis: %v\n", err)
+				m.log.Errorf("Error altering index in Redis: %v", err)
 				return err
 			}
 			m.customMetadataKeys = append(m.customMetadataKeys, newMetadata...)
@@ -92,14 +92,14 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata utils
 
 		err := m.redis.SetMetadata(collectionId, metadata)
 		if err != nil {
-			fmt.Fprintf(m.logger, "Error setting metadata in Redis: %v\n", err)
+			m.log.Errorf("Error setting metadata in Redis: %v", err)
 			return err
 		}
 	}
 
 	err := m.metadataPropagator.Propagate(collectionId, metadata, metadata.Geolocation, reqOrigin, CREATE)
 	if err != nil {
-		fmt.Fprintf(m.logger, "Error propagating metadata: %v\n", err)
+		m.log.Errorf("Error propagating metadata: %v", err)
 		return err
 	}
 
@@ -161,18 +161,18 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 			if query, err := m.templateCache.GetTemplate(functionName, functionVersion, templateName); err == nil {
 				err = query.ReplacePlaceholderFromStrings(params)
 				if err != nil {
-					fmt.Fprintf(m.logger, "Error replacing placeholders in templateParamsMapping: %v\n", err)
+					m.log.Errorf("Error replacing placeholders in templateParamsMapping: %v", err)
 					return nil, err
 				}
 
 				if err = query.Validate(); err != nil {
-					fmt.Fprintf(m.logger, "Error validating templateParamsMapping: %v\n", err)
+					m.log.Errorf("Error validating templateParamsMapping: %v", err)
 					return nil, err
 				}
 
 				collInfo, err := m.redis.SearchOnMetadata(*query, groups)
 				if err != nil {
-					fmt.Fprintf(m.logger, "Error executing templateParamsMapping: %v\n", err)
+					m.log.Errorf("Error executing templateParamsMapping: %v", err)
 					return nil, err
 				}
 				if len(collInfo) > 0 {

@@ -4,6 +4,9 @@ import (
 	"config"
 	"context"
 	"db/redis"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
+	"logger"
 	"net/url"
 	"testing"
 
@@ -45,6 +48,16 @@ import (
 //	return "172.17.0.1"
 //}
 
+func createNewLogger(t *testing.T) *logger.Logger {
+	log, err := logger.NewLogger(logger.Config{
+		Level:     zerolog.DebugLevel,
+		Format:    "text",
+		AddSource: false,
+	})
+	require.NoError(t, err)
+	return log
+}
+
 func StartRedisTestContainer(t *testing.T) (*redis.RedisClient, func()) {
 	//if !IsWSL() {
 	//	t.Setenv("TESTCONTAINERS_HOST_OVERRIDE", GetDockerHost())
@@ -67,13 +80,14 @@ func StartRedisTestContainer(t *testing.T) (*redis.RedisClient, func()) {
 	connectionString, _ := redisContainer.ConnectionString(ctx)
 	parsedUrl, _ := url.Parse(connectionString)
 
+	log := createNewLogger(t)
 	client := redis.NewRedisClient(config.RedisConfig{
 		Address:  parsedUrl.Hostname(),
 		Port:     parsedUrl.Port(),
 		Password: "",
 		DB:       0,
 		Protocol: 2,
-	}, ctx)
+	}, ctx, log)
 
 	return client, func() {
 		if err := redisContainer.Terminate(ctx); err != nil {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"logger"
 	"metadataManager"
 	"metadataManager/utils"
 	"net/http"
@@ -33,16 +34,16 @@ type SchedulerImpl struct {
 	cache            caches.FunctionCache
 	wasmExecutorPool wasm.ExecutorPool
 	serverInfo       *info.ServerInfo
-	logger           io.Writer
+	log              *logger.Logger
 }
 
-func NewScheduler(dataManager datamanager.DataManager, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *info.ServerInfo, logger io.Writer) *SchedulerImpl {
+func NewScheduler(dataManager datamanager.DataManager, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *info.ServerInfo, logger *logger.Logger) *SchedulerImpl {
 	return &SchedulerImpl{
 		dataManager:      dataManager,
 		cache:            cache,
 		wasmExecutorPool: wasmExecutorPool,
 		serverInfo:       serverInfo,
-		logger:           logger,
+		log:              logger,
 	}
 }
 

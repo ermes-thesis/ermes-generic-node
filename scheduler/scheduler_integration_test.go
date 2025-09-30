@@ -4,7 +4,10 @@ import (
 	"caches/metadata"
 	shared "dataManager/shared"
 	"encoding/json"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
 	"io"
+	"logger"
 	"metadataManager/utils"
 	"mocks/caches"
 	datamanager_mock "mocks/dataManager"
@@ -16,7 +19,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"scheduler"
 	"server"
 	"server/info"
@@ -27,6 +29,16 @@ import (
 	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
 	"github.com/stretchr/testify/assert"
 )
+
+func createNewLogger(t *testing.T) *logger.Logger {
+	log, err := logger.NewLogger(logger.Config{
+		Level:     zerolog.DebugLevel,
+		Format:    "text",
+		AddSource: false,
+	})
+	require.NoError(t, err)
+	return log
+}
 
 func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
@@ -82,9 +94,11 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFatherLog := createNewLogger(t)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
+	fatherLog := createNewLogger(t)
+	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
@@ -137,8 +151,11 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
 	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
+	schedulerLog := createNewLogger(t)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerLog)
+
+	childLog := createNewLogger(t)
+	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
@@ -257,9 +274,11 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 	wasmExecutorPoolFather.EXPECT().Acquire().Return(wasmExecutorFather)
 
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerLog := createNewLogger(t)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerLog)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
+	fatherLog := createNewLogger(t)
+	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
@@ -305,8 +324,11 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
+	schedulerChildLog := createNewLogger(t)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+
+	childLog := createNewLogger(t)
+	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
@@ -390,9 +412,11 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFatherLog := createNewLogger(t)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
+	fatherLog := createNewLogger(t)
+	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
@@ -433,8 +457,11 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
+	schedulerChildLog := createNewLogger(t)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+
+	childLog := createNewLogger(t)
+	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
@@ -529,9 +556,11 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 	wasmExecutorPoolFather.EXPECT().Acquire().Return(wasmExecutorFather)
 
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFatherLog := createNewLogger(t)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
+	fatherLog := createNewLogger(t)
+	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
@@ -566,8 +595,11 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
+	schedulerChildLog := createNewLogger(t)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+
+	childLog := createNewLogger(t)
+	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
@@ -658,9 +690,11 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFatherLog := createNewLogger(t)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
+	fatherLog := createNewLogger(t)
+	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
@@ -703,8 +737,11 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
+	schedulerChildLog := createNewLogger(t)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+
+	childLog := createNewLogger(t)
+	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
@@ -790,9 +827,11 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFatherLog := createNewLogger(t)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
+	fatherLog := createNewLogger(t)
+	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
@@ -833,8 +872,11 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
+	schedulerChildLog := createNewLogger(t)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+
+	childLog := createNewLogger(t)
+	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
@@ -940,9 +982,11 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFatherLog := createNewLogger(t)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
+	fatherLog := createNewLogger(t)
+	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
@@ -996,8 +1040,11 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
+	schedulerChildLog := createNewLogger(t)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+
+	childLog := createNewLogger(t)
+	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
@@ -1091,9 +1138,11 @@ func TestScheduleThreeNodes(t *testing.T) {
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, os.Stdout)
+	schedulerFatherLog := createNewLogger(t)
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
 
-	serverFather, err := server.NewServer(os.Stdout, serverInfoFather)
+	fatherLog := createNewLogger(t)
+	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
@@ -1134,8 +1183,11 @@ func TestScheduleThreeNodes(t *testing.T) {
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, os.Stdout)
-	serverChild, err := server.NewServer(os.Stdout, serverInfoChild)
+	schedulerChildLog := createNewLogger(t)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+
+	childLog := createNewLogger(t)
+	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
@@ -1188,8 +1240,11 @@ func TestScheduleThreeNodes(t *testing.T) {
 	dataManagerChild2.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild2)
 	dataManagerChild2.EXPECT().GetMigrationManager().Return(migrationManagerChild2)
 
-	schedulerChild2 := scheduler.NewScheduler(dataManagerChild2, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, os.Stdout)
-	serverChild2, err := server.NewServer(os.Stdout, serverInfoChild2)
+	schedulerChild2Log := createNewLogger(t)
+	schedulerChild2 := scheduler.NewScheduler(dataManagerChild2, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, schedulerChild2Log)
+
+	child2Log := createNewLogger(t)
+	serverChild2, err := server.NewServer(child2Log, serverInfoChild2)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = schedulerChild2.RegisterRoutes(serverChild2, tknDecoderChild2, metadataManager)

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"logger"
 	"metadataManager/utils"
 	"net/http"
 	"os"
@@ -39,25 +40,25 @@ type QueryPropagator interface {
 
 type QueryPropagatorImpl struct {
 	serverInfo *info.ServerInfo
-	logger     *io.Writer
+	log        *logger.Logger
 }
 
-func NewQueryPropagator(serverInfo *info.ServerInfo, logger *io.Writer) QueryPropagator {
+func NewQueryPropagator(serverInfo *info.ServerInfo, log *logger.Logger) QueryPropagator {
 	return &QueryPropagatorImpl{
 		serverInfo: serverInfo,
-		logger:     logger,
+		log:        log,
 	}
 }
 
 func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error) {
-	fmt.Fprintf(*p.logger, "No geolocation provided in the request header.\n")
+	p.log.Info("No geolocation provided in the request header.")
 
 	var receiver string
 	if p.serverInfo.CloudNode == nil || strings.HasPrefix(p.serverInfo.MetadataDomain, geolocation) {
-		fmt.Fprintf(*p.logger, "No cloud node configured, forwarding to parent node.\n")
+		p.log.Info("No cloud node configured, forwarding to parent node.")
 		receiver = p.serverInfo.Father.HostName
 	} else {
-		fmt.Fprintf(*p.logger, "Using cloud node %s for the request.\n", p.serverInfo.CloudNode.HostName)
+		p.log.Info("Using cloud node %s for the request.\n", p.serverInfo.CloudNode.HostName)
 		receiver = p.serverInfo.CloudNode.HostName
 	}
 
@@ -106,22 +107,22 @@ type MetadataPropagator interface {
 
 type MetadataPropagatorImpl struct {
 	serverInfo *info.ServerInfo
-	logger     *io.Writer
+	log        *logger.Logger
 }
 
-func NewMetadataPropagator(serverInfo *info.ServerInfo, logger *io.Writer) *MetadataPropagatorImpl {
+func NewMetadataPropagator(serverInfo *info.ServerInfo, log *logger.Logger) *MetadataPropagatorImpl {
 	return &MetadataPropagatorImpl{
 		serverInfo: serverInfo,
-		logger:     logger,
+		log:        log,
 	}
 }
 
 func (p *MetadataPropagatorImpl) Propagate(collectionId string, obj Propagable, geolocation string, reqOrigin PropagationOrigin, action MetadataAction) error {
-	fmt.Fprintf(*p.logger, "Starting to propagating metadata...\n")
+	p.log.Info("Starting to propagating metadata...")
 
 	body, err := json.Marshal(obj)
 	if err != nil {
-		fmt.Fprintf(*p.logger, "Error marshalling metadata: %v\n", err)
+		p.log.Infof("Error marshalling metadata: %v", err)
 		return err
 	}
 
@@ -131,7 +132,7 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, obj Propagable, 
 			if strings.HasPrefix(geolocation, child.MetadataDomain) {
 				err = p.sendHttpReqToDest(child.HostName, collectionId, body, action)
 				if err != nil {
-					fmt.Fprintf(*p.logger, "Error sending request to child : %v\n", err)
+					p.log.Errorf("Error sending request to child: %v\n", err)
 					return err
 				}
 
@@ -142,7 +143,7 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, obj Propagable, 
 		if p.serverInfo.Father != nil {
 			err = p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, body, action)
 			if err != nil {
-				fmt.Fprintf(*p.logger, "Error sending request to father : %v\n", err)
+				p.log.Errorf("Error sending request to father : %v\n", err)
 				return err
 			}
 		}
@@ -150,7 +151,7 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, obj Propagable, 
 		if p.serverInfo.Father != nil {
 			err = p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, body, action)
 			if err != nil {
-				fmt.Fprintf(*p.logger, "Error sending request to father : %v\n", err)
+				p.log.Errorf("Error sending request to father : %v\n", err)
 				return err
 			}
 		}
@@ -159,7 +160,7 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, obj Propagable, 
 			if strings.HasPrefix(geolocation, child.MetadataDomain) {
 				err = p.sendHttpReqToDest(child.HostName, collectionId, body, action)
 				if err != nil {
-					fmt.Fprintf(*p.logger, "Error sending request to child : %v\n", err)
+					p.log.Errorf("Error sending request to child : %v\n", err)
 					return err
 				}
 
@@ -182,7 +183,7 @@ func (p *MetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId str
 	}
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/%s/%s", dest, endpoint, collectionId), bytes.NewReader(body))
 	if err != nil {
-		fmt.Fprintf(*p.logger, "Error creating request: %v\n", err)
+		p.log.Errorf("Error creating request: %v", err)
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
@@ -191,7 +192,7 @@ func (p *MetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId str
 
 	resp, err := client.CustomClient.Do(req)
 	if err != nil {
-		fmt.Fprintf(*p.logger, "[%s] Error sending request: %v\n", p.serverInfo.MetadataDomain, err)
+		p.log.Errorf("[%s] Error sending request: %v\n", p.serverInfo.MetadataDomain, err)
 		return err
 	}
 	defer resp.Body.Close()

@@ -12,7 +12,7 @@ import (
 
 func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(s.logger, "got offloaded function invocation \n")
+		s.log.Info("got offloaded function invocation")
 		defer r.Body.Close()
 
 		fnName := r.PathValue("name")
@@ -21,7 +21,7 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 			fnVersion = "latest"
 		}
 
-		fmt.Fprintf(s.logger, "Function name: %s, version: %s\n", fnName, fnVersion)
+		s.log.Infof("Function name: %s, version: %s", fnName, fnVersion)
 
 		collectionJson := r.Header.Get("X-ERMES-COLLECTIONS")
 		groupToken := r.Header.Get("X-ERMES-GROUPS")

@@ -4,27 +4,26 @@ import (
 	gossip "dataManager/messages"
 	"encoding/json"
 	"io"
-	log "logger"
 	"net"
 	"net/http"
 )
 
-func (m *MigrationManagerImp) handleIncomingGossipMessages(logger log.Logger) http.Handler {
+func (m *MigrationManagerImp) handleIncomingGossipMessages() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("HTTP-REQ", "New gossip message received through HTTP request", log.INFO)
+		m.log.Info("HTTP-REQ, New gossip message received through HTTP request")
 
 		defer r.Body.Close()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			m.log.Error("HTTP-REQ, Error reading request body")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		var baseMsg gossip.BaseGossipMessage
 		if err := json.Unmarshal(bodyBytes, &baseMsg); err != nil {
-			logger.Println("HTTP-REQ", "Error parsing base message", log.ERROR)
+			m.log.Error("HTTP-REQ, Error parsing base message")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -35,7 +34,7 @@ func (m *MigrationManagerImp) handleIncomingGossipMessages(logger log.Logger) ht
 		case "HW_STATE":
 			var msg gossip.ChildStateMessage
 			if err := msg.FromJSON(bodyBytes); err != nil {
-				logger.Println("HTTP-REQ", "Error parsing HW_STATE message", log.ERROR)
+				m.log.Error("HTTP-REQ, Error parsing HW_STATE message")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
@@ -44,14 +43,14 @@ func (m *MigrationManagerImp) handleIncomingGossipMessages(logger log.Logger) ht
 		case "LEADER_DELEGA":
 			var msg gossip.LeaderDelegaMessage
 			if err := msg.FromJSON(bodyBytes); err != nil {
-				logger.Println("HTTP-REQ", "Error parsing LEADER_DELEGA message", log.ERROR)
+				m.log.Error("HTTP-REQ, Error parsing LEADER_DELEGA message")
 				w.WriteHeader(http.StatusBadRequest)
 				return
 			}
 			concreteMsg = &msg
 
 		default:
-			logger.Println("HTTP-REQ", "Unknown message type: "+baseMsg.MessageType, log.ERROR)
+			m.log.Error("HTTP-REQ, Unknown message type: " + baseMsg.MessageType)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -62,22 +61,22 @@ func (m *MigrationManagerImp) handleIncomingGossipMessages(logger log.Logger) ht
 	})
 }
 
-func (m *MigrationManagerImp) handleIncomingCollection(logger log.Logger) http.Handler {
+func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("HTTP-REQ", "New collection received through HTTP request", log.INFO)
+		m.log.Info("HTTP-REQ, New collection received through HTTP request")
 
 		defer r.Body.Close()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			m.log.Error("HTTP-REQ, Error reading request body")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		var collection gossip.SendCollectionMessage
 		if err := json.Unmarshal(bodyBytes, &collection); err != nil {
-			logger.Println("HTTP-REQ", "Error parsing collection message", log.ERROR)
+			m.log.Error("HTTP-REQ, Error parsing collection message")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}

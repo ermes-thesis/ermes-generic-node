@@ -5,6 +5,7 @@ import (
 	"context"
 	"db"
 	"errors"
+	"logger"
 	"metadataManager/utils"
 	"regexp"
 	"slices"
@@ -17,16 +18,17 @@ import (
 type RedisClient struct {
 	client *redis.Client
 	ctx    context.Context
+	log    *logger.Logger
 }
 
-func NewRedisClient(config config.RedisConfig, ctx context.Context) *RedisClient {
+func NewRedisClient(config config.RedisConfig, ctx context.Context, log *logger.Logger) *RedisClient {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     config.Address + ":" + config.Port,
 		Password: config.Password,
 		DB:       config.DB,
 		Protocol: config.Protocol,
 	})
-	return &RedisClient{client: rdb, ctx: ctx}
+	return &RedisClient{client: rdb, ctx: ctx, log: log}
 }
 
 func (r *RedisClient) GetRecord(collectionId string, recordName string) (string, error) {

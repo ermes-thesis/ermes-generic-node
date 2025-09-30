@@ -4,6 +4,7 @@ import (
 	"caches/metadata"
 	"config"
 	"fmt"
+	"logger"
 	"metadataManager/utils"
 	"slices"
 
@@ -22,9 +23,10 @@ type FunctionCacheImpl struct {
 	LatestVersions   *BaseCache[string]
 	fetcher          Fetcher[*FunctionBundle]
 	group            singleflight.Group
+	log              *logger.Logger
 }
 
-func NewFunctionCache(config config.FunctionsCacheConfig, fetcher Fetcher[*FunctionBundle]) (*FunctionCacheImpl, error) {
+func NewFunctionCache(config config.FunctionsCacheConfig, fetcher Fetcher[*FunctionBundle], log *logger.Logger) (*FunctionCacheImpl, error) {
 	tmplCache, err := NewTemplatesCache(config.TemplateCache)
 	if err != nil {
 		return nil, fmt.Errorf("error creating template cache: %v", err)
@@ -43,10 +45,11 @@ func NewFunctionCache(config config.FunctionsCacheConfig, fetcher Fetcher[*Funct
 		MetadataBinaries: binCache,
 		LatestVersions:   latest,
 		fetcher:          fetcher,
+		log:              log,
 	}, nil
 }
 
-func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret string) (*FunctionCacheImpl, error) {
+func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret string, log *logger.Logger) (*FunctionCacheImpl, error) {
 	tmplCache, err := NewTemplatesCache(config.TemplateCache)
 	if err != nil {
 		return nil, fmt.Errorf("error creating template cache: %v", err)
@@ -66,6 +69,7 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret str
 		LatestVersions:   latest,
 		fetcher:          NewRemoteBundleFetcher(fmt.Sprintf("http://%s:%s", config.FunctionRegistry.Address, config.FunctionRegistry.Port), ermesSecret),
 		group:            singleflight.Group{},
+		log:              log,
 	}, nil
 }
 

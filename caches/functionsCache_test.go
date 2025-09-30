@@ -4,6 +4,8 @@ import (
 	"caches/metadata"
 	"config"
 	"fmt"
+	"github.com/rs/zerolog"
+	"logger"
 	"metadataManager/utils"
 	"mocks/caches"
 	"os"
@@ -14,7 +16,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func createNewLogger(t *testing.T) *logger.Logger {
+	log, err := logger.NewLogger(logger.Config{
+		Level:     zerolog.DebugLevel,
+		AddSource: false,
+	})
+	require.NoError(t, err)
+	return log
+}
+
 func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
+	log := createNewLogger(t)
 	tmpDir := t.TempDir()
 
 	fn := "func1"
@@ -56,7 +68,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 		},
 	}
 
-	cache, err := NewFunctionCache(cfg, fetcher)
+	cache, err := NewFunctionCache(cfg, fetcher, log)
 	require.NoError(t, err)
 
 	// Initially cache is empty, so fetcher should be called
@@ -89,6 +101,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 }
 
 func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
+	log := createNewLogger(t)
 	tmpDir := t.TempDir()
 
 	fnName := "func1"
@@ -123,7 +136,7 @@ func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
 		},
 	}
 
-	cache, err := NewFunctionCache(cfg, fetcher)
+	cache, err := NewFunctionCache(cfg, fetcher, log)
 	require.NoError(t, err)
 
 	_, err = cache.GetBinary(fnName, fnVer)

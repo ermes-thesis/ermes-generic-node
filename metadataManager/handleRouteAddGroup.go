@@ -9,7 +9,7 @@ import (
 
 func (m *MetadataManagerImpl) handleRouteAddGroup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(m.logger, "[%s], got /pvt-add-group \n", m.serverInfo.MetadataDomain)
+		m.log.Infof("[%s], got /pvt-add-group \n", m.serverInfo.MetadataDomain)
 		defer r.Body.Close()
 
 		collectionId := r.PathValue("collection_id")

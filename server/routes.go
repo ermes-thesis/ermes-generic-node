@@ -9,11 +9,11 @@ import (
 
 // Method to add pre-defined routes to the server.
 func (s *Server) compileRoutes() {
-	s.Handler.Handle("/pvt-data-transfer-request", s.checkErmesSecret(private.HandleRoutePvtDataTransferRequest(&s.Logger, s.ServerInfo)))
-	s.Handler.Handle("/info", public.HandleRouteInfo(&s.Logger, s.ServerInfo))
+	s.Handler.Handle("/pvt-data-transfer-request", s.checkErmesSecret(private.HandleRoutePvtDataTransferRequest(s.logger, s.ServerInfo)))
+	s.Handler.Handle("/info", public.HandleRouteInfo(s.logger, s.ServerInfo))
 
 	// Let's test the method AddCustomRoute with the /info handler but calling it /info2
-	s.AddCustomRoute("/info2", false, public.HandleRouteInfo(&s.Logger, s.ServerInfo))
+	s.AddCustomRoute("/info2", false, public.HandleRouteInfo(s.logger, s.ServerInfo))
 }
 
 // AddCustomRoute Method to add a route defined by the user to the server. DO NOT ADD IT AFTER THE SERVER HAS BEEN STARTED PLS (idk what could happen)

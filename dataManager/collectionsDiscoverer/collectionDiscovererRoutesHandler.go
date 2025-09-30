@@ -5,26 +5,25 @@ import (
 	shared "dataManager/shared"
 	"encoding/json"
 	"io"
-	log "logger"
 	"net/http"
 )
 
-func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess(logger log.Logger) http.Handler {
+func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("HTTP-REQ", "New remote access request received through HTTP request", log.INFO)
+		c.log.Info("HTTP-REQ, New remote access request received through HTTP request")
 
 		defer r.Body.Close()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			c.log.Error("HTTP-REQ, Error reading request body")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		var msg gossip.RemoteAccessRequest
 		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
-			logger.Println("HTTP-REQ", "Error parsing remote access request", log.ERROR)
+			c.log.Error("HTTP-REQ, Error parsing remote access request")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -81,7 +80,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess(logger log.Logger)
 		w.Header().Set("Content-Type", "application/json")
 
 		if dbErr != nil || jsonErr != nil {
-			logger.Println("HTTP-REQ", "Error accessing collection: "+dbErr.Error(), log.ERROR)
+			c.log.Error("HTTP-REQ, Error accessing collection: " + dbErr.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -92,22 +91,22 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess(logger log.Logger)
 	})
 }
 
-func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate(logger log.Logger) http.Handler {
+func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("HTTP-REQ", "New remote update request received through HTTP request", log.INFO)
+		c.log.Info("HTTP-REQ, New remote update request received through HTTP request")
 
 		defer r.Body.Close()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			c.log.Error("HTTP-REQ, Error reading request body")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		var msg gossip.RemoteUpdateRequest
 		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
-			logger.Println("HTTP-REQ", "Error parsing remote access request", log.ERROR)
+			c.log.Error("HTTP-REQ, Error parsing remote access request")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -184,7 +183,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate(logger log.Logger)
 		}
 
 		if dbErr != nil {
-			logger.Println("HTTP-REQ", "Error accessing collection: "+dbErr.Error(), log.ERROR)
+			c.log.Error("HTTP-REQ, Error accessing collection: " + dbErr.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -193,22 +192,22 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate(logger log.Logger)
 	})
 }
 
-func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation(logger log.Logger) http.Handler {
+func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("HTTP-REQ", "New update propagation request received through HTTP request", log.INFO)
+		c.log.Info("HTTP-REQ, New update propagation request received through HTTP request")
 
 		defer r.Body.Close()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			c.log.Error("HTTP-REQ, Error reading request body")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		var msg gossip.CollectionUpdateMessage
 		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
-			logger.Println("HTTP-REQ", "Error parsing remote access request", log.ERROR)
+			c.log.Error("HTTP-REQ, Error parsing remote access request")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}

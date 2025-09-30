@@ -9,7 +9,7 @@ import (
 
 func (m *MetadataManagerImpl) handleRouteRemoveGroup() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(m.logger, "[%s], got /pvt-remove-group \n", m.serverInfo.MetadataDomain)
+		m.log.Infof("[%s], got /pvt-remove-group \n", m.serverInfo.MetadataDomain)
 		defer r.Body.Close()
 
 		collectionId := r.PathValue("collection_id")

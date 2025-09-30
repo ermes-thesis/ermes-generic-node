@@ -300,8 +300,7 @@ func hostDelete(data any, callframe *wasmedge.CallingFrame, params []any) ([]any
 		return returns, wasmedge.Result_Success
 	}
 
-	_, _, _ = deps, collId, recordName
-	//TODO: err = deps.DataManager.Delete
+	err = deps.DataManager.DeleteRecords(collId, groups, recordName)
 	if err != nil {
 		if errors.Is(err, &shared.UnauthorizedError{}) {
 			returns[0] = wasmComponent.WriteError(Unauthorized, err)
@@ -343,8 +342,7 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 
 	collectionId := uuid.NewString()
 
-	// TODO: Substitute with dataManager
-	//err = deps.RedisClient.SAdd(context.Background(), key, groups...).Err()
+	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Consistency == utils.SequentialConsistent)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(RedisError, err)
 	} else {

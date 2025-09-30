@@ -29,6 +29,7 @@ type CollectionsDiscoverer interface {
 	PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool)
 
 	SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error
+	RemoveCollectionAndProgate(collectionId string, migrationManager migrationManager.MigrationManager) error
 }
 
 type CollectionsDiscovererImp struct {
@@ -142,16 +143,8 @@ func AccessRecords[T any](
 		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return zero, errors.New("strong collection can't be accessed remotely")
 	}
-
-	// fallback su un host a caso (TODO: scegliere in base a latenza)
-	var oneKey string
-	for k := range collection.HostsId() {
-		oneKey = k
-		break
-	}
-
 	c.collectionsPartialView.Mutex.Unlock() // lock release
-	return remoteFn(oneKey)
+	return remoteFn(c.getClosestChild(collection.HostsId()))
 }
 
 func UpdateRecords(
@@ -185,15 +178,8 @@ func UpdateRecords(
 			return errors.New("strong collection can't be updated remotely")
 		}
 
-		// fallback su un host a caso (TODO: scegliere in base a latenza)
-		var oneKey string
-		for k := range collection.HostsId() {
-			oneKey = k
-			break
-		}
-
 		c.collectionsPartialView.Mutex.Unlock() // lock release
-		return remoteFn(oneKey)
+		return remoteFn(c.getClosestChild(collection.HostsId()))
 	}
 
 	if collection.IsStrong() {
@@ -304,32 +290,36 @@ func contains(slice []string, str string) bool {
 func (c *CollectionsDiscovererImp) SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error {
 	//sync
 	c.collectionsPartialView.Mutex.Lock()
-	defer c.collectionsPartialView.Mutex.Unlock()
 	//imp
 
 	//if collection  already exists return error
 	_, exists := c.collectionsPartialView.KnownCollections[collectionId]
 	if exists {
+		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return errors.New("collection already exists")
 	}
 
 	//try to add collection in redis
 	dbErr := c.dbInterface.SetCollection(collectionId, records, groups)
 	if dbErr != nil {
+		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return dbErr
 	}
 
 	//get size of collection in db
 	size, sizeErr := c.dbInterface.GetCollectionMemoryUsage(collectionId)
 	if sizeErr != nil {
+		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return sizeErr
 	}
 
 	//add collection in local view
 	migrationManagerErr := migrationManager.NewCollectionCreated(collectionId, size, isStrong)
 	if migrationManagerErr != nil {
+		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return migrationManagerErr
 	}
+	c.collectionsPartialView.Mutex.Unlock() // lock release
 
 	//propagate update to father
 	if c.serverInfo.Father != nil {
@@ -342,4 +332,47 @@ func (c *CollectionsDiscovererImp) SetCollectionAndProgate(collectionId string, 
 	}
 
 	return nil
+}
+
+func (c *CollectionsDiscovererImp) RemoveCollectionAndProgate(collectionId string, migrationManager migrationManager.MigrationManager) error {
+	//sync
+	c.collectionsPartialView.Mutex.Lock()
+	//imp
+
+	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
+	if !exists {
+		return errors.New("collection doesn't exists")
+	}
+
+	if !collection.IsLocal() {
+		if collection.IsStrong() {
+			c.collectionsPartialView.Mutex.Unlock() // lock release
+			return errors.New("strong collection can't be removed remotely")
+		}
+
+		//todo -> risolvere dubbio per quanto riguarda conflitti
+	}
+
+	c.collectionsPartialView.KnownCollections[collectionId] = nil //remove from local view
+	c.dbInterface.DeleteCollection(collectionId)                  //remove from local db
+	migrationManager.RemoveCollectionFromLru(collectionId)        //remove from lru
+
+	return nil
+}
+
+func (c *CollectionsDiscovererImp) getClosestChild(hostSet map[string]struct{}) string {
+	var minLatency uint64
+	var minLatencyHost string
+
+	for _, child := range c.serverInfo.Children {
+		if _, ok := hostSet[child.HostName]; !ok {
+			continue
+		}
+		if minLatencyHost == "" || child.Latency < minLatency {
+			minLatency = child.Latency
+			minLatencyHost = child.HostName
+		}
+	}
+
+	return minLatencyHost
 }

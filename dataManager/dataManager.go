@@ -33,7 +33,9 @@ type DataManager interface {
 	SetRecords(collectionId string, recordNames []string, recordValues []string) error
 	DeleteRecords(collectionId string, ecordNames ...string) error
 	PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool) //if isDelete true -> RecordValues can be empty
+
 	SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, isStrong bool) error
+	RemoveCollectionAndProgate(collectionId string) error
 }
 
 type DataManagerImp struct {
@@ -159,4 +161,8 @@ func (m *DataManagerImp) SetCollectionAndProgate(collectionId string, records ma
 		m.migrationManager,
 		isStrong,
 	)
+}
+
+func (m *DataManagerImp) RemoveCollectionAndProgate(collectionId string) error {
+	return m.collectionsDiscoverer.RemoveCollectionAndProgate(collectionId, m.migrationManager)
 }

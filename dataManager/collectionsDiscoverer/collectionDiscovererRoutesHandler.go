@@ -42,7 +42,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess(logger log.Logger)
 			remoteFn := func(addr string) (interface{}, error) {
 				return c.WeakCollectionRemoteRecordAccess(addr, msg.CollectionId, msg.RecordNames[0])
 			}
-			res, dbErr = AccessCollection(c, msg.CollectionId, dbFn, remoteFn)
+			res, dbErr = AccessRecords(c, msg.CollectionId, dbFn, remoteFn)
 		} else {
 			dbFn := func() (interface{}, error) {
 				return c.dbInterface.GetRecords(msg.CollectionId, msg.RecordNames...)
@@ -50,7 +50,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess(logger log.Logger)
 			remoteFn := func(addr string) (interface{}, error) {
 				return c.WeakCollectionRemoteRecordsAccess(addr, msg.CollectionId, msg.RecordNames...)
 			}
-			res, dbErr = AccessCollection(c, msg.CollectionId, dbFn, remoteFn)
+			res, dbErr = AccessRecords(c, msg.CollectionId, dbFn, remoteFn)
 		}
 
 		resp := gossip.RemoteAccessResponse{
@@ -99,8 +99,13 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate(logger log.Logger)
 			return
 		} else if len(msg.RecordNames) == 1 {
 			dbFn := func() error {
-				//write in db
-				err := c.dbInterface.SetRecord(msg.CollectionId, msg.RecordNames[0], msg.Record[0])
+				//write or delete in db
+				var err error
+				if msg.IsDelete {
+					err = c.dbInterface.DeleteRecords(msg.CollectionId, msg.RecordNames[0])
+				} else {
+					err = c.dbInterface.SetRecord(msg.CollectionId, msg.RecordNames[0], msg.Record[0])
+				}
 				if err != nil {
 					return err
 				}
@@ -111,18 +116,30 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate(logger log.Logger)
 					RecordNames:  msg.RecordNames,
 					RecordValues: msg.Record,
 				}
-				c.PropagateUpdates([]gossip.CollectionUpdate{update}, false)
+				c.PropagateUpdates([]gossip.CollectionUpdate{update}, msg.IsDelete)
 
 				return nil
 			}
-			remoteFn := func(addr string) error {
-				return c.WeakCollectionRemoteRecordWrite(addr, msg.CollectionId, msg.RecordNames[0], msg.Record[0])
+			var remoteFn func(addr string) error
+			if msg.IsDelete {
+				remoteFn = func(addr string) error {
+					return c.WeakCollectionRemoteRecordDelete(addr, msg.CollectionId, msg.RecordNames)
+				}
+			} else {
+				remoteFn = func(addr string) error {
+					return c.WeakCollectionRemoteRecordWrite(addr, msg.CollectionId, msg.RecordNames[0], msg.Record[0])
+				}
 			}
-			dbErr = UpdateCollection(c, msg.CollectionId, dbFn, remoteFn)
+			dbErr = UpdateRecords(c, msg.CollectionId, dbFn, remoteFn)
 		} else {
 			dbFn := func() error {
-				//write in db
-				err := c.dbInterface.SetRecords(msg.CollectionId, msg.RecordNames, msg.Record)
+				//write or delete in db
+				var err error
+				if msg.IsDelete {
+					err = c.dbInterface.DeleteRecords(msg.CollectionId, msg.RecordNames...)
+				} else {
+					err = c.dbInterface.SetRecords(msg.CollectionId, msg.RecordNames, msg.Record)
+				}
 				if err != nil {
 					return err
 				}
@@ -133,14 +150,21 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate(logger log.Logger)
 					RecordNames:  msg.RecordNames,
 					RecordValues: msg.Record,
 				}
-				c.PropagateUpdates([]gossip.CollectionUpdate{update}, false)
+				c.PropagateUpdates([]gossip.CollectionUpdate{update}, msg.IsDelete)
 
 				return nil
 			}
-			remoteFn := func(addr string) error {
-				return c.WeakCollectionRemoteRecordsWrite(addr, msg.CollectionId, msg.RecordNames, msg.Record)
+			var remoteFn func(addr string) error
+			if msg.IsDelete {
+				remoteFn = func(addr string) error {
+					return c.WeakCollectionRemoteRecordDelete(addr, msg.CollectionId, msg.RecordNames)
+				}
+			} else {
+				remoteFn = func(addr string) error {
+					return c.WeakCollectionRemoteRecordsWrite(addr, msg.CollectionId, msg.RecordNames, msg.Record)
+				}
 			}
-			dbErr = UpdateCollection(c, msg.CollectionId, dbFn, remoteFn)
+			dbErr = UpdateRecords(c, msg.CollectionId, dbFn, remoteFn)
 		}
 
 		if dbErr != nil {

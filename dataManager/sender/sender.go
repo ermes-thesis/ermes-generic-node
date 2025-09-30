@@ -89,7 +89,7 @@ func (s *MigrationManagerSenderImpl) RepoPath() string {
 
 type CollectionDiscovererSender interface {
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames ...string) ([]any, error)
-	WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string) error
+	WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string, isDelete bool, serverInfo info.ServerInfo) error
 	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessage)
 	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage)
 
@@ -141,13 +141,18 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId
 	return resp.Records, err
 }
 
-func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string) error {
+func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string, isDelete bool, serverInfo info.ServerInfo) error {
 	s.logger.Println("SENDER", fmt.Sprintf("request collection %s update to %s", collectionId, hostId), log.INFO)
 
 	msg := gossip.RemoteUpdateRequest{
 		CollectionId: collectionId,
 		RecordNames:  recordNames,
 		Record:       value,
+		SenderIp:     serverInfo.HostName,
+		IsDelete:     isDelete,
+	}
+	if isDelete {
+		msg.Record = []string{}
 	}
 
 	res, err := s.server.SendGenericHTTPRequestRetrunResponse(hostId, remoteUpdatePath, msg)

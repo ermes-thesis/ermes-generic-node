@@ -13,6 +13,8 @@ type RemoteUpdateRequest struct {
 	CollectionId string   `json:"collectionId"`
 	RecordNames  []string `json:"recordNames"`
 	Record       []string `json:"records"`
+	SenderIp     string   `json:"senderIp"`
+	IsDelete     bool     `json:"isDelete"`
 }
 
 type CollectionUpdate struct {

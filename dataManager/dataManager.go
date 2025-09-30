@@ -31,6 +31,7 @@ type DataManager interface {
 	SetRecord(collectionId string, recordName string, recordValue string) error
 	GetRecords(collectionId string, recordNames ...string) ([]any, error)
 	SetRecords(collectionId string, recordNames []string, recordValues []string) error
+	DeleteRecords(collectionId string, ecordNames ...string) error
 	PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool) //if isDelete true -> RecordValues can be empty
 	SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, isStrong bool) error
 }
@@ -82,7 +83,7 @@ func (m *DataManagerImp) GetCollectionsDiscoverer() collectionsDiscoverer.Collec
 }
 
 func (m *DataManagerImp) GetRecord(collectionId string, recordName string) (string, error) {
-	return collectionsDiscoverer.AccessCollection(
+	return collectionsDiscoverer.AccessRecords(
 		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
 		collectionId,
 		func() (string, error) {
@@ -95,7 +96,7 @@ func (m *DataManagerImp) GetRecord(collectionId string, recordName string) (stri
 }
 
 func (m *DataManagerImp) SetRecord(collectionId string, recordName string, recordValue string) error {
-	return collectionsDiscoverer.UpdateCollection(
+	return collectionsDiscoverer.UpdateRecords(
 		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
 		collectionId,
 		func() error {
@@ -108,7 +109,7 @@ func (m *DataManagerImp) SetRecord(collectionId string, recordName string, recor
 }
 
 func (m *DataManagerImp) GetRecords(collectionId string, recordNames ...string) ([]any, error) {
-	return collectionsDiscoverer.AccessCollection(
+	return collectionsDiscoverer.AccessRecords(
 		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
 		collectionId,
 		func() ([]any, error) {
@@ -121,7 +122,7 @@ func (m *DataManagerImp) GetRecords(collectionId string, recordNames ...string) 
 }
 
 func (m *DataManagerImp) SetRecords(collectionId string, recordNames []string, recordValues []string) error {
-	return collectionsDiscoverer.UpdateCollection(
+	return collectionsDiscoverer.UpdateRecords(
 		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
 		collectionId,
 		func() error {
@@ -129,6 +130,19 @@ func (m *DataManagerImp) SetRecords(collectionId string, recordNames []string, r
 		},
 		func(addr string) error {
 			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsWrite(addr, collectionId, recordNames, recordValues)
+		},
+	)
+}
+
+func (m *DataManagerImp) DeleteRecords(collectionId string, recordNames ...string) error {
+	return collectionsDiscoverer.UpdateRecords( //same logic of SetRecords for Delete
+		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
+		collectionId,
+		func() error {
+			return m.dbInterface.DeleteRecords(collectionId, recordNames...)
+		},
+		func(addr string) error {
+			return m.collectionsDiscoverer.WeakCollectionRemoteRecordDelete(addr, collectionId, recordNames)
 		},
 	)
 }

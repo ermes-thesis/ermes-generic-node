@@ -24,6 +24,8 @@ type CollectionsDiscoverer interface {
 	WeakCollectionRemoteRecordWrite(hostId string, collectionId string, recordNames string, value string) error
 	WeakCollectionRemoteRecordsWrite(hostId string, collectionId string, recordNames []string, recordValues []string) error
 
+	WeakCollectionRemoteRecordDelete(hostId string, collectionId string, recordNames []string) error
+
 	PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool)
 
 	SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error
@@ -99,15 +101,19 @@ func (m *CollectionsDiscovererImp) WeakCollectionRemoteRecordsAccess(hostId stri
 }
 
 func (m *CollectionsDiscovererImp) WeakCollectionRemoteRecordWrite(hostId string, collectionId string, recordNames string, value string) error {
-	return m.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, []string{recordNames}, []string{value})
+	return m.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, []string{recordNames}, []string{value}, false, m.serverInfo)
 }
 
 func (m *CollectionsDiscovererImp) WeakCollectionRemoteRecordsWrite(hostId string, collectionId string, recordNames []string, recordValues []string) error {
-	return m.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, recordNames, recordValues)
+	return m.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, recordNames, recordValues, false, m.serverInfo)
+}
+
+func (m *CollectionsDiscovererImp) WeakCollectionRemoteRecordDelete(hostId string, collectionId string, recordNames []string) error {
+	return m.sender.WeakCollectionRemoteRecordUpdate(hostId, collectionId, recordNames, []string{}, true, m.serverInfo)
 }
 
 // use generics to preserve type-safety, unfortunately generics are not supported for methods.
-func AccessCollection[T any](
+func AccessRecords[T any](
 	c *CollectionsDiscovererImp,
 	collectionId string,
 	dbFn func() (T, error),
@@ -148,7 +154,7 @@ func AccessCollection[T any](
 	return remoteFn(oneKey)
 }
 
-func UpdateCollection(
+func UpdateRecords(
 	c *CollectionsDiscovererImp,
 	collectionId string,
 	dbFn func() error,
@@ -195,7 +201,7 @@ func UpdateCollection(
 	}
 
 	c.collectionsPartialView.Mutex.Unlock() // lock release
-	return dbFn()
+	return dbFn()                           // update in local db
 }
 
 func (c *CollectionsDiscovererImp) PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool) {

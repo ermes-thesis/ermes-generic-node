@@ -203,15 +203,18 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 
 	resp := executor.Invoke(functionName+"@"+functionVersion, "entry", reqBody, ctxJson)
 	repBody, err := json.Marshal(resp.Response)
-
-	// TODO: Use resp.CollectionsToCommit to create goroutines that calls dataManager remote write method
-	// dataManager.RemoteWrite(resp.CollectionsToCommit)
-
-	// TODO: Use resp.DeleteRecords to create goroutines that calls dataManager remote delete method
-	// dataManager.RemoteDelete(resp.DeletedRecords)
-
 	if err != nil {
 		return nil, 0, fmt.Errorf("error marshalling response body: %v", err)
+	}
+
+	// TODO: Use resp.CollectionsToCommit to create goroutines that calls dataManager remote write method
+	//for collId, records := range resp.CollectionsToCommit {
+	// dataManager.RemoteWrite(resp.CollectionsToCommit)
+	//}
+
+	// TODO: Propagate deletion?
+	for collId, records := range resp.DeletedRecords {
+		go s.dataManager.DeleteRecords(collId, groups, records...)
 	}
 
 	var seqNumber uint64

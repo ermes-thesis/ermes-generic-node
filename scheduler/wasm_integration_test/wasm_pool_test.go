@@ -20,6 +20,7 @@ func TestWasmPool(t *testing.T) {
 
 	dataManager := datamanager_mock.NewDataManager(t)
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
@@ -36,7 +37,7 @@ func TestWasmPool(t *testing.T) {
 	executor := pool.Acquire()
 	defer executor.Release()
 
-	resp := executor.Invoke("auth_function", "authEntry", []byte("token"))
+	resp := executor.Invoke("auth_aot", "authEntry", []byte("token"))
 
 	fmt.Println("Auth function:", resp.HttpCode, resp.Response)
 
@@ -44,7 +45,7 @@ func TestWasmPool(t *testing.T) {
 	//response, resCode := executor.InvokeFn("function", req, ctx)
 	//fmt.Println("Invoke function:", string(response), resCode)
 
-	response := executor.Invoke("provaNuovoNome1.2.2", "entry", req, ctx)
+	response := executor.Invoke("fun_aot", "entry", req, ctx)
 	fmt.Println("Invoke function:", response.Response, response.HttpCode)
 
 	if response.HttpCode != 200 {
@@ -58,6 +59,7 @@ func BenchmarkWasmPool(b *testing.B) {
 
 	dataManager := datamanager_mock.NewDataManager(b)
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
 	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
@@ -77,7 +79,79 @@ func BenchmarkWasmPool(b *testing.B) {
 		fmt.Println("Auth function:", resp.HttpCode, resp.Response)
 
 		req, ctx := getTestReqAndCtx(resp.Response.(string))
-		response := executor.Invoke("provaNuovoNome1.2.2", "entry", req, ctx)
+		response := executor.Invoke("fun", "entry", req, ctx)
+		fmt.Println("Invoke function:", response.Response, response.HttpCode)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkWasmPool_AOT(b *testing.B) {
+	pool := wasm.NewExecutorPool(10)
+	defer pool.Close()
+
+	dataManager := datamanager_mock.NewDataManager(b)
+	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
+
+	metadataManager := metadataManager_mock.NewMetadataManager(b)
+	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
+	metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
+	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
+
+	scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{
+		MetadataManager: metadataManager,
+		DataManager:     dataManager,
+		ServerInfo:      nil,
+	})
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		resp := executor.Invoke("auth_aot", "authEntry", []byte("token"))
+		fmt.Println("Auth function:", resp.HttpCode, resp.Response)
+
+		req, ctx := getTestReqAndCtx(resp.Response.(string))
+		response := executor.Invoke("fun_aot", "entry", req, ctx)
+		fmt.Println("Invoke function:", response.Response, response.HttpCode)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkWasmPool_AOT_O3(b *testing.B) {
+	pool := wasm.NewExecutorPool(10)
+	defer pool.Close()
+
+	dataManager := datamanager_mock.NewDataManager(b)
+	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
+
+	metadataManager := metadataManager_mock.NewMetadataManager(b)
+	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
+	metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
+	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
+
+	scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{
+		MetadataManager: metadataManager,
+		DataManager:     dataManager,
+		ServerInfo:      nil,
+	})
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		resp := executor.Invoke("auth_aot_o3", "authEntry", []byte("token"))
+		fmt.Println("Auth function:", resp.HttpCode, resp.Response)
+
+		req, ctx := getTestReqAndCtx(resp.Response.(string))
+		response := executor.Invoke("fun_aot_o3", "entry", req, ctx)
 		fmt.Println("Invoke function:", response.Response, response.HttpCode)
 
 		if response.HttpCode != 200 {

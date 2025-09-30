@@ -4,8 +4,6 @@ import (
 	"caches/metadata"
 	shared "dataManager/shared"
 	"encoding/json"
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/require"
 	"io"
 	"logger"
 	"metadataManager/utils"
@@ -25,6 +23,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
 
 	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
 	"github.com/stretchr/testify/assert"

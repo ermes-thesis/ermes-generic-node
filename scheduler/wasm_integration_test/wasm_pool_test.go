@@ -75,7 +75,7 @@ func BenchmarkWasmPool(b *testing.B) {
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		resp := executor.Invoke("auth_function", "authEntry", []byte("token"))
+		resp := executor.Invoke("auth", "authEntry", []byte("token"))
 		fmt.Println("Auth function:", resp.HttpCode, resp.Response)
 
 		req, ctx := getTestReqAndCtx(resp.Response.(string))

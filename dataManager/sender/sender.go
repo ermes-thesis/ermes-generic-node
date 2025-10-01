@@ -89,8 +89,7 @@ func (s *MigrationManagerSenderImpl) RepoPath() string {
 
 type CollectionDiscovererSender interface {
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames ...string) ([]any, error)
-	WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string, isDelete bool, serverInfo info.ServerInfo) error
-	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessage)
+	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages)
 	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage)
 
 	RemoteAccessPath() string
@@ -141,38 +140,13 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId
 	return resp.Records, err
 }
 
-func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordUpdate(hostId string, collectionId string, recordNames []string, value []string, isDelete bool, serverInfo info.ServerInfo) error {
-	s.logger.Println("SENDER", fmt.Sprintf("request collection %s update to %s", collectionId, hostId), log.INFO)
-
-	msg := gossip.RemoteUpdateRequest{
-		CollectionId: collectionId,
-		RecordNames:  recordNames,
-		Record:       value,
-		SenderIp:     serverInfo.HostName,
-		IsDelete:     isDelete,
-	}
-	if isDelete {
-		msg.Record = []string{}
-	}
-
-	res, err := s.server.SendGenericHTTPRequestRetrunResponse(hostId, remoteUpdatePath, msg)
-	if err != nil {
-		s.logger.Println("HTTP-REQ", "Error reading response body", log.ERROR)
-		return err
-	}
-
-	defer res.Body.Close()
-
-	return nil
-}
-
 func (s *CollectionDiscovererSenderImpl) NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage) {
 	s.logger.Println("SENDER", fmt.Sprintf("notify new collection %s to %s", newCollection.CollectionId, hostId), log.INFO)
 
 	s.server.SendGenericHTTPRequest(hostId, createCollectionPropagationPath, newCollection)
 }
 
-func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessage) {
+func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages) {
 	s.logger.Println("SENDER", fmt.Sprintf("request collection update propagation to %s", hostId), log.INFO)
 
 	s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)

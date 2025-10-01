@@ -27,12 +27,7 @@ type DataManager interface {
 	setCollectionsDiscoverer(collectionsDiscoverer.CollectionsDiscoverer)
 
 	//methods
-	GetRecord(collectionId string, recordName string) (string, error)
-	SetRecord(collectionId string, recordName string, recordValue string) error
-	GetRecords(collectionId string, recordNames ...string) ([]any, error)
-	SetRecords(collectionId string, recordNames []string, recordValues []string) error
-	DeleteRecords(collectionId string, ecordNames ...string) error
-	PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool) //if isDelete true -> RecordValues can be empty
+	UpdateCollectionsRecorsAndPropogate(updates []messages.CollectionUpdate) error
 
 	SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, isStrong bool) error
 	RemoveCollectionAndProgate(collectionId string) error
@@ -43,6 +38,7 @@ type DataManagerImp struct {
 	collectionsDiscoverer collectionsDiscoverer.CollectionsDiscoverer
 
 	dbInterface db.GenericDB
+	serverInfo  info.ServerInfo
 }
 
 // Singleton pattern
@@ -65,6 +61,7 @@ func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalit
 		m.collectionsDiscoverer.Init(collections, serverInfo, server, logger, dbInterface)
 
 		m.dbInterface = dbInterface
+		m.serverInfo = serverInfo
 	})
 }
 
@@ -97,60 +94,13 @@ func (m *DataManagerImp) GetRecord(collectionId string, recordName string) (stri
 	)
 }
 
-func (m *DataManagerImp) SetRecord(collectionId string, recordName string, recordValue string) error {
-	return collectionsDiscoverer.UpdateRecords(
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
-		collectionId,
-		func() error {
-			return m.dbInterface.SetRecord(collectionId, recordName, recordValue)
-		},
-		func(addr string) error {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordWrite(addr, collectionId, recordName, recordValue)
-		},
+func (m *DataManagerImp) UpdateCollectionsRecorsAndPropogate(updates []messages.CollectionUpdate) error {
+	return m.collectionsDiscoverer.UpdateCollectionsRecorsAndPropogate(messages.ToCollectionUpdateMessages(
+		updates,
+		m.serverInfo.HostName,
+		m.serverInfo.HostName,
+	), true, m.serverInfo.HostName,
 	)
-}
-
-func (m *DataManagerImp) GetRecords(collectionId string, recordNames ...string) ([]any, error) {
-	return collectionsDiscoverer.AccessRecords(
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
-		collectionId,
-		func() ([]any, error) {
-			return m.dbInterface.GetRecords(collectionId, recordNames...)
-		},
-		func(addr string) ([]any, error) {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsAccess(addr, collectionId, recordNames...)
-		},
-	)
-}
-
-func (m *DataManagerImp) SetRecords(collectionId string, recordNames []string, recordValues []string) error {
-	return collectionsDiscoverer.UpdateRecords(
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
-		collectionId,
-		func() error {
-			return m.dbInterface.SetRecords(collectionId, recordNames, recordValues)
-		},
-		func(addr string) error {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsWrite(addr, collectionId, recordNames, recordValues)
-		},
-	)
-}
-
-func (m *DataManagerImp) DeleteRecords(collectionId string, recordNames ...string) error {
-	return collectionsDiscoverer.UpdateRecords( //same logic of SetRecords for Delete
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
-		collectionId,
-		func() error {
-			return m.dbInterface.DeleteRecords(collectionId, recordNames...)
-		},
-		func(addr string) error {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordDelete(addr, collectionId, recordNames)
-		},
-	)
-}
-
-func (m *DataManagerImp) PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool) { //if isDelete true -> RecordValues can be empty
-	m.collectionsDiscoverer.PropagateUpdates(updates, isDelete)
 }
 
 func (m *DataManagerImp) SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, isStrong bool) error {

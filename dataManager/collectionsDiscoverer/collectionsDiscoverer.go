@@ -211,6 +211,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecorsAndPropogate(updates [
 			c.collectionsPartialView.Mutex.Unlock() // lock release
 			return err
 		}
+		update.SenderIp = c.serverInfo.HostName
 
 		for host := range hosts { // for each host that has the collection prepare the message
 			if host == ignoredHostName {
@@ -235,7 +236,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecorsAndPropogate(updates [
 
 func (c *CollectionsDiscovererImp) checkUpdateConflicts(collectionId string, updateMessage messages.CollectionUpdateMessage, isDelete bool) bool {
 	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
-	if !exists || !collection.IsLocal() { //conflict not possible
+	if !exists || !collection.IsLocal() || collection.IsStrong() { //conflict not possible
 		return true
 	}
 

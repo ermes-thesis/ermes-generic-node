@@ -4,6 +4,7 @@ import (
 	"caches/metadata"
 	shared "dataManager/shared"
 	"encoding/json"
+	wasm_executor "github.com/ermes-thesis/ermes-wasm-pool/wasm-pool/executor"
 	"io"
 	"logger"
 	"metadataManager/utils"
@@ -12,6 +13,7 @@ import (
 	"mocks/dataManager/collectionsDiscoverer"
 	migrationManager_mock "mocks/dataManager/migrationManager"
 	"mocks/ermes-wasm-pool/wasm-pool"
+	wasm_executor_mock "mocks/ermes-wasm-pool/wasm-pool/executor"
 	"mocks/metadataManager"
 	"mocks/tokenDecoder"
 	"net/http"
@@ -25,10 +27,8 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/require"
-
-	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func createNewLogger(t *testing.T) *logger.Logger {
@@ -142,8 +142,8 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	wasmExecutorChild := wasm_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm.WasmResponse{
+	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
+	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm_executor.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -265,8 +265,8 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 
-	wasmExecutorFather := wasm_mock.NewExecutor(t)
-	wasmExecutorFather.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm.WasmResponse{
+	wasmExecutorFather := wasm_executor_mock.NewExecutor(t)
+	wasmExecutorFather.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm_executor.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -440,8 +440,8 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	wasmExecutorChild := wasm_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm.WasmResponse{
+	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
+	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm_executor.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -547,8 +547,8 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 
-	wasmExecutorFather := wasm_mock.NewExecutor(t)
-	wasmExecutorFather.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm.WasmResponse{
+	wasmExecutorFather := wasm_executor_mock.NewExecutor(t)
+	wasmExecutorFather.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm_executor.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -718,8 +718,8 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	wasmExecutorChild := wasm_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm.WasmResponse{
+	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
+	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm_executor.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -855,8 +855,8 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	wasmExecutorChild := wasm_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm.WasmResponse{
+	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
+	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm_executor.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -1018,8 +1018,8 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	wasmExecutorChild := wasm_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm.WasmResponse{
+	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
+	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm_executor.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -1219,8 +1219,8 @@ func TestScheduleThreeNodes(t *testing.T) {
 	tknDecoderChild2 := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild2.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	wasmExecutorChild2 := wasm_mock.NewExecutor(t)
-	wasmExecutorChild2.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm.WasmResponse{
+	wasmExecutorChild2 := wasm_executor_mock.NewExecutor(t)
+	wasmExecutorChild2.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(wasm_executor.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})

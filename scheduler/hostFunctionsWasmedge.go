@@ -13,6 +13,7 @@ import (
 	"server/info"
 
 	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
+	wasm_utils "github.com/ermes-thesis/ermes-wasm-pool/wasm-pool/executor/utils"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/second-state/WasmEdge-go/wasmedge"
@@ -33,9 +34,6 @@ const (
 )
 
 func RegisterHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDependencies) error {
-	// Create the module instance with the module name "extern".
-	externMod := wasmedge.NewModule("extern")
-
 	fnOneParamOneReturnType := wasmedge.NewFunctionType(
 		[]*wasmedge.ValType{wasmedge.NewValTypeI32(), wasmedge.NewValTypeI32()},
 		[]*wasmedge.ValType{wasmedge.NewValTypeI32()},
@@ -57,38 +55,37 @@ func RegisterHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDependenci
 	// Developers should guarantee the life cycle of the data, and it can be
 	// `nil` if the external data is not needed.
 	// The last parameter can be 0 if developers do not need the cost measuring.
-	hostGetFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostGet, &dependencies, 0)
-	hostMultipleGetFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostMultipleGet, &dependencies, 0)
-	hostPutFun := wasmedge.NewFunction(fnFourParamOneReturnType, hostPut, &dependencies, 0)
-	hostDelFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostDelete, &dependencies, 0)
-	hostCreateCollectionFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostCreateCollection, &dependencies, 0)
-	hostDeleteCollectionFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostDeleteCollection, &dependencies, 0)
-	hostAddGroupToCollectionFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostAddGroupToCollection, &dependencies, 0)
-	hostRemoveGroupFromCollectionFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostRemoveGroupFromCollection, &dependencies, 0)
-	hostAddUserToGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostAddUserToGroup, &dependencies, 0)
-	hostRemoveUserFromGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostRemoveUserFromGroup, &dependencies, 0)
-	hostCreateGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostCreateGroup, &dependencies, 0)
-	hostDeleteGroupFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostDeleteGroup, &dependencies, 0)
+	//hostPutFun := wasmedge.NewFunction(fnFourParamOneReturnType, hostPut, &dependencies, 0)
+	//hostDelFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostDelete, &dependencies, 0)
+	//hostDeleteCollectionFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostDeleteCollection, &dependencies, 0)
+	//hostAddGroupToCollectionFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostAddGroupToCollection, &dependencies, 0)
+	//hostRemoveGroupFromCollectionFun := wasmedge.NewFunction(fnThreeParamOneReturnType, hostRemoveGroupFromCollection, &dependencies, 0)
+	//hostAddUserToGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostAddUserToGroup, &dependencies, 0)
+	//hostRemoveUserFromGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostRemoveUserFromGroup, &dependencies, 0)
+	//hostCreateGroupFun := wasmedge.NewFunction(fnTwoParamOneReturnType, hostCreateGroup, &dependencies, 0)
+	//hostDeleteGroupFun := wasmedge.NewFunction(fnOneParamOneReturnType, hostDeleteGroup, &dependencies, 0)
 
+	fns := map[string]any{
+		"hostGet":                       wasmedge.NewFunction(fnThreeParamOneReturnType, hostGet, &dependencies, 0),
+		"hostMultipleGet":               wasmedge.NewFunction(fnThreeParamOneReturnType, hostMultipleGet, &dependencies, 0),
+		"hostCreateCollection":          wasmedge.NewFunction(fnOneParamOneReturnType, hostCreateCollection, &dependencies, 0),
+		"hostPut":                       wasmedge.NewFunction(fnFourParamOneReturnType, hostPut, &dependencies, 0),
+		"hostDelete":                    wasmedge.NewFunction(fnThreeParamOneReturnType, hostDelete, &dependencies, 0),
+		"hostDeleteCollection":          wasmedge.NewFunction(fnTwoParamOneReturnType, hostDeleteCollection, &dependencies, 0),
+		"hostAddGroupToCollection":      wasmedge.NewFunction(fnThreeParamOneReturnType, hostAddGroupToCollection, &dependencies, 0),
+		"hostRemoveGroupFromCollection": wasmedge.NewFunction(fnThreeParamOneReturnType, hostRemoveGroupFromCollection, &dependencies, 0),
+		"hostAddUserToGroup":            wasmedge.NewFunction(fnTwoParamOneReturnType, hostAddUserToGroup, &dependencies, 0),
+		"hostRemoveUserFromGroup":       wasmedge.NewFunction(fnTwoParamOneReturnType, hostRemoveUserFromGroup, &dependencies, 0),
+		"hostCreateGroup":               wasmedge.NewFunction(fnTwoParamOneReturnType, hostCreateGroup, &dependencies, 0),
+		"hostDeleteGroup":               wasmedge.NewFunction(fnOneParamOneReturnType, hostDeleteGroup, &dependencies, 0),
+	}
 	// If the function object is not added into a module instance object, it should be released.
 	fnOneParamOneReturnType.Release()
 	fnTwoParamOneReturnType.Release()
 	fnThreeParamOneReturnType.Release()
 	fnFourParamOneReturnType.Release()
-	externMod.AddFunction("hostGet", hostGetFun)
-	externMod.AddFunction("hostMultipleGet", hostMultipleGetFun)
-	externMod.AddFunction("hostPut", hostPutFun)
-	externMod.AddFunction("hostDelete", hostDelFun)
-	externMod.AddFunction("hostCreateCollection", hostCreateCollectionFun)
-	externMod.AddFunction("hostDeleteCollection", hostDeleteCollectionFun)
-	externMod.AddFunction("hostAddGroupToCollection", hostAddGroupToCollectionFun)
-	externMod.AddFunction("hostRemoveGroupFromCollection", hostRemoveGroupFromCollectionFun)
-	externMod.AddFunction("hostAddUserToGroup", hostAddUserToGroupFun)
-	externMod.AddFunction("hostRemoveUserFromGroup", hostRemoveUserFromGroupFun)
-	externMod.AddFunction("hostCreateGroup", hostCreateGroupFun)
-	externMod.AddFunction("hostDeleteGroup", hostDeleteGroupFun)
 
-	err := pool.RegisterModule(externMod)
+	err := pool.RegisterHostFns(fns)
 	if err != nil {
 		return fmt.Errorf("failed to register module: %v", err)
 	}
@@ -105,7 +102,7 @@ func hostGet(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm.WasmComponents{
+	wasmComponent := wasm_utils.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -160,7 +157,7 @@ func hostMultipleGet(data any, callframe *wasmedge.CallingFrame, params []any) (
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm.WasmComponents{
+	wasmComponent := wasm_utils.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -216,7 +213,7 @@ func hostPut(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm.WasmComponents{
+	wasmComponent := wasm_utils.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -273,7 +270,7 @@ func hostDelete(data any, callframe *wasmedge.CallingFrame, params []any) ([]any
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm.WasmComponents{
+	wasmComponent := wasm_utils.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -320,7 +317,7 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm.WasmComponents{
+	wasmComponent := wasm_utils.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -345,9 +342,9 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Consistency == utils.SequentialConsistent)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(RedisError, err)
-	} else {
-		returns[0] = wasmComponent.WriteResult(collectionId)
+		return returns, wasmedge.Result_Success
 	}
+	returns[0] = wasmComponent.WriteResult(collectionId)
 
 	go deps.MetadataManager.CreateMetadata(collectionId, metadata, metadataManager.FROM_LOCAL)
 
@@ -362,7 +359,7 @@ func hostDeleteCollection(data any, callframe *wasmedge.CallingFrame, params []a
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm.WasmComponents{
+	wasmComponent := wasm_utils.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -401,7 +398,7 @@ func hostAddGroupToCollection(data any, callframe *wasmedge.CallingFrame, params
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm.WasmComponents{
+	wasmComponent := wasm_utils.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -451,7 +448,7 @@ func hostRemoveGroupFromCollection(data any, callframe *wasmedge.CallingFrame, p
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm.WasmComponents{
+	wasmComponent := wasm_utils.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -498,7 +495,7 @@ func hostRemoveUserFromGroup(data any, callframe *wasmedge.CallingFrame, params 
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm.WasmComponents{
+	wasmComponent := wasm_utils.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -542,7 +539,7 @@ func hostAddUserToGroup(data any, callframe *wasmedge.CallingFrame, params []any
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm.WasmComponents{
+	wasmComponent := wasm_utils.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -586,7 +583,7 @@ func hostCreateGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm.WasmComponents{
+	wasmComponent := wasm_utils.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -629,7 +626,7 @@ func hostDeleteGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm.WasmComponents{
+	wasmComponent := wasm_utils.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),

@@ -15,7 +15,7 @@ import (
 )
 
 func TestWasmPool(t *testing.T) {
-	pool := wasm.NewExecutorPool(10)
+	pool := wasm.NewWasmedgeExecutorPool(10)
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(t)
@@ -54,7 +54,7 @@ func TestWasmPool(t *testing.T) {
 }
 
 func BenchmarkWasmPool(b *testing.B) {
-	pool := wasm.NewExecutorPool(10)
+	pool := wasm.NewWasmedgeExecutorPool(10)
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(b)
@@ -66,11 +66,12 @@ func BenchmarkWasmPool(b *testing.B) {
 	metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
-	scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{
+	err := scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{
 		MetadataManager: metadataManager,
 		DataManager:     dataManager,
 		ServerInfo:      nil,
 	})
+	require.NoError(b, err)
 
 	for b.Loop() {
 		executor := pool.Acquire()
@@ -90,7 +91,7 @@ func BenchmarkWasmPool(b *testing.B) {
 }
 
 func BenchmarkWasmPool_AOT(b *testing.B) {
-	pool := wasm.NewExecutorPool(10)
+	pool := wasm.NewWasmedgeExecutorPool(10)
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(b)
@@ -126,7 +127,7 @@ func BenchmarkWasmPool_AOT(b *testing.B) {
 }
 
 func BenchmarkWasmPool_AOT_O3(b *testing.B) {
-	pool := wasm.NewExecutorPool(10)
+	pool := wasm.NewWasmedgeExecutorPool(10)
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(b)

@@ -5,6 +5,7 @@ go 1.24.4
 require (
 	github.com/bytecodealliance/wasmtime-go/v37 v37.0.0
 	github.com/ermes-thesis/ermes-common/logger v0.0.0-00010101000000-000000000000
+	github.com/ermes-thesis/ermes-common/model v0.0.0-00010101000000-000000000000
 	github.com/ermes-thesis/ermes-common/wasm-pool v0.0.0-00010101000000-000000000000
 	github.com/google/uuid v1.6.0
 	github.com/redis/go-redis/v9 v9.14.0
@@ -17,6 +18,8 @@ replace github.com/ermes-thesis/ermes-common/wasm-pool => ../../ermes-common/was
 
 replace github.com/ermes-thesis/ermes-common/logger => ../../ermes-common/logger
 
+replace github.com/ermes-thesis/ermes-common/model => ../../ermes-common/model
+
 require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -26,7 +29,6 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	github.com/wasmerio/wasmer-go v1.0.5-0.20250201183934-50a7979d1c75 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

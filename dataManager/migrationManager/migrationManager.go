@@ -11,10 +11,11 @@ import (
 	shared "dataManager/shared"
 	"db"
 	"errors"
-	"logger"
 	"server"
 	"server/info"
 	"sync"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 type MigrationManager interface {

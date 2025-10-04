@@ -9,10 +9,11 @@ import (
 	sender "dataManager/sender"
 	shared "dataManager/shared"
 	"db"
-	"logger"
 	"server/info"
 	"sync"
 	"time"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 // ErmesStrongCollectionPolicy default policy

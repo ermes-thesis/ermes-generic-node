@@ -4,11 +4,12 @@ import (
 	"config"
 	"context"
 	"db/redis"
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/require"
-	"logger"
 	"net/url"
 	"testing"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
 
 	"github.com/testcontainers/testcontainers-go"
 	tcredis "github.com/testcontainers/testcontainers-go/modules/redis"

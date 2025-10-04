@@ -1,9 +1,10 @@
 package caches
 
 import (
-	"github.com/hashicorp/golang-lru/v2"
 	"sync"
 	"time"
+
+	"github.com/hashicorp/golang-lru/v2"
 )
 
 // GenericCache defines the minimal interface for a cache that supports storing

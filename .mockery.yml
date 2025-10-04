@@ -18,6 +18,6 @@ packages:
   caches:
   server:
   scheduler:
-  github.com/ermes-thesis/ermes-wasm-pool:
+  github.com/ermes-thesis/ermes-common:
     config:
-      dir: 'mocks/ermes-wasm-pool/{{.InterfaceDirRelative}}'
+      dir: 'mocks/ermes-common/{{.InterfaceDirRelative}}'

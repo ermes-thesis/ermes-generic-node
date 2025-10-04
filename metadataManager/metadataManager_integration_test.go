@@ -6,10 +6,7 @@ import (
 	"db/test_utils"
 	"encoding/json"
 	"fmt"
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/require"
 	"io"
-	"logger"
 	"metadataManager"
 	"metadataManager/utils"
 	"mocks/caches"
@@ -21,6 +18,10 @@ import (
 	"server/info"
 	"testing"
 	"time"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 )

@@ -4,14 +4,15 @@ import (
 	"caches/metadata"
 	"config"
 	"fmt"
-	"github.com/rs/zerolog"
-	"logger"
 	"metadataManager/utils"
 	"mocks/caches"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/rs/zerolog"
 
 	"github.com/stretchr/testify/require"
 )

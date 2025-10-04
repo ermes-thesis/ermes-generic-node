@@ -9,10 +9,11 @@ import (
 	penality "dataManager/migrationManager/penalityFunction"
 	shared "dataManager/shared"
 	"db"
-	"logger"
 	"server"
 	"server/info"
 	"sync"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 type DataManager interface {

@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"logger"
 	"metadataManager/utils"
 	"net/http"
 	"os"
 	"server/client"
 	"server/info"
 	"strings"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 type PropagationOrigin int

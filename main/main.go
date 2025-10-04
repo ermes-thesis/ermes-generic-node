@@ -11,8 +11,6 @@ import (
 	"db/redis"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
-	"logger"
 	"metadataManager"
 	"net/http"
 	"os"
@@ -24,7 +22,10 @@ import (
 	"time"
 	"tokenDecoder"
 
-	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/rs/zerolog"
+
+	"github.com/ermes-thesis/ermes-common/wasm-pool"
 )
 
 func run(ctx context.Context, configPath string) error {

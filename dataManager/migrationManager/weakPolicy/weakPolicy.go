@@ -5,7 +5,8 @@ import (
 	sender "dataManager/sender"
 	shared "dataManager/shared"
 	"db"
-	"logger"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 type WeakCollectionPolicy interface {

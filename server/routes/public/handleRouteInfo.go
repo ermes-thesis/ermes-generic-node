@@ -2,9 +2,10 @@ package public
 
 import (
 	"fmt"
-	"logger"
 	"net/http"
 	"server/info"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 func HandleRouteInfo(logger *logger.Logger, serverinfo *info.ServerInfo) http.HandlerFunc {

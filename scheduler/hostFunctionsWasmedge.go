@@ -12,8 +12,8 @@ import (
 	"server/client"
 	"server/info"
 
-	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
-	wasm_utils "github.com/ermes-thesis/ermes-wasm-pool/wasm-pool/executor/utils"
+	"github.com/ermes-thesis/ermes-common/wasm-pool"
+	wasm_utils "github.com/ermes-thesis/ermes-common/wasm-pool/executor/utils"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/second-state/WasmEdge-go/wasmedge"
@@ -26,7 +26,7 @@ type HostFnsDependencies struct {
 }
 
 const (
-	Unauthorized wasm.ResponseCode = iota + 100
+	Unauthorized wasm_utils.ResponseCode = iota + 100
 	NotFound
 	RedisError
 	GroupTokenProviderError
@@ -113,20 +113,20 @@ func hostGet(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 	var groups []string
 	err := wasmComponent.GetWasmObject(groupsPtr, groupsLength, &groups)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	// Read the result of the function.
 	collId, err := wasmComponent.GetWasmString(collIdPtr, collIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	recordName, err := wasmComponent.GetWasmString(recordNamePtr, recordNameLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
@@ -167,21 +167,21 @@ func hostMultipleGet(data any, callframe *wasmedge.CallingFrame, params []any) (
 
 	collId, err := wasmComponent.GetWasmString(collIdPtr, collIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	var recordNames []string
 	err = wasmComponent.GetWasmObject(recordNamesPtr, recordNamesLength, &recordNames)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	var groups []string
 	err = wasmComponent.GetWasmObject(groupsPtr, groupsLength, &groups)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
@@ -224,25 +224,25 @@ func hostPut(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 	var groups []string
 	err := wasmComponent.GetWasmObject(groupsPtr, groupsLength, &groups)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	collId, err := wasmComponent.GetWasmString(collIdPtr, collIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	recordName, err := wasmComponent.GetWasmString(recordNamePtr, recordNameLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	value, err := wasmComponent.GetWasmString(valuePointer, valueLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
@@ -254,7 +254,7 @@ func hostPut(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 			returns[0] = wasmComponent.WriteError(RedisError, err)
 		}
 	} else {
-		returns[0] = int32(wasm.Success)
+		returns[0] = int32(wasm_utils.Success)
 	}
 
 	return returns, wasmedge.Result_Success
@@ -281,19 +281,19 @@ func hostDelete(data any, callframe *wasmedge.CallingFrame, params []any) ([]any
 	var groups []string
 	err := wasmComponent.GetWasmObject(groupsPtr, groupsLength, &groups)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	collId, err := wasmComponent.GetWasmString(collIdPtr, collIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	recordName, err := wasmComponent.GetWasmString(recordNamePtr, recordNameLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
@@ -305,7 +305,7 @@ func hostDelete(data any, callframe *wasmedge.CallingFrame, params []any) ([]any
 			returns[0] = wasmComponent.WriteError(RedisError, err)
 		}
 	} else {
-		returns[0] = int32(wasm.Success)
+		returns[0] = int32(wasm_utils.Success)
 	}
 
 	return returns, wasmedge.Result_Success
@@ -328,7 +328,7 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 	var metadata utils.Metadata
 	err := wasmComponent.GetWasmObject(metadataPointer, metadataLength, &metadata)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
@@ -369,14 +369,14 @@ func hostDeleteCollection(data any, callframe *wasmedge.CallingFrame, params []a
 
 	collectionId, err := wasmComponent.GetWasmString(collectionIdPtr, collectionIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	var groups []string
 	err = wasmComponent.GetWasmObject(groupsPtr, groupsLength, &groups)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
@@ -384,7 +384,7 @@ func hostDeleteCollection(data any, callframe *wasmedge.CallingFrame, params []a
 	//TODO: err = deps.DataManager.DeleteCollection(collectionId)
 	//TODO: Forward the deletion process to other nodes with HTTP
 
-	returns[0] = int32(wasm.Success)
+	returns[0] = int32(wasm_utils.Success)
 	return returns, wasmedge.Result_Success
 }
 
@@ -408,19 +408,19 @@ func hostAddGroupToCollection(data any, callframe *wasmedge.CallingFrame, params
 	var groups []string
 	err := wasmComponent.GetWasmObject(groupsPtr, groupsLength, &groups)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	collectionId, err := wasmComponent.GetWasmString(collectionIdPointer, collectionIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	groupName, err := wasmComponent.GetWasmString(groupNamePointer, groupNameLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
@@ -432,7 +432,7 @@ func hostAddGroupToCollection(data any, callframe *wasmedge.CallingFrame, params
 		returns[0] = wasmComponent.WriteError(RedisError, err)
 		return returns, wasmedge.Result_Success
 	} else {
-		returns[0] = int32(wasm.Success)
+		returns[0] = int32(wasm_utils.Success)
 	}
 
 	return returns, wasmedge.Result_Success
@@ -458,19 +458,19 @@ func hostRemoveGroupFromCollection(data any, callframe *wasmedge.CallingFrame, p
 	var groups []string
 	err := wasmComponent.GetWasmObject(groupsPtr, groupsLength, &groups)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	collectionId, err := wasmComponent.GetWasmString(collectionIdPointer, collectionIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
 	groupName, err := wasmComponent.GetWasmString(groupNamePointer, groupNameLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
@@ -481,7 +481,7 @@ func hostRemoveGroupFromCollection(data any, callframe *wasmedge.CallingFrame, p
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(RedisError, err)
 	} else {
-		returns[0] = int32(wasm.Success)
+		returns[0] = int32(wasm_utils.Success)
 	}
 
 	return returns, wasmedge.Result_Success
@@ -504,7 +504,7 @@ func hostRemoveUserFromGroup(data any, callframe *wasmedge.CallingFrame, params 
 	returns := make([]any, 1)
 	userId, err := wasmComponent.GetWasmString(userIdPtr, userIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 	groupName, err := wasmComponent.GetWasmString(groupNamePtr, groupNameLength)
@@ -524,7 +524,7 @@ func hostRemoveUserFromGroup(data any, callframe *wasmedge.CallingFrame, params 
 	_ = res.Body.Close()
 
 	if res.StatusCode == http.StatusOK {
-		returns[0] = int32(wasm.Success)
+		returns[0] = int32(wasm_utils.Success)
 	} else {
 		returns[0] = wasmComponent.WriteError(GroupTokenProviderError, errors.New(res.Status))
 	}
@@ -548,7 +548,7 @@ func hostAddUserToGroup(data any, callframe *wasmedge.CallingFrame, params []any
 	returns := make([]any, 1)
 	userId, err := wasmComponent.GetWasmString(userIdPtr, userIdLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 	groupName, err := wasmComponent.GetWasmString(groupNamePtr, groupNameLength)
@@ -568,7 +568,7 @@ func hostAddUserToGroup(data any, callframe *wasmedge.CallingFrame, params []any
 	_ = res.Body.Close()
 
 	if res.StatusCode == http.StatusOK {
-		returns[0] = int32(wasm.Success)
+		returns[0] = int32(wasm_utils.Success)
 	} else {
 		returns[0] = wasmComponent.WriteError(GroupTokenProviderError, errors.New(res.Status))
 	}
@@ -592,7 +592,7 @@ func hostCreateGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	returns := make([]any, 1)
 	participantIDsJsonStr, err := wasmComponent.GetWasmString(participantIDsJsonPtr, participantIDsJsonLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 	groupName, err := wasmComponent.GetWasmString(groupNamePtr, groupNameLength)
@@ -613,7 +613,7 @@ func hostCreateGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	_ = res.Body.Close()
 
 	if res.StatusCode == http.StatusCreated {
-		returns[0] = int32(wasm.Success)
+		returns[0] = int32(wasm_utils.Success)
 	} else {
 		returns[0] = wasmComponent.WriteError(GroupTokenProviderError, errors.New(res.Status))
 	}
@@ -635,7 +635,7 @@ func hostDeleteGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	returns := make([]any, 1)
 	groupName, err := wasmComponent.GetWasmString(groupNamePtr, groupNameLength)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(wasm.WasmRuntimeError, err)
+		returns[0] = wasmComponent.WriteError(wasm_utils.WasmRuntimeError, err)
 		return returns, wasmedge.Result_Success
 	}
 
@@ -654,7 +654,7 @@ func hostDeleteGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	_ = res.Body.Close()
 
 	if res.StatusCode == http.StatusOK {
-		returns[0] = int32(wasm.Success)
+		returns[0] = int32(wasm_utils.Success)
 	} else {
 		returns[0] = wasmComponent.WriteError(GroupTokenProviderError, errors.New(res.Status))
 	}

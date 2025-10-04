@@ -5,13 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"logger"
 	"net"
 	"net/http"
 	"os"
 	"server/client"
 	"server/clientrepo"
 	"server/info"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 type ServerType interface {

@@ -7,11 +7,12 @@ import (
 	shared "dataManager/shared"
 	"db"
 	"errors"
-	"logger"
 	"server"
 	"server/info"
 	"sync"
 	"time"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 type CollectionsDiscoverer interface {

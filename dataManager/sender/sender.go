@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"logger"
 	"net/http"
 	"server"
 	info "server/info"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 const (

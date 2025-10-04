@@ -4,10 +4,10 @@ import (
 	"caches/metadata"
 	"config"
 	"fmt"
-	"logger"
 	"metadataManager/utils"
 	"slices"
 
+	"github.com/ermes-thesis/ermes-common/logger"
 	"golang.org/x/sync/singleflight"
 )
 

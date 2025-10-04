@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"logger"
 	"metadataManager"
 	"metadataManager/utils"
 	"net/http"
@@ -17,7 +16,8 @@ import (
 	"time"
 	"tokenDecoder"
 
-	"github.com/ermes-thesis/ermes-wasm-pool/wasm-pool"
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/wasm-pool"
 )
 
 type Scheduler interface {

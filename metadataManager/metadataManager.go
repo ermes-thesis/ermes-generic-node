@@ -5,7 +5,6 @@ import (
 	"db"
 	"encoding/json"
 	"fmt"
-	"logger"
 	"metadataManager/utils"
 	"os"
 	"server"
@@ -13,6 +12,8 @@ import (
 	"slices"
 	"strings"
 	"tokenDecoder"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 // QueryTemplatesParamsMapping map[tmpl_name]map[param_name]param_value

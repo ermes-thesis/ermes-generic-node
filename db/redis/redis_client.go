@@ -5,13 +5,13 @@ import (
 	"context"
 	"db"
 	"errors"
-	"logger"
 	"metadataManager/utils"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
 
+	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/redis/go-redis/v9"
 )
 

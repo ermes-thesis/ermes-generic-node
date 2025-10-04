@@ -9,7 +9,6 @@ use (
 	db
 	caches
 	tokenDecoder
-	logger
 	scheduler
 	mocks
 )

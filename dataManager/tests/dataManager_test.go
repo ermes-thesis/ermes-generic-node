@@ -9,11 +9,12 @@ import (
 	migrationManager "dataManager/migrationManager"
 	penality "dataManager/migrationManager/penalityFunction"
 	"fmt"
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/require"
-	"logger"
 	"testing"
 	"time"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/mock"
 )

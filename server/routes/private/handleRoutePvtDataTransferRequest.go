@@ -2,10 +2,11 @@ package private
 
 import (
 	"errors"
-	"logger"
 	"net/http"
 	"server/helper"
 	"server/info"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 func HandleRoutePvtDataTransferRequest(logger *logger.Logger, serverInfo *info.ServerInfo) http.HandlerFunc {

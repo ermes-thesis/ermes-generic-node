@@ -354,8 +354,8 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 func hostDeleteCollection(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, wasmedge.Result) {
 	collectionIdPtr := params[0].(int32)
 	collectionIdLength := params[1].(int32)
-	groupsPtr := params[4].(int32)
-	groupsLength := params[5].(int32)
+	groupsPtr := params[2].(int32)
+	groupsLength := params[3].(int32)
 
 	deps := data.(*HostFnsDependencies)
 

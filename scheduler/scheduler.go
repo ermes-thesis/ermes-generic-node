@@ -17,6 +17,7 @@ import (
 	"tokenDecoder"
 
 	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
 )
 
@@ -122,7 +123,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 				return nil, 0, fmt.Errorf("wrong sequence number for collection: %v, %w", col.Id, err)
 			}
 
-			if col.Metadata.Consistency == utils.SequentialConsistent {
+			if col.Metadata.Consistency == model.SequentialConsistent {
 				if sequentialCollection != nil {
 					return nil, 0, fmt.Errorf("multiple sequentially consistent collections are not supported")
 				}

@@ -58,23 +58,23 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 			"private_data_query": {
 				{
 					Id: "12345",
-					Metadata: utils.Metadata{
+					Metadata: model.Metadata{
 						Name:        "collectionName",
 						Owner:       "12345",
 						CreatedAt:   time.Unix(1745748000, 0),
 						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: utils.EventualConsistent,
+						Consistency: model.EventualConsistent,
 						Geolocation: "IT/Como",
 					},
 				},
 				{
 					Id: "1111",
-					Metadata: utils.Metadata{
+					Metadata: model.Metadata{
 						Name:        "collectionNameFather",
 						Owner:       "12345",
 						CreatedAt:   time.Unix(1745749000, 0),
 						Groups:      []string{"groupC"},
-						Consistency: utils.SequentialConsistent,
+						Consistency: model.SequentialConsistent,
 						Geolocation: "IT",
 					},
 				},
@@ -210,23 +210,23 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 			"private_data_query": {
 				{
 					Id: "12345",
-					Metadata: utils.Metadata{
+					Metadata: model.Metadata{
 						Name:        "collectionName",
 						Owner:       "12345",
 						CreatedAt:   time.Unix(1745748000, 0),
 						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: utils.EventualConsistent,
+						Consistency: model.EventualConsistent,
 						Geolocation: "IT/Como",
 					},
 				},
 				{
 					Id: "1111",
-					Metadata: utils.Metadata{
+					Metadata: model.Metadata{
 						Name:        "collectionNameFather",
 						Owner:       "12345",
 						CreatedAt:   time.Unix(1745749000, 0),
 						Groups:      []string{"groupC"},
-						Consistency: utils.SequentialConsistent,
+						Consistency: model.SequentialConsistent,
 						Geolocation: "IT",
 					},
 				},
@@ -386,12 +386,12 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 			"private_data_query": {
 				{
 					Id: "12345",
-					Metadata: utils.Metadata{
+					Metadata: model.Metadata{
 						Name:        "collectionName",
 						Owner:       "12345",
 						CreatedAt:   time.Unix(1745748000, 0),
 						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: utils.EventualConsistent,
+						Consistency: model.EventualConsistent,
 						Geolocation: "IT/Como",
 					},
 				},
@@ -515,12 +515,12 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 			"private_data_query": {
 				{
 					Id: "12345",
-					Metadata: utils.Metadata{
+					Metadata: model.Metadata{
 						Name:        "collectionName",
 						Owner:       "12345",
 						CreatedAt:   time.Unix(1745748000, 0),
 						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: utils.EventualConsistent,
+						Consistency: model.EventualConsistent,
 						Geolocation: "IT/Como",
 					},
 				},
@@ -653,23 +653,23 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 			"private_data_query": {
 				{
 					Id: "12345",
-					Metadata: utils.Metadata{
+					Metadata: model.Metadata{
 						Name:        "collectionName",
 						Owner:       "12345",
 						CreatedAt:   time.Unix(1745748000, 0),
 						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: utils.EventualConsistent,
+						Consistency: model.EventualConsistent,
 						Geolocation: "IT/Como",
 					},
 				},
 				{
 					Id: "54321",
-					Metadata: utils.Metadata{
+					Metadata: model.Metadata{
 						Name:        "collectionName2",
 						Owner:       "12345",
 						CreatedAt:   time.Unix(1745748000, 0),
 						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: utils.EventualConsistent,
+						Consistency: model.EventualConsistent,
 						Geolocation: "IT/Como",
 					},
 				},
@@ -795,12 +795,12 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 			"private_data_query": {
 				{
 					Id: "12345",
-					Metadata: utils.Metadata{
+					Metadata: model.Metadata{
 						Name:        "collectionName",
 						Owner:       "12345",
 						CreatedAt:   time.Unix(1745748000, 0),
 						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: utils.EventualConsistent,
+						Consistency: model.EventualConsistent,
 						Geolocation: "IT/Como",
 					},
 				},
@@ -929,23 +929,23 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 			"private_data_query": {
 				{
 					Id: "12345",
-					Metadata: utils.Metadata{
+					Metadata: model.Metadata{
 						Name:        "collectionName",
 						Owner:       "12345",
 						CreatedAt:   time.Unix(1745748000, 0),
 						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: utils.EventualConsistent,
+						Consistency: model.EventualConsistent,
 						Geolocation: "IT/Como",
 					},
 				},
 				{
 					Id: "1111",
-					Metadata: utils.Metadata{
+					Metadata: model.Metadata{
 						Name:        "collectionName",
 						Owner:       "12345",
 						CreatedAt:   time.Unix(1745748000, 0),
 						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: utils.SequentialConsistent,
+						Consistency: model.SequentialConsistent,
 						Geolocation: "IT/Como",
 					},
 				},
@@ -1098,12 +1098,12 @@ func TestScheduleThreeNodes(t *testing.T) {
 			"private_data_query": {
 				{
 					Id: "1111",
-					Metadata: utils.Metadata{
+					Metadata: model.Metadata{
 						Name:        "collectionName",
 						Owner:       "12345",
 						CreatedAt:   time.Unix(1745748000, 0),
 						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: utils.SequentialConsistent,
+						Consistency: model.SequentialConsistent,
 						Geolocation: "IT/Como",
 					},
 				},

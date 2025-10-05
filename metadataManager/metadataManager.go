@@ -14,6 +14,7 @@ import (
 	"tokenDecoder"
 
 	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/model"
 )
 
 // QueryTemplatesParamsMapping map[tmpl_name]map[param_name]param_value
@@ -26,7 +27,7 @@ func (g GroupMessage) IsPropagable() bool {
 }
 
 type MetadataManager interface {
-	CreateMetadata(collectionId string, metadata utils.Metadata, reqOrigin PropagationOrigin) error
+	CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin PropagationOrigin) error
 	AddGroupToCollection(collectionId string, reqOrigin PropagationOrigin, groups ...string) error
 	RemoveGroupFromCollection(collectionId string, reqOrigin PropagationOrigin, groups ...string) error
 	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error)
@@ -74,7 +75,7 @@ func (m *MetadataManagerImpl) RegisterRoutes(server server.ServerType, tokenDeco
 	return nil
 }
 
-func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata utils.Metadata, reqOrigin PropagationOrigin) error {
+func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin PropagationOrigin) error {
 	if strings.HasPrefix(metadata.Geolocation, m.serverInfo.MetadataDomain) {
 		var newMetadata []string
 		for key, value := range metadata.CustomMetadata {

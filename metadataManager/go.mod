@@ -7,7 +7,7 @@ require (
 	github.com/ermes-thesis/ermes-common/model v0.0.0-00010101000000-000000000000
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/rs/zerolog v1.34.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 )
 
 replace github.com/ermes-thesis/ermes-common/logger => ../../ermes-common/logger

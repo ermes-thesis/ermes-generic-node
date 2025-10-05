@@ -236,7 +236,7 @@ func (r *RedisClient) CollectionExists(collectionId string) (bool, error) {
 	return res > 0, nil
 }
 
-func (r *RedisClient) GetMetadata(collectionId string) (*utils.Metadata, error) {
+func (r *RedisClient) GetMetadata(collectionId string) (*model.Metadata, error) {
 	res, err := r.client.HGetAll(r.ctx, "meta:"+collectionId).Result()
 	if err != nil {
 		return nil, err
@@ -244,10 +244,10 @@ func (r *RedisClient) GetMetadata(collectionId string) (*utils.Metadata, error) 
 	if len(res) == 0 {
 		return nil, nil
 	}
-	return utils.FromMap(res)
+	return model.FromMap(res)
 }
 
-func (r *RedisClient) SetMetadata(collectionId string, metadata utils.Metadata) error {
+func (r *RedisClient) SetMetadata(collectionId string, metadata model.Metadata) error {
 	return r.client.HSet(r.ctx, "meta:"+collectionId, metadata.ToList()...).Err()
 }
 
@@ -339,7 +339,7 @@ func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userGroups []s
 	for _, doc := range res.Docs {
 		collId, _ := strings.CutPrefix(doc.ID, "meta:")
 
-		metadata, err := utils.FromMap(doc.Fields)
+		metadata, err := model.FromMap(doc.Fields)
 		if err != nil {
 			return nil, err
 		}

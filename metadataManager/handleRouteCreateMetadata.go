@@ -3,9 +3,10 @@ package metadataManager
 import (
 	"encoding/json"
 	"fmt"
-	"metadataManager/utils"
 	"net/http"
 	"os"
+
+	"github.com/ermes-thesis/ermes-common/model"
 )
 
 func (m *MetadataManagerImpl) handleRouteCreateMetadata() http.HandlerFunc {
@@ -15,7 +16,7 @@ func (m *MetadataManagerImpl) handleRouteCreateMetadata() http.HandlerFunc {
 
 		collectionId := r.PathValue("collection_id")
 		reqMetadataDomain := r.Header.Get("X-ERMES-METADATA-DOMAIN")
-		var meta utils.Metadata
+		var meta model.Metadata
 		err := json.NewDecoder(r.Body).Decode(&meta)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error decoding metadata: %v\n", err)

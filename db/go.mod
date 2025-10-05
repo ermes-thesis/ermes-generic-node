@@ -7,7 +7,7 @@ require (
 	github.com/ermes-thesis/ermes-common/model v0.0.0-00010101000000-000000000000
 	github.com/redis/go-redis/v9 v9.12.0
 	github.com/rs/zerolog v1.34.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.38.0
 	github.com/testcontainers/testcontainers-go/modules/redis v0.38.0
 )

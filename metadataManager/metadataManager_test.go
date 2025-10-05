@@ -113,12 +113,12 @@ func TestCreateMetadata(t *testing.T) {
 	}
 
 	tm := time.Now().Truncate(time.Millisecond)
-	metadata := utils.Metadata{
+	metadata := model.Metadata{
 		Name:        "test",
 		Owner:       "fake",
 		CreatedAt:   tm,
 		Groups:      []string{"g1", "g2", "g3"},
-		Consistency: utils.EventualConsistent,
+		Consistency: model.EventualConsistent,
 		Geolocation: "IT",
 		CustomMetadata: map[string]string{
 			"key1": "value1",

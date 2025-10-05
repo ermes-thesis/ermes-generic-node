@@ -131,7 +131,7 @@ type GenericDB interface {
 	// Returns:
 	//	- *Metadata: pointer to the metadata object, nil if no metadata exists
 	//	- error: non-nil if the retrieval operation fails
-	GetMetadata(collectionId string) (*utils.Metadata, error)
+	GetMetadata(collectionId string) (*model.Metadata, error)
 	// SetMetadata associates metadata with a collection for search purposes.
 	// Existing metadata will be completely replaced.
 	//
@@ -141,7 +141,7 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the operation fails
-	SetMetadata(collectionId string, metadata utils.Metadata) error
+	SetMetadata(collectionId string, metadata model.Metadata) error
 	// DeleteMetadata removes all metadata associated with a collection.
 	// The collection itself and its records remain unchanged. They must
 	// be explicitly deleted using the DeleteCollection method.

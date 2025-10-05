@@ -279,12 +279,12 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 		},
 	}
 
-	metadata := utils.Metadata{
+	metadata := model.Metadata{
 		Name:           "test",
 		Owner:          "test",
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Groups:         []string{"groupC"},
-		Consistency:    utils.EventualConsistent,
+		Consistency:    model.EventualConsistent,
 		Geolocation:    "IT/Milan",
 		CustomMetadata: map[string]string{},
 	}
@@ -392,12 +392,12 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 		},
 	}
 
-	metadata := utils.Metadata{
+	metadata := model.Metadata{
 		Name:           "test",
 		Owner:          "test",
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Groups:         []string{"groupC"},
-		Consistency:    utils.EventualConsistent,
+		Consistency:    model.EventualConsistent,
 		Geolocation:    "IT/Milan",
 		CustomMetadata: map[string]string{},
 	}
@@ -523,12 +523,12 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	metadataLocalLog := createNewLogger(t)
 	metadataManagerLocal := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, metadataLocalLog, fnCacheLocal)
 
-	metadata := utils.Metadata{
+	metadata := model.Metadata{
 		Name:           "test",
 		Owner:          "test",
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Groups:         []string{"groupC"},
-		Consistency:    utils.EventualConsistent,
+		Consistency:    model.EventualConsistent,
 		Geolocation:    "IT/Milan",
 		CustomMetadata: map[string]string{},
 	}
@@ -549,12 +549,12 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when getting metadata from local")
 	assert.Equal(t, metadata, *metaLocal, "Expected metadata to match")
 
-	metadata2 := utils.Metadata{
+	metadata2 := model.Metadata{
 		Name:           "test2",
 		Owner:          "test",
 		CreatedAt:      time.Now().Truncate(time.Millisecond),
 		Groups:         []string{"groupC"},
-		Consistency:    utils.EventualConsistent,
+		Consistency:    model.EventualConsistent,
 		Geolocation:    "IT/Milan/Polimi",
 		CustomMetadata: map[string]string{},
 	}
@@ -583,33 +583,33 @@ func startRedisContainer(t *testing.T, child bool) (db.GenericDB, func()) {
 	err := client.CreateIndex()
 	assert.NoError(t, err, "Expected no error when creating index")
 
-	err = client.SetMetadata("12345", utils.Metadata{
+	err = client.SetMetadata("12345", model.Metadata{
 		Name:        "collectionName",
 		Owner:       "12345",
 		CreatedAt:   time.Unix(1745748000, 0),
 		Groups:      []string{"groupA", "groupB", "groupC"},
-		Consistency: utils.EventualConsistent,
+		Consistency: model.EventualConsistent,
 		Geolocation: "IT/Como",
 	})
 	assert.NoError(t, err, "Expected no error when setting metadata for collection 12345")
 
-	err = client.SetMetadata("54321", utils.Metadata{
+	err = client.SetMetadata("54321", model.Metadata{
 		Name:        "collectionName2",
 		Owner:       "12345",
 		CreatedAt:   time.Unix(745748000, 0),
 		Groups:      []string{"groupC"},
-		Consistency: utils.EventualConsistent,
+		Consistency: model.EventualConsistent,
 		Geolocation: "IT/Milan",
 	})
 	assert.NoError(t, err, "Expected no error when setting metadata for collection 54321")
 
 	if !child {
-		err = client.SetMetadata("1111", utils.Metadata{
+		err = client.SetMetadata("1111", model.Metadata{
 			Name:        "collectionNameFather",
 			Owner:       "12345",
 			CreatedAt:   time.Unix(1745749000, 0),
 			Groups:      []string{"groupC"},
-			Consistency: utils.EventualConsistent,
+			Consistency: model.EventualConsistent,
 			Geolocation: "IT",
 		})
 		assert.NoError(t, err, "Expected no error when setting metadata for collection 1111")

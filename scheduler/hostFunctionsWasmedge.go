@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"metadataManager"
-	"metadataManager/utils"
 	"net/http"
 	"server/client"
 	"server/info"
@@ -318,7 +317,7 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 
 	returns := make([]any, 1)
 
-	var metadata utils.Metadata
+	var metadata model.Metadata
 	err := wasmComponent.GetWasmObject(metadataPointer, metadataLength, &metadata)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(model.WasmRuntimeError, err)
@@ -332,7 +331,7 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 
 	collectionId := uuid.NewString()
 
-	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Consistency == utils.SequentialConsistent)
+	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Consistency == model.SequentialConsistent)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(model.RedisError, err)
 		return returns, wasmedge.Result_Success

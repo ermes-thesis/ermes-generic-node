@@ -4,6 +4,7 @@ go 1.24.4
 
 require (
 	github.com/ermes-thesis/ermes-common/logger v0.0.0-00010101000000-000000000000
+	github.com/ermes-thesis/ermes-common/model v0.0.0-00010101000000-000000000000
 	github.com/hashicorp/golang-lru/v2 v2.0.7
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
@@ -20,3 +21,5 @@ require (
 )
 
 replace github.com/ermes-thesis/ermes-common/logger => ../../ermes-common/logger
+
+replace github.com/ermes-thesis/ermes-common/model => ../../ermes-common/model

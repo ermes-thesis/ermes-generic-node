@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"metadataManager/utils"
 	"net/http"
 	"server/client"
+
+	"github.com/ermes-thesis/ermes-common/model"
 )
 
 type FunctionBundle struct {
 	Binary    []byte
 	Metadata  metadata.FunctionMetadata
-	Templates map[string]utils.QueryTemplate
+	Templates map[string]model.QueryTemplate
 }
 
 type Fetcher[T any] interface {

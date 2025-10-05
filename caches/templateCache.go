@@ -2,7 +2,8 @@ package caches
 
 import (
 	"config"
-	"metadataManager/utils"
+
+	"github.com/ermes-thesis/ermes-common/model"
 )
 
 // TemplatesCache stores compiled templates for functions. Each function
@@ -11,7 +12,7 @@ import (
 // Internally, it uses a BaseCache that maps function names to a map[string]string
 // containing template name-value pairs.
 type TemplatesCache struct {
-	templates *BaseCache[utils.QueryTemplate]
+	templates *BaseCache[model.QueryTemplate]
 }
 
 // NewTemplatesCache creates a new TemplatesCache based on the given configuration.
@@ -23,7 +24,7 @@ type TemplatesCache struct {
 //   - *TemplatesCache: the newly created templates cache
 //   - error: non-nil if the underlying BaseCache could not be created
 func NewTemplatesCache(config config.TemplatesCacheConfig) (*TemplatesCache, error) {
-	templatesCache, err := NewBaseCache[utils.QueryTemplate](config.Size, config.Ttl)
+	templatesCache, err := NewBaseCache[model.QueryTemplate](config.Size, config.Ttl)
 	if err != nil {
 		return nil, err
 	}
@@ -41,7 +42,7 @@ func NewTemplatesCache(config config.TemplatesCacheConfig) (*TemplatesCache, err
 // Returns:
 //   - map[string]string: the templates associated with the function (nil if not found)
 //   - bool: true if templates were found, false otherwise
-func (t *TemplatesCache) Get(templateName string) (utils.QueryTemplate, bool) {
+func (t *TemplatesCache) Get(templateName string) (model.QueryTemplate, bool) {
 	return t.templates.Get(templateName)
 }
 
@@ -50,6 +51,6 @@ func (t *TemplatesCache) Get(templateName string) (utils.QueryTemplate, bool) {
 // Parameters:
 //   - functionName: the name of the function to associate with the templates
 //   - templates: a map of template names to template values
-func (t *TemplatesCache) Set(templateName string, template utils.QueryTemplate) {
+func (t *TemplatesCache) Set(templateName string, template model.QueryTemplate) {
 	t.templates.Set(templateName, template)
 }

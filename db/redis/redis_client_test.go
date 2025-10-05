@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/stretchr/testify/require"
 )
 
@@ -185,11 +186,11 @@ func TestIndex(t *testing.T) {
 	err = redisClient.SetMetadata(collectionId, metadata)
 	require.NoError(t, err, "Expected no error setting metadata")
 
-	query := utils.QueryTemplate{
+	query := model.QueryTemplate{
 		Select: "ALL",
 		As:     "test",
-		Where: &utils.ConditionWrapper{
-			Condition: &utils.EqCondition{
+		Where: &model.ConditionWrapper{
+			Condition: &model.EqCondition{
 				Field: "custom_key",
 				Value: "owner1",
 			},

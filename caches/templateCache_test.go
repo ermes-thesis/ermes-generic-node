@@ -2,10 +2,10 @@ package caches
 
 import (
 	"config"
-	"metadataManager/utils"
 	"testing"
 	"time"
 
+	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/stretchr/testify/require"
 )
 
@@ -18,7 +18,7 @@ func TestTemplatesCache_SetAndGet(t *testing.T) {
 	cache, err := NewTemplatesCache(cfg)
 	require.NoError(t, err)
 
-	templates := map[string]utils.QueryTemplate{
+	templates := map[string]model.QueryTemplate{
 		"tmpl1": {
 			Select: "ALL",
 			As:     "test1",
@@ -66,7 +66,7 @@ func TestTemplatesCache_TTLExpiry(t *testing.T) {
 	require.NoError(t, err)
 
 	fn := "func1"
-	templates := map[string]utils.QueryTemplate{
+	templates := map[string]model.QueryTemplate{
 		"tmpl": {
 			Select: "ALL",
 			As:     "test",

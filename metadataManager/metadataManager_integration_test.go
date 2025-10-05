@@ -20,23 +20,24 @@ import (
 	"time"
 
 	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
 )
 
-var templates = map[string]utils.QueryTemplate{
+var templates = map[string]model.QueryTemplate{
 	"private_data_query": {
 		Select: "ALL",
 		As:     "private_data",
-		Where: &utils.ConditionWrapper{Condition: &utils.AndCondition{
-			Conditions: []utils.Condition{
-				&utils.EqCondition{
+		Where: &model.ConditionWrapper{Condition: &model.AndCondition{
+			Conditions: []model.Condition{
+				&model.EqCondition{
 					Field: "owner",
 					Value: "12345",
 				},
-				&utils.EqCondition{
+				&model.EqCondition{
 					Field: "name",
 					Value: "<name>",
 				},
@@ -46,17 +47,17 @@ var templates = map[string]utils.QueryTemplate{
 	"gt_data_query": {
 		Select: "ALL",
 		As:     "gt_data",
-		Where: &utils.ConditionWrapper{Condition: &utils.AndCondition{
-			Conditions: []utils.Condition{
-				&utils.EqCondition{
+		Where: &model.ConditionWrapper{Condition: &model.AndCondition{
+			Conditions: []model.Condition{
+				&model.EqCondition{
 					Field: "owner",
 					Value: 12345,
 				},
-				&utils.EqCondition{
+				&model.EqCondition{
 					Field: "name",
 					Value: "DATI_PRIVATE",
 				},
-				&utils.GtCondition{
+				&model.GtCondition{
 					Field: "created_at",
 					Value: 1745747999,
 				},

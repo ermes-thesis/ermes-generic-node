@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -322,7 +323,7 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 	}}, fields...)...).Err()
 }
 
-func (r *RedisClient) SearchOnMetadata(query utils.QueryTemplate, userGroups []string) ([]utils.CollectionInfo, error) {
+func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userGroups []string) ([]utils.CollectionInfo, error) {
 	redisQuery, err := query.ToRedisSearchCommand()
 	if err != nil {
 		return nil, err

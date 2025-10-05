@@ -21,9 +21,9 @@ jobs:
       - name: Checkout wasm pool
         uses: actions/checkout@v4
         with:
-          repository: 'ermes-thesis/ermes-wasm-pool'
+          repository: 'ermes-thesis/ermes-common'
           token: '${{ secrets.READ_TOKEN }}'
-          path: 'ermes-wasm-pool'
+          path: 'ermes-common'
 
       - name: Install WasmEdge
         run: curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | sudo bash -s -- -p /usr/local

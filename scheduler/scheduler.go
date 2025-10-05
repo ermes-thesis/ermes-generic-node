@@ -101,91 +101,114 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 		return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId, "")
 	}
 
-	var sequentialCollection shared.Collection
-	sequentialCollectionNeeded := false
-	eventualCollectionPresent := false
-	eventualHostIds := make(map[string]uint)
+	// Initializing vars for function returned collections analysis
+	var sequentialCollection *shared.StrongCollection
+	hasEventualLocal := false
+	eventualHostCounts := make(map[string]uint)
+	maxEventualCount := uint(0)
 	hostWithMoreEventual := ""
 	if s.serverInfo.Father != nil {
 		hostWithMoreEventual = s.serverInfo.Father.HostName
 	}
-	maxEventual := uint(0)
+
+	// Cycling over all the returned collections (they are grouped based on their "AS" defined by the dev)
 	for _, cols := range collections {
+		// Cycling over all the collections with the same "AS"
 		for _, col := range cols {
+			// Checking if the collection is locally present, the check is retried maximum 10 times, every 500ms if the
+			// collection is a sequential consistent one. (In case of a eventual consistent the seqNumber passed is ignored)
 			found, collection, err := s.retryIsCollectionLocallyPresent(col.Id, sequentialSeqNumber, 10, 500*time.Millisecond)
 			if err != nil {
 				return nil, 0, fmt.Errorf("wrong sequence number for collection: %v, %w", col.Id, err)
 			}
+
 			if col.Metadata.Consistency == utils.SequentialConsistent {
-				if sequentialCollectionNeeded {
+				if sequentialCollection != nil {
 					return nil, 0, fmt.Errorf("multiple sequentially consistent collections are not supported")
 				}
-				sequentialCollection = collection
-				sequentialCollectionNeeded = true
+				// If collection is NIL, it means that the current node does not know its existance
+				if collection != nil {
+					sequentialCollection = collection.(*shared.StrongCollection)
+				}
 			} else {
 				if found {
-					eventualCollectionPresent = true
+					hasEventualLocal = true
 				}
+
+				// If the currently iterated collection is known by the current node, we count the host for this collection
+				// TODO: Should replace this counter with a check to find the host with lower latency
 				if collection != nil {
 					for hostId := range collection.HostsId() {
-						eventualHostIds[hostId]++
-						if eventualHostIds[hostId] > maxEventual {
-							maxEventual = eventualHostIds[hostId]
+						eventualHostCounts[hostId]++
+						if eventualHostCounts[hostId] > maxEventualCount {
+							maxEventualCount = eventualHostCounts[hostId]
 							hostWithMoreEventual = hostId
 						}
 					}
-				} else {
-					eventualHostIds[s.serverInfo.Father.HostName]++
-					if eventualHostIds[s.serverInfo.Father.HostName] > maxEventual {
-						maxEventual = eventualHostIds[s.serverInfo.Father.HostName]
-						hostWithMoreEventual = s.serverInfo.Father.HostName
+				} else if s.serverInfo.Father != nil {
+					hostId := s.serverInfo.Father.HostName
+					eventualHostCounts[hostId]++
+					if eventualHostCounts[hostId] > maxEventualCount {
+						maxEventualCount = eventualHostCounts[hostId]
+						hostWithMoreEventual = hostId
 					}
 				}
 			}
 		}
 	}
 
-	if sequentialCollectionNeeded {
-		if sequentialCollection == nil {
-			return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
-		}
-
+	// Route based on collection analysis
+	// Priority: Sequential > Local Eventual > Remote Eventual
+	if sequentialCollection != nil {
+		// Sequential collection present - check if it is requested a write or read access
 		functionMetadata, err := s.cache.GetMetadata(functionName, functionVersion)
 		if err != nil {
 			return nil, 0, fmt.Errorf("error retrieving function metadata: %v", err)
 		}
 
-		seqCollectionCasted, ok := sequentialCollection.(*shared.StrongCollection)
 		if sequentialCollection.IsLocal() {
-			if !ok {
-				return nil, 0, fmt.Errorf("collection %s is not a strong collection", sequentialCollection)
+			// If Sequential collection is present, and it's the leader execute locally.
+			// If Sequential collection is present, and the function needs only to read it, execute locally
+			if sequentialCollection.IsLeader || !functionMetadata.StrongCollWriteAccess {
+				return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId, sequentialCollection.CollectionId())
 			}
 
-			if seqCollectionCasted.IsLeader || !functionMetadata.StrongCollWriteAccess {
-				return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId, seqCollectionCasted.CollectionId())
-			} else {
-				// Forward to seqCollectionCasted.LeaderId
-				return s.forwardRequest(seqCollectionCasted.LeaderId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
-			}
-		} else {
-			// Forward to the leader or to a replica based on the functionMetadata.StrongCollWriteAccess
-			if functionMetadata.StrongCollWriteAccess {
-				// Forward to seqCollectionCasted.LeaderId
-				return s.forwardRequest(seqCollectionCasted.LeaderId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
-			} else {
-				// Forward to any node that has the collection
-				//TODO: check if maps in Go are iterated consistently --> No, it matters here?
-				for hostId := range seqCollectionCasted.HostsId() {
-					return s.forwardRequest(hostId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
-				}
-				return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
-			}
+			// In all the other cases forward to the leader replica of the sequential collection
+			return s.forwardRequest(sequentialCollection.LeaderId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
 		}
-	} else if eventualCollectionPresent {
-		return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId, "")
-	} else {
-		return s.forwardRequest(hostWithMoreEventual, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
+
+		// If the Sequential collection is not locally present, and the function needs to access it in write. Forward towards
+		// the leader.
+		if functionMetadata.StrongCollWriteAccess {
+			return s.forwardRequest(sequentialCollection.LeaderId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
+		}
+
+		// If the Sequential collection is not locally present, and the function require only reading it. Forward towards to
+		// one of the available replicas
+		// TODO: Should replace this forwarding with a check to find the host with lower latency
+		for hostId := range sequentialCollection.HostsId() {
+			return s.forwardRequest(hostId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
+		}
+
+		// If "HostId" is empty we fallback to the father (shouldn't happen, since if we are in this branch, it means that
+		// the node knows the existence of the collection, therefore the collection should be local to the node, or in
+		// one of its children, meaning that "HostId" should NOT be empty)
+		if s.serverInfo.Father != nil {
+			return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
+		}
+		// If we are here, it means that something wrong has happened in the scheduling process and we are in the Cloud Node
+		panic("No available host for sequential collection")
 	}
+
+	// If is not requested a Sequential Collection, and the current node has at least one of the eventual collections
+	// requested, we execute the function locally
+	if hasEventualLocal {
+		return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId, "")
+	}
+
+	// We have only Eventual Collection requested, and no one of them is local, we forward the scheduling request
+	// towards the DIRECTION where we have more Eventual Collections
+	return s.forwardRequest(hostWithMoreEventual, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
 }
 
 func (s *SchedulerImpl) executeLocally(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, reqBody []byte, groups []string, userId string, sequentialCollId string) (*FunctionResult, uint64, error) {

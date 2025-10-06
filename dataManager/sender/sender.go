@@ -17,6 +17,7 @@ const (
 	remoteAccessPath                = "/dataRemoteAccess"
 	remoteUpdatePath                = "/dataRemoteUpdate"
 	updatePropagationPath           = "/dataUpdatePropagation"
+	updateGroupPropagationPath      = "/dataGroupUpdatePropagation"
 	createCollectionPropagationPath = "/newCollection"
 	removeCollectionPropagationPath = "/removeCollection"
 )
@@ -91,12 +92,14 @@ func (s *MigrationManagerSenderImpl) RepoPath() string {
 type CollectionDiscovererSender interface {
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames ...string) ([]any, error)
 	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages)
+	PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages)
 	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage)
 	RemoveCollection(hostId string, collectionId string, senderIp string)
 
 	RemoteAccessPath() string
 	RemoteUpdatePath() string
 	UpdatePropagationPath() string
+	UpdateGroupPropagationPath() string
 	CreateCollectionPropagationPath() string
 	RemoveCollectionPropagationPath() string
 }
@@ -166,6 +169,12 @@ func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update g
 	s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)
 }
 
+func (s *CollectionDiscovererSenderImpl) PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages) {
+	s.logger.Println("SENDER", fmt.Sprintf("request collection group update propagation to %s", hostId), log.INFO)
+
+	s.server.SendGenericHTTPRequest(hostId, updateGroupPropagationPath, update)
+}
+
 func (s *CollectionDiscovererSenderImpl) RemoteAccessPath() string {
 	return remoteAccessPath
 }
@@ -176,6 +185,10 @@ func (s *CollectionDiscovererSenderImpl) RemoteUpdatePath() string {
 
 func (s *CollectionDiscovererSenderImpl) UpdatePropagationPath() string {
 	return updatePropagationPath
+}
+
+func (s *CollectionDiscovererSenderImpl) UpdateGroupPropagationPath() string {
+	return updateGroupPropagationPath
 }
 
 func (s *CollectionDiscovererSenderImpl) CreateCollectionPropagationPath() string {

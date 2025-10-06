@@ -28,7 +28,7 @@ type DataManager interface {
 
 	//methods
 	UpdateCollectionsRecorsAndPropogate(updates []messages.CollectionUpdate) error
-
+	UpdateCollectionsGroupsAndPropogate(updates []messages.CollectionGroupUpdate) error
 	SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, isStrong bool) error
 	RemoveCollectionAndProgate(collectionId string) error
 }
@@ -101,6 +101,14 @@ func (m *DataManagerImp) UpdateCollectionsRecorsAndPropogate(updates []messages.
 		m.serverInfo.HostName,
 	), true, m.serverInfo.HostName,
 	)
+}
+
+func (m *DataManagerImp) UpdateCollectionsGroupsAndPropogate(updates []messages.CollectionGroupUpdate) error {
+	return m.collectionsDiscoverer.UpdateCollectionsGroupsAndPropogate(messages.ToCollectionGroupUpdateMessages(
+		updates,
+		m.serverInfo.HostName,
+		m.serverInfo.HostName,
+	), true, m.serverInfo.HostName)
 }
 
 func (m *DataManagerImp) SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, isStrong bool) error {

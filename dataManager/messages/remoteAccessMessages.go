@@ -4,6 +4,8 @@ import (
 	"time"
 )
 
+// get
+
 type RemoteAccessRequest struct {
 	CollectionId string   `json:"collectionId"`
 	RecordNames  []string `json:"recordNames"`
@@ -20,6 +22,8 @@ type RemoteUpdateRequest struct {
 	SenderIp     string   `json:"senderIp"`
 	IsDelete     bool     `json:"isDelete"`
 }
+
+// put and delete records
 
 type CollectionUpdate struct {
 	CollectionId string   `json:"collectionId"`
@@ -63,6 +67,46 @@ func ToCollectionUpdateMessages(
 
 	return result
 }
+
+// put and delete groups
+
+type CollectionGroupUpdate struct {
+	CollectionId string   `json:"collectionId"`
+	GroupNames   []string `json:"recordNames"`
+	IsDelete     bool     `json:"isDelete"`
+}
+
+type CollectionGroupUpdateMessage struct {
+	CollectionId string   `json:"collectionId"`
+	GroupNames   []string `json:"recordNames"`
+	IsDelete     bool     `json:"isDelete"`
+	Time         int64    `json:"time"`
+	UpdateHostIp string   `json:"updateHostIp"`
+	SenderIp     string   `json:"senderIp"`
+}
+
+func ToCollectionGroupUpdateMessages(updates []CollectionGroupUpdate, updateHostIp string, senderIp string) []CollectionGroupUpdateMessage {
+	result := make([]CollectionGroupUpdateMessage, 0, len(updates))
+	time := time.Now().Unix()
+
+	for _, u := range updates {
+		msg := CollectionGroupUpdateMessage{
+			CollectionId: u.CollectionId,
+			GroupNames:   u.GroupNames,
+			Time:         time,
+			UpdateHostIp: updateHostIp,
+			SenderIp:     senderIp,
+			IsDelete:     u.IsDelete,
+		}
+		result = append(result, msg)
+	}
+
+	return result
+}
+
+type CollectionGroupUpdateMessages []CollectionGroupUpdateMessage
+
+// collection management
 
 type NewCollectionMessage struct {
 	CollectionId string `json:"collectionId"`

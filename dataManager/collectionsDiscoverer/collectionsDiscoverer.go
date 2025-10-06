@@ -21,7 +21,7 @@ type CollectionsDiscoverer interface {
 	WeakCollectionRemoteRecordsAccess(hostId string, collectionId string, recordNames ...string) ([]any, error)
 
 	UpdateCollectionsRecorsAndPropogate(updates []messages.CollectionUpdateMessage, isInitiator bool, ignoredHostName string) error
-
+	UpdateCollectionsGroupsAndPropogate(updates []messages.CollectionGroupUpdateMessage, isInitiator bool, ignoredHostName string) error
 	SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error
 	RemoveCollectionAndProgate(collectionId string, migrationManager migrationManager.MigrationManager, isInitiator bool, ignoredHostName string) error
 }
@@ -57,6 +57,7 @@ func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialVie
 
 		server.AddCustomRoute(c.sender.RemoteAccessPath(), true, c.handleIncomingRemoteAccess(logger).ServeHTTP)
 		server.AddCustomRoute(c.sender.UpdatePropagationPath(), true, c.handleIncomingUpdatePropagation(logger).ServeHTTP)
+		server.AddCustomRoute(c.sender.UpdateGroupPropagationPath(), true, c.handleIncomingUpdateGroupPropagation(logger).ServeHTTP)
 		server.AddCustomRoute(c.sender.CreateCollectionPropagationPath(), true, c.handleIncomingNewCollection(logger).ServeHTTP)
 		server.AddCustomRoute(c.sender.RemoveCollectionPropagationPath(), true, c.handleIncomingRemoveCollection(logger).ServeHTTP)
 	})
@@ -203,7 +204,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecorsAndPropogate(updates [
 			}
 		}
 		//check for conflicts
-		if !isInitiator && !c.checkUpdateConflicts(update.CollectionId, update, update.IsDelete) {
+		if !isInitiator && !c.checkUpdateConflicts(update.CollectionId, update) {
 			continue //do not apply and propagate update
 		}
 
@@ -236,7 +237,62 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecorsAndPropogate(updates [
 	return nil
 }
 
-func (c *CollectionsDiscovererImp) checkUpdateConflicts(collectionId string, updateMessage messages.CollectionUpdateMessage, isDelete bool) bool {
+func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropogate(updates []messages.CollectionGroupUpdateMessage, isInitiator bool, ignoredHostName string) error {
+	var msgs map[string]messages.CollectionGroupUpdateMessages = make(map[string]messages.CollectionGroupUpdateMessages) // host -> message
+	//sync
+	c.collectionsPartialView.Mutex.Lock()
+
+	for _, update := range updates {
+		var dbFn func() error
+		if update.IsDelete {
+			dbFn = func() error {
+				return c.dbInterface.RemoveGroups(update.CollectionId, update.GroupNames...)
+			}
+		} else {
+			dbFn = func() error {
+				return c.dbInterface.AddGroups(update.CollectionId, update.GroupNames...)
+			}
+		}
+		//check for conflicts  -> TODO: same time and id for put and groups?
+		/*if !isInitiator && !c.checkUpdateConflicts(update.CollectionId, update) {
+			continue //do not apply and propagate update
+		}*/
+
+		//TODO remove
+		collection, exists := c.collectionsPartialView.KnownCollections[update.CollectionId]
+		if exists && !collection.IsStrong() {
+			return errors.New("unimplemented ")
+		}
+		//TODO end remove
+
+		//write or delete in db
+		hosts, err := UpdateRecord(c, update.CollectionId, dbFn, isInitiator)
+		if err != nil {
+			c.collectionsPartialView.Mutex.Unlock() // lock release
+			return err
+		}
+		update.SenderIp = c.serverInfo.HostName
+
+		for host := range hosts { // for each host that has the collection prepare the message
+			if host == ignoredHostName {
+				continue
+			}
+			if _, ok := msgs[host]; !ok {
+				msgs[host] = make(messages.CollectionGroupUpdateMessages, 0)
+			}
+			msgs[host] = append(msgs[host], update)
+		}
+	}
+	c.collectionsPartialView.Mutex.Unlock() // lock release
+
+	//propagate update to other hosts
+	for host, msg := range msgs {
+		c.sender.PropagateGroupUpdate(host, msg)
+	}
+	return nil
+}
+
+func (c *CollectionsDiscovererImp) checkUpdateConflicts(collectionId string, updateMessage messages.CollectionUpdateMessage) bool {
 	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
 	if !exists || !collection.IsLocal() || collection.IsStrong() { //conflict not possible
 		return true

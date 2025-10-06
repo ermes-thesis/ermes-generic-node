@@ -88,7 +88,7 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation(logger log.Lo
 
 		var msg gossip.CollectionUpdateMessages
 		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
-			logger.Println("HTTP-REQ", "Error parsing remote access request", log.ERROR)
+			logger.Println("HTTP-REQ", "Error parsing remote propagation request", log.ERROR)
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -96,6 +96,32 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation(logger log.Lo
 		w.WriteHeader(http.StatusOK) //response
 
 		c.UpdateCollectionsRecorsAndPropogate(msg, false, msg[0].SenderIp)
+	})
+}
+
+func (c *CollectionsDiscovererImp) handleIncomingUpdateGroupPropagation(logger log.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger.Println("HTTP-REQ", "New group update propagation request received through HTTP request", log.INFO)
+
+		defer r.Body.Close()
+
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var msg gossip.CollectionGroupUpdateMessages
+		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
+			logger.Println("HTTP-REQ", "Error parsing remote group propagation request", log.ERROR)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK) //response
+
+		c.UpdateCollectionsGroupsAndPropogate(msg, false, msg[0].SenderIp)
 	})
 }
 
@@ -178,7 +204,6 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection(logger log.Log
 		dbErr := c.RemoveCollectionAndProgate(collectionId, migrationManager.GetMigrationManagerInstance(c.logger), false, senderIp)
 		if dbErr != nil {
 			logger.Println("HTTP-REQ", "Error removing collection: "+dbErr.Error(), log.ERROR)
-			return
 		}
 	})
 }

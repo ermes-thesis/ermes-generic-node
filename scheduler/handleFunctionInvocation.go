@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"io"
 	"metadataManager"
-	"metadataManager/utils"
+	"metadataManager/types"
 	"net/http"
 	"os"
 	"tokenDecoder"
@@ -36,11 +36,11 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			return
 		}
 
-		var collections map[string][]utils.CollectionInfo
-		var toCache map[uint64]utils.QueryResult
+		var collections map[string][]types.CollectionInfo
+		var toCache map[uint64]types.QueryResult
 
 		if cachedQuery != "" {
-			var cachedQueries map[string][]utils.CollectionInfo
+			var cachedQueries map[string][]types.CollectionInfo
 			err := json.Unmarshal([]byte(cachedQuery), &cachedQueries)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error unmarshalling cached query: %s \n", err)
@@ -60,7 +60,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			toCache = res
 
 			if collections == nil {
-				collections = make(map[string][]utils.CollectionInfo)
+				collections = make(map[string][]types.CollectionInfo)
 			}
 			for _, v := range res {
 				collections[v.As] = append(collections[v.As], v.Collections...)

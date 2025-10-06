@@ -1,7 +1,6 @@
 package caches
 
 import (
-	"caches/metadata"
 	"config"
 	"fmt"
 	"mocks/caches"
@@ -10,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ermes-thesis/ermes-common/caches"
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/rs/zerolog"
@@ -48,7 +48,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 		Templates: map[string]model.QueryTemplate{
 			"tmpl" + fn: query,
 		},
-		Metadata: metadata.FunctionMetadata{
+		Metadata: model.FunctionMetadata{
 			Name:                  fn,
 			Version:               fnVer,
 			TemplateNames:         []string{"tmpl" + fn},
@@ -62,7 +62,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 			Size: 10,
 			Ttl:  30 * time.Second,
 		},
-		BinaryCache: config.MetadataBinaryCacheConfig{
+		BinaryCache: caches.MetadataBinaryCacheConfig{
 			Size:   10,
 			Ttl:    30 * time.Second,
 			BinDir: tmpDir,
@@ -130,7 +130,7 @@ func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
 			Size: 10,
 			Ttl:  1 * time.Second,
 		},
-		BinaryCache: config.MetadataBinaryCacheConfig{
+		BinaryCache: caches.MetadataBinaryCacheConfig{
 			Size:   10,
 			Ttl:    1 * time.Second,
 			BinDir: tmpDir,

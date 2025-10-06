@@ -1,11 +1,11 @@
 package caches
 
 import (
-	"caches/metadata"
 	"config"
 	"fmt"
 	"slices"
 
+	"github.com/ermes-thesis/ermes-common/caches"
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 	"golang.org/x/sync/singleflight"
@@ -14,28 +14,34 @@ import (
 type FunctionCache interface {
 	GetTemplate(functionName string, functionVersion string, templateName string) (*model.QueryTemplate, error)
 	GetBinary(functionName string, functionVersion string) ([]byte, error)
-	GetMetadata(functionName string, functionVersion string) (*metadata.FunctionMetadata, error)
+	GetMetadata(functionName string, functionVersion string) (*model.FunctionMetadata, error)
 }
 
 type FunctionCacheImpl struct {
 	Templates        *TemplatesCache
-	MetadataBinaries *MetadataBinaryCache
-	LatestVersions   *BaseCache[string]
-	fetcher          Fetcher[*FunctionBundle]
+	MetadataBinaries *caches.MetadataBinaryCache
+	LatestVersions   *caches.BaseCache[string]
+	fetcher          caches.Fetcher[*FunctionBundle]
 	group            singleflight.Group
 	log              *logger.Logger
 }
 
-func NewFunctionCache(config config.FunctionsCacheConfig, fetcher Fetcher[*FunctionBundle], log *logger.Logger) (*FunctionCacheImpl, error) {
+type FunctionBundle struct {
+	Binary    []byte
+	Metadata  model.FunctionMetadata
+	Templates map[string]model.QueryTemplate
+}
+
+func NewFunctionCache(config config.FunctionsCacheConfig, fetcher caches.Fetcher[*FunctionBundle], log *logger.Logger) (*FunctionCacheImpl, error) {
 	tmplCache, err := NewTemplatesCache(config.TemplateCache)
 	if err != nil {
 		return nil, fmt.Errorf("error creating template cache: %v", err)
 	}
-	binCache, err := NewMetadataBinaryCache(config.BinaryCache)
+	binCache, err := caches.NewMetadataBinaryCache(config.BinaryCache)
 	if err != nil {
 		return nil, fmt.Errorf("error creating binary cache: %v", err)
 	}
-	latest, err := NewBaseCache[string](config.BinaryCache.Size, config.LatestCacheTtl)
+	latest, err := caches.NewBaseCache[string](config.BinaryCache.Size, config.LatestCacheTtl)
 	if err != nil {
 		return nil, fmt.Errorf("error creating latest versions cache: %v", err)
 	}
@@ -54,11 +60,11 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret str
 	if err != nil {
 		return nil, fmt.Errorf("error creating template cache: %v", err)
 	}
-	binCache, err := NewMetadataBinaryCache(config.BinaryCache)
+	binCache, err := caches.NewMetadataBinaryCache(config.BinaryCache)
 	if err != nil {
 		return nil, fmt.Errorf("error creating binary cache: %v", err)
 	}
-	latest, err := NewBaseCache[string](config.BinaryCache.Size, config.LatestCacheTtl)
+	latest, err := caches.NewBaseCache[string](config.BinaryCache.Size, config.LatestCacheTtl)
 	if err != nil {
 		return nil, fmt.Errorf("error creating latest versions cache: %v", err)
 	}
@@ -67,7 +73,7 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret str
 		Templates:        tmplCache,
 		MetadataBinaries: binCache,
 		LatestVersions:   latest,
-		fetcher:          NewRemoteBundleFetcher(fmt.Sprintf("http://%s:%s", config.FunctionRegistry.Address, config.FunctionRegistry.Port), ermesSecret),
+		fetcher:          caches.NewRemoteBundleFetcher[FunctionBundle](fmt.Sprintf("http://%s:%s", config.FunctionRegistry.Address, config.FunctionRegistry.Port), ermesSecret),
 		group:            singleflight.Group{},
 		log:              log,
 	}, nil
@@ -144,7 +150,7 @@ func (f *FunctionCacheImpl) GetBinary(functionName string, functionVersion strin
 	return fnBundle.Binary, err
 }
 
-func (f *FunctionCacheImpl) GetMetadata(functionName string, functionVersion string) (*metadata.FunctionMetadata, error) {
+func (f *FunctionCacheImpl) GetMetadata(functionName string, functionVersion string) (*model.FunctionMetadata, error) {
 	if functionVersion == "latest" {
 		bundle, err := f.resolveLatest(functionName, "metadata")
 		if err != nil {

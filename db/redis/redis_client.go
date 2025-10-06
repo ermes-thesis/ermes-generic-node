@@ -5,7 +5,7 @@ import (
 	"context"
 	"db"
 	"errors"
-	"metadataManager/utils"
+	"metadataManager/types"
 	"regexp"
 	"slices"
 	"strconv"
@@ -323,7 +323,7 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 	}}, fields...)...).Err()
 }
 
-func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userGroups []string) ([]utils.CollectionInfo, error) {
+func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userGroups []string) ([]types.CollectionInfo, error) {
 	redisQuery, err := query.ToRedisSearchCommand()
 	if err != nil {
 		return nil, err
@@ -335,7 +335,7 @@ func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userGroups []s
 		return nil, err
 	}
 
-	var result []utils.CollectionInfo
+	var result []types.CollectionInfo
 	for _, doc := range res.Docs {
 		collId, _ := strings.CutPrefix(doc.ID, "meta:")
 
@@ -344,7 +344,7 @@ func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userGroups []s
 			return nil, err
 		}
 
-		collectionInfo := utils.CollectionInfo{
+		collectionInfo := types.CollectionInfo{
 			Id:       collId,
 			Metadata: *metadata,
 		}

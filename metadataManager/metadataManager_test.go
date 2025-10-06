@@ -3,7 +3,7 @@ package metadataManager_test
 import (
 	"encoding/json"
 	"metadataManager"
-	"metadataManager/utils"
+	"metadataManager/types"
 	"mocks/caches"
 	"mocks/metadataManager"
 	"server/info"
@@ -89,7 +89,7 @@ func TestExecuteQueries(t *testing.T) {
 
 	assert.Len(t, result, 1, "Expected result to be non-empty")
 
-	hash := utils.NewQueryIdentifier("private_data_query", map[string]string{
+	hash := types.NewQueryIdentifier("private_data_query", map[string]string{
 		"name": "collectionNameFather",
 	}).Hash()
 	assert.Contains(t, result, hash, "Expected result to contain 'private_data' key")

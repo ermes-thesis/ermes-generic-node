@@ -1,11 +1,10 @@
 package scheduler_test
 
 import (
-	"caches/metadata"
 	shared "dataManager/shared"
 	"encoding/json"
 	"io"
-	"metadataManager/utils"
+	"metadataManager/types"
 	"mocks/caches"
 	datamanager_mock "mocks/dataManager"
 	"mocks/dataManager/collectionsDiscoverer"
@@ -54,7 +53,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]utils.CollectionInfo{
+		Collections: map[string][]types.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -118,7 +117,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 		MiddlewareSecret: "middleware-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
-	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&metadata.FunctionMetadata{
+	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
 		Name:                  invokedFnName,
 		Version:               invokedFnVer,
 		TemplateNames:         nil,
@@ -206,7 +205,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]utils.CollectionInfo{
+		Collections: map[string][]types.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -239,7 +238,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	tokenString := "JWTToken"
 
 	fnCacheFather := caches_mock.NewFunctionCache(t)
-	fnCacheFather.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&metadata.FunctionMetadata{
+	fnCacheFather.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
 		Name:                  invokedFnName,
 		Version:               invokedFnVer,
 		TemplateNames:         nil,
@@ -298,7 +297,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 		MiddlewareSecret: "middleware-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
-	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&metadata.FunctionMetadata{
+	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
 		Name:                  invokedFnName,
 		Version:               invokedFnVer,
 		TemplateNames:         nil,
@@ -382,7 +381,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]utils.CollectionInfo{
+		Collections: map[string][]types.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -511,7 +510,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]utils.CollectionInfo{
+		Collections: map[string][]types.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -649,7 +648,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]utils.CollectionInfo{
+		Collections: map[string][]types.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -791,7 +790,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]utils.CollectionInfo{
+		Collections: map[string][]types.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -925,7 +924,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]utils.CollectionInfo{
+		Collections: map[string][]types.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -958,7 +957,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	tokenString := "JWTToken"
 
 	fnCacheFather := caches_mock.NewFunctionCache(t)
-	fnCacheFather.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&metadata.FunctionMetadata{
+	fnCacheFather.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
 		Name:                  invokedFnName,
 		Version:               invokedFnVer,
 		TemplateNames:         nil,
@@ -1007,7 +1006,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	}
 
 	fnCacheChild := caches_mock.NewFunctionCache(t)
-	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&metadata.FunctionMetadata{
+	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
 		Name:                  invokedFnName,
 		Version:               invokedFnVer,
 		TemplateNames:         nil,
@@ -1094,7 +1093,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]utils.CollectionInfo{
+		Collections: map[string][]types.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "1111",
@@ -1116,7 +1115,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	tokenString := "JWTToken"
 
 	fnCacheFather := caches_mock.NewFunctionCache(t)
-	fnCacheFather.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&metadata.FunctionMetadata{
+	fnCacheFather.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
 		Name:                  invokedFnName,
 		Version:               invokedFnVer,
 		TemplateNames:         nil,
@@ -1163,7 +1162,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	}
 
 	fnCacheChild := caches_mock.NewFunctionCache(t)
-	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&metadata.FunctionMetadata{
+	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
 		Name:                  invokedFnName,
 		Version:               invokedFnVer,
 		TemplateNames:         nil,
@@ -1208,7 +1207,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	}
 
 	fnCacheChild2 := caches_mock.NewFunctionCache(t)
-	fnCacheChild2.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&metadata.FunctionMetadata{
+	fnCacheChild2.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
 		Name:                  invokedFnName,
 		Version:               invokedFnVer,
 		TemplateNames:         nil,

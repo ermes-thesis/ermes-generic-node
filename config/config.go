@@ -5,6 +5,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/ermes-thesis/ermes-common/caches"
 	"gopkg.in/yaml.v3" //go get gopkg.in/yaml.v3
 )
 
@@ -42,16 +43,10 @@ type RedisConfig struct {
 }
 
 type FunctionsCacheConfig struct {
-	BinaryCache      MetadataBinaryCacheConfig `yaml:"binaryCache"`
-	TemplateCache    TemplatesCacheConfig      `yaml:"templateCache"`
-	FunctionRegistry FunctionRegistryConfig    `yaml:"functionRegistry"`
-	LatestCacheTtl   time.Duration             `yaml:"latestCacheTtl"`
-}
-
-type MetadataBinaryCacheConfig struct {
-	Size   int           `yaml:"size"`
-	Ttl    time.Duration `yaml:"ttl"`
-	BinDir string        `yaml:"binDir"`
+	BinaryCache      caches.MetadataBinaryCacheConfig `yaml:"binaryCache"`
+	TemplateCache    TemplatesCacheConfig             `yaml:"templateCache"`
+	FunctionRegistry FunctionRegistryConfig           `yaml:"functionRegistry"`
+	LatestCacheTtl   time.Duration                    `yaml:"latestCacheTtl"`
 }
 
 type TemplatesCacheConfig struct {

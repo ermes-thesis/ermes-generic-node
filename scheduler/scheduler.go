@@ -8,21 +8,21 @@ import (
 	"fmt"
 	"io"
 	"metadataManager"
-	"metadataManager/utils"
+	"metadataManager/types"
 	"net/http"
 	"server"
-	"server/client"
 	"server/info"
 	"time"
 	"tokenDecoder"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
+	"github.com/ermes-thesis/ermes-common/utils"
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
 )
 
 type Scheduler interface {
-	Schedule(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, sequentialSeqNumber uint64, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, error)
+	Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, error)
 }
 
 type FunctionResult struct {
@@ -94,7 +94,7 @@ func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
 	return found, collection, fmt.Errorf("after %d retries: %w", retries, err)
 }
 
-func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, sequentialSeqNumber uint64, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, uint64, error) {
+func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, uint64, error) {
 	fmt.Println("Scheduling function:", functionName, "version:", functionVersion)
 	fmt.Printf("With collections: %v\n", collections)
 
@@ -212,7 +212,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 	return s.forwardRequest(hostWithMoreEventual, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
 }
 
-func (s *SchedulerImpl) executeLocally(functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, reqBody []byte, groups []string, userId string, sequentialCollId string) (*FunctionResult, uint64, error) {
+func (s *SchedulerImpl) executeLocally(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, reqBody []byte, groups []string, userId string, sequentialCollId string) (*FunctionResult, uint64, error) {
 	executor := s.wasmExecutorPool.Acquire()
 	defer executor.Release()
 	ctx := WasmContext{
@@ -255,7 +255,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 	}, seqNumber, nil
 }
 
-func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functionVersion string, collections map[string][]utils.CollectionInfo, groupToken string, seqNumber uint64) (*FunctionResult, uint64, error) {
+func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functionVersion string, collections map[string][]types.CollectionInfo, groupToken string, seqNumber uint64) (*FunctionResult, uint64, error) {
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/pvt-offload-function/%s/%s", dest, functionName, functionVersion), nil)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error creating request to leader: %v", err)
@@ -269,7 +269,7 @@ func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functio
 	req.Header.Set("X-ERMES-SECRET", s.serverInfo.Secret)
 	req.Header.Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", seqNumber))
 
-	resp, err := client.CustomClient.Do(req)
+	resp, err := utils.CustomClient.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error forwarding request to leader: %v", err)
 	}

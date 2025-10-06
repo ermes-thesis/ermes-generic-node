@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"metadataManager/utils"
+	"metadataManager/types"
 	"net/http"
 	"os"
-	"server/client"
 	"server/info"
 	"strings"
 
 	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/utils"
 )
 
 type PropagationOrigin int
@@ -36,7 +36,7 @@ type Propagable interface {
 }
 
 type QueryPropagator interface {
-	Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error)
+	Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error)
 }
 
 type QueryPropagatorImpl struct {
@@ -51,7 +51,7 @@ func NewQueryPropagator(serverInfo *info.ServerInfo, log *logger.Logger) QueryPr
 	}
 }
 
-func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error) {
+func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error) {
 	p.log.Info("No geolocation provided in the request header.")
 
 	var receiver string
@@ -75,7 +75,7 @@ func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion str
 	req.Header.Set("X-ERMES-POSITION", geolocation)
 	req.Header.Set("X-ERMES-QUERY", templateParamsMappings)
 
-	res, err := client.CustomClient.Do(req)
+	res, err := utils.CustomClient.Do(req)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when contacting the cloud node: %s \n", err)
 		return nil, err
@@ -93,7 +93,7 @@ func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion str
 		return nil, err
 	}
 
-	var result map[uint64]utils.QueryResult
+	var result map[uint64]types.QueryResult
 	if err := json.Unmarshal(body, &result); err != nil {
 		fmt.Fprintf(os.Stderr, "Error when unmarshalling the response body: %s \n", err)
 		return nil, err
@@ -191,7 +191,7 @@ func (p *MetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId str
 	req.Header.Set("X-ERMES-SECRET", p.serverInfo.Secret)
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", p.serverInfo.MetadataDomain)
 
-	resp, err := client.CustomClient.Do(req)
+	resp, err := utils.CustomClient.Do(req)
 	if err != nil {
 		p.log.Errorf("[%s] Error sending request: %v\n", p.serverInfo.MetadataDomain, err)
 		return err

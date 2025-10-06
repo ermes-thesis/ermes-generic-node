@@ -1,9 +1,9 @@
 package scheduler
 
-import "metadataManager/utils"
+import "metadataManager/types"
 
 type WasmContext struct {
 	UserId      string
 	GroupList   []string
-	Collections map[string][]utils.CollectionInfo
+	Collections map[string][]types.CollectionInfo
 }

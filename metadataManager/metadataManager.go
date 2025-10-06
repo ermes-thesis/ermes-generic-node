@@ -5,7 +5,7 @@ import (
 	"db"
 	"encoding/json"
 	"fmt"
-	"metadataManager/utils"
+	"metadataManager/types"
 	"os"
 	"server"
 	"server/info"
@@ -30,7 +30,7 @@ type MetadataManager interface {
 	CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin PropagationOrigin) error
 	AddGroupToCollection(collectionId string, reqOrigin PropagationOrigin, groups ...string) error
 	RemoveGroupFromCollection(collectionId string, reqOrigin PropagationOrigin, groups ...string) error
-	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error)
+	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error)
 }
 
 type MetadataManagerImpl struct {
@@ -144,11 +144,11 @@ func (m *MetadataManagerImpl) RemoveGroupFromCollection(collectionId string, req
 	return m.metadataPropagator.Propagate(collectionId, GroupMessage(groups), geolocation, reqOrigin, DELETE)
 }
 
-func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]utils.QueryResult, error) {
+func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error) {
 	// Execute the query locally if the server's metadata domain match the geolocation, it is its prefix or if the local node is a cloud node.
 	//Otherwise, propagate the query to the cloud node or the father node.
 	if strings.HasPrefix(geolocation, m.serverInfo.MetadataDomain) || m.serverInfo.Father == nil {
-		result := make(map[uint64]utils.QueryResult)
+		result := make(map[uint64]types.QueryResult)
 
 		var queryMap QueryTemplatesParamsMapping[string]
 		err := json.Unmarshal([]byte(templateParamsMapping), &queryMap)
@@ -178,8 +178,8 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 					return nil, err
 				}
 				if len(collInfo) > 0 {
-					hash := utils.NewQueryIdentifier(templateName, params).Hash()
-					result[hash] = utils.QueryResult{
+					hash := types.NewQueryIdentifier(templateName, params).Hash()
+					result[hash] = types.QueryResult{
 						As:          query.As,
 						Collections: collInfo,
 					}

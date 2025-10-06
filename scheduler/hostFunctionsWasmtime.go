@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"metadataManager"
 	"net/http"
-	"server/client"
 
 	"github.com/bytecodealliance/wasmtime-go/v37"
 	"github.com/ermes-thesis/ermes-common/model"
+	"github.com/ermes-thesis/ermes-common/utils"
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
-	wasm_utils "github.com/ermes-thesis/ermes-common/wasm-pool/executor/utils"
+	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
@@ -65,7 +65,7 @@ func RegisterWasmtimeHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDe
 }
 
 func hostWasmtimeGet(collIdPtr int32, collIdLength int32, recordNamePtr int32, recordNameLength int32, groupsPtr int32, groupsLength int32, deps *HostFnsDependencies, caller *wasmtime.Caller) int32 {
-	wasmComponent := wasm_utils.WasmtimeAdapter{
+	wasmComponent := adapter.WasmtimeAdapter{
 		Store:      caller,
 		Memory:     caller.GetExport("memory").Memory(),
 		MallocFunc: caller.GetExport("malloc").Func(),
@@ -106,7 +106,7 @@ func hostWasmtimeGet(collIdPtr int32, collIdLength int32, recordNamePtr int32, r
 }
 
 func hostWasmtimeMultipleGet(collIdPtr int32, collIdLength int32, recordNamesPtr int32, recordNamesLength int32, groupsPtr int32, groupsLength int32, deps *HostFnsDependencies, caller *wasmtime.Caller) int32 {
-	wasmComponent := wasm_utils.WasmtimeAdapter{
+	wasmComponent := adapter.WasmtimeAdapter{
 		Store:      caller,
 		Memory:     caller.GetExport("memory").Memory(),
 		MallocFunc: caller.GetExport("malloc").Func(),
@@ -147,7 +147,7 @@ func hostWasmtimeMultipleGet(collIdPtr int32, collIdLength int32, recordNamesPtr
 }
 
 func hostWasmtimePut(collIdPtr int32, collIdLength int32, recordNamePtr int32, recordNameLength int32, valuePtr int32, valueLength int32, groupsPtr int32, groupsLength int32, deps *HostFnsDependencies, caller *wasmtime.Caller) int32 {
-	wasmComponent := wasm_utils.WasmtimeAdapter{
+	wasmComponent := adapter.WasmtimeAdapter{
 		Store:      caller,
 		Memory:     caller.GetExport("memory").Memory(),
 		MallocFunc: caller.GetExport("malloc").Func(),
@@ -187,7 +187,7 @@ func hostWasmtimePut(collIdPtr int32, collIdLength int32, recordNamePtr int32, r
 }
 
 func hostWasmtimeDelete(collIdPtr int32, collIdLength int32, recordNamePtr int32, recordNameLength int32, groupsPtr int32, groupsLength int32, deps *HostFnsDependencies, caller *wasmtime.Caller) int32 {
-	wasmComponent := wasm_utils.WasmtimeAdapter{
+	wasmComponent := adapter.WasmtimeAdapter{
 		Store:      caller,
 		Memory:     caller.GetExport("memory").Memory(),
 		MallocFunc: caller.GetExport("malloc").Func(),
@@ -225,7 +225,7 @@ func hostWasmtimeDelete(collIdPtr int32, collIdLength int32, recordNamePtr int32
 }
 
 func hostWasmtimeCreateCollection(metadataPointer int32, metadataLength int32, deps *HostFnsDependencies, caller *wasmtime.Caller) int32 {
-	wasmComponent := wasm_utils.WasmtimeAdapter{
+	wasmComponent := adapter.WasmtimeAdapter{
 		Store:      caller,
 		Memory:     caller.GetExport("memory").Memory(),
 		MallocFunc: caller.GetExport("malloc").Func(),
@@ -255,7 +255,7 @@ func hostWasmtimeCreateCollection(metadataPointer int32, metadataLength int32, d
 }
 
 func hostWasmtimeDeleteCollection(collectionIdPtr int32, collectionIdLength int32, groupsPtr int32, groupsLength int32, deps *HostFnsDependencies, caller *wasmtime.Caller) int32 {
-	wasmComponent := wasm_utils.WasmtimeAdapter{
+	wasmComponent := adapter.WasmtimeAdapter{
 		Store:      caller,
 		Memory:     caller.GetExport("memory").Memory(),
 		MallocFunc: caller.GetExport("malloc").Func(),
@@ -280,7 +280,7 @@ func hostWasmtimeDeleteCollection(collectionIdPtr int32, collectionIdLength int3
 }
 
 func hostWasmtimeAddGroupToCollection(collectionIdPtr int32, collectionIdLength int32, groupNamePtr int32, groupNameLength int32, groupsPtr int32, groupsLength int32, deps *HostFnsDependencies, caller *wasmtime.Caller) int32 {
-	wasmComponent := wasm_utils.WasmtimeAdapter{
+	wasmComponent := adapter.WasmtimeAdapter{
 		Store:      caller,
 		Memory:     caller.GetExport("memory").Memory(),
 		MallocFunc: caller.GetExport("malloc").Func(),
@@ -317,7 +317,7 @@ func hostWasmtimeAddGroupToCollection(collectionIdPtr int32, collectionIdLength 
 }
 
 func hostWasmtimeRemoveGroupFromCollection(collectionIdPtr int32, collectionIdLength int32, groupNamePtr int32, groupNameLength int32, groupsPtr int32, groupsLength int32, deps *HostFnsDependencies, caller *wasmtime.Caller) int32 {
-	wasmComponent := wasm_utils.WasmtimeAdapter{
+	wasmComponent := adapter.WasmtimeAdapter{
 		Store:      caller,
 		Memory:     caller.GetExport("memory").Memory(),
 		MallocFunc: caller.GetExport("malloc").Func(),
@@ -354,7 +354,7 @@ func hostWasmtimeRemoveGroupFromCollection(collectionIdPtr int32, collectionIdLe
 }
 
 func hostWasmtimeRemoveUserFromGroup(userIdPtr int32, userIdLength int32, groupNamePtr int32, groupNameLength int32, deps *HostFnsDependencies, caller *wasmtime.Caller) int32 {
-	wasmComponent := wasm_utils.WasmtimeAdapter{
+	wasmComponent := adapter.WasmtimeAdapter{
 		Store:      caller,
 		Memory:     caller.GetExport("memory").Memory(),
 		MallocFunc: caller.GetExport("malloc").Func(),
@@ -372,7 +372,7 @@ func hostWasmtimeRemoveUserFromGroup(userIdPtr int32, userIdLength int32, groupN
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := client.CustomClient.Do(req)
+	res, err := utils.CustomClient.Do(req)
 	if err != nil {
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
@@ -388,7 +388,7 @@ func hostWasmtimeRemoveUserFromGroup(userIdPtr int32, userIdLength int32, groupN
 }
 
 func hostWasmtimeAddUserToGroup(userIdPtr int32, userIdLength int32, groupNamePtr int32, groupNameLength int32, deps *HostFnsDependencies, caller *wasmtime.Caller) int32 {
-	wasmComponent := wasm_utils.WasmtimeAdapter{
+	wasmComponent := adapter.WasmtimeAdapter{
 		Store:      caller,
 		Memory:     caller.GetExport("memory").Memory(),
 		MallocFunc: caller.GetExport("malloc").Func(),
@@ -406,7 +406,7 @@ func hostWasmtimeAddUserToGroup(userIdPtr int32, userIdLength int32, groupNamePt
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := client.CustomClient.Do(req)
+	res, err := utils.CustomClient.Do(req)
 	if err != nil {
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
@@ -422,7 +422,7 @@ func hostWasmtimeAddUserToGroup(userIdPtr int32, userIdLength int32, groupNamePt
 }
 
 func hostWasmtimeCreateGroup(groupNamePtr int32, groupNameLength int32, partecipantIDsPtr int32, partecipantIDsLength int32, deps *HostFnsDependencies, caller *wasmtime.Caller) int32 {
-	wasmComponent := wasm_utils.WasmtimeAdapter{
+	wasmComponent := adapter.WasmtimeAdapter{
 		Store:      caller,
 		Memory:     caller.GetExport("memory").Memory(),
 		MallocFunc: caller.GetExport("malloc").Func(),
@@ -441,7 +441,7 @@ func hostWasmtimeCreateGroup(groupNamePtr int32, groupNameLength int32, partecip
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := client.CustomClient.Do(req)
+	res, err := utils.CustomClient.Do(req)
 	if err != nil {
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
@@ -457,7 +457,7 @@ func hostWasmtimeCreateGroup(groupNamePtr int32, groupNameLength int32, partecip
 }
 
 func hostWasmtimeDeleteGroup(groupNamePtr int32, groupNameLength int32, deps *HostFnsDependencies, caller *wasmtime.Caller) int32 {
-	wasmComponent := wasm_utils.WasmtimeAdapter{
+	wasmComponent := adapter.WasmtimeAdapter{
 		Store:      caller,
 		Memory:     caller.GetExport("memory").Memory(),
 		MallocFunc: caller.GetExport("malloc").Func(),
@@ -474,7 +474,7 @@ func hostWasmtimeDeleteGroup(groupNamePtr int32, groupNameLength int32, deps *Ho
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := client.CustomClient.Do(req)
+	res, err := utils.CustomClient.Do(req)
 	if err != nil {
 		return wasmComponent.WriteError(model.HttpError, err)
 	}

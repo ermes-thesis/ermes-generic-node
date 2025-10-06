@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"metadataManager/utils"
+	"metadataManager/types"
 	"net/http"
 	"os"
 	"tokenDecoder"
@@ -33,7 +33,7 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 			return
 		}
 
-		var collections map[string][]utils.CollectionInfo
+		var collections map[string][]types.CollectionInfo
 		err = json.Unmarshal([]byte(collectionJson), &collections)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error unmarshalling cached query: %s \n", err)

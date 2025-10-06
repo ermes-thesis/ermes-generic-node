@@ -8,11 +8,11 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"server/client"
 	"server/clientrepo"
 	"server/info"
 
 	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/utils"
 )
 
 type ServerType interface {
@@ -120,7 +120,7 @@ func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo stri
 
 	s.logger.Info("Request is ready, now sending it ...")
 
-	res, err := client.CustomClient.Do(req)
+	res, err := utils.CustomClient.Do(req)
 
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when contacting the node: %s \n", err)

@@ -3,6 +3,7 @@ package caches
 import (
 	"config"
 
+	"github.com/ermes-thesis/ermes-common/caches"
 	"github.com/ermes-thesis/ermes-common/model"
 )
 
@@ -12,7 +13,7 @@ import (
 // Internally, it uses a BaseCache that maps function names to a map[string]string
 // containing template name-value pairs.
 type TemplatesCache struct {
-	templates *BaseCache[model.QueryTemplate]
+	templates *caches.BaseCache[model.QueryTemplate]
 }
 
 // NewTemplatesCache creates a new TemplatesCache based on the given configuration.
@@ -24,7 +25,7 @@ type TemplatesCache struct {
 //   - *TemplatesCache: the newly created templates cache
 //   - error: non-nil if the underlying BaseCache could not be created
 func NewTemplatesCache(config config.TemplatesCacheConfig) (*TemplatesCache, error) {
-	templatesCache, err := NewBaseCache[model.QueryTemplate](config.Size, config.Ttl)
+	templatesCache, err := caches.NewBaseCache[model.QueryTemplate](config.Size, config.Ttl)
 	if err != nil {
 		return nil, err
 	}

@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"metadataManager"
 	"net/http"
-	"server/client"
 	"server/info"
 
 	"github.com/ermes-thesis/ermes-common/model"
+	"github.com/ermes-thesis/ermes-common/utils"
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
-	wasm_utils "github.com/ermes-thesis/ermes-common/wasm-pool/executor/utils"
+	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/second-state/WasmEdge-go/wasmedge"
@@ -94,7 +94,7 @@ func hostGet(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm_utils.WasmedgeAdapter{
+	wasmComponent := adapter.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -149,7 +149,7 @@ func hostMultipleGet(data any, callframe *wasmedge.CallingFrame, params []any) (
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm_utils.WasmedgeAdapter{
+	wasmComponent := adapter.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -205,7 +205,7 @@ func hostPut(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm_utils.WasmedgeAdapter{
+	wasmComponent := adapter.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -262,7 +262,7 @@ func hostDelete(data any, callframe *wasmedge.CallingFrame, params []any) ([]any
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm_utils.WasmedgeAdapter{
+	wasmComponent := adapter.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -309,7 +309,7 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm_utils.WasmedgeAdapter{
+	wasmComponent := adapter.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -351,7 +351,7 @@ func hostDeleteCollection(data any, callframe *wasmedge.CallingFrame, params []a
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm_utils.WasmedgeAdapter{
+	wasmComponent := adapter.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -390,7 +390,7 @@ func hostAddGroupToCollection(data any, callframe *wasmedge.CallingFrame, params
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm_utils.WasmedgeAdapter{
+	wasmComponent := adapter.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -440,7 +440,7 @@ func hostRemoveGroupFromCollection(data any, callframe *wasmedge.CallingFrame, p
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm_utils.WasmedgeAdapter{
+	wasmComponent := adapter.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -487,7 +487,7 @@ func hostRemoveUserFromGroup(data any, callframe *wasmedge.CallingFrame, params 
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm_utils.WasmedgeAdapter{
+	wasmComponent := adapter.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -508,7 +508,7 @@ func hostRemoveUserFromGroup(data any, callframe *wasmedge.CallingFrame, params 
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := client.CustomClient.Do(req)
+	res, err := utils.CustomClient.Do(req)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(model.HttpError, err)
 		return returns, wasmedge.Result_Success
@@ -531,7 +531,7 @@ func hostAddUserToGroup(data any, callframe *wasmedge.CallingFrame, params []any
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm_utils.WasmedgeAdapter{
+	wasmComponent := adapter.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -552,7 +552,7 @@ func hostAddUserToGroup(data any, callframe *wasmedge.CallingFrame, params []any
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := client.CustomClient.Do(req)
+	res, err := utils.CustomClient.Do(req)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(model.HttpError, err)
 		return returns, wasmedge.Result_Success
@@ -575,7 +575,7 @@ func hostCreateGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm_utils.WasmedgeAdapter{
+	wasmComponent := adapter.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -597,7 +597,7 @@ func hostCreateGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := client.CustomClient.Do(req)
+	res, err := utils.CustomClient.Do(req)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(model.HttpError, err)
 		return returns, wasmedge.Result_Success
@@ -618,7 +618,7 @@ func hostDeleteGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 
 	deps := data.(*HostFnsDependencies)
 
-	wasmComponent := wasm_utils.WasmedgeAdapter{
+	wasmComponent := adapter.WasmedgeAdapter{
 		Memory:     callframe.GetMemoryByIndex(0),
 		Executor:   callframe.GetExecutor(),
 		MallocFunc: callframe.GetModule().FindFunction("malloc"),
@@ -638,7 +638,7 @@ func hostDeleteGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := client.CustomClient.Do(req)
+	res, err := utils.CustomClient.Do(req)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(model.HttpError, err)
 		return returns, wasmedge.Result_Success

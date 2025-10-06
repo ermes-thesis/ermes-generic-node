@@ -23,7 +23,7 @@ type CollectionsDiscoverer interface {
 	UpdateCollectionsRecorsAndPropogate(updates []messages.CollectionUpdateMessage, isInitiator bool, ignoredHostName string) error
 
 	SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error
-	RemoveCollectionAndProgate(collectionId string, migrationManager migrationManager.MigrationManager) error
+	RemoveCollectionAndProgate(collectionId string, migrationManager migrationManager.MigrationManager, isInitiator bool, ignoredHostName string) error
 }
 
 type CollectionsDiscovererImp struct {
@@ -58,6 +58,7 @@ func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialVie
 		server.AddCustomRoute(c.sender.RemoteAccessPath(), true, c.handleIncomingRemoteAccess(logger).ServeHTTP)
 		server.AddCustomRoute(c.sender.UpdatePropagationPath(), true, c.handleIncomingUpdatePropagation(logger).ServeHTTP)
 		server.AddCustomRoute(c.sender.CreateCollectionPropagationPath(), true, c.handleIncomingNewCollection(logger).ServeHTTP)
+		server.AddCustomRoute(c.sender.RemoveCollectionPropagationPath(), true, c.handleIncomingRemoveCollection(logger).ServeHTTP)
 	})
 }
 
@@ -136,9 +137,7 @@ func UpdateRecord(
 ) (map[string]struct{}, error) {
 	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
 	if !exists {
-		if collection.IsStrong() {
-			return nil, errors.New("strong collection can't be updated remotely")
-		}
+		//can't verify if collection is strong or weak, so just notify father
 
 		hosts := map[string]struct{}{}
 		if c.serverInfo.Father == nil {
@@ -166,6 +165,9 @@ func UpdateRecord(
 	if collection.IsStrong() {
 		if isInitiator && !collection.(*shared.StrongCollection).IsLeader { //safety check
 			return nil, errors.New("only leader can update strong collection")
+		}
+		if !isInitiator { //safety check
+			return nil, errors.New("strong collection can't be updated remotely")
 		}
 
 		collection.(*shared.StrongCollection).ConsistencyClock++
@@ -319,13 +321,17 @@ func (c *CollectionsDiscovererImp) SetCollectionAndProgate(collectionId string, 
 	return nil
 }
 
-func (c *CollectionsDiscovererImp) RemoveCollectionAndProgate(collectionId string, migrationManager migrationManager.MigrationManager) error {
+func (c *CollectionsDiscovererImp) RemoveCollectionAndProgate(collectionId string, migrationManager migrationManager.MigrationManager, isInitiator bool, ignoredHostName string) error {
 	//sync
 	c.collectionsPartialView.Mutex.Lock()
 	//imp
 
 	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
 	if !exists {
+		if c.serverInfo.Father != nil && c.serverInfo.Father.HostName != ignoredHostName {
+			c.sender.RemoveCollection(c.serverInfo.Father.HostName, collectionId, c.serverInfo.HostName) //progate to father
+			return nil
+		}
 		return errors.New("collection doesn't exists")
 	}
 
@@ -335,14 +341,33 @@ func (c *CollectionsDiscovererImp) RemoveCollectionAndProgate(collectionId strin
 			return errors.New("strong collection can't be removed remotely")
 		}
 
-		//todo -> risolvere dubbio per quanto riguarda conflitti
+		c.collectionsPartialView.Mutex.Unlock()                                // lock release
+		c.propagateRemoveCollection(collection, collectionId, ignoredHostName) //progate to other hosts
+		return nil
 	}
 
 	c.collectionsPartialView.KnownCollections[collectionId] = nil //remove from local view
 	c.dbInterface.DeleteCollection(collectionId)                  //remove from local db
 	migrationManager.RemoveCollectionFromLru(collectionId)        //remove from lru
 
+	c.collectionsPartialView.Mutex.Unlock()                                // lock release
+	c.propagateRemoveCollection(collection, collectionId, ignoredHostName) //progate to other hosts
+
 	return nil
+}
+
+func (c *CollectionsDiscovererImp) propagateRemoveCollection(collection shared.Collection, collectionId string, ignoredHostName string) {
+	hosts := collection.HostsId()
+	for host := range hosts {
+		if host == ignoredHostName {
+			continue
+		}
+		c.sender.RemoveCollection(host, collectionId, c.serverInfo.HostName)
+	}
+
+	if c.serverInfo.Father != nil && c.serverInfo.Father.HostName != ignoredHostName {
+		c.sender.RemoveCollection(c.serverInfo.Father.HostName, collectionId, c.serverInfo.HostName)
+	}
 }
 
 func (c *CollectionsDiscovererImp) getClosestChild(hostSet map[string]struct{}) string {

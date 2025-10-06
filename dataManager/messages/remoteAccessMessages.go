@@ -69,3 +69,8 @@ type NewCollectionMessage struct {
 	IsStrong     bool   `json:"isStrong"`
 	SenderIp     string `json:"senderIp"`
 }
+
+type RemoveCollectionMessage struct {
+	CollectionId string `json:"collectionId"`
+	SenderIp     string `json:"senderIp"`
+}

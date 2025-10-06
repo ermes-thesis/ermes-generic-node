@@ -114,5 +114,5 @@ func (m *DataManagerImp) SetCollectionAndProgate(collectionId string, records ma
 }
 
 func (m *DataManagerImp) RemoveCollectionAndProgate(collectionId string) error {
-	return m.collectionsDiscoverer.RemoveCollectionAndProgate(collectionId, m.migrationManager)
+	return m.collectionsDiscoverer.RemoveCollectionAndProgate(collectionId, m.migrationManager, true, m.serverInfo.HostName)
 }

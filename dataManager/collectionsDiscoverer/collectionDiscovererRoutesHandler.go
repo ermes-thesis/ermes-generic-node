@@ -2,6 +2,7 @@ package collectionsDiscoverer
 
 import (
 	gossip "dataManager/messages"
+	"dataManager/migrationManager"
 	shared "dataManager/shared"
 	"encoding/json"
 	"io"
@@ -147,5 +148,37 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection(logger log.Logger
 			c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, msg)
 		}
 
+	})
+}
+
+func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection(logger log.Logger) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		logger.Println("HTTP-REQ", "New collection removal request received through HTTP request", log.INFO)
+
+		defer r.Body.Close()
+
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var msg gossip.RemoveCollectionMessage
+		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
+			logger.Println("HTTP-REQ", "Error parsing new collection message", log.ERROR)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		collectionId := msg.CollectionId
+		senderIp := msg.SenderIp
+		w.WriteHeader(http.StatusOK)
+
+		//async
+		dbErr := c.RemoveCollectionAndProgate(collectionId, migrationManager.GetMigrationManagerInstance(c.logger), false, senderIp)
+		if dbErr != nil {
+			logger.Println("HTTP-REQ", "Error removing collection: "+dbErr.Error(), log.ERROR)
+			return
+		}
 	})
 }

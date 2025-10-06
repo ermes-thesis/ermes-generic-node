@@ -18,6 +18,7 @@ const (
 	remoteUpdatePath                = "/dataRemoteUpdate"
 	updatePropagationPath           = "/dataUpdatePropagation"
 	createCollectionPropagationPath = "/newCollection"
+	removeCollectionPropagationPath = "/removeCollection"
 )
 
 //###############################################################
@@ -91,11 +92,13 @@ type CollectionDiscovererSender interface {
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, recordNames ...string) ([]any, error)
 	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages)
 	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage)
+	RemoveCollection(hostId string, collectionId string, senderIp string)
 
 	RemoteAccessPath() string
 	RemoteUpdatePath() string
 	UpdatePropagationPath() string
 	CreateCollectionPropagationPath() string
+	RemoveCollectionPropagationPath() string
 }
 
 type CollectionDiscovererSenderImpl struct {
@@ -146,6 +149,17 @@ func (s *CollectionDiscovererSenderImpl) NewCollectionCreated(hostId string, new
 	s.server.SendGenericHTTPRequest(hostId, createCollectionPropagationPath, newCollection)
 }
 
+func (s *CollectionDiscovererSenderImpl) RemoveCollection(hostId string, collectionId string, senderIp string) {
+	s.logger.Println("SENDER", fmt.Sprintf("request collection %s removal to %s", collectionId, hostId), log.INFO)
+
+	msg := gossip.RemoveCollectionMessage{
+		CollectionId: collectionId,
+		SenderIp:     senderIp,
+	}
+
+	s.server.SendGenericHTTPRequest(hostId, removeCollectionPropagationPath, msg)
+}
+
 func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages) {
 	s.logger.Println("SENDER", fmt.Sprintf("request collection update propagation to %s", hostId), log.INFO)
 
@@ -166,4 +180,8 @@ func (s *CollectionDiscovererSenderImpl) UpdatePropagationPath() string {
 
 func (s *CollectionDiscovererSenderImpl) CreateCollectionPropagationPath() string {
 	return createCollectionPropagationPath
+}
+
+func (s *CollectionDiscovererSenderImpl) RemoveCollectionPropagationPath() string {
+	return removeCollectionPropagationPath
 }

@@ -3,7 +3,7 @@ package caches
 import (
 	"config"
 	"fmt"
-	"mocks/caches"
+	common_caches "mocks/ermes-common/caches"
 	"os"
 	"path/filepath"
 	"testing"
@@ -33,7 +33,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 	fn := "func1"
 	fnVer := "1.0.0"
 
-	fetcher := &caches_mock.Fetcher[*FunctionBundle]{}
+	fetcher := &common_caches.Fetcher[*FunctionBundle]{}
 	query := model.QueryTemplate{
 		Select: "ALL",
 		As:     "test",
@@ -107,7 +107,7 @@ func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
 
 	fnName := "func1"
 	fnVer := "1.0.0"
-	fetcher := &caches_mock.Fetcher[*FunctionBundle]{}
+	fetcher := &common_caches.Fetcher[*FunctionBundle]{}
 	// Return invalid bundle (empty binary)
 	query := model.QueryTemplate{
 		Select: "ALL",

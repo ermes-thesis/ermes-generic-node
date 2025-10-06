@@ -16,6 +16,8 @@ replace github.com/ermes-thesis/ermes-common/logger => ../../ermes-common/logger
 
 replace github.com/ermes-thesis/ermes-common/model => ../../ermes-common/model
 
+replace github.com/ermes-thesis/ermes-common/utils => ../../ermes-common/utils
+
 require (
 	dario.cat/mergo v1.0.1 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
@@ -34,6 +36,7 @@ require (
 	github.com/docker/go-connections v0.5.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ebitengine/purego v0.8.4 // indirect
+	github.com/ermes-thesis/ermes-common/utils v0.0.0-00010101000000-000000000000 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

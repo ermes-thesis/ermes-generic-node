@@ -4,7 +4,12 @@ go 1.24.4
 
 replace github.com/ermes-thesis/ermes-common/logger => ../../ermes-common/logger
 
-require github.com/ermes-thesis/ermes-common/logger v0.0.0-00010101000000-000000000000
+replace github.com/ermes-thesis/ermes-common/utils => ../../ermes-common/utils
+
+require (
+	github.com/ermes-thesis/ermes-common/logger v0.0.0-00010101000000-000000000000
+	github.com/ermes-thesis/ermes-common/utils v0.0.0-00010101000000-000000000000
+)
 
 require (
 	github.com/mattn/go-colorable v0.1.14 // indirect

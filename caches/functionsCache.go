@@ -73,7 +73,7 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret str
 		Templates:        tmplCache,
 		MetadataBinaries: binCache,
 		LatestVersions:   latest,
-		fetcher:          caches.NewRemoteBundleFetcher[FunctionBundle](fmt.Sprintf("http://%s:%s", config.FunctionRegistry.Address, config.FunctionRegistry.Port), ermesSecret),
+		fetcher:          caches.NewRemoteBundleFetcher[FunctionBundle](fmt.Sprintf("http://%s:%s/retrieve-function", config.FunctionRegistry.Address, config.FunctionRegistry.Port), ermesSecret),
 		group:            singleflight.Group{},
 		log:              log,
 	}, nil

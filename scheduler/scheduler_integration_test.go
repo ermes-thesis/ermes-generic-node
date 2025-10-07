@@ -143,8 +143,9 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 
 	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
 	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
-		HttpCode: 200,
-		Response: "function executed correctly",
+		HttpCode:     200,
+		Response:     "function executed correctly",
+		CacheUpdates: &model.FunctionCachedUpdates{},
 	})
 	wasmExecutorChild.EXPECT().Release().Return()
 

@@ -19,12 +19,12 @@ func TestWasmPool(t *testing.T) {
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(t)
-	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, []string{"test"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo", "testGroup"}, Sequence: 1}, nil)
-	metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, []string{"test"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo"}, Sequence: 2}, nil)
+	//metadataManager.EXPECT().AddGroupToCollection(mock.Anything, []string{"test"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo", "testGroup"}, Sequence: 1}, nil)
+	//metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, []string{"test"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo"}, Sequence: 2}, nil)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
 	err := scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{
@@ -58,7 +58,7 @@ func BenchmarkWasmPool(b *testing.B) {
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(b)
-	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
@@ -95,7 +95,7 @@ func BenchmarkWasmPool_Wasmtime(b *testing.B) {
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(b)
-	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
@@ -132,7 +132,7 @@ func BenchmarkWasmPool_all(b *testing.B) {
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(b)
-	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
@@ -168,7 +168,7 @@ func BenchmarkWasmPool_all_Wasmtime(b *testing.B) {
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(b)
-	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
@@ -202,7 +202,7 @@ func BenchmarkWasmPool_AOT(b *testing.B) {
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(b)
-	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
@@ -238,7 +238,7 @@ func BenchmarkWasmPool_AOT_O3(b *testing.B) {
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(b)
-	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
+	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)

@@ -3,10 +3,11 @@ package scheduler
 import (
 	"bytes"
 	"context"
+	"dataManager/messages"
 	shared "dataManager/shared"
 	"errors"
 	"fmt"
-	"github.com/ermes-thesis/ermes-common/utils"
+	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"metadataManager"
 	"net/http"
 
@@ -89,7 +90,7 @@ func hostWazeroGet(ctx context.Context, m api.Module, collIdPtr, collIdLength, r
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	value, err := deps.DataManager.GetRecord(collId, recordName, groups)
+	value, err := deps.DataManager.GetRecord(collId, groups, recordName)
 	var ret int32
 	if err != nil {
 		if errors.Is(err, &shared.UnauthorizedError{}) {
@@ -175,7 +176,12 @@ func hostWazeroPut(ctx context.Context, m api.Module, collIdPtr int32, collIdLen
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	err = deps.DataManager.SetRecord(collId, recordName, value, groups)
+	err = deps.DataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{{
+		CollectionId: collId,
+		RecordNames:  []string{recordName},
+		RecordValues: []string{value},
+		IsDelete:     false,
+	}}, groups)
 	if err != nil {
 		if errors.Is(err, &shared.UnauthorizedError{}) {
 			return wasmComponent.WriteError(model.Unauthorized, err)
@@ -210,7 +216,11 @@ func hostWazeroDelete(ctx context.Context, m api.Module, collIdPtr int32, collId
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	err = deps.DataManager.DeleteRecords(collId, groups, recordName)
+	err = deps.DataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{{
+		CollectionId: collId,
+		RecordNames:  []string{recordName},
+		IsDelete:     true,
+	}}, groups)
 	var ret int32
 	if err != nil {
 		if errors.Is(err, &shared.UnauthorizedError{}) {
@@ -245,7 +255,7 @@ func hostWazeroCreateCollection(ctx context.Context, m api.Module, metadataPoint
 
 	collectionId := uuid.NewString()
 
-	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Consistency == model.SequentialConsistent)
+	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, 0, metadata.Consistency == model.SequentialConsistent)
 	if err != nil {
 		return wasmComponent.WriteError(model.RedisError, err)
 	}
@@ -303,16 +313,24 @@ func hostWazeroAddGroupToCollection(ctx context.Context, m api.Module, collectio
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	//TODO: chiamare DataManager per aggiornare il record speciale groups
-	// e inoltrare l'aggiunta' del gruppo al record speciale agli altri nodi
-
-	go deps.MetadataManager.AddGroupToCollection(collectionId, metadataManager.FROM_LOCAL, groupName)
 	var ret int32
+	resp, err := deps.MetadataManager.AddGroupToCollection(collectionId, groups, groupName)
 	if err != nil {
-		ret = wasmComponent.WriteError(model.RedisError, err)
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
+			ret = wasmComponent.WriteError(model.Unauthorized, err)
+		} else {
+			ret = wasmComponent.WriteError(model.RedisError, err)
+		}
 	} else {
 		ret = int32(model.Success)
 	}
+
+	go func() {
+		//TODO: chiamare DataManager per aggiornare il record speciale groups
+		//err = deps.DataManager.SetCollectionGroups(collectionId, resp.Groups)
+		_ = resp
+	}()
 
 	return ret
 }
@@ -340,16 +358,24 @@ func hostWazeroRemoveGroupFromCollection(ctx context.Context, m api.Module, coll
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	//TODO: chiamare DataManager per aggiornare il record speciale groups
-	// e inoltrare la rimozione del gruppo dal record speciale agli altri nodi
-	go deps.MetadataManager.RemoveGroupFromCollection(collectionId, metadataManager.FROM_LOCAL, groupName)
-
 	var ret int32
+	resp, err := deps.MetadataManager.RemoveGroupFromCollection(collectionId, groups, groupName)
 	if err != nil {
-		ret = wasmComponent.WriteError(model.RedisError, err)
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
+			ret = wasmComponent.WriteError(model.Unauthorized, err)
+		} else {
+			ret = wasmComponent.WriteError(model.RedisError, err)
+		}
 	} else {
 		ret = int32(model.Success)
 	}
+
+	go func() {
+		//TODO: chiamare DataManager per aggiornare il record speciale groups
+		//err = deps.DataManager.SetCollectionGroups(collectionId, resp.Groups)
+		_ = resp
+	}()
 
 	return ret
 }
@@ -373,7 +399,7 @@ func hostWazeroRemoveUserFromGroup(ctx context.Context, m api.Module, userIdPtr 
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
@@ -407,7 +433,7 @@ func hostWazeroAddUserToGroup(ctx context.Context, m api.Module, userIdPtr int32
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
@@ -442,7 +468,7 @@ func hostWazeroCreateGroup(ctx context.Context, m api.Module, groupNamePtr int32
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
@@ -475,7 +501,7 @@ func hostWazeroDeleteGroup(ctx context.Context, m api.Module, groupNamePtr int32
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		return wasmComponent.WriteError(model.HttpError, err)
 	}

@@ -2,8 +2,10 @@ package metadataManager
 
 import (
 	"caches"
+	dataManagerShared "dataManager/shared"
 	"db"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"metadataManager/types"
 	"os"
@@ -20,38 +22,42 @@ import (
 // QueryTemplatesParamsMapping map[tmpl_name]map[param_name]param_value
 type QueryTemplatesParamsMapping[T any] map[string]map[string]T
 
-type GroupMessage []string
-
-func (g GroupMessage) IsPropagable() bool {
-	return true
+type GroupMessage struct {
+	UserGroups []string       `json:"userGroups"`
+	Groups     []string       `json:"groups"`
+	Action     MetadataAction `json:"action"`
 }
 
 type MetadataManager interface {
 	CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin PropagationOrigin) error
-	AddGroupToCollection(collectionId string, reqOrigin PropagationOrigin, groups ...string) error
-	RemoveGroupFromCollection(collectionId string, reqOrigin PropagationOrigin, groups ...string) error
+	AddGroupToCollection(collectionId string, userGroups []string, groupsToAdd ...string) (*UpdateGroupResponse, error)
+	RemoveGroupFromCollection(collectionId string, userGroups []string, groupsToRemove ...string) (*UpdateGroupResponse, error)
+	SetCollectionGroups(collectionId string, message UpdateGroupResponse) error
 	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error)
 }
 
 type MetadataManagerImpl struct {
-	redis              db.GenericDB
-	log                *logger.Logger
-	templateCache      caches.FunctionCache
-	serverInfo         *info.ServerInfo
-	queryPropagator    QueryPropagator
-	metadataPropagator MetadataPropagator
-	customMetadataKeys []string
+	redis                        db.GenericDB
+	log                          *logger.Logger
+	templateCache                caches.FunctionCache
+	serverInfo                   *info.ServerInfo
+	queryPropagator              QueryPropagator
+	createMetadataPropagator     CreateMetadataPropagator
+	groupUpdateRequestPropagator GroupUpdateRequestPropagator
+	updateGroupsPropagator       UpdateGroupsPropagator
+	customMetadataKeys           []string
 }
 
 func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, log *logger.Logger, cache caches.FunctionCache) *MetadataManagerImpl {
 	return &MetadataManagerImpl{
-		redis:              redis,
-		log:                log,
-		templateCache:      cache,
-		serverInfo:         serverInfo,
-		queryPropagator:    NewQueryPropagator(serverInfo, log),
-		metadataPropagator: NewMetadataPropagator(serverInfo, log),
-		customMetadataKeys: []string{},
+		redis:                        redis,
+		log:                          log,
+		templateCache:                cache,
+		serverInfo:                   serverInfo,
+		createMetadataPropagator:     NewCreateMetadataPropagator(serverInfo, log),
+		queryPropagator:              NewQueryPropagator(serverInfo, log),
+		groupUpdateRequestPropagator: NewGroupUpdateRequestPropagator(serverInfo, log),
+		customMetadataKeys:           []string{},
 	}
 }
 
@@ -64,14 +70,15 @@ func (m *MetadataManagerImpl) RegisterRoutes(server server.ServerType, tokenDeco
 	if err != nil {
 		return fmt.Errorf("Error while registering /pvt-create-metadata/{collection_id} route: %v\n", err)
 	}
-	err = server.AddCustomRoute("/pvt-add-group/{collection_id}", true, m.handleRouteAddGroup())
+	err = server.AddCustomRoute("/pvt-request-update-group/{collection_id}", true, m.handleRouteRequestUpdateGroups())
 	if err != nil {
-		return fmt.Errorf("Error while registering /pvt-add-group/{collection_id} route: %v\n", err)
+		return fmt.Errorf("Error while registering /pvt-request-update-group/{collection_id} route: %v\n", err)
 	}
-	err = server.AddCustomRoute("/pvt-remove-group/{collection_id}", true, m.handleRouteRemoveGroup())
+	err = server.AddCustomRoute("/pvt-propagate-groups/{collection_id}", true, m.handleRoutePropagateGroups())
 	if err != nil {
-		return fmt.Errorf("Error while registering /pvt-remove-group/{collection_id} route: %v\n", err)
+		return fmt.Errorf("Error while registering /pvt-propagate-groups/{collection_id} route: %v\n", err)
 	}
+
 	return nil
 }
 
@@ -99,7 +106,7 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model
 		}
 	}
 
-	err := m.metadataPropagator.Propagate(collectionId, metadata, metadata.Geolocation, reqOrigin, CREATE)
+	err := m.createMetadataPropagator.Propagate(collectionId, metadata, reqOrigin)
 	if err != nil {
 		m.log.Errorf("Error propagating metadata: %v", err)
 		return err
@@ -108,40 +115,115 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model
 	return nil
 }
 
-func (m *MetadataManagerImpl) AddGroupToCollection(collectionId string, reqOrigin PropagationOrigin, groups ...string) error {
-	metadata, err := m.redis.GetMetadata(collectionId)
-	if err != nil {
-		return err
-	}
-
-	var geolocation string
-	if metadata != nil {
-		geolocation = metadata.Geolocation
-		err = m.redis.AddGroups(collectionId, groups...)
+func (m *MetadataManagerImpl) AddGroupToCollection(collectionId string, userGroups []string, groups ...string) (*UpdateGroupResponse, error) {
+	if m.serverInfo.Father == nil {
+		exists, err := m.redis.MetadataExists(collectionId)
 		if err != nil {
-			return err
+			return nil, err
 		}
+
+		if exists {
+			authorized, err := m.redis.IsInMetadataGroups(collectionId, userGroups...)
+			if err != nil {
+				return nil, err
+			}
+			if !authorized {
+				return nil, &dataManagerShared.UnauthorizedError{}
+			}
+
+			newGroups, seq, err := m.redis.AddGroupsToMetadata(collectionId, groups...)
+			if err != nil {
+				return nil, err
+			}
+			respMessage := &UpdateGroupResponse{
+				Groups:   newGroups,
+				Sequence: seq,
+			}
+
+			go func() {
+				metadata, err := m.redis.GetMetadata(collectionId)
+				if err != nil {
+					m.log.Errorf("Error getting metadata for propagation: %v", err)
+					return
+				}
+
+				err = m.updateGroupsPropagator.Propagate(collectionId, *respMessage, metadata.Geolocation)
+				if err != nil {
+					m.log.Errorf("Error propagating group update: %v", err)
+				}
+			}()
+
+			return respMessage, nil
+		}
+		return nil, errors.New("collection does not exists")
 	}
 
-	return m.metadataPropagator.Propagate(collectionId, GroupMessage(groups), geolocation, reqOrigin, UPDATE)
+	return m.groupUpdateRequestPropagator.Propagate(collectionId, GroupMessage{Groups: groups, Action: Add})
 }
 
-func (m *MetadataManagerImpl) RemoveGroupFromCollection(collectionId string, reqOrigin PropagationOrigin, groups ...string) error {
+func (m *MetadataManagerImpl) RemoveGroupFromCollection(collectionId string, userGroups []string, groups ...string) (*UpdateGroupResponse, error) {
+	if m.serverInfo.Father == nil {
+		exists, err := m.redis.MetadataExists(collectionId)
+		if err != nil {
+			return nil, err
+		}
+
+		if exists {
+			authorized, err := m.redis.IsInMetadataGroups(collectionId, userGroups...)
+			if err != nil {
+				return nil, err
+			}
+			if !authorized {
+				return nil, &dataManagerShared.UnauthorizedError{}
+			}
+
+			newGroups, seq, err := m.redis.RemoveGroupsFromMetadata(collectionId, groups...)
+			if err != nil {
+				return nil, err
+			}
+			respMessage := &UpdateGroupResponse{
+				Groups:   newGroups,
+				Sequence: seq,
+			}
+
+			go func() {
+				metadata, err := m.redis.GetMetadata(collectionId)
+				if err != nil {
+					m.log.Errorf("Error getting metadata for propagation: %v", err)
+					return
+				}
+
+				err = m.updateGroupsPropagator.Propagate(collectionId, *respMessage, metadata.Geolocation)
+				if err != nil {
+					m.log.Errorf("Error propagating group update: %v", err)
+				}
+			}()
+
+			return respMessage, nil
+		}
+		return nil, errors.New("collection does not exists")
+	}
+
+	return m.groupUpdateRequestPropagator.Propagate(collectionId, GroupMessage{Groups: groups, Action: Remove})
+}
+
+func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message UpdateGroupResponse) error {
 	metadata, err := m.redis.GetMetadata(collectionId)
 	if err != nil {
+		m.log.Errorf("Error getting metadata for propagation: %v", err)
+		return err
+	}
+	if metadata == nil {
+		return errors.New("collection does not exists")
+	}
+
+	err = m.redis.SetGroupsInMetadata(collectionId, message.Sequence, message.Groups...)
+	if err != nil {
+		m.log.Errorf("Error setting groups: %v", err)
 		return err
 	}
 
-	var geolocation string
-	if metadata != nil {
-		geolocation = metadata.Geolocation
-		err = m.redis.RemoveGroups(collectionId, groups...)
-		if err != nil {
-			return err
-		}
-	}
-
-	return m.metadataPropagator.Propagate(collectionId, GroupMessage(groups), geolocation, reqOrigin, DELETE)
+	return m.updateGroupsPropagator.Propagate(collectionId, message, metadata.Geolocation)
 }
 
 func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error) {

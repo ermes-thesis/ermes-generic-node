@@ -125,8 +125,8 @@ func TestCreateMetadata(t *testing.T) {
 		},
 	}
 
-	mPropagator := &metadataManager_mock.MetadataPropagator{}
-	mPropagator.EXPECT().Propagate("collection_id_test", metadata, metadata.Geolocation, metadataManager.FROM_LOCAL, metadataManager.CREATE).Return(nil).Once()
+	mPropagator := &metadataManager_mock.CreateMetadataPropagator{}
+	mPropagator.EXPECT().Propagate("collection_id_test", metadata, metadataManager.FROM_LOCAL).Return(nil).Once()
 
 	fnCache := &caches_mock.FunctionCache{}
 	log := createNewLogger(t)

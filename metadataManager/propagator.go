@@ -2,7 +2,9 @@ package metadataManager
 
 import (
 	"bytes"
+	dataManagerShared "dataManager/shared"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"metadataManager/types"
@@ -12,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/ermes-thesis/ermes-common/utils"
 )
 
@@ -26,13 +29,13 @@ const (
 type MetadataAction int
 
 const (
-	CREATE MetadataAction = iota
-	UPDATE
-	DELETE
+	Add = iota
+	Remove
 )
 
-type Propagable interface {
-	IsPropagable() bool
+type UpdateGroupResponse struct {
+	Groups   []string `json:"groups"`
+	Sequence uint64   `json:"sequence"`
 }
 
 type QueryPropagator interface {
@@ -102,36 +105,30 @@ func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion str
 	return result, nil
 }
 
-type MetadataPropagator interface {
-	Propagate(collectionId string, obj Propagable, geolocation string, reqOrigin PropagationOrigin, action MetadataAction) error
+type CreateMetadataPropagator interface {
+	Propagate(collectionId string, metadata model.Metadata, reqOrigin PropagationOrigin) error
 }
 
-type MetadataPropagatorImpl struct {
+type CreateMetadataPropagatorImpl struct {
 	serverInfo *info.ServerInfo
 	log        *logger.Logger
 }
 
-func NewMetadataPropagator(serverInfo *info.ServerInfo, log *logger.Logger) *MetadataPropagatorImpl {
-	return &MetadataPropagatorImpl{
+func NewCreateMetadataPropagator(serverInfo *info.ServerInfo, log *logger.Logger) *CreateMetadataPropagatorImpl {
+	return &CreateMetadataPropagatorImpl{
 		serverInfo: serverInfo,
 		log:        log,
 	}
 }
 
-func (p *MetadataPropagatorImpl) Propagate(collectionId string, obj Propagable, geolocation string, reqOrigin PropagationOrigin, action MetadataAction) error {
-	p.log.Info("Starting to propagating metadata...")
-
-	body, err := json.Marshal(obj)
-	if err != nil {
-		p.log.Infof("Error marshalling metadata: %v", err)
-		return err
-	}
+func (p *CreateMetadataPropagatorImpl) Propagate(collectionId string, metadata model.Metadata, reqOrigin PropagationOrigin) error {
+	p.log.Info("Starting to propagating groups update request...")
 
 	switch reqOrigin {
 	case FROM_FATHER:
 		for _, child := range p.serverInfo.Children {
-			if strings.HasPrefix(geolocation, child.MetadataDomain) {
-				err = p.sendHttpReqToDest(child.HostName, collectionId, body, action)
+			if strings.HasPrefix(metadata.Geolocation, child.MetadataDomain) {
+				err := p.sendHttpReqToDest(child.HostName, collectionId, metadata)
 				if err != nil {
 					p.log.Errorf("Error sending request to child: %v\n", err)
 					return err
@@ -142,7 +139,7 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, obj Propagable, 
 		}
 	case FROM_CHILD:
 		if p.serverInfo.Father != nil {
-			err = p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, body, action)
+			err := p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, metadata)
 			if err != nil {
 				p.log.Errorf("Error sending request to father : %v\n", err)
 				return err
@@ -150,7 +147,7 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, obj Propagable, 
 		}
 	case FROM_LOCAL:
 		if p.serverInfo.Father != nil {
-			err = p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, body, action)
+			err := p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, metadata)
 			if err != nil {
 				p.log.Errorf("Error sending request to father : %v\n", err)
 				return err
@@ -158,8 +155,8 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, obj Propagable, 
 		}
 
 		for _, child := range p.serverInfo.Children {
-			if strings.HasPrefix(geolocation, child.MetadataDomain) {
-				err = p.sendHttpReqToDest(child.HostName, collectionId, body, action)
+			if strings.HasPrefix(metadata.Geolocation, child.MetadataDomain) {
+				err := p.sendHttpReqToDest(child.HostName, collectionId, metadata)
 				if err != nil {
 					p.log.Errorf("Error sending request to child : %v\n", err)
 					return err
@@ -172,17 +169,14 @@ func (p *MetadataPropagatorImpl) Propagate(collectionId string, obj Propagable, 
 	return nil
 }
 
-func (p *MetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, body []byte, action MetadataAction) error {
-	var endpoint string
-	switch action {
-	case CREATE:
-		endpoint = "pvt-create-metadata"
-	case UPDATE:
-		endpoint = "pvt-add-group"
-	case DELETE:
-		endpoint = "pvt-remove-group"
+func (p *CreateMetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, metadata model.Metadata) error {
+	body, err := json.Marshal(metadata)
+	if err != nil {
+		p.log.Infof("Error marshalling metadata: %v", err)
+		return err
 	}
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/%s/%s", dest, endpoint, collectionId), bytes.NewReader(body))
+
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/pvt-create-metadata/%s", dest, collectionId), bytes.NewReader(body))
 	if err != nil {
 		p.log.Errorf("Error creating request: %v", err)
 		return err
@@ -197,6 +191,136 @@ func (p *MetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId str
 		return err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("error when contacting the node: %s", resp.Status)
+	}
+	return nil
+}
+
+type GroupUpdateRequestPropagator interface {
+	Propagate(collectionId string, message GroupMessage) (*UpdateGroupResponse, error)
+}
+
+type GroupsUpdateRequestPropagatorImpl struct {
+	serverInfo *info.ServerInfo
+	log        *logger.Logger
+}
+
+func NewGroupUpdateRequestPropagator(serverInfo *info.ServerInfo, log *logger.Logger) *GroupsUpdateRequestPropagatorImpl {
+	return &GroupsUpdateRequestPropagatorImpl{
+		serverInfo: serverInfo,
+		log:        log,
+	}
+}
+
+func (p *GroupsUpdateRequestPropagatorImpl) Propagate(collectionId string, message GroupMessage) (*UpdateGroupResponse, error) {
+	p.log.Info("Starting to propagating groups update request...")
+
+	// If a cloud node is configured, always propagate to it
+	if p.serverInfo.CloudNode != nil {
+		p.log.Info("Using cloud node %s for the request.\n", p.serverInfo.CloudNode.HostName)
+		return p.sendHttpReqToDest(p.serverInfo.CloudNode.HostName, collectionId, message)
+	}
+
+	// If no cloud node is configured, propagate to father and children based on geolocation
+	if p.serverInfo.Father != nil {
+		p.log.Info("No cloud node configured, forwarding to parent node.")
+		return p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, message)
+	}
+
+	return nil, errors.New("no cloud node or father node configured")
+}
+
+func (p *GroupsUpdateRequestPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, message GroupMessage) (*UpdateGroupResponse, error) {
+	body, err := json.Marshal(message)
+	if err != nil {
+		p.log.Infof("Error marshalling metadata: %v", err)
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/pvt-request-update-groups/%s", dest, collectionId), bytes.NewReader(body))
+	if err != nil {
+		p.log.Errorf("Error creating request: %v", err)
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-ERMES-SECRET", p.serverInfo.Secret)
+
+	resp, err := utils.CustomClient.Do(req)
+	if err != nil {
+		p.log.Errorf("[%s] Error sending request: %v\n", p.serverInfo.MetadataDomain, err)
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusUnauthorized {
+		return nil, &dataManagerShared.UnauthorizedError{}
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("error when contacting the node: %s", resp.Status)
+	}
+
+	var respData *UpdateGroupResponse
+	err = json.NewDecoder(resp.Body).Decode(respData)
+
+	return respData, err
+}
+
+type UpdateGroupsPropagator interface {
+	Propagate(collectionId string, message UpdateGroupResponse, geolocation string) error
+}
+
+type UpdateGroupsPropagatorImpl struct {
+	serverInfo *info.ServerInfo
+	log        *logger.Logger
+}
+
+func NewUpdateGroupsPropagator(serverInfo *info.ServerInfo, log *logger.Logger) *UpdateGroupsPropagatorImpl {
+	return &UpdateGroupsPropagatorImpl{
+		serverInfo: serverInfo,
+		log:        log,
+	}
+}
+
+func (p *UpdateGroupsPropagatorImpl) Propagate(collectionId string, message UpdateGroupResponse, geolocation string) error {
+	p.log.Info("Starting to propagating groups update...")
+
+	for _, child := range p.serverInfo.Children {
+		if strings.HasPrefix(geolocation, child.MetadataDomain) {
+			p.log.Infof("Forwarding to child node %s for the request.\n", child.HostName)
+			return p.sendHttpReqToDest(child.HostName, collectionId, message)
+		}
+	}
+
+	return errors.New("domain not found among children nodes")
+}
+
+func (p *UpdateGroupsPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, message UpdateGroupResponse) error {
+	body, err := json.Marshal(message)
+	if err != nil {
+		p.log.Infof("Error marshalling metadata: %v", err)
+		return err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/pvt-propagate-groups/%s", dest, collectionId), bytes.NewReader(body))
+	if err != nil {
+		p.log.Errorf("Error creating request: %v", err)
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-ERMES-SECRET", p.serverInfo.Secret)
+
+	resp, err := utils.CustomClient.Do(req)
+	if err != nil {
+		p.log.Errorf("[%s] Error sending request: %v\n", p.serverInfo.MetadataDomain, err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("error when contacting the node: %s", resp.Status)
+	}
 
 	return nil
 }

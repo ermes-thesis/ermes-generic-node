@@ -171,7 +171,7 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 	defer strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 
 	//get collection from redis instance
-	res, groups, err := m.policy.dbInterface.GetCollection(outerKey)
+	res, groups, groupsSequence, err := m.policy.dbInterface.GetCollection(outerKey)
 	if err != nil {
 		panic(err) //TODO: decide
 	}
@@ -181,7 +181,7 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 	}
 	//s
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, true, res, groups, collectionSize)
+	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, true, res, groups, groupsSequence, collectionSize)
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(outerKey)
@@ -218,7 +218,7 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 	defer strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 
 	//get collection from redis instance
-	res, groups, err := m.policy.dbInterface.GetCollection(outerKey)
+	res, groups, groupsSequence, err := m.policy.dbInterface.GetCollection(outerKey)
 	if err != nil {
 		panic(err) //TODO: decide
 	}
@@ -227,7 +227,7 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 		panic(sizeError) //TODO: decide
 	}
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, false, res, groups, collectionSize)
+	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, false, res, groups, groupsSequence, collectionSize)
 
 	//if all the interest adjacent node has been satisfied
 	if interestedNodeCounter-len(strongCollection.HostsId()) <= 0 && !strongCollection.IsLeader {
@@ -270,7 +270,7 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 
 	//get collection from redis instance
-	res, groups, err := m.policy.dbInterface.GetCollection(collection.CollectionId())
+	res, groups, groupsSequence, err := m.policy.dbInterface.GetCollection(collection.CollectionId())
 	if err != nil {
 		panic(err) //TODO: decide
 	}
@@ -289,7 +289,7 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 		//stop keep track of access for a remote collection
 		m.policy.RemoveInfo(collection.CollectionId())
 	}
-	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.HostName, collection, isLeader, res, groups, collectionSize)
+	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.HostName, collection, isLeader, res, groups, groupsSequence, collectionSize)
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(collection.CollectionId())

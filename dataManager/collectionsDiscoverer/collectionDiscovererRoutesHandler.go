@@ -4,6 +4,7 @@ import (
 	gossip "dataManager/messages"
 	shared "dataManager/shared"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 )
@@ -38,11 +39,9 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 			dbFn := func() (interface{}, error) {
 				authorized, err := c.dbInterface.IsInGroups(msg.CollectionId, msg.Groups...)
 				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
 					return nil, err
 				}
 				if !authorized {
-					w.WriteHeader(http.StatusUnauthorized)
 					return nil, &shared.UnauthorizedError{}
 				}
 
@@ -52,15 +51,22 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 				return c.WeakCollectionRemoteRecordAccess(addr, msg.CollectionId, msg.Groups, msg.RecordNames[0])
 			}
 			res, dbErr = AccessRecords(c, msg.CollectionId, dbFn, remoteFn)
+			if dbErr != nil {
+				var unAuthErr *shared.UnauthorizedError
+				if errors.As(dbErr, &unAuthErr) {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 		} else {
 			dbFn := func() (interface{}, error) {
 				authorized, err := c.dbInterface.IsInGroups(msg.CollectionId, msg.Groups...)
 				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
 					return nil, err
 				}
 				if !authorized {
-					w.WriteHeader(http.StatusUnauthorized)
 					return nil, &shared.UnauthorizedError{}
 				}
 
@@ -70,6 +76,16 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 				return c.WeakCollectionRemoteRecordsAccess(addr, msg.CollectionId, msg.Groups, msg.RecordNames...)
 			}
 			res, dbErr = AccessRecords(c, msg.CollectionId, dbFn, remoteFn)
+			if dbErr != nil {
+				var unAuthErr *shared.UnauthorizedError
+				if errors.As(dbErr, &unAuthErr) {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
 		}
 
 		resp := gossip.RemoteAccessResponse{
@@ -120,11 +136,9 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate() http.Handler {
 			dbFn := func() error {
 				authorized, err := c.dbInterface.IsInGroups(msg.CollectionId, msg.Groups...)
 				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
 					return err
 				}
 				if !authorized {
-					w.WriteHeader(http.StatusUnauthorized)
 					return &shared.UnauthorizedError{}
 				}
 
@@ -159,15 +173,23 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate() http.Handler {
 				}
 			}
 			dbErr = UpdateRecords(c, msg.CollectionId, dbFn, remoteFn)
+			if dbErr != nil {
+				var unAuthErr *shared.UnauthorizedError
+				if errors.As(dbErr, &unAuthErr) {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
 		} else {
 			dbFn := func() error {
 				authorized, err := c.dbInterface.IsInGroups(msg.CollectionId, msg.Groups...)
 				if err != nil {
-					w.WriteHeader(http.StatusInternalServerError)
 					return err
 				}
 				if !authorized {
-					w.WriteHeader(http.StatusUnauthorized)
 					return &shared.UnauthorizedError{}
 				}
 
@@ -202,6 +224,16 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate() http.Handler {
 				}
 			}
 			dbErr = UpdateRecords(c, msg.CollectionId, dbFn, remoteFn)
+			if dbErr != nil {
+				var unAuthErr *shared.UnauthorizedError
+				if errors.As(dbErr, &unAuthErr) {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
 		}
 
 		if dbErr != nil {

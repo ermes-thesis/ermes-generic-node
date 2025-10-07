@@ -29,7 +29,7 @@ type CollectionsDiscoverer interface {
 
 	PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool)
 
-	SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error
+	SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, groupsSequence uint64, migrationManager migrationManager.MigrationManager, isStrong bool) error
 }
 
 type CollectionsDiscovererImp struct {
@@ -302,7 +302,7 @@ func contains(slice []string, str string) bool {
 	return false
 }
 
-func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error {
+func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, groupsSequence uint64, migrationManager migrationManager.MigrationManager, isStrong bool) error {
 	//sync
 	c.collectionsPartialView.Mutex.Lock()
 	defer c.collectionsPartialView.Mutex.Unlock()
@@ -315,7 +315,7 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 	}
 
 	//try to add collection in redis
-	dbErr := c.dbInterface.SetCollection(collectionId, records, groups)
+	dbErr := c.dbInterface.SetCollection(collectionId, records, groups, groupsSequence)
 	if dbErr != nil {
 		return dbErr
 	}

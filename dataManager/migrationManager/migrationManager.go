@@ -29,7 +29,7 @@ type MigrationManager interface {
 	ManageGossipMessage(gossip.GossipMessage)
 	// NewCollectionReceived used when the node receive  a collection from one of the directly connected nodes (collectionID,isStrong,leader)
 	//return True if the collection is already stored locally and must not be stored in Redis
-	NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string, collectionSize uint64, hostToRemove bool, hostAddress string) bool
+	NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool
 	// NewCollectionCreated used when user create a new collection in the local node (collectionID,size,isStrong)
 	//throw an error if the collection already exists locally
 	NewCollectionCreated(string, uint64, bool) error
@@ -108,7 +108,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 }
 
 // methods
-func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string, collectionSize uint64, hostToRemove bool, hostAddress string) bool {
+func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool {
 	//sync
 	m.collectionsLock.Lock()
 	defer m.collectionsLock.Unlock()
@@ -125,14 +125,14 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 			m.log.Warn("MIG-MANAGER, new collection already present locally")
 			return true
 		}
-		m.addCollectionInRedis(collectionId, records, groups, collectionSize)
+		m.addCollectionInRedis(collectionId, records, groups, groupsSequence, collectionSize)
 
 		collection.SetToLocal(collectionSize)
 		m.log.Info("MIG-MANAGER, new collection set to local")
 		m.updateLru(collectionId, uint(collectionSize))
 		return false
 	}
-	m.addCollectionInRedis(collectionId, records, groups, collectionSize)
+	m.addCollectionInRedis(collectionId, records, groups, groupsSequence, collectionSize)
 
 	if isStrong {
 		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false, isLeader)
@@ -145,7 +145,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	return false
 }
 
-func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records map[string]string, groups []string, collectionSize uint64) {
+func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records map[string]string, groups []string, groupsSequence uint64, collectionSize uint64) {
 	memStats, memErr := m.dbInterface.GetMemoryStats()
 	if memErr != nil {
 		m.log.Error("MIG-MANAGER, get memory usage fails")
@@ -157,7 +157,7 @@ func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records 
 	}
 	//check size before set collection
 
-	err := m.dbInterface.SetCollection(collectionId, records, groups) //add collection to redis
+	err := m.dbInterface.SetCollection(collectionId, records, groups, groupsSequence) //add collection to redis
 	if err != nil {
 		m.log.Error("MIG-MANAGER, add collection in redis fails")
 		panic(err) //TODO: decide
@@ -251,7 +251,7 @@ func (m *MigrationManagerImp) SendCollectionAndRemove(collection shared.Collecti
 	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 
 	//get collection from redis instance
-	res, groups, err := m.dbInterface.GetCollection(collection.CollectionId())
+	res, groups, groupsSequence, err := m.dbInterface.GetCollection(collection.CollectionId())
 	if err != nil {
 		panic(err) //TODO: decide
 	}
@@ -269,7 +269,7 @@ func (m *MigrationManagerImp) SendCollectionAndRemove(collection shared.Collecti
 		//stop keep track of access for a remote collection
 		m.StrongCollectionPolicy.RemoveInfo(collection.CollectionId())
 	}
-	m.sender.SendRemoteCollectionTo(m.serverInfo.Father.HostName, collection, isLeader, res, groups, collectionSize)
+	m.sender.SendRemoteCollectionTo(m.serverInfo.Father.HostName, collection, isLeader, res, groups, groupsSequence, collectionSize)
 
 	//remove collection from redis instance
 	m.dbInterface.DeleteCollection(collection.CollectionId())

@@ -27,7 +27,7 @@ const (
 //###############################################################
 
 type MigrationManagerSender interface {
-	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]string, []string, uint64)
+	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]string, []string, uint64, uint64)
 	SendGossipMessages(gossip.GossipMessage, string)
 	GossipPath() string
 	RepoPath() string
@@ -47,7 +47,7 @@ func NewMigrationManagerSender(logger *logger.Logger, server server.ServerType, 
 	}
 }
 
-func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]string, groups []string, collectionSize uint64) {
+func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]string, groups []string, groupsSequence uint64, collectionSize uint64) {
 	//imp
 	s.log.Infof("[SENDER] send collection %s to %s", collection.CollectionId(), destination)
 	if destination != s.serverInfo.Father.HostName {
@@ -59,6 +59,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		CollectionId:   collection.CollectionId(),
 		Records:        res,
 		Groups:         groups,
+		GroupsSequence: groupsSequence,
 		IsStrong:       collection.IsStrong(),
 		CollectionSize: collectionSize,
 		HostToRemove:   hostToRemove,

@@ -32,7 +32,7 @@ type DataManager interface {
 	SetRecords(collectionId string, groups []string, recordNames []string, recordValues []string) error
 	DeleteRecords(collectionId string, groups []string, recordNames ...string) error
 	PropagateUpdates(updates []messages.CollectionUpdate, isDeleted bool)
-	SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, isStrong bool) error
+	SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, groupsSequence uint64, isStrong bool) error
 }
 
 type DataManagerImp struct {
@@ -189,11 +189,12 @@ func (m *DataManagerImp) PropagateUpdates(updates []messages.CollectionUpdate, i
 	m.collectionsDiscoverer.PropagateUpdates(updates, isDelete)
 }
 
-func (m *DataManagerImp) SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, isStrong bool) error {
+func (m *DataManagerImp) SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, groupsSequence uint64, isStrong bool) error {
 	return m.collectionsDiscoverer.SetCollectionAndPropagate(
 		collectionId,
 		records,
 		groups,
+		groupsSequence,
 		m.migrationManager,
 		isStrong,
 	)

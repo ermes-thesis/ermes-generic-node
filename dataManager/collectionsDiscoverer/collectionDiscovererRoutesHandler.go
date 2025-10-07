@@ -2,6 +2,7 @@ package collectionsDiscoverer
 
 import (
 	gossip "dataManager/messages"
+	"dataManager/migrationManager"
 	shared "dataManager/shared"
 	"encoding/json"
 	"errors"
@@ -107,145 +108,6 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 	})
 }
 
-func (c *CollectionsDiscovererImp) handleIncomingRemoteUpdate() http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		c.log.Info("HTTP-REQ, New remote update request received through HTTP request")
-
-		defer r.Body.Close()
-
-		bodyBytes, err := io.ReadAll(r.Body)
-		if err != nil {
-			c.log.Error("HTTP-REQ, Error reading request body")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		var msg gossip.RemoteUpdateRequest
-		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
-			c.log.Error("HTTP-REQ, Error parsing remote access request")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		var dbErr error
-
-		if len(msg.RecordNames) == 0 {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		} else if len(msg.RecordNames) == 1 {
-			dbFn := func() error {
-				authorized, err := c.dbInterface.IsInGroups(msg.CollectionId, msg.Groups...)
-				if err != nil {
-					return err
-				}
-				if !authorized {
-					return &shared.UnauthorizedError{}
-				}
-
-				//write or delete in db
-				if msg.IsDelete {
-					err = c.dbInterface.DeleteRecords(msg.CollectionId, msg.RecordNames[0])
-				} else {
-					err = c.dbInterface.SetRecord(msg.CollectionId, msg.RecordNames[0], msg.Record[0])
-				}
-				if err != nil {
-					return err
-				}
-
-				//propagate update
-				update := gossip.CollectionUpdate{
-					CollectionId: msg.CollectionId,
-					RecordNames:  msg.RecordNames,
-					RecordValues: msg.Record,
-				}
-				c.PropagateUpdates([]gossip.CollectionUpdate{update}, msg.IsDelete)
-
-				return nil
-			}
-			var remoteFn func(addr string) error
-			if msg.IsDelete {
-				remoteFn = func(addr string) error {
-					return c.WeakCollectionRemoteRecordDelete(addr, msg.CollectionId, msg.Groups, msg.RecordNames)
-				}
-			} else {
-				remoteFn = func(addr string) error {
-					return c.WeakCollectionRemoteRecordWrite(addr, msg.CollectionId, msg.Groups, msg.RecordNames[0], msg.Record[0])
-				}
-			}
-			dbErr = UpdateRecords(c, msg.CollectionId, dbFn, remoteFn)
-			if dbErr != nil {
-				var unAuthErr *shared.UnauthorizedError
-				if errors.As(dbErr, &unAuthErr) {
-					w.WriteHeader(http.StatusUnauthorized)
-					return
-				}
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-		} else {
-			dbFn := func() error {
-				authorized, err := c.dbInterface.IsInGroups(msg.CollectionId, msg.Groups...)
-				if err != nil {
-					return err
-				}
-				if !authorized {
-					return &shared.UnauthorizedError{}
-				}
-
-				//write or delete in db
-				if msg.IsDelete {
-					err = c.dbInterface.DeleteRecords(msg.CollectionId, msg.RecordNames...)
-				} else {
-					err = c.dbInterface.SetRecords(msg.CollectionId, msg.RecordNames, msg.Record)
-				}
-				if err != nil {
-					return err
-				}
-
-				//propagate update
-				update := gossip.CollectionUpdate{
-					CollectionId: msg.CollectionId,
-					RecordNames:  msg.RecordNames,
-					RecordValues: msg.Record,
-				}
-				c.PropagateUpdates([]gossip.CollectionUpdate{update}, msg.IsDelete)
-
-				return nil
-			}
-			var remoteFn func(addr string) error
-			if msg.IsDelete {
-				remoteFn = func(addr string) error {
-					return c.WeakCollectionRemoteRecordDelete(addr, msg.CollectionId, msg.Groups, msg.RecordNames)
-				}
-			} else {
-				remoteFn = func(addr string) error {
-					return c.WeakCollectionRemoteRecordsWrite(addr, msg.CollectionId, msg.Groups, msg.RecordNames, msg.Record)
-				}
-			}
-			dbErr = UpdateRecords(c, msg.CollectionId, dbFn, remoteFn)
-			if dbErr != nil {
-				var unAuthErr *shared.UnauthorizedError
-				if errors.As(dbErr, &unAuthErr) {
-					w.WriteHeader(http.StatusUnauthorized)
-					return
-				}
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-
-		}
-
-		if dbErr != nil {
-			c.log.Error("HTTP-REQ, Error accessing collection: " + dbErr.Error())
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-	})
-}
-
 func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		c.log.Info("HTTP-REQ, New update propagation request received through HTTP request")
@@ -259,23 +121,42 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation() http.Handle
 			return
 		}
 
-		var msg gossip.CollectionUpdateMessage
+		var msg gossip.CollectionUpdateMessages
 		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
-			c.log.Error("HTTP-REQ, Error parsing remote access request")
+			c.log.Error("HTTP-REQ: Error parsing remote propagation request")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
-		address := msg.SenderIp
+		w.WriteHeader(http.StatusOK) //response
+
+		c.UpdateCollectionsRecordsAndPropagate(msg.Messages, msg.Groups, false, msg.Messages[0].SenderIp)
+	})
+}
+
+func (c *CollectionsDiscovererImp) handleIncomingUpdateGroupPropagation() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c.log.Info("HTTP-REQ", "New group update propagation request received through HTTP request")
+
+		defer r.Body.Close()
+
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			c.log.Error("HTTP-REQ, Error reading request body")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var msg gossip.CollectionGroupUpdateMessages
+		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
+			c.log.Error("HTTP-REQ", "Error parsing remote group propagation request")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
 
 		w.WriteHeader(http.StatusOK) //response
 
-		//sync
-		c.collectionsPartialView.Mutex.Lock()
-
-		c.propagateUpdate(msg, true, []string{address}, msg.IsDelete)
-
-		c.collectionsPartialView.Mutex.Unlock() // lock release
+		c.UpdateCollectionsGroupsAndPropagate(msg, false, msg[0].SenderIp)
 	})
 }
 
@@ -328,5 +209,36 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 			c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, msg)
 		}
 
+	})
+}
+
+func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c.log.Info("HTTP-REQ: New collection removal request received through HTTP request")
+
+		defer r.Body.Close()
+
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			c.log.Error("HTTP-REQ: Error reading request body")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var msg gossip.RemoveCollectionMessage
+		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
+			c.log.Error("HTTP-REQ", "Error parsing new collection message")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		collectionId := msg.CollectionId
+		senderIp := msg.SenderIp
+		w.WriteHeader(http.StatusOK)
+
+		//async
+		dbErr := c.RemoveCollectionAndPropagate(collectionId, migrationManager.GetMigrationManagerInstance(), msg.Groups, false, senderIp)
+		if dbErr != nil {
+			c.log.Error("HTTP-REQ", "Error removing collection: "+dbErr.Error())
+		}
 	})
 }

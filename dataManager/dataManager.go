@@ -27,12 +27,10 @@ type DataManager interface {
 
 	//methods
 	GetRecord(collectionId string, recordName string, groups []string) (string, error)
-	SetRecord(collectionId string, recordName string, recordValue string, groups []string) error
-	GetRecords(collectionId string, groups []string, recordNames ...string) ([]any, error)
-	SetRecords(collectionId string, groups []string, recordNames []string, recordValues []string) error
-	DeleteRecords(collectionId string, groups []string, recordNames ...string) error
-	PropagateUpdates(updates []messages.CollectionUpdate, isDeleted bool)
+	UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdate, groups []string) error
+	UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdate) error
 	SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, groupsSequence uint64, isStrong bool) error
+	RemoveCollectionAndPropagate(collectionId string, groups []string) error
 }
 
 type DataManagerImp struct {
@@ -40,6 +38,7 @@ type DataManagerImp struct {
 	collectionsDiscoverer collectionsDiscoverer.CollectionsDiscoverer
 
 	dbInterface db.GenericDB
+	serverInfo  info.ServerInfo
 }
 
 // Singleton pattern
@@ -62,6 +61,7 @@ func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalit
 		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger)
 
 		m.dbInterface = dbInterface
+		m.serverInfo = serverInfo
 	})
 }
 
@@ -102,91 +102,20 @@ func (m *DataManagerImp) GetRecord(collectionId string, recordName string, group
 	)
 }
 
-func (m *DataManagerImp) SetRecord(collectionId string, recordName string, recordValue string, groups []string) error {
-	return collectionsDiscoverer.UpdateRecords(
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
-		collectionId,
-		func() error {
-			authorized, err := m.dbInterface.IsInGroups(collectionId, groups...)
-			if err != nil {
-				return err
-			}
-			if !authorized {
-				return &shared.UnauthorizedError{}
-			}
-			return m.dbInterface.SetRecord(collectionId, recordName, recordValue)
-		},
-		func(addr string) error {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordWrite(addr, collectionId, groups, recordName, recordValue)
-		},
+func (m *DataManagerImp) UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdate, groups []string) error {
+	return m.collectionsDiscoverer.UpdateCollectionsRecordsAndPropagate(messages.ToCollectionUpdateMessages(
+		updates,
+		m.serverInfo.HostName,
+		m.serverInfo.HostName,
+	), groups, true, m.serverInfo.HostName,
 	)
 }
 
-func (m *DataManagerImp) GetRecords(collectionId string, groups []string, recordNames ...string) ([]any, error) {
-	return collectionsDiscoverer.AccessRecords(
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
-		collectionId,
-		func() ([]any, error) {
-			authorized, err := m.dbInterface.IsInGroups(collectionId, groups...)
-			if err != nil {
-				return nil, err
-			}
-			if !authorized {
-				return nil, &shared.UnauthorizedError{}
-			}
-
-			return m.dbInterface.GetRecords(collectionId, recordNames...)
-		},
-		func(addr string) ([]any, error) {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsAccess(addr, collectionId, groups, recordNames...)
-		},
-	)
-}
-
-func (m *DataManagerImp) SetRecords(collectionId string, groups []string, recordNames []string, recordValues []string) error {
-	return collectionsDiscoverer.UpdateRecords(
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
-		collectionId,
-		func() error {
-			authorized, err := m.dbInterface.IsInGroups(collectionId, groups...)
-			if err != nil {
-				return err
-			}
-			if !authorized {
-				return &shared.UnauthorizedError{}
-			}
-
-			return m.dbInterface.SetRecords(collectionId, recordNames, recordValues)
-		},
-		func(addr string) error {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsWrite(addr, collectionId, groups, recordNames, recordValues)
-		},
-	)
-}
-
-func (m *DataManagerImp) DeleteRecords(collectionId string, groups []string, recordNames ...string) error {
-	return collectionsDiscoverer.UpdateRecords( //same logic of SetRecords for Delete
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
-		collectionId,
-		func() error {
-			authorized, err := m.dbInterface.IsInGroups(collectionId, groups...)
-			if err != nil {
-				return err
-			}
-			if !authorized {
-				return &shared.UnauthorizedError{}
-			}
-
-			return m.dbInterface.DeleteRecords(collectionId, recordNames...)
-		},
-		func(addr string) error {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordDelete(addr, collectionId, groups, recordNames)
-		},
-	)
-}
-
-func (m *DataManagerImp) PropagateUpdates(updates []messages.CollectionUpdate, isDelete bool) { //if isDelete true -> RecordValues can be empty
-	m.collectionsDiscoverer.PropagateUpdates(updates, isDelete)
+func (m *DataManagerImp) UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdate) error {
+	return m.collectionsDiscoverer.UpdateCollectionsGroupsAndPropagate(messages.ToCollectionGroupUpdateMessages(
+		updates,
+		m.serverInfo.HostName,
+	), true, m.serverInfo.HostName)
 }
 
 func (m *DataManagerImp) SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, groupsSequence uint64, isStrong bool) error {
@@ -198,4 +127,8 @@ func (m *DataManagerImp) SetCollectionAndPropagate(collectionId string, records 
 		m.migrationManager,
 		isStrong,
 	)
+}
+
+func (m *DataManagerImp) RemoveCollectionAndPropagate(collectionId string, groups []string) error {
+	return m.collectionsDiscoverer.RemoveCollectionAndPropagate(collectionId, m.migrationManager, groups, true, m.serverInfo.HostName)
 }

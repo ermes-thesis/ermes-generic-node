@@ -37,6 +37,8 @@ type MigrationManager interface {
 	ChangeStrongCollectionPolicy(strongPolicy.CurrentPolicy)
 	ChangeWeakCollectionPolicy(weakpolicy.CurrentPolicy)
 	GetCollectionVectorClockValue(collectionId string) (uint64, error)
+
+	RemoveCollectionFromLru(collectionId string)
 }
 
 type MigrationManagerImp struct {
@@ -105,6 +107,14 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 
 		m.log.Info("MIG-MANAGER, migration manager instance has been initialized")
 	})
+}
+
+func (m *MigrationManagerImp) RemoveCollectionFromLru(collectionId string) {
+	//sync
+	m.collectionsLock.Lock()
+	defer m.collectionsLock.Unlock()
+
+	m.lruCache.Remove(collectionId)
 }
 
 // methods

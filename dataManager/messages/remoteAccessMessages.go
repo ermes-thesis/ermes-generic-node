@@ -1,5 +1,11 @@
 package messages
 
+import (
+	"time"
+)
+
+// get
+
 type RemoteAccessRequest struct {
 	CollectionId string   `json:"collectionId"`
 	RecordNames  []string `json:"recordNames"`
@@ -19,10 +25,13 @@ type RemoteUpdateRequest struct {
 	IsDelete     bool     `json:"isDelete"`
 }
 
+// put and delete records
+
 type CollectionUpdate struct {
 	CollectionId string   `json:"collectionId"`
 	RecordNames  []string `json:"recordNames"`
 	RecordValues []string `json:"recordValue"`
+	IsDelete     bool     `json:"isDelete"`
 }
 
 type CollectionUpdateMessage struct {
@@ -35,8 +44,78 @@ type CollectionUpdateMessage struct {
 	IsDelete     bool     `json:"isDelete"`
 }
 
+type CollectionUpdateMessages struct {
+	Messages []CollectionUpdateMessage
+	Groups   []string
+}
+
+func ToCollectionUpdateMessages(
+	updates []CollectionUpdate,
+	updateHostIp string,
+	senderIp string,
+) []CollectionUpdateMessage {
+	result := make([]CollectionUpdateMessage, 0, len(updates))
+	time := time.Now().Unix()
+
+	for _, u := range updates {
+		msg := CollectionUpdateMessage{
+			CollectionId: u.CollectionId,
+			RecordNames:  u.RecordNames,
+			RecordValues: u.RecordValues,
+			Time:         time,
+			UpdateHostIp: updateHostIp,
+			SenderIp:     senderIp,
+			IsDelete:     u.IsDelete,
+		}
+		result = append(result, msg)
+	}
+
+	return result
+}
+
+// put and delete groups
+
+type CollectionGroupUpdate struct {
+	CollectionId string   `json:"collectionId"`
+	GroupNames   []string `json:"recordNames"`
+	Sequence     uint64   `json:"sequence"`
+}
+
+type CollectionGroupUpdateMessage struct {
+	CollectionId string   `json:"collectionId"`
+	GroupNames   []string `json:"recordNames"`
+	Sequence     uint64   `json:"sequence"`
+	SenderIp     string   `json:"senderIp"`
+}
+
+func ToCollectionGroupUpdateMessages(updates []CollectionGroupUpdate, senderIp string) []CollectionGroupUpdateMessage {
+	result := make([]CollectionGroupUpdateMessage, 0, len(updates))
+
+	for _, u := range updates {
+		msg := CollectionGroupUpdateMessage{
+			CollectionId: u.CollectionId,
+			GroupNames:   u.GroupNames,
+			Sequence:     u.Sequence,
+			SenderIp:     senderIp,
+		}
+		result = append(result, msg)
+	}
+
+	return result
+}
+
+type CollectionGroupUpdateMessages []CollectionGroupUpdateMessage
+
+// collection management
+
 type NewCollectionMessage struct {
 	CollectionId string `json:"collectionId"`
 	IsStrong     bool   `json:"isStrong"`
 	SenderIp     string `json:"senderIp"`
+}
+
+type RemoveCollectionMessage struct {
+	CollectionId string   `json:"collectionId"`
+	SenderIp     string   `json:"senderIp"`
+	Groups       []string `json:"groups"`
 }

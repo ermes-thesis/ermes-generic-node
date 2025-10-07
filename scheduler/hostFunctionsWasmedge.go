@@ -3,6 +3,7 @@ package scheduler
 import (
 	"bytes"
 	datamanager "dataManager"
+	"dataManager/messages"
 	shared "dataManager/shared"
 	"errors"
 	"fmt"
@@ -240,7 +241,13 @@ func hostPut(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 		return returns, wasmedge.Result_Success
 	}
 
-	err = deps.DataManager.SetRecord(collId, recordName, value, groups)
+	err = deps.DataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{{
+		CollectionId: collId,
+		RecordNames:  []string{recordName},
+		RecordValues: []string{value},
+		IsDelete:     false,
+	}})
+
 	if err != nil {
 		var unAuthErr *shared.UnauthorizedError
 		if errors.As(err, &unAuthErr) {

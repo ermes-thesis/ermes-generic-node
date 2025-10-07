@@ -11,7 +11,7 @@ import (
 
 	"github.com/bytecodealliance/wasmtime-go/v37"
 	"github.com/ermes-thesis/ermes-common/model"
-	"github.com/ermes-thesis/ermes-common/utils"
+	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
 	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
 	"github.com/google/uuid"
@@ -402,7 +402,7 @@ func hostWasmtimeRemoveUserFromGroup(userIdPtr int32, userIdLength int32, groupN
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
@@ -436,7 +436,7 @@ func hostWasmtimeAddUserToGroup(userIdPtr int32, userIdLength int32, groupNamePt
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
@@ -471,7 +471,7 @@ func hostWasmtimeCreateGroup(groupNamePtr int32, groupNameLength int32, partecip
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
@@ -504,7 +504,7 @@ func hostWasmtimeDeleteGroup(groupNamePtr int32, groupNameLength int32, deps *Ho
 		return wasmComponent.WriteError(model.HttpError, err)
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		return wasmComponent.WriteError(model.HttpError, err)
 	}

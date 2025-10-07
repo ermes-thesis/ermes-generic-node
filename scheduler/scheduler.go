@@ -18,7 +18,7 @@ import (
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
-	"github.com/ermes-thesis/ermes-common/utils"
+	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
 )
 
@@ -298,7 +298,7 @@ func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functio
 	req.Header.Set("X-ERMES-SECRET", s.serverInfo.Secret)
 	req.Header.Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", seqNumber))
 
-	resp, err := utils.CustomClient.Do(req)
+	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		return nil, 0, fmt.Errorf("error forwarding request to leader: %v", err)
 	}

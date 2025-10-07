@@ -15,7 +15,7 @@ import (
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
-	"github.com/ermes-thesis/ermes-common/utils"
+	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 )
 
 type PropagationOrigin int
@@ -78,7 +78,7 @@ func (p *QueryPropagatorImpl) Propagate(functionName string, functionVersion str
 	req.Header.Set("X-ERMES-POSITION", geolocation)
 	req.Header.Set("X-ERMES-QUERY", templateParamsMappings)
 
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error when contacting the cloud node: %s \n", err)
 		return nil, err
@@ -185,7 +185,7 @@ func (p *CreateMetadataPropagatorImpl) sendHttpReqToDest(dest string, collection
 	req.Header.Set("X-ERMES-SECRET", p.serverInfo.Secret)
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", p.serverInfo.MetadataDomain)
 
-	resp, err := utils.CustomClient.Do(req)
+	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		p.log.Errorf("[%s] Error sending request: %v\n", p.serverInfo.MetadataDomain, err)
 		return err
@@ -247,7 +247,7 @@ func (p *GroupsUpdateRequestPropagatorImpl) sendHttpReqToDest(dest string, colle
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-ERMES-SECRET", p.serverInfo.Secret)
 
-	resp, err := utils.CustomClient.Do(req)
+	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		p.log.Errorf("[%s] Error sending request: %v\n", p.serverInfo.MetadataDomain, err)
 		return nil, err
@@ -311,7 +311,7 @@ func (p *UpdateGroupsPropagatorImpl) sendHttpReqToDest(dest string, collectionId
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-ERMES-SECRET", p.serverInfo.Secret)
 
-	resp, err := utils.CustomClient.Do(req)
+	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		p.log.Errorf("[%s] Error sending request: %v\n", p.serverInfo.MetadataDomain, err)
 		return err

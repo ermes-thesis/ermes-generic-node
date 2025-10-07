@@ -12,7 +12,7 @@ import (
 	"server/info"
 
 	"github.com/ermes-thesis/ermes-common/model"
-	"github.com/ermes-thesis/ermes-common/utils"
+	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
 	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
 	"github.com/google/uuid"
@@ -539,7 +539,7 @@ func hostRemoveUserFromGroup(data any, callframe *wasmedge.CallingFrame, params 
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(model.HttpError, err)
 		return returns, wasmedge.Result_Success
@@ -583,7 +583,7 @@ func hostAddUserToGroup(data any, callframe *wasmedge.CallingFrame, params []any
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(model.HttpError, err)
 		return returns, wasmedge.Result_Success
@@ -628,7 +628,7 @@ func hostCreateGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(model.HttpError, err)
 		return returns, wasmedge.Result_Success
@@ -669,7 +669,7 @@ func hostDeleteGroup(data any, callframe *wasmedge.CallingFrame, params []any) (
 		return returns, wasmedge.Result_Success
 	}
 	req.Header.Set("X-ERMES-SECRET", deps.ServerInfo.Secret)
-	res, err := utils.CustomClient.Do(req)
+	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(model.HttpError, err)
 		return returns, wasmedge.Result_Success

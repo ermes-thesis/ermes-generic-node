@@ -91,7 +91,8 @@ func hostWasmtimeGet(collIdPtr int32, collIdLength int32, recordNamePtr int32, r
 	value, err := deps.DataManager.GetRecord(collId, recordName, groups)
 	var ret int32
 	if err != nil {
-		if errors.Is(err, &shared.UnauthorizedError{}) {
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
 			ret = wasmComponent.WriteError(model.Unauthorized, err)
 		} else if errors.Is(err, redis.Nil) {
 			ret = wasmComponent.WriteError(model.NotFound, err)
@@ -132,7 +133,8 @@ func hostWasmtimeMultipleGet(collIdPtr int32, collIdLength int32, recordNamesPtr
 	values, err := deps.DataManager.GetRecords(collId, groups, recordNames...)
 	var ret int32
 	if err != nil {
-		if errors.Is(err, &shared.UnauthorizedError{}) {
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
 			ret = wasmComponent.WriteError(model.Unauthorized, err)
 		} else if errors.Is(err, redis.Nil) {
 			ret = wasmComponent.WriteError(model.NotFound, err)
@@ -176,7 +178,8 @@ func hostWasmtimePut(collIdPtr int32, collIdLength int32, recordNamePtr int32, r
 
 	err = deps.DataManager.SetRecord(collId, recordName, value, groups)
 	if err != nil {
-		if errors.Is(err, &shared.UnauthorizedError{}) {
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
 			return wasmComponent.WriteError(model.Unauthorized, err)
 		} else {
 			return wasmComponent.WriteError(model.RedisError, err)
@@ -212,7 +215,8 @@ func hostWasmtimeDelete(collIdPtr int32, collIdLength int32, recordNamePtr int32
 	err = deps.DataManager.DeleteRecords(collId, groups, recordName)
 	var ret int32
 	if err != nil {
-		if errors.Is(err, &shared.UnauthorizedError{}) {
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
 			ret = wasmComponent.WriteError(model.Unauthorized, err)
 		} else {
 			ret = wasmComponent.WriteError(model.RedisError, err)
@@ -244,7 +248,7 @@ func hostWasmtimeCreateCollection(metadataPointer int32, metadataLength int32, d
 
 	collectionId := uuid.NewString()
 
-	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Consistency == model.SequentialConsistent)
+	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, 0, metadata.Consistency == model.SequentialConsistent)
 	if err != nil {
 		return wasmComponent.WriteError(model.RedisError, err)
 	}
@@ -302,16 +306,24 @@ func hostWasmtimeAddGroupToCollection(collectionIdPtr int32, collectionIdLength 
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	//TODO: chiamare DataManager per aggiornare il record speciale groups
-	// e inoltrare l'aggiunta' del gruppo al record speciale agli altri nodi
-
-	go deps.MetadataManager.AddGroupToCollection(collectionId, metadataManager.FROM_LOCAL, groupName)
 	var ret int32
+	resp, err := deps.MetadataManager.AddGroupToCollection(collectionId, groups, groupName)
 	if err != nil {
-		ret = wasmComponent.WriteError(model.RedisError, err)
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
+			ret = wasmComponent.WriteError(model.Unauthorized, err)
+		} else {
+			ret = wasmComponent.WriteError(model.RedisError, err)
+		}
 	} else {
 		ret = int32(model.Success)
 	}
+
+	go func() {
+		//TODO: chiamare DataManager per aggiornare il record speciale groups
+		//err = deps.DataManager.SetCollectionGroups(collectionId, resp.Groups)
+		_ = resp
+	}()
 
 	return ret
 }
@@ -339,16 +351,24 @@ func hostWasmtimeRemoveGroupFromCollection(collectionIdPtr int32, collectionIdLe
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	//TODO: chiamare DataManager per aggiornare il record speciale groups
-	// e inoltrare la rimozione del gruppo dal record speciale agli altri nodi
-	go deps.MetadataManager.RemoveGroupFromCollection(collectionId, metadataManager.FROM_LOCAL, groupName)
-
 	var ret int32
+	resp, err := deps.MetadataManager.RemoveGroupFromCollection(collectionId, groups, groupName)
 	if err != nil {
-		ret = wasmComponent.WriteError(model.RedisError, err)
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
+			ret = wasmComponent.WriteError(model.Unauthorized, err)
+		} else {
+			ret = wasmComponent.WriteError(model.RedisError, err)
+		}
 	} else {
 		ret = int32(model.Success)
 	}
+
+	go func() {
+		//TODO: chiamare DataManager per aggiornare il record speciale groups
+		//err = deps.DataManager.SetCollectionGroups(collectionId, resp.Groups)
+		_ = resp
+	}()
 
 	return ret
 }

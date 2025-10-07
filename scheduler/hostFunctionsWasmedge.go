@@ -125,7 +125,8 @@ func hostGet(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 	value, err := deps.DataManager.GetRecord(collId, recordName, groups)
 
 	if err != nil {
-		if errors.Is(err, &shared.UnauthorizedError{}) {
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
 			returns[0] = wasmComponent.WriteError(model.Unauthorized, err)
 		} else if errors.Is(err, redis.Nil) {
 			returns[0] = wasmComponent.WriteError(model.NotFound, err)
@@ -179,7 +180,8 @@ func hostMultipleGet(data any, callframe *wasmedge.CallingFrame, params []any) (
 
 	values, err := deps.DataManager.GetRecords(collId, groups, recordNames...)
 	if err != nil {
-		if errors.Is(err, &shared.UnauthorizedError{}) {
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
 			returns[0] = wasmComponent.WriteError(model.Unauthorized, err)
 		} else if errors.Is(err, redis.Nil) {
 			returns[0] = wasmComponent.WriteError(model.NotFound, err)
@@ -240,7 +242,8 @@ func hostPut(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 
 	err = deps.DataManager.SetRecord(collId, recordName, value, groups)
 	if err != nil {
-		if errors.Is(err, &shared.UnauthorizedError{}) {
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
 			returns[0] = wasmComponent.WriteError(model.Unauthorized, err)
 		} else {
 			returns[0] = wasmComponent.WriteError(model.RedisError, err)
@@ -291,7 +294,8 @@ func hostDelete(data any, callframe *wasmedge.CallingFrame, params []any) ([]any
 
 	err = deps.DataManager.DeleteRecords(collId, groups, recordName)
 	if err != nil {
-		if errors.Is(err, &shared.UnauthorizedError{}) {
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
 			returns[0] = wasmComponent.WriteError(model.Unauthorized, err)
 		} else {
 			returns[0] = wasmComponent.WriteError(model.RedisError, err)
@@ -331,7 +335,9 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 
 	collectionId := uuid.NewString()
 
-	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Consistency == model.SequentialConsistent)
+	//TODO: this method should contact the cloud node and verify if there is already a collection with the same name and owner.
+	// If not the existence of the collection must be registered while returning the responses.
+	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, 0, metadata.Consistency == model.SequentialConsistent)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(model.RedisError, err)
 		return returns, wasmedge.Result_Success
@@ -416,16 +422,23 @@ func hostAddGroupToCollection(data any, callframe *wasmedge.CallingFrame, params
 		return returns, wasmedge.Result_Success
 	}
 
-	//TODO: chiamare DataManager per aggiornare il record speciale groups
-	// e inoltrare l'aggiunta' del gruppo al record speciale agli altri nodi
-
-	go deps.MetadataManager.AddGroupToCollection(collectionId, metadataManager.FROM_LOCAL, groupName)
+	resp, err := deps.MetadataManager.AddGroupToCollection(collectionId, groups, groupName)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(model.RedisError, err)
-		return returns, wasmedge.Result_Success
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
+			returns[0] = wasmComponent.WriteError(model.Unauthorized, err)
+		} else {
+			returns[0] = wasmComponent.WriteError(model.RedisError, err)
+		}
 	} else {
 		returns[0] = int32(model.Success)
 	}
+
+	go func() {
+		//TODO: chiamare DataManager per aggiornare il record speciale groups
+		//err = deps.DataManager.SetCollectionGroups(collectionId, resp.Groups)
+		_ = resp
+	}()
 
 	return returns, wasmedge.Result_Success
 }
@@ -466,15 +479,23 @@ func hostRemoveGroupFromCollection(data any, callframe *wasmedge.CallingFrame, p
 		return returns, wasmedge.Result_Success
 	}
 
-	//TODO: chiamare DataManager per aggiornare il record speciale groups
-	// e inoltrare la rimozione del gruppo dal record speciale agli altri nodi
-	go deps.MetadataManager.RemoveGroupFromCollection(collectionId, metadataManager.FROM_LOCAL, groupName)
-
+	resp, err := deps.MetadataManager.RemoveGroupFromCollection(collectionId, groups, groupName)
 	if err != nil {
-		returns[0] = wasmComponent.WriteError(model.RedisError, err)
+		var unAuthErr *shared.UnauthorizedError
+		if errors.As(err, &unAuthErr) {
+			returns[0] = wasmComponent.WriteError(model.Unauthorized, err)
+		} else {
+			returns[0] = wasmComponent.WriteError(model.RedisError, err)
+		}
 	} else {
 		returns[0] = int32(model.Success)
 	}
+
+	go func() {
+		//TODO: chiamare DataManager per aggiornare il record speciale groups
+		//err = deps.DataManager.SetCollectionGroups(collectionId, resp.Groups)
+		_ = resp
+	}()
 
 	return returns, wasmedge.Result_Success
 }

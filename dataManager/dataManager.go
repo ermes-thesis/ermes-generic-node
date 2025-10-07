@@ -26,7 +26,8 @@ type DataManager interface {
 	GetCollectionsDiscoverer() collectionsDiscoverer.CollectionsDiscoverer
 
 	//methods
-	GetRecord(collectionId string, recordName string, groups []string) (string, error)
+	GetRecord(collectionId string, groups []string, recordName string) (string, error)
+	GetRecords(collectionId string, groups []string, recordNames ...string) ([]any, error)
 	UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdate, groups []string) error
 	UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdate) error
 	SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, groupsSequence uint64, isStrong bool) error
@@ -81,7 +82,7 @@ func (m *DataManagerImp) GetCollectionsDiscoverer() collectionsDiscoverer.Collec
 	return m.collectionsDiscoverer
 }
 
-func (m *DataManagerImp) GetRecord(collectionId string, recordName string, groups []string) (string, error) {
+func (m *DataManagerImp) GetRecord(collectionId string, groups []string, recordName string) (string, error) {
 	return collectionsDiscoverer.AccessRecords(
 		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
 		collectionId,
@@ -98,6 +99,27 @@ func (m *DataManagerImp) GetRecord(collectionId string, recordName string, group
 		},
 		func(addr string) (string, error) {
 			return m.collectionsDiscoverer.WeakCollectionRemoteRecordAccess(addr, collectionId, groups, recordName)
+		},
+	)
+}
+
+func (m *DataManagerImp) GetRecords(collectionId string, groups []string, recordNames ...string) ([]any, error) {
+	return collectionsDiscoverer.AccessRecords(
+		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
+		collectionId,
+		func() ([]any, error) {
+			authorized, err := m.dbInterface.IsInGroups(collectionId, groups...)
+			if err != nil {
+				return nil, err
+			}
+			if !authorized {
+				return nil, &shared.UnauthorizedError{}
+			}
+
+			return m.dbInterface.GetRecords(collectionId, recordNames...)
+		},
+		func(addr string) ([]any, error) {
+			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsAccess(addr, collectionId, groups, recordNames...)
 		},
 	)
 }

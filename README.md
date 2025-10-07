@@ -41,6 +41,11 @@ You can run tests of each module with
 $ go test {moduleName}
 ```
 
+To run tests of the entire project run
+
+```bash
+$ go list -f '{{.Dir}}' -m | xargs -I {} go test {}/... --tags test 
+```
 
 ## Outdated stuff
 

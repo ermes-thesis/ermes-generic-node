@@ -8,7 +8,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ..:/workspaces/ermes-generic-node:cached
-      - ../../ermes-wasm-pool:/workspaces/ermes-wasm-pool:cached
+      - ../../ermes-common:/workspaces/ermes-common:cached
       - gocache:/go/pkg/mod  # Go module cache persistente
       - gocachebin:/root/.cache/go-build # cache di compilazione
     cap_add:

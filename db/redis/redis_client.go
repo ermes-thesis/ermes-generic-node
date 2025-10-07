@@ -73,6 +73,14 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 	infoKey := "info:" + collectionId
 	keysKey := "info:" + collectionId + ":keys"
 
+	anyConvertedNames := make([]any, len(recordNames))
+	inlineRecords := make([]any, len(recordNames)*2)
+	for i, name := range recordNames {
+		anyConvertedNames[i] = name
+		inlineRecords[i*2] = buildKey(collectionId, recordNames[i])
+		inlineRecords[i*2+1] = recordValues[i]
+	}
+
 	return r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 		exists, err := tx.Exists(r.ctx, infoKey).Result()
 		if err != nil {
@@ -83,13 +91,6 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 		}
 
 		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
-			anyConvertedNames := make([]any, len(recordNames))
-			inlineRecords := make([]any, len(recordNames)*2)
-			for i, name := range recordNames {
-				anyConvertedNames[i] = name
-				inlineRecords[i*2] = buildKey(collectionId, recordNames[i])
-				inlineRecords[i*2+1] = recordValues[i]
-			}
 			pipe.SAdd(r.ctx, keysKey, anyConvertedNames...)
 			pipe.MSet(r.ctx, inlineRecords...)
 
@@ -108,28 +109,30 @@ func (r *RedisClient) RecordExists(collectionId string, recordName string) (bool
 func (r *RedisClient) DeleteRecords(collectionId string, recordNames ...string) error {
 	keysKey := "info:" + collectionId + ":keys"
 
+	anyConvertedNames, dataKeys := buildNamesAndKeys(collectionId, recordNames)
+
 	_, err := r.client.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
-		for _, recordName := range recordNames {
-			dataKey := buildKey(collectionId, recordName)
-			pipe.SRem(r.ctx, keysKey, recordName)
-			pipe.Del(r.ctx, dataKey)
-		}
+		pipe.SRem(r.ctx, keysKey, anyConvertedNames...)
+		pipe.Del(r.ctx, dataKeys...)
+
 		return nil
 	})
 
 	return err
 }
 
-func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []string, error) {
+func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []string, uint64, error) {
 	const maxRetries = 5
 
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
+	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
 
 	var (
-		keys   []string
-		groups []string
-		result map[string]string
+		keys           []string
+		groups         []string
+		groupsSequence uint64
+		values         []any
 	)
 
 	for retries := 0; retries < maxRetries; retries++ {
@@ -145,6 +148,11 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 				return err
 			}
 
+			groupsSequence, err = tx.Get(r.ctx, groupsSequenceKey).Uint64()
+			if err != nil {
+				return err
+			}
+
 			cmds, err := tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
 				pipe.MGet(r.ctx, buildKeys(collectionId, keys)...)
 				return nil
@@ -154,36 +162,39 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 			}
 
 			mgetCmd := cmds[0].(*redis.SliceCmd)
-			values, err := mgetCmd.Result()
+			values, err = mgetCmd.Result()
 			if err != nil {
 				return err
 			}
 
-			result = make(map[string]string, len(keys))
+			return nil
+		}, keysKey, groupsKey, groupsSequenceKey)
+
+		if err == nil {
+			result := make(map[string]string, len(keys))
 			for i, key := range keys {
 				result[key] = values[i].(string)
 			}
 
-			return nil
-		}, keysKey, groupsKey)
-
-		if err == nil {
-			return result, groups, nil
+			return result, groups, groupsSequence, nil
 		}
 
 		if errors.Is(err, redis.TxFailedErr) {
 			continue
 		}
 
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
-	return nil, nil, errors.New("transaction retries exhausted")
+	return nil, nil, 0, errors.New("transaction retries exhausted")
 }
 
-func (r *RedisClient) SetCollection(collectionId string, records map[string]string, groups []string) error {
+func (r *RedisClient) SetCollection(collectionId string, records map[string]string, groups []string, groupsSequence uint64) error {
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
+	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
+
+	groupsAny := toListAny(groups)
 
 	_, err := r.client.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
 		pipe.Set(r.ctx, "info:"+collectionId, "", 0)
@@ -193,9 +204,10 @@ func (r *RedisClient) SetCollection(collectionId string, records map[string]stri
 			pipe.SAdd(r.ctx, keysKey, key)
 		}
 
-		for _, g := range groups {
-			pipe.SAdd(r.ctx, groupsKey, g)
+		if len(groupsAny) > 0 {
+			pipe.SAdd(r.ctx, groupsKey, groupsAny...)
 		}
+		pipe.Set(r.ctx, groupsSequenceKey, groupsSequence, 0)
 
 		return nil
 	})
@@ -207,6 +219,7 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 	keysKey := "info:" + collectionId + ":keys"
 	infoKey := "info:" + collectionId
 	groupsKey := "info:" + collectionId + ":groups"
+	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
 
 	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 		keys, err := tx.SMembers(r.ctx, keysKey).Result()
@@ -215,7 +228,7 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 		}
 
 		dataKeys := buildKeys(collectionId, keys)
-		allKeysToDelete := append(dataKeys, infoKey, keysKey, groupsKey)
+		allKeysToDelete := append(dataKeys, infoKey, keysKey, groupsKey, groupsSequenceKey)
 
 		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
 			pipe.Del(r.ctx, allKeysToDelete...)
@@ -244,28 +257,199 @@ func (r *RedisClient) GetMetadata(collectionId string) (*model.Metadata, error) 
 	if len(res) == 0 {
 		return nil, nil
 	}
+	delete(res, "groupsSequence")
 	return model.FromMap(res)
 }
 
 func (r *RedisClient) SetMetadata(collectionId string, metadata model.Metadata) error {
-	return r.client.HSet(r.ctx, "meta:"+collectionId, metadata.ToList()...).Err()
+	metaList := append(metadata.ToList(), "groupsSequence", 0)
+	return r.client.HSet(r.ctx, "meta:"+collectionId, metaList).Err()
+}
+
+func (r *RedisClient) MetadataExists(collectionId string) (bool, error) {
+	res, err := r.client.Exists(r.ctx, "meta:"+collectionId).Result()
+	return res > 0, err
 }
 
 func (r *RedisClient) DeleteMetadata(collectionId string) error {
 	return r.client.Del(r.ctx, "meta:"+collectionId).Err()
 }
 
-func (r *RedisClient) AddGroups(collectionId string, members ...string) error {
-	if len(members) == 0 {
+func (r *RedisClient) AddGroupsToMetadata(collectionId string, groupsToAdd ...string) ([]string, uint64, error) {
+	if len(groupsToAdd) == 0 {
+		return nil, 0, nil
+	}
+
+	metadataKey := "meta:" + collectionId
+
+	var seq uint64
+	var groups []string
+
+	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+		var seqCmd *redis.IntCmd
+
+		groupsStr, err := tx.HGet(r.ctx, metadataKey, "groups").Result()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			return err
+		}
+
+		if groupsStr == "" {
+			groups = groupsToAdd
+		} else {
+			groups = strings.Split(groupsStr, ",")
+			for _, g := range groupsToAdd {
+				if !slices.Contains(groups, g) {
+					groups = append(groups, g)
+				}
+			}
+		}
+
+		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+			pipe.HSet(r.ctx, metadataKey, "groups", strings.Join(groups, ","))
+			seqCmd = pipe.HIncrBy(r.ctx, metadataKey, "groupsSequence", int64(1))
+
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		seq, err = seqCmd.Uint64()
+		if err != nil {
+			return err
+		}
+
 		return nil
+	}, metadataKey)
+
+	return groups, seq, err
+}
+
+func (r *RedisClient) RemoveGroupsFromMetadata(collectionId string, groupsToRemove ...string) ([]string, uint64, error) {
+	if len(groupsToRemove) == 0 {
+		return nil, 0, nil
 	}
 
-	m := make([]any, len(members))
-	for i, member := range members {
-		m[i] = member
+	metadataKey := "meta:" + collectionId
+
+	var groups []string
+	var seq uint64
+
+	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+		var seqCmd *redis.IntCmd
+
+		groupsStr, err := tx.HGet(r.ctx, metadataKey, "groups").Result()
+		if err != nil {
+			return err
+		}
+
+		groups = strings.Split(groupsStr, ",")
+		groups = slices.DeleteFunc(groups, func(g string) bool {
+			return slices.Contains(groupsToRemove, g)
+		})
+
+		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+			pipe.HSet(r.ctx, metadataKey, "groups", strings.Join(groups, ","))
+			seqCmd = pipe.HIncrBy(r.ctx, metadataKey, "groupsSequence", int64(1))
+
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		seq, err = seqCmd.Uint64()
+		if err != nil {
+			return err
+		}
+
+		return err
+	}, metadataKey)
+
+	return groups, seq, err
+}
+
+func (r *RedisClient) SetGroupsInMetadata(collectionId string, sequenceGroups uint64, groups ...string) error {
+	metadataKey := "meta:" + collectionId
+
+	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+
+		groupsSeq, err := tx.HGet(r.ctx, metadataKey, "groupsSequence").Uint64()
+		if err != nil {
+			return err
+		}
+
+		if groupsSeq >= sequenceGroups {
+			return nil
+		}
+
+		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+			pipe.HMSet(r.ctx, metadataKey, "groups", strings.Join(groups, ","), "groupsSequence", sequenceGroups)
+
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		return err
+	}, metadataKey)
+
+	return err
+}
+
+func (r *RedisClient) IsInMetadataGroups(collectionId string, userGroups ...string) (bool, error) {
+	if len(userGroups) == 0 {
+		return false, nil
 	}
 
-	return r.client.SAdd(r.ctx, "info:"+collectionId+":groups", m...).Err()
+	authorizedGroupsStr, err := r.client.HGet(r.ctx, "meta:"+collectionId, "groups").Result()
+	if err != nil {
+		return false, err
+	}
+	if authorizedGroupsStr == "" {
+		return false, nil
+	}
+
+	authorizedGroups := strings.Split(authorizedGroupsStr, ",")
+
+	for _, group := range userGroups {
+		if slices.Contains(authorizedGroups, group) {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
+func (r *RedisClient) SetGroups(collectionId string, sequenceGroups uint64, groups ...string) error {
+	groupsKey := "info:" + collectionId + ":groups"
+	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
+
+	var toAdd []any
+	for _, member := range groups {
+		toAdd = append(toAdd, member)
+	}
+
+	return r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+		seq, err := tx.Get(r.ctx, groupsSequenceKey).Uint64()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			return err
+		}
+		if seq >= sequenceGroups {
+			return nil
+		}
+
+		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+			pipe.Del(r.ctx, groupsKey)
+			pipe.SAdd(r.ctx, groupsKey, toAdd...)
+			pipe.Set(r.ctx, groupsSequenceKey, sequenceGroups, 0)
+
+			return nil
+		})
+		return err
+	}, groupsKey, groupsSequenceKey)
+
 }
 
 func (r *RedisClient) IsInGroups(collectionId string, members ...string) (bool, error) {
@@ -281,19 +465,6 @@ func (r *RedisClient) IsInGroups(collectionId string, members ...string) (bool, 
 	res, err := r.client.SMIsMember(r.ctx, "info:"+collectionId+":groups", m...).Result()
 
 	return slices.Contains(res, true), err
-}
-
-func (r *RedisClient) RemoveGroups(collectionId string, members ...string) error {
-	if len(members) == 0 {
-		return nil
-	}
-
-	m := make([]any, len(members))
-	for i, member := range members {
-		m[i] = member
-	}
-
-	return r.client.SRem(r.ctx, "info:"+collectionId+":groups", m...).Err()
 }
 
 func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
@@ -339,6 +510,7 @@ func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userGroups []s
 	for _, doc := range res.Docs {
 		collId, _ := strings.CutPrefix(doc.ID, "meta:")
 
+		delete(doc.Fields, "groupsSequence")
 		metadata, err := model.FromMap(doc.Fields)
 		if err != nil {
 			return nil, err
@@ -519,4 +691,22 @@ func buildKeys(collectionId string, recordNames []string) []string {
 		keys[i] = buildKey(collectionId, name)
 	}
 	return keys
+}
+
+func buildNamesAndKeys(collectionId string, recordNames []string) ([]any, []string) {
+	keys := slices.Clone(recordNames)
+	names := make([]any, len(recordNames))
+	for i, name := range keys {
+		keys[i] = buildKey(collectionId, name)
+		names[i] = name
+	}
+	return names, keys
+}
+
+func toListAny(s []string) []any {
+	res := make([]any, len(s))
+	for i, v := range s {
+		res[i] = v
+	}
+	return res
 }

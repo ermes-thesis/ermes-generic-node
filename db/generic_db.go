@@ -92,7 +92,7 @@ type GenericDB interface {
 	//	- map[string]string: map of record names to values (empty if collection doesn't exist)
 	//	- []string: slice of group names associated with the collection
 	//	- error: non-nil if the operation fails
-	GetCollection(collectionId string) (map[string]string, []string, error)
+	GetCollection(collectionId string) (map[string]string, []string, uint64, error)
 	// SetCollection creates or completely replaces a collection with the provided
 	// records and groups. This operation will overwrite any existing data.
 	//
@@ -103,7 +103,7 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the operation fails
-	SetCollection(collectionId string, records map[string]string, groups []string) error
+	SetCollection(collectionId string, records map[string]string, groups []string, groupsSequence uint64) error
 	// DeleteCollection removes a collection and all its associated data including
 	// records, and groups. This operation is irreversible.
 	//
@@ -142,6 +142,7 @@ type GenericDB interface {
 	// Returns:
 	//	- error: non-nil if the operation fails
 	SetMetadata(collectionId string, metadata model.Metadata) error
+	MetadataExists(collectionId string) (bool, error)
 	// DeleteMetadata removes all metadata associated with a collection.
 	// The collection itself and its records remain unchanged. They must
 	// be explicitly deleted using the DeleteCollection method.
@@ -153,7 +154,7 @@ type GenericDB interface {
 	//	- error: non-nil if the deletion operation fails
 	DeleteMetadata(collectionId string) error
 
-	// AddGroups add the specified members to a collection's group access list.
+	// AddGroupsToMetadata add the specified members to a collection's group access list.
 	// Duplicate members are silently ignored. If no members are provided, the operation
 	// succeeds with no effect.
 	//
@@ -163,7 +164,23 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the operation fails
-	AddGroups(collectionId string, groups ...string) error
+	AddGroupsToMetadata(collectionId string, members ...string) ([]string, uint64, error)
+	// RemoveGroupsFromMetadata removes the specified groups from a collection's group access list.
+	// Non-existent groups are silently ignored. If no members are provided,
+	// the operation succeeds with no effect.
+	//
+	// Parameters:
+	//	- collectionId: the unique identifier of the collection
+	//	- groups: variable number of group names to remove
+	//
+	// Returns:
+	//	- error: non-nil if the operation fails
+	RemoveGroupsFromMetadata(collectionId string, groups ...string) ([]string, uint64, error)
+
+	SetGroupsInMetadata(collectionId string, sequenceGroups uint64, groups ...string) error
+	IsInMetadataGroups(collectionId string, groups ...string) (bool, error)
+
+	SetGroups(collectionId string, sequenceGroups uint64, groups ...string) error
 	// IsInGroups checks if any of the specified members belong to the collection's
 	// groups. Returns true if al least one member is found.
 	//
@@ -176,17 +193,6 @@ type GenericDB interface {
 	//			provided or none are found in the collection's groups
 	//	- error: non-nil if the check operation fails
 	IsInGroups(collectionId string, groups ...string) (bool, error)
-	// RemoveGroups removes the specified groups from a collection's group access list.
-	// Non-existent groups are silently ignored. If no members are provided,
-	// the operation succeeds with no effect.
-	//
-	// Parameters:
-	//	- collectionId: the unique identifier of the collection
-	//	- groups: variable number of group names to remove
-	//
-	// Returns:
-	//	- error: non-nil if the operation fails
-	RemoveGroups(collectionId string, groups ...string) error
 
 	// CreateIndex creates a search index on collection metadata fields.
 	// The index automatically includes standard fields (name, owner, created_at,

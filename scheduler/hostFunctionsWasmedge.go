@@ -123,8 +123,7 @@ func hostGet(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 		return returns, wasmedge.Result_Success
 	}
 
-	value, err := deps.DataManager.GetRecord(collId, recordName, groups)
-
+	value, err := deps.DataManager.GetRecord(collId, groups, recordName)
 	if err != nil {
 		var unAuthErr *shared.UnauthorizedError
 		if errors.As(err, &unAuthErr) {
@@ -246,7 +245,7 @@ func hostPut(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, w
 		RecordNames:  []string{recordName},
 		RecordValues: []string{value},
 		IsDelete:     false,
-	}})
+	}}, groups)
 
 	if err != nil {
 		var unAuthErr *shared.UnauthorizedError
@@ -299,7 +298,11 @@ func hostDelete(data any, callframe *wasmedge.CallingFrame, params []any) ([]any
 		return returns, wasmedge.Result_Success
 	}
 
-	err = deps.DataManager.DeleteRecords(collId, groups, recordName)
+	err = deps.DataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{{
+		CollectionId: collId,
+		RecordNames:  []string{recordName},
+		IsDelete:     true,
+	}}, groups)
 	if err != nil {
 		var unAuthErr *shared.UnauthorizedError
 		if errors.As(err, &unAuthErr) {
@@ -385,9 +388,9 @@ func hostDeleteCollection(data any, callframe *wasmedge.CallingFrame, params []a
 		return returns, wasmedge.Result_Success
 	}
 
-	_, _ = deps, collectionId
-	//TODO: err = deps.DataManager.DeleteCollection(collectionId)
-	//TODO: Forward the deletion process to other nodes with HTTP
+	err = deps.DataManager.RemoveCollectionAndPropagate(collectionId, groups)
+
+	//TODO: Delete the metadata only if the collection has been effectively deleted.
 
 	returns[0] = int32(model.Success)
 	return returns, wasmedge.Result_Success

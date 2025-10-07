@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"bytes"
+	"dataManager/messages"
 	shared "dataManager/shared"
 	"errors"
 	"fmt"
@@ -88,7 +89,7 @@ func hostWasmtimeGet(collIdPtr int32, collIdLength int32, recordNamePtr int32, r
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	value, err := deps.DataManager.GetRecord(collId, recordName, groups)
+	value, err := deps.DataManager.GetRecord(collId, groups, recordName)
 	var ret int32
 	if err != nil {
 		var unAuthErr *shared.UnauthorizedError
@@ -176,7 +177,12 @@ func hostWasmtimePut(collIdPtr int32, collIdLength int32, recordNamePtr int32, r
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	err = deps.DataManager.SetRecord(collId, recordName, value, groups)
+	err = deps.DataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{{
+		CollectionId: collId,
+		RecordNames:  []string{recordName},
+		RecordValues: []string{value},
+		IsDelete:     false,
+	}}, groups)
 	if err != nil {
 		var unAuthErr *shared.UnauthorizedError
 		if errors.As(err, &unAuthErr) {
@@ -212,7 +218,11 @@ func hostWasmtimeDelete(collIdPtr int32, collIdLength int32, recordNamePtr int32
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	err = deps.DataManager.DeleteRecords(collId, groups, recordName)
+	err = deps.DataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{{
+		CollectionId: collId,
+		RecordNames:  []string{recordName},
+		IsDelete:     true,
+	}}, groups)
 	var ret int32
 	if err != nil {
 		var unAuthErr *shared.UnauthorizedError
@@ -276,9 +286,9 @@ func hostWasmtimeDeleteCollection(collectionIdPtr int32, collectionIdLength int3
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	_, _ = deps, collectionId
-	//TODO: err = deps.DataManager.DeleteCollection(collectionId)
-	//TODO: Forward the deletion process to other nodes with HTTP
+	err = deps.DataManager.RemoveCollectionAndPropagate(collectionId, groups)
+
+	//TODO: Delete the metadata only if the collection has been effectively deleted.
 
 	return int32(model.Success)
 }

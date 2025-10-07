@@ -13,6 +13,7 @@ require (
 	github.com/rs/zerolog v1.34.0
 	github.com/second-state/WasmEdge-go v0.14.0
 	github.com/stretchr/testify v1.11.1
+	github.com/tetratelabs/wazero v1.9.0
 )
 
 replace github.com/ermes-thesis/ermes-common/wasm-pool => ../../ermes-common/wasm-pool

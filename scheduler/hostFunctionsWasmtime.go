@@ -39,10 +39,10 @@ func RegisterWasmtimeHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDe
 			return hostWasmtimeDeleteCollection(collectionIdPtr, collectionIdLength, groupsPtr, groupsLength, &dependencies, caller)
 		},
 		"hostAddGroupToCollection": func(collectionIdPtr int32, collectionIdLength int32, groupNamePtr int32, groupNameLength int32, groupsPtr int32, groupsLength int32, caller *wasmtime.Caller) int32 {
-			return hostWasmtimeAddGroupToCollection(collectionIdPtr, collectionIdLength, groupsPtr, groupNamePtr, groupNameLength, groupsLength, &dependencies, caller)
+			return hostWasmtimeAddGroupToCollection(collectionIdPtr, collectionIdLength, groupNamePtr, groupNameLength, groupsPtr, groupsLength, &dependencies, caller)
 		},
 		"hostRemoveGroupFromCollection": func(collectionIdPtr int32, collectionIdLength int32, groupNamePtr int32, groupNameLength int32, groupsPtr int32, groupsLength int32, caller *wasmtime.Caller) int32 {
-			return hostWasmtimeRemoveGroupFromCollection(collectionIdPtr, collectionIdLength, groupsPtr, groupNamePtr, groupNameLength, groupsLength, &dependencies, caller)
+			return hostWasmtimeRemoveGroupFromCollection(collectionIdPtr, collectionIdLength, groupNamePtr, groupNameLength, groupsPtr, groupsLength, &dependencies, caller)
 		},
 		"hostAddUserToGroup": func(userIdPtr int32, userIdLength int32, groupNamePtr int32, groupNameLength int32, caller *wasmtime.Caller) int32 {
 			return hostWasmtimeAddUserToGroup(userIdPtr, userIdLength, groupNamePtr, groupNameLength, &dependencies, caller)

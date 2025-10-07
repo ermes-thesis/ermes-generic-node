@@ -3,6 +3,7 @@ package scheduler
 import (
 	"caches"
 	datamanager "dataManager"
+	"dataManager/messages"
 	shared "dataManager/shared"
 	"encoding/json"
 	"fmt"
@@ -231,15 +232,43 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		return nil, 0, fmt.Errorf("error marshalling response body: %v", err)
 	}
 
-	// TODO: Use resp.CollectionsToCommit to create goroutines that calls dataManager remote write method
-	//for collId, records := range resp.CollectionsToCommit {
-	// dataManager.RemoteWrite(resp.CollectionsToCommit)
-	//}
-
-	// TODO: Propagate deletion?
-	for collId, records := range resp.DeletedRecords {
-		go s.dataManager.DeleteRecords(collId, groups, records...)
+	var updateMessage []messages.CollectionUpdate
+	for collId, records := range resp.CacheUpdates.DeletedRecords {
+		updateMessage = append(updateMessage, messages.CollectionUpdate{
+			CollectionId: collId,
+			RecordNames:  records,
+			IsDelete:     true,
+		})
 	}
+
+	go func() {
+
+		for collId, records := range resp.CacheUpdates.DirtyCollections {
+			var recordNames []string
+			var recordValues []string
+			for recordName, recordValue := range records {
+				recordNames = append(recordNames, recordName)
+				recordValues = append(recordValues, recordValue)
+			}
+			updateMessage = append(updateMessage, messages.CollectionUpdate{
+				CollectionId: collId,
+				RecordNames:  recordNames,
+				RecordValues: recordValues,
+				IsDelete:     false,
+			})
+		}
+
+		s.dataManager.UpdateCollectionsRecordsAndPropagate(updateMessage, groups)
+
+		for _, collId := range resp.CacheUpdates.DeletedCollections {
+			s.dataManager.RemoveCollectionAndPropagate(collId, groups)
+		}
+
+		//TODO: call metadataManager to update collection's groups if needed
+
+		//TODO: call GTP to update groups
+
+	}()
 
 	var seqNumber uint64
 	if sequentialCollId != "" {

@@ -2,13 +2,14 @@ package wasm_integration_test
 
 import (
 	"fmt"
-	"github.com/ermes-thesis/ermes-common/wasm-pool"
 	metadataManager2 "metadataManager"
 	datamanager_mock "mocks/dataManager"
 	metadataManager_mock "mocks/metadataManager"
 	"scheduler"
 	"testing"
 	"time"
+
+	"github.com/ermes-thesis/ermes-common/wasm-pool"
 
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -23,8 +24,6 @@ func TestWasmPool(t *testing.T) {
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	//metadataManager.EXPECT().AddGroupToCollection(mock.Anything, []string{"test"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo", "testGroup"}, Sequence: 1}, nil)
-	//metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, []string{"test"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo"}, Sequence: 2}, nil)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
 	err := scheduler.RegisterWazeroHostFns(pool, scheduler.HostFnsDependencies{
@@ -62,8 +61,6 @@ func BenchmarkWasmPool(b *testing.B) {
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
-	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, []string{"test", "pippo"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo", "testGroup"}, Sequence: 1}, nil)
-	metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, []string{"test", "pippo"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo"}, Sequence: 2}, nil)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
 	err := scheduler.RegisterWasmtimeHostFns(pool, scheduler.HostFnsDependencies{
@@ -99,8 +96,6 @@ func BenchmarkWasmPool_Wasmtime(b *testing.B) {
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
-	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo", "testGroup"}, Sequence: 1}, nil)
-	metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo", "testGroup"}, Sequence: 1}, nil)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
 	err := scheduler.RegisterWasmtimeHostFns(pool, scheduler.HostFnsDependencies{
@@ -173,8 +168,6 @@ func BenchmarkWasmPool_all(b *testing.B) {
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
-	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, []string{"test", "pippo"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo", "testGroup"}, Sequence: 1}, nil)
-	metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, []string{"test", "pippo"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo"}, Sequence: 2}, nil)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
 	scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{
@@ -243,8 +236,6 @@ func BenchmarkWasmPool_AOT(b *testing.B) {
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
-	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, []string{"test", "pippo"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo", "testGroup"}, Sequence: 1}, nil)
-	metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, []string{"test", "pippo"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo"}, Sequence: 2}, nil)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
 	scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{
@@ -279,8 +270,6 @@ func BenchmarkWasmPool_all_Wazero(b *testing.B) {
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, 0, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
-	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo", "testGroup"}, Sequence: 1}, nil)
-	metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo", "testGroup"}, Sequence: 1}, nil)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
 	scheduler.RegisterWazeroHostFns(pool, scheduler.HostFnsDependencies{
@@ -315,8 +304,6 @@ func BenchmarkWasmPool_AOT_O3(b *testing.B) {
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
-	metadataManager.EXPECT().AddGroupToCollection(mock.Anything, []string{"test", "pippo"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo", "testGroup"}, Sequence: 1}, nil)
-	metadataManager.EXPECT().RemoveGroupFromCollection(mock.Anything, []string{"test", "pippo"}, []string{"testGroup"}).Return(&metadataManager2.UpdateGroupResponse{Groups: []string{"test", "pippo"}, Sequence: 2}, nil)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
 	scheduler.RegisterHostFns(pool, scheduler.HostFnsDependencies{

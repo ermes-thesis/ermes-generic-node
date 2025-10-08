@@ -120,6 +120,10 @@ func AccessRecords[T any](
 		return remoteFn(addr)
 	}
 	if collection.IsLocal() {
+		if !collection.IsStrong() {
+			collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
+			defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
+		}
 		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return dbFn()
 	}
@@ -183,6 +187,12 @@ func UpdateRecord(
 
 	addr := c.serverInfo.Father.HostName
 	hosts[addr] = struct{}{}
+
+	if !collection.IsStrong() {
+		collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
+		defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
+	}
+
 	return hosts, dbFn() // update in local db
 }
 

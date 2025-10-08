@@ -102,8 +102,8 @@ func run(ctx context.Context, configPath string) error {
 	if err != nil {
 		return fmt.Errorf("error creating token decoder: %w", err)
 	}
-	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, metadataLog, funcCache)
-	err = metadataLookup.RegisterRoutes(httpServer, tknDecoder)
+	metadataManager := metadataManager.NewMetadataManager(redisClient, serverInfo, metadataLog, funcCache)
+	err = metadataManager.RegisterRoutes(httpServer, tknDecoder)
 	if err != nil {
 		return fmt.Errorf("error registering metadata routes: %w", err)
 	}
@@ -120,13 +120,13 @@ func run(ctx context.Context, configPath string) error {
 	dataManager.Init(collections, penality.LogPenalty(2), cfg.MigrationManager, cfg.Lru, httpServer, *httpServer.ServerInfo, &lruCache, redisClient, dataLog)
 
 	wasmExecutorPool := wasm.NewWasmedgeExecutorPool(10)
-	err = scheduler.RegisterHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{MetadataManager: metadataLookup, ServerInfo: serverInfo, DataManager: dataManager})
+	err = scheduler.RegisterHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{MetadataManager: metadataManager, ServerInfo: serverInfo, DataManager: dataManager})
 	if err != nil {
 		return fmt.Errorf("error registering host functions: %w", err)
 	}
 
-	sched := scheduler.NewScheduler(dataManager, funcCache, wasmExecutorPool, serverInfo, schedLog)
-	err = sched.RegisterRoutes(httpServer, tknDecoder, metadataLookup)
+	sched := scheduler.NewScheduler(dataManager, metadataManager, funcCache, wasmExecutorPool, serverInfo, schedLog)
+	err = sched.RegisterRoutes(httpServer, tknDecoder, metadataManager)
 	if err != nil {
 		return fmt.Errorf("error registering scheduler routes: %w", err)
 	}

@@ -369,6 +369,60 @@ func (r *RedisClient) RemoveGroupsFromMetadata(collectionId string, groupsToRemo
 	return groups, seq, err
 }
 
+func (r *RedisClient) UpdateGroupsInMetadata(collectionId string, groupsToAdd []string, groupsToRemove []string) ([]string, uint64, error) {
+	if len(groupsToRemove) == 0 {
+		return nil, 0, nil
+	}
+
+	metadataKey := "meta:" + collectionId
+
+	var groups []string
+	var seq uint64
+
+	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+		var seqCmd *redis.IntCmd
+
+		groupsStr, err := tx.HGet(r.ctx, metadataKey, "groups").Result()
+		if err != nil {
+			return err
+		}
+
+		//This works if groupsToAdd and groupsToRemove are disjointed
+		if groupsStr == "" {
+			groups = groupsToAdd
+		} else {
+			groups = strings.Split(groupsStr, ",")
+			for _, g := range groupsToAdd {
+				if !slices.Contains(groups, g) {
+					groups = append(groups, g)
+				}
+			}
+			groups = slices.DeleteFunc(groups, func(g string) bool {
+				return slices.Contains(groupsToRemove, g)
+			})
+		}
+
+		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+			pipe.HSet(r.ctx, metadataKey, "groups", strings.Join(groups, ","))
+			seqCmd = pipe.HIncrBy(r.ctx, metadataKey, "groupsSequence", int64(1))
+
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		seq, err = seqCmd.Uint64()
+		if err != nil {
+			return err
+		}
+
+		return err
+	}, metadataKey)
+
+	return groups, seq, err
+}
+
 func (r *RedisClient) SetGroupsInMetadata(collectionId string, sequenceGroups uint64, groups ...string) error {
 	metadataKey := "meta:" + collectionId
 

@@ -23,15 +23,14 @@ import (
 type QueryTemplatesParamsMapping[T any] map[string]map[string]T
 
 type GroupMessage struct {
-	UserGroups []string       `json:"userGroups"`
-	Groups     []string       `json:"groups"`
-	Action     MetadataAction `json:"action"`
+	UserGroups     []string `json:"userGroups"`
+	GroupsToAdd    []string `json:"groupsToAdd,omitempty"`
+	GroupsToRemove []string `json:"groupsToRemove,omitempty"`
 }
 
 type MetadataManager interface {
 	CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin PropagationOrigin) error
-	AddGroupToCollection(collectionId string, userGroups []string, groupsToAdd ...string) (*UpdateGroupResponse, error)
-	RemoveGroupFromCollection(collectionId string, userGroups []string, groupsToRemove ...string) (*UpdateGroupResponse, error)
+	UpdateGroupsInCollection(collectionId string, userGroups []string, groupsToAdd []string, groupsToRemove []string) (*UpdateGroupResponse, error)
 	SetCollectionGroups(collectionId string, message UpdateGroupResponse) error
 	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error)
 }
@@ -115,7 +114,7 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model
 	return nil
 }
 
-func (m *MetadataManagerImpl) AddGroupToCollection(collectionId string, userGroups []string, groups ...string) (*UpdateGroupResponse, error) {
+func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, userGroups []string, groupsToAdd []string, groupsToRemove []string) (*UpdateGroupResponse, error) {
 	if m.serverInfo.Father == nil {
 		exists, err := m.redis.MetadataExists(collectionId)
 		if err != nil {
@@ -131,7 +130,7 @@ func (m *MetadataManagerImpl) AddGroupToCollection(collectionId string, userGrou
 				return nil, &dataManagerShared.UnauthorizedError{}
 			}
 
-			newGroups, seq, err := m.redis.AddGroupsToMetadata(collectionId, groups...)
+			newGroups, seq, err := m.redis.UpdateGroupsInMetadata(collectionId, groupsToAdd, groupsToRemove)
 			if err != nil {
 				return nil, err
 			}
@@ -151,6 +150,7 @@ func (m *MetadataManagerImpl) AddGroupToCollection(collectionId string, userGrou
 				if err != nil {
 					m.log.Errorf("Error propagating group update: %v", err)
 				}
+
 			}()
 
 			return respMessage, nil
@@ -158,53 +158,7 @@ func (m *MetadataManagerImpl) AddGroupToCollection(collectionId string, userGrou
 		return nil, errors.New("collection does not exists")
 	}
 
-	return m.groupUpdateRequestPropagator.Propagate(collectionId, GroupMessage{Groups: groups, Action: Add})
-}
-
-func (m *MetadataManagerImpl) RemoveGroupFromCollection(collectionId string, userGroups []string, groups ...string) (*UpdateGroupResponse, error) {
-	if m.serverInfo.Father == nil {
-		exists, err := m.redis.MetadataExists(collectionId)
-		if err != nil {
-			return nil, err
-		}
-
-		if exists {
-			authorized, err := m.redis.IsInMetadataGroups(collectionId, userGroups...)
-			if err != nil {
-				return nil, err
-			}
-			if !authorized {
-				return nil, &dataManagerShared.UnauthorizedError{}
-			}
-
-			newGroups, seq, err := m.redis.RemoveGroupsFromMetadata(collectionId, groups...)
-			if err != nil {
-				return nil, err
-			}
-			respMessage := &UpdateGroupResponse{
-				Groups:   newGroups,
-				Sequence: seq,
-			}
-
-			go func() {
-				metadata, err := m.redis.GetMetadata(collectionId)
-				if err != nil {
-					m.log.Errorf("Error getting metadata for propagation: %v", err)
-					return
-				}
-
-				err = m.updateGroupsPropagator.Propagate(collectionId, *respMessage, metadata.Geolocation)
-				if err != nil {
-					m.log.Errorf("Error propagating group update: %v", err)
-				}
-			}()
-
-			return respMessage, nil
-		}
-		return nil, errors.New("collection does not exists")
-	}
-
-	return m.groupUpdateRequestPropagator.Propagate(collectionId, GroupMessage{Groups: groups, Action: Remove})
+	return m.groupUpdateRequestPropagator.Propagate(collectionId, GroupMessage{UserGroups: userGroups, GroupsToAdd: groupsToAdd, GroupsToRemove: groupsToRemove})
 }
 
 func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message UpdateGroupResponse) error {

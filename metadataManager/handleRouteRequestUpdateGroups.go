@@ -24,12 +24,7 @@ func (m *MetadataManagerImpl) handleRouteRequestUpdateGroups() http.HandlerFunc 
 			return
 		}
 
-		var resp *UpdateGroupResponse
-		if message.Action == Add {
-			resp, err = m.AddGroupToCollection(collectionId, message.UserGroups, message.Groups...)
-		} else {
-			resp, err = m.RemoveGroupFromCollection(collectionId, message.UserGroups, message.Groups...)
-		}
+		resp, err := m.UpdateGroupsInCollection(collectionId, message.UserGroups, message.GroupsToAdd, message.GroupsToRemove)
 		if err != nil {
 			var unAuthErr *dataManagerShared.UnauthorizedError
 			if errors.As(err, &unAuthErr) {

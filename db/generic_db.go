@@ -176,6 +176,7 @@ type GenericDB interface {
 	// Returns:
 	//	- error: non-nil if the operation fails
 	RemoveGroupsFromMetadata(collectionId string, groups ...string) ([]string, uint64, error)
+	UpdateGroupsInMetadata(collectionId string, groupsToAdd []string, groupsToRemove []string) ([]string, uint64, error)
 
 	SetGroupsInMetadata(collectionId string, sequenceGroups uint64, groups ...string) error
 	IsInMetadataGroups(collectionId string, groups ...string) (bool, error)

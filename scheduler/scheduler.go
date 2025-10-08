@@ -248,72 +248,87 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		s.log.Errorf("error marshalling response body: %v", err)
 		return nil, 0, fmt.Errorf("error marshalling response body: %v", err)
 	}
+	result := &FunctionResult{
+		StatusCode: resp.HttpCode,
+		Body:       repBody,
+	}
+
+	if resp.CacheUpdates == nil {
+		if sequentialCollId != "" {
+			seqNumber, err := s.dataManager.GetMigrationManager().GetCollectionVectorClockValue(sequentialCollId)
+			return result, seqNumber, err
+		}
+		return result, 0, nil
+	}
 
 	if sequentialCollId != "" {
-		update := resp.CacheUpdates.CollectionUpdates[sequentialCollId]
-		if update.Deleted {
-			err := s.dataManager.RemoveCollectionAndPropagate(sequentialCollId, groups)
-			if err != nil {
-				s.log.Errorf("error removing sequential collection: %v", err)
-				return nil, 0, fmt.Errorf("error removing sequential collection: %v", err)
-			}
-		} else {
-			var recordNames []string
-			var recordValues []string
-			for recordName, recordValue := range update.DirtyRecords {
-				recordNames = append(recordNames, recordName)
-				recordValues = append(recordValues, recordValue)
-			}
-			if len(recordNames) > 0 {
-				err := s.dataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{{
-					CollectionId: sequentialCollId,
-					RecordNames:  recordNames,
-					RecordValues: recordValues,
-					IsDelete:     false,
-				}}, groups)
+		if update, ok := resp.CacheUpdates.CollectionUpdates[sequentialCollId]; ok {
+			if update.Deleted {
+				err := s.dataManager.RemoveCollectionAndPropagate(sequentialCollId, groups)
 				if err != nil {
-					s.log.Errorf("error updating sequential collection records: %v", err)
-					return nil, 0, fmt.Errorf("error updating sequential collection records: %v", err)
+					s.log.Errorf("error removing sequential collection: %v", err)
+					return nil, 0, fmt.Errorf("error removing sequential collection: %v", err)
 				}
-			}
-			if len(update.DeletedRecords) > 0 {
-				err := s.dataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{{
-					CollectionId: sequentialCollId,
-					RecordNames:  update.DeletedRecords,
-					IsDelete:     false,
-				}}, groups)
-				if err != nil {
-					s.log.Errorf("error deleting sequential collection records: %v", err)
-					return nil, 0, fmt.Errorf("error deleting sequential collection records: %v", err)
+			} else {
+				var recordNames []string
+				var recordValues []string
+				for recordName, recordValue := range update.DirtyRecords {
+					recordNames = append(recordNames, recordName)
+					recordValues = append(recordValues, recordValue)
 				}
-			}
+				if len(recordNames) > 0 {
+					err := s.dataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{{
+						CollectionId: sequentialCollId,
+						RecordNames:  recordNames,
+						RecordValues: recordValues,
+						IsDelete:     false,
+					}}, groups)
+					if err != nil {
+						s.log.Errorf("error updating sequential collection records: %v", err)
+						return nil, 0, fmt.Errorf("error updating sequential collection records: %v", err)
+					}
+				}
+				if len(update.DeletedRecords) > 0 {
+					err := s.dataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{{
+						CollectionId: sequentialCollId,
+						RecordNames:  update.DeletedRecords,
+						IsDelete:     false,
+					}}, groups)
+					if err != nil {
+						s.log.Errorf("error deleting sequential collection records: %v", err)
+						return nil, 0, fmt.Errorf("error deleting sequential collection records: %v", err)
+					}
+				}
 
-			var groupsToAdd []string
-			var groupsToRemove []string
-			for group, toAdd := range update.CollectionGroups {
-				if toAdd {
-					groupsToAdd = append(groupsToAdd, group)
-				} else {
-					groupsToRemove = append(groupsToRemove, group)
+				var groupsToAdd []string
+				var groupsToRemove []string
+				for group, toAdd := range update.CollectionGroups {
+					if toAdd {
+						groupsToAdd = append(groupsToAdd, group)
+					} else {
+						groupsToRemove = append(groupsToRemove, group)
+					}
+				}
+				if len(groupsToAdd) > 0 || len(groupsToRemove) > 0 {
+					updateResp, err := s.metadataManager.UpdateGroupsInCollection(sequentialCollId, groups, groupsToAdd, groupsToRemove)
+					if err != nil {
+						s.log.Errorf("error updating sequential collection groups: %v", err)
+						return nil, 0, fmt.Errorf("error updating sequential collection groups: %v", err)
+					}
+
+					err = s.dataManager.UpdateCollectionsGroupsAndPropagate([]messages.CollectionGroupUpdate{{
+						CollectionId: sequentialCollId,
+						GroupNames:   updateResp.Groups,
+						Sequence:     updateResp.Sequence,
+					}})
+					if err != nil {
+						s.log.Errorf("error propagating sequential collection group updates: %v", err)
+						return nil, 0, fmt.Errorf("error propagating sequential collection group updates: %v", err)
+					}
 				}
 			}
-			updateResp, err := s.metadataManager.UpdateGroupsInCollection(sequentialCollId, groups, groupsToAdd, groupsToRemove)
-			if err != nil {
-				s.log.Errorf("error updating sequential collection groups: %v", err)
-				return nil, 0, fmt.Errorf("error updating sequential collection groups: %v", err)
-			}
-
-			err = s.dataManager.UpdateCollectionsGroupsAndPropagate([]messages.CollectionGroupUpdate{{
-				CollectionId: sequentialCollId,
-				GroupNames:   updateResp.Groups,
-				Sequence:     updateResp.Sequence,
-			}})
-			if err != nil {
-				s.log.Errorf("error propagating sequential collection group updates: %v", err)
-				return nil, 0, fmt.Errorf("error propagating sequential collection group updates: %v", err)
-			}
+			delete(resp.CacheUpdates.CollectionUpdates, sequentialCollId)
 		}
-		delete(resp.CacheUpdates.CollectionUpdates, sequentialCollId)
 	}
 
 	go func() {
@@ -400,10 +415,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		}
 	}
 
-	return &FunctionResult{
-		StatusCode: resp.HttpCode,
-		Body:       repBody,
-	}, seqNumber, nil
+	return result, seqNumber, nil
 }
 
 func (s *SchedulerImpl) sendUpdateToGTP(groupsCache model.GroupsCache) {

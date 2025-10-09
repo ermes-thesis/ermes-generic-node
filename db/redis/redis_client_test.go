@@ -148,6 +148,17 @@ func TestGroup(t *testing.T) {
 	err := redisClient.SetCollection(collectionId, nil, nil, 0)
 	require.NoError(t, err, "Expected no error setting collection")
 
+	err = redisClient.SetMetadata(collectionId, model.Metadata{
+		Name:           "collection_name",
+		Owner:          "coll_owner",
+		CreatedAt:      time.Now().Truncate(time.Millisecond),
+		Groups:         []string{},
+		Consistency:    model.EventualConsistent,
+		Geolocation:    "IT/Milan",
+		CustomMetadata: nil,
+	})
+	require.NoError(t, err, "Expected no error setting collection")
+
 	groups, groupsSequence, err := redisClient.AddGroupsToMetadata(collectionId, members...)
 	require.NoError(t, err, "Expected no error adding group members")
 	require.Equal(t, members, groups, "Expected group members to match")

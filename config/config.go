@@ -1,8 +1,10 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/ermes-thesis/ermes-common/caches"
@@ -68,8 +70,9 @@ type FunctionRegistryConfig struct {
 	Port    string `yaml:"port"`
 }
 type SchedulerConfig struct {
-	GroupTokenProviderAddress string `yaml:"groupTokenProviderAddress"`
-	GroupTokenProviderPort    string `yaml:"groupTokenProviderPort"`
+	GroupTokenProviderAddress string            `yaml:"groupTokenProviderAddress"`
+	GroupTokenProviderPort    string            `yaml:"groupTokenProviderPort"`
+	WasmRuntime               ChosenWasmRuntime `yaml:"wasmRuntime"`
 }
 
 // The father should look something like:
@@ -113,6 +116,46 @@ func LoadConfig(filename string) Config {
 	}
 
 	return config
+}
+
+type ChosenWasmRuntime int
+
+const (
+	Wasmedge ChosenWasmRuntime = iota
+	Wasmtime
+	Wazero
+)
+
+func (m *ChosenWasmRuntime) UnmarshalYAML(value *yaml.Node) error {
+	var s string
+	if err := value.Decode(&s); err != nil {
+		return err
+	}
+	switch strings.ToLower(s) {
+	case "wasmedge":
+		*m = Wasmedge
+	case "wasmtime":
+		*m = Wasmtime
+	case "wazero":
+		*m = Wazero
+	default:
+		return fmt.Errorf("unknown chosen wasm runtime: %s", s)
+	}
+
+	return nil
+}
+
+func (m ChosenWasmRuntime) String() string {
+	switch m {
+	case Wasmedge:
+		return "wasmedge"
+	case Wasmtime:
+		return "wasmtime"
+	case Wazero:
+		return "wazero"
+	default:
+		return "unknown"
+	}
 }
 
 type CollectionSettingsInfo struct {

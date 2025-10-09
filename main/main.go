@@ -119,8 +119,18 @@ func run(ctx context.Context, configPath string) error {
 	dataManager := datamanager.GetDataManagerInstance()
 	dataManager.Init(collections, penality.LogPenalty(2), cfg.MigrationManager, cfg.Lru, httpServer, *httpServer.ServerInfo, &lruCache, redisClient, dataLog)
 
-	wasmExecutorPool := wasm.NewWasmedgeExecutorPool(10)
-	err = scheduler.RegisterHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{MetadataManager: metadataManager, ServerInfo: serverInfo, DataManager: dataManager})
+	var wasmExecutorPool *wasm.WasmExecutorPool
+	switch cfg.Scheduler.WasmRuntime {
+	case config.Wasmedge:
+		wasmExecutorPool = wasm.NewWasmedgeExecutorPool(10)
+		err = scheduler.RegisterHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{MetadataManager: metadataManager, ServerInfo: serverInfo, DataManager: dataManager})
+	case config.Wasmtime:
+		wasmExecutorPool = wasm.NewWasmtimeExecutorPool(10)
+		err = scheduler.RegisterWasmtimeHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{MetadataManager: metadataManager, ServerInfo: serverInfo, DataManager: dataManager})
+	case config.Wazero:
+		wasmExecutorPool = wasm.NewWazeroExecutorPool(10)
+		err = scheduler.RegisterWazeroHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{MetadataManager: metadataManager, ServerInfo: serverInfo, DataManager: dataManager})
+	}
 	if err != nil {
 		return fmt.Errorf("error registering host functions: %w", err)
 	}

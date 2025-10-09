@@ -127,8 +127,8 @@ func BenchmarkWasmPool_Wazero(b *testing.B) {
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(b)
-	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, 0, false).Return(nil)
+	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
 	//metadataManager.EXPECT().AddGroupToCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
@@ -329,8 +329,99 @@ func BenchmarkWasmPool_AOT_O3(b *testing.B) {
 	}
 }
 
+func BenchmarkExecutionTimeComparison_Native(b *testing.B) {
+	var fibFun func(n int) int
+	fibFun = func(n int) int {
+		if n <= 1 {
+			return n
+		}
+		return fibFun(n-1) + fibFun(n-2)
+	}
+
+	//for b.Loop() {
+	//	fibFun(40)
+	//}
+
+	var computePrimes func(n int) int
+	computePrimes = func(n int) int {
+		count := 0
+		for i := 2; i <= n; i++ {
+			isPrime := true
+			for j := 2; j*j <= i; j++ {
+				if i%j == 0 {
+					isPrime = false
+					break
+				}
+			}
+			if isPrime {
+				count++
+			}
+		}
+		return count
+	}
+
+	for b.Loop() {
+		res := computePrimes(2000000)
+		fmt.Println("Compute primes:", res)
+	}
+}
+
+func BenchmarkExecutionTimeComparison_Wasmedge(b *testing.B) {
+	pool := wasm.NewWasmedgeExecutorPool(10)
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId")
+		response := executor.Invoke("functionPrimeNums", "entry", req, ctx)
+		fmt.Println("Invoke function:", response.Response, response.HttpCode)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTimeComparison_Wasmtime(b *testing.B) {
+	pool := wasm.NewWasmtimeExecutorPool(10)
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId")
+		response := executor.Invoke("functionPrimeNums", "entry", req, ctx)
+		fmt.Println("Invoke function:", response.Response, response.HttpCode)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTimeComparison_Wazero(b *testing.B) {
+	pool := wasm.NewWazeroExecutorPool(10)
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId")
+		response := executor.Invoke("functionPrimeNums", "entry", req, ctx)
+		fmt.Println("Invoke function:", response.Response, response.HttpCode)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
 func getTestReqAndCtx(userId string) ([]byte, []byte) {
-	req := "{\"prova\": \"ciao\"}"
+	req := "{\"prova\": \"ciao\", \"n\":\"20000\"}"
 
 	timestamp, _ := time.Now().MarshalJSON()
 	ctx := "{" +

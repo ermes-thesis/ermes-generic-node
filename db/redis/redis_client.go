@@ -22,6 +22,8 @@ type RedisClient struct {
 	log    *logger.Logger
 }
 
+const maxRetries = 5
+
 func NewRedisClient(config config.RedisConfig, ctx context.Context, log *logger.Logger) *RedisClient {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     config.Address + ":" + config.Port,
@@ -59,6 +61,10 @@ func (r *RedisClient) SetRecord(collectionId string, recordName string, value st
 		return err
 	}, infoKey)
 
+	if errors.Is(err, redis.TxFailedErr) {
+		return errors.New("collection does not exist")
+	}
+
 	return err
 }
 
@@ -81,7 +87,7 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 		inlineRecords[i*2+1] = recordValues[i]
 	}
 
-	return r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 		exists, err := tx.Exists(r.ctx, infoKey).Result()
 		if err != nil {
 			return err
@@ -99,6 +105,11 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 
 		return err
 	}, infoKey)
+
+	if errors.Is(err, redis.TxFailedErr) {
+		return errors.New("collection does not exist")
+	}
+	return err
 }
 
 func (r *RedisClient) RecordExists(collectionId string, recordName string) (bool, error) {
@@ -108,22 +119,36 @@ func (r *RedisClient) RecordExists(collectionId string, recordName string) (bool
 
 func (r *RedisClient) DeleteRecords(collectionId string, recordNames ...string) error {
 	keysKey := "info:" + collectionId + ":keys"
+	infoKey := "info:" + collectionId
 
 	anyConvertedNames, dataKeys := buildNamesAndKeys(collectionId, recordNames)
 
-	_, err := r.client.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
-		pipe.SRem(r.ctx, keysKey, anyConvertedNames...)
-		pipe.Del(r.ctx, dataKeys...)
+	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+		exists, err := tx.Exists(r.ctx, infoKey).Result()
+		if err != nil {
+			return err
+		}
+		if exists == 0 {
+			return errors.New("collection does not exist")
+		}
 
-		return nil
-	})
+		_, err = r.client.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+			pipe.SRem(r.ctx, keysKey, anyConvertedNames...)
+			pipe.Del(r.ctx, dataKeys...)
+
+			return nil
+		})
+		return err
+	}, infoKey)
+
+	if errors.Is(err, redis.TxFailedErr) {
+		return errors.New("collection does not exist")
+	}
 
 	return err
 }
 
 func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []string, uint64, error) {
-	const maxRetries = 5
-
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
@@ -189,6 +214,8 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 	return nil, nil, 0, errors.New("transaction retries exhausted")
 }
 
+// Implemented like this, we allow the overwrite of a collection. If we want to avoid to overwrite a collection
+// we would need to add a Watch( ..., infoKey) to check the existence of the collection
 func (r *RedisClient) SetCollection(collectionId string, records map[string]string, groups []string, groupsSequence uint64) error {
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
@@ -221,24 +248,32 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 	groupsKey := "info:" + collectionId + ":groups"
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
 
-	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
-		keys, err := tx.SMembers(r.ctx, keysKey).Result()
-		if err != nil {
+	for retries := 0; retries < maxRetries; retries++ {
+		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+			keys, err := tx.SMembers(r.ctx, keysKey).Result()
+			if err != nil {
+				return err
+			}
+
+			dataKeys := buildKeys(collectionId, keys)
+			allKeysToDelete := append(dataKeys, infoKey, keysKey, groupsKey, groupsSequenceKey)
+
+			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+				pipe.Del(r.ctx, allKeysToDelete...)
+				return nil
+			})
+
 			return err
+		}, keysKey)
+
+		if errors.Is(err, redis.TxFailedErr) {
+			continue
 		}
 
-		dataKeys := buildKeys(collectionId, keys)
-		allKeysToDelete := append(dataKeys, infoKey, keysKey, groupsKey, groupsSequenceKey)
-
-		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
-			pipe.Del(r.ctx, allKeysToDelete...)
-			return nil
-		})
-
 		return err
-	}, keysKey)
+	}
 
-	return err
+	return errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) CollectionExists(collectionId string) (bool, error) {
@@ -285,44 +320,60 @@ func (r *RedisClient) AddGroupsToMetadata(collectionId string, groupsToAdd ...st
 	var seq uint64
 	var groups []string
 
-	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
-		var seqCmd *redis.IntCmd
+	for retries := 0; retries < maxRetries; retries++ {
+		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+			var seqCmd *redis.IntCmd
 
-		groupsStr, err := tx.HGet(r.ctx, metadataKey, "groups").Result()
-		if err != nil && !errors.Is(err, redis.Nil) {
-			return err
-		}
+			exists, err := tx.Exists(r.ctx, metadataKey).Result()
+			if err != nil {
+				return err
+			}
+			if exists == 0 {
+				return errors.New("metadata key does not exist")
+			}
 
-		if groupsStr == "" {
-			groups = groupsToAdd
-		} else {
-			groups = strings.Split(groupsStr, ",")
-			for _, g := range groupsToAdd {
-				if !slices.Contains(groups, g) {
-					groups = append(groups, g)
+			groupsStr, err := tx.HGet(r.ctx, metadataKey, "groups").Result()
+			if err != nil && !errors.Is(err, redis.Nil) {
+				return err
+			}
+
+			if groupsStr == "" {
+				groups = groupsToAdd
+			} else {
+				groups = strings.Split(groupsStr, ",")
+				for _, g := range groupsToAdd {
+					if !slices.Contains(groups, g) {
+						groups = append(groups, g)
+					}
 				}
 			}
-		}
 
-		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
-			pipe.HSet(r.ctx, metadataKey, "groups", strings.Join(groups, ","))
-			seqCmd = pipe.HIncrBy(r.ctx, metadataKey, "groupsSequence", int64(1))
+			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+				pipe.HSet(r.ctx, metadataKey, "groups", strings.Join(groups, ","))
+				seqCmd = pipe.HIncrBy(r.ctx, metadataKey, "groupsSequence", int64(1))
+
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+
+			seq, err = seqCmd.Uint64()
+			if err != nil {
+				return err
+			}
 
 			return nil
-		})
-		if err != nil {
-			return err
+		}, metadataKey)
+
+		if errors.Is(err, redis.TxFailedErr) {
+			continue
 		}
 
-		seq, err = seqCmd.Uint64()
-		if err != nil {
-			return err
-		}
+		return groups, seq, err
+	}
 
-		return nil
-	}, metadataKey)
-
-	return groups, seq, err
+	return nil, 0, errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) RemoveGroupsFromMetadata(collectionId string, groupsToRemove ...string) ([]string, uint64, error) {
@@ -335,38 +386,55 @@ func (r *RedisClient) RemoveGroupsFromMetadata(collectionId string, groupsToRemo
 	var groups []string
 	var seq uint64
 
-	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
-		var seqCmd *redis.IntCmd
+	for retries := 0; retries < maxRetries; retries++ {
+		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+			var seqCmd *redis.IntCmd
 
-		groupsStr, err := tx.HGet(r.ctx, metadataKey, "groups").Result()
-		if err != nil {
+			exists, err := tx.Exists(r.ctx, metadataKey).Result()
+			if err != nil {
+				return err
+			}
+			if exists == 0 {
+				return errors.New("metadata key does not exist")
+			}
+
+			groupsStr, err := tx.HGet(r.ctx, metadataKey, "groups").Result()
+			if err != nil {
+				return err
+			}
+
+			groups = strings.Split(groupsStr, ",")
+			groups = slices.DeleteFunc(groups, func(g string) bool {
+				return slices.Contains(groupsToRemove, g)
+			})
+
+			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+				pipe.HSet(r.ctx, metadataKey, "groups", strings.Join(groups, ","))
+				seqCmd = pipe.HIncrBy(r.ctx, metadataKey, "groupsSequence", int64(1))
+
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+
+			seq, err = seqCmd.Uint64()
+			if err != nil {
+				return err
+			}
+
 			return err
+		}, metadataKey)
+
+		if errors.Is(err, redis.TxFailedErr) {
+			continue
 		}
 
-		groups = strings.Split(groupsStr, ",")
-		groups = slices.DeleteFunc(groups, func(g string) bool {
-			return slices.Contains(groupsToRemove, g)
-		})
+		return groups, seq, err
 
-		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
-			pipe.HSet(r.ctx, metadataKey, "groups", strings.Join(groups, ","))
-			seqCmd = pipe.HIncrBy(r.ctx, metadataKey, "groupsSequence", int64(1))
+	}
 
-			return nil
-		})
-		if err != nil {
-			return err
-		}
-
-		seq, err = seqCmd.Uint64()
-		if err != nil {
-			return err
-		}
-
-		return err
-	}, metadataKey)
-
-	return groups, seq, err
+	return nil, 0, errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) UpdateGroupsInMetadata(collectionId string, groupsToAdd []string, groupsToRemove []string) ([]string, uint64, error) {
@@ -379,77 +447,108 @@ func (r *RedisClient) UpdateGroupsInMetadata(collectionId string, groupsToAdd []
 	var groups []string
 	var seq uint64
 
-	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
-		var seqCmd *redis.IntCmd
+	for retries := 0; retries < maxRetries; retries++ {
+		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+			var seqCmd *redis.IntCmd
 
-		groupsStr, err := tx.HGet(r.ctx, metadataKey, "groups").Result()
-		if err != nil {
-			return err
-		}
-
-		//This works if groupsToAdd and groupsToRemove are disjointed
-		if groupsStr == "" {
-			groups = groupsToAdd
-		} else {
-			groups = strings.Split(groupsStr, ",")
-			for _, g := range groupsToAdd {
-				if !slices.Contains(groups, g) {
-					groups = append(groups, g)
-				}
+			exists, err := tx.Exists(r.ctx, metadataKey).Result()
+			if err != nil {
+				return err
 			}
-			groups = slices.DeleteFunc(groups, func(g string) bool {
-				return slices.Contains(groupsToRemove, g)
+			if exists == 0 {
+				return errors.New("metadata key does not exist")
+			}
+
+			groupsStr, err := tx.HGet(r.ctx, metadataKey, "groups").Result()
+			if err != nil {
+				return err
+			}
+
+			//This works if groupsToAdd and groupsToRemove are disjointed
+			if groupsStr == "" {
+				groups = groupsToAdd
+			} else {
+				groups = strings.Split(groupsStr, ",")
+				for _, g := range groupsToAdd {
+					if !slices.Contains(groups, g) {
+						groups = append(groups, g)
+					}
+				}
+				groups = slices.DeleteFunc(groups, func(g string) bool {
+					return slices.Contains(groupsToRemove, g)
+				})
+			}
+
+			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+				pipe.HSet(r.ctx, metadataKey, "groups", strings.Join(groups, ","))
+				seqCmd = pipe.HIncrBy(r.ctx, metadataKey, "groupsSequence", int64(1))
+
+				return nil
 			})
-		}
+			if err != nil {
+				return err
+			}
 
-		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
-			pipe.HSet(r.ctx, metadataKey, "groups", strings.Join(groups, ","))
-			seqCmd = pipe.HIncrBy(r.ctx, metadataKey, "groupsSequence", int64(1))
+			seq, err = seqCmd.Uint64()
+			if err != nil {
+				return err
+			}
 
-			return nil
-		})
-		if err != nil {
 			return err
+		}, metadataKey)
+
+		if errors.Is(err, redis.TxFailedErr) {
+			continue
 		}
 
-		seq, err = seqCmd.Uint64()
-		if err != nil {
-			return err
-		}
+		return groups, seq, err
+	}
 
-		return err
-	}, metadataKey)
-
-	return groups, seq, err
+	return nil, 0, errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) SetGroupsInMetadata(collectionId string, sequenceGroups uint64, groups ...string) error {
 	metadataKey := "meta:" + collectionId
 
-	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+	for retries := 0; retries < maxRetries; retries++ {
+		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 
-		groupsSeq, err := tx.HGet(r.ctx, metadataKey, "groupsSequence").Uint64()
-		if err != nil {
+			exists, err := tx.Exists(r.ctx, metadataKey).Result()
+			if err != nil {
+				return err
+			}
+			if exists == 0 {
+				return errors.New("metadata key does not exist")
+			}
+
+			groupsSeq, err := tx.HGet(r.ctx, metadataKey, "groupsSequence").Uint64()
+			if err != nil {
+				return err
+			}
+
+			if groupsSeq >= sequenceGroups {
+				return nil
+			}
+
+			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+				pipe.HMSet(r.ctx, metadataKey, "groups", strings.Join(groups, ","), "groupsSequence", sequenceGroups)
+
+				return nil
+			})
+			if err != nil {
+				return err
+			}
+
 			return err
-		}
+		}, metadataKey)
 
-		if groupsSeq >= sequenceGroups {
-			return nil
-		}
-
-		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
-			pipe.HMSet(r.ctx, metadataKey, "groups", strings.Join(groups, ","), "groupsSequence", sequenceGroups)
-
-			return nil
-		})
-		if err != nil {
-			return err
+		if errors.Is(err, redis.TxFailedErr) {
+			continue
 		}
 
 		return err
-	}, metadataKey)
-
-	return err
+	}
+	return errors.New("max retries exceeded")
 }
 
 func (r *RedisClient) IsInMetadataGroups(collectionId string, userGroups ...string) (bool, error) {
@@ -479,31 +578,48 @@ func (r *RedisClient) IsInMetadataGroups(collectionId string, userGroups ...stri
 func (r *RedisClient) SetGroups(collectionId string, sequenceGroups uint64, groups ...string) error {
 	groupsKey := "info:" + collectionId + ":groups"
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
+	infoKey := "info:" + collectionId
 
 	var toAdd []any
 	for _, member := range groups {
 		toAdd = append(toAdd, member)
 	}
 
-	return r.client.Watch(r.ctx, func(tx *redis.Tx) error {
-		seq, err := tx.Get(r.ctx, groupsSequenceKey).Uint64()
-		if err != nil && !errors.Is(err, redis.Nil) {
+	for retries := 0; retries < maxRetries; retries++ {
+		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+			exists, err := tx.Exists(r.ctx, infoKey).Result()
+			if err != nil {
+				return err
+			}
+			if exists == 0 {
+				return errors.New("groups key does not exist")
+			}
+
+			seq, err := tx.Get(r.ctx, groupsSequenceKey).Uint64()
+			if err != nil && !errors.Is(err, redis.Nil) {
+				return err
+			}
+			if seq >= sequenceGroups {
+				return nil
+			}
+
+			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+				pipe.Del(r.ctx, groupsKey)
+				pipe.SAdd(r.ctx, groupsKey, toAdd...)
+				pipe.Set(r.ctx, groupsSequenceKey, sequenceGroups, 0)
+
+				return nil
+			})
 			return err
-		}
-		if seq >= sequenceGroups {
-			return nil
-		}
+		}, infoKey, groupsKey, groupsSequenceKey)
 
-		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
-			pipe.Del(r.ctx, groupsKey)
-			pipe.SAdd(r.ctx, groupsKey, toAdd...)
-			pipe.Set(r.ctx, groupsSequenceKey, sequenceGroups, 0)
-
-			return nil
-		})
+		if errors.Is(err, redis.TxFailedErr) {
+			continue
+		}
 		return err
-	}, groupsKey, groupsSequenceKey)
+	}
 
+	return errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) IsInGroups(collectionId string, members ...string) (bool, error) {
@@ -555,7 +671,7 @@ func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userGroups []s
 	}
 	redisQuery = redisQuery + " @groups:{" + strings.Join(userGroups, " | ") + "}"
 
-	res, err := r.client.FTSearch(context.Background(), "metadata_index", redisQuery).Result()
+	res, err := r.client.FTSearch(r.ctx, "metadata_index", redisQuery).Result()
 	if err != nil {
 		return nil, err
 	}
@@ -687,6 +803,7 @@ func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
 func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, error) {
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
+	groupSequenceKey := "info:" + collectionId + ":groupsSequence"
 	infoKey := "info:" + collectionId
 
 	var totalMemory uint64
@@ -707,7 +824,7 @@ func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, err
 			totalMemory += uint64(memUsage)
 		}
 
-		metaKeys := []string{keysKey, groupsKey, infoKey}
+		metaKeys := []string{keysKey, groupsKey, infoKey, groupSequenceKey}
 		for _, metaKey := range metaKeys {
 			memUsage, err := tx.MemoryUsage(r.ctx, metaKey).Result()
 			if err != nil {
@@ -717,7 +834,7 @@ func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, err
 		}
 
 		return nil
-	}, keysKey)
+	}, keysKey, infoKey)
 
 	if err != nil {
 		return 0, err

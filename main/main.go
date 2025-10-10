@@ -92,7 +92,10 @@ func run(ctx context.Context, configPath string) error {
 		return err
 	}
 
-	redisClient := redis.NewRedisClient(cfg.Redis, ctx, redisLog)
+	redisClient, err := redis.NewRedisClient(cfg.Redis, ctx, redisLog)
+	if err != nil {
+		return fmt.Errorf("error creating redis client: %w", err)
+	}
 	// remoteFunctionName must be in the format: "functionName/functionVersion"
 	funcCache, err := caches.NewDefaultFunctionCache(cfg.FunctionsCache, cfg.Node.Secret, cacheLog)
 	if err != nil {

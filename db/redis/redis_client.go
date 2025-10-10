@@ -24,14 +24,20 @@ type RedisClient struct {
 
 const maxRetries = 5
 
-func NewRedisClient(config config.RedisConfig, ctx context.Context, log *logger.Logger) *RedisClient {
+func NewRedisClient(config config.RedisConfig, ctx context.Context, log *logger.Logger) (*RedisClient, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     config.Address + ":" + config.Port,
 		Password: config.Password,
 		DB:       config.DB,
 		Protocol: config.Protocol,
 	})
-	return &RedisClient{client: rdb, ctx: ctx, log: log}
+	pong, err := rdb.Ping(ctx).Result()
+	if err != nil {
+		log.Error("Failed to connect to Redis", "error", err)
+		return nil, err
+	}
+	log.Info("Connected to Redis", "response", pong)
+	return &RedisClient{client: rdb, ctx: ctx, log: log}, nil
 }
 
 func (r *RedisClient) GetRecord(collectionId string, recordName string) (string, error) {

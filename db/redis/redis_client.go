@@ -68,6 +68,50 @@ func (r *RedisClient) SetRecord(collectionId string, recordName string, value st
 	return err
 }
 
+func (r *RedisClient) SetRecordWithTimestamp(collectionId string, recordName string, value string, timestamp string) error {
+	infoKey := "info:" + collectionId
+	dataKey := buildKey(collectionId, recordName)
+	keysKey := "info:" + collectionId + ":keys"
+	timeKey := "info:" + collectionId + ":" + recordName + ":timestamp"
+
+	for retries := 0; retries < maxRetries; retries++ {
+		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+			exists, err := tx.Exists(r.ctx, infoKey).Result()
+			if err != nil {
+				return err
+			}
+			if exists == 0 {
+				return errors.New("collection does not exist")
+			}
+
+			currentTimestamp, err := tx.Get(r.ctx, timeKey).Result()
+			if err != nil && !errors.Is(err, redis.Nil) {
+				return err
+			}
+
+			if currentTimestamp >= timestamp {
+				return nil
+			}
+
+			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+				pipe.SAdd(r.ctx, keysKey, recordName)
+				pipe.MSet(r.ctx, dataKey, value, timeKey, timestamp)
+				return nil
+			})
+
+			return err
+		}, infoKey, timeKey)
+
+		if errors.Is(err, redis.TxFailedErr) {
+			continue
+		}
+
+		return err
+	}
+
+	return errors.New("transaction retries exhausted")
+}
+
 func (r *RedisClient) GetRecords(collectionId string, recordNames ...string) ([]any, error) {
 	return r.client.MGet(r.ctx, buildKeys(collectionId, recordNames)...).Result()
 }
@@ -110,6 +154,62 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 		return errors.New("collection does not exist")
 	}
 	return err
+}
+func (r *RedisClient) SetRecordsWithTimestamp(collectionId string, recordNames []string, recordValues []string, timestamp string) error {
+	if len(recordNames) != len(recordValues) {
+		return errors.New("recordNames and recordValues must be the same length")
+	}
+
+	infoKey := "info:" + collectionId
+	keysKey := "info:" + collectionId + ":keys"
+
+	timestampKeys := make([]string, len(recordNames))
+	for i, name := range recordNames {
+		timestampKeys[i] = buildTimestampKey(collectionId, name)
+	}
+
+	for retries := 0; retries < maxRetries; retries++ {
+		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+			exists, err := tx.Exists(r.ctx, infoKey).Result()
+			if err != nil {
+				return err
+			}
+			if exists == 0 {
+				return errors.New("collection does not exist")
+			}
+
+			timestamps, err := tx.MGet(r.ctx, timestampKeys...).Result()
+			if err != nil && !errors.Is(err, redis.Nil) {
+				return err
+			}
+
+			var anyConvertedNames []any
+			var inlineRecords []any
+			for i, name := range recordNames {
+				if timestamps[i] == nil || timestamps[i].(string) < timestamp {
+					anyConvertedNames = append(anyConvertedNames, name)
+					inlineRecords = append(inlineRecords, buildKey(collectionId, name), recordValues[i], buildTimestampKey(collectionId, name), timestamp)
+				}
+			}
+
+			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+				pipe.SAdd(r.ctx, keysKey, anyConvertedNames...)
+				pipe.MSet(r.ctx, inlineRecords...)
+
+				return nil
+			})
+
+			return err
+		}, append(timestampKeys, infoKey)...)
+
+		if errors.Is(err, redis.TxFailedErr) {
+			continue
+		}
+
+		return err
+	}
+
+	return errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) RecordExists(collectionId string, recordName string) (bool, error) {
@@ -854,6 +954,9 @@ func (r *RedisClient) Close() error {
 
 func buildKey(collectionId string, recordName string) string {
 	return "data:" + collectionId + ":" + recordName
+}
+func buildTimestampKey(collectionId string, recordName string) string {
+	return "info:" + collectionId + ":" + recordName + ":timestamp"
 }
 
 func buildKeys(collectionId string, recordNames []string) []string {

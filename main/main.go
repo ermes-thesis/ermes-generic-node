@@ -98,7 +98,7 @@ func run(ctx context.Context, configPath string) error {
 	if err != nil {
 		return fmt.Errorf("error creating function cache: %w", err)
 	}
-	tknDecoder, err := tokenDecoder.NewTokenDecoder("/path/to/pem/file")
+	tknDecoder, err := tokenDecoder.NewTokenDecoder(cfg.GroupTokenPublicKeyPath)
 	if err != nil {
 		return fmt.Errorf("error creating token decoder: %w", err)
 	}

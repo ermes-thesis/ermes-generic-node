@@ -13,14 +13,15 @@ import (
 
 // config data structures
 type Config struct {
-	Node             NodeConfig               `yaml:"node"`
-	Hierarchy        HierarchyConfig          `yaml:"hierarchy"`
-	MigrationManager MigrationManagerConfig   `yaml:"migrationManager"`
-	Redis            RedisConfig              `yaml:"redis"`
-	Lru              LruConfig                `yaml:"lru"`
-	FunctionsCache   FunctionsCacheConfig     `yaml:"functionsCache"`
-	Scheduler        SchedulerConfig          `yaml:"scheduler"`
-	Collections      []CollectionSettingsInfo `yaml:"collections"`
+	Node                    NodeConfig               `yaml:"node"`
+	Hierarchy               HierarchyConfig          `yaml:"hierarchy"`
+	MigrationManager        MigrationManagerConfig   `yaml:"migrationManager"`
+	Redis                   RedisConfig              `yaml:"redis"`
+	Lru                     LruConfig                `yaml:"lru"`
+	FunctionsCache          FunctionsCacheConfig     `yaml:"functionsCache"`
+	Scheduler               SchedulerConfig          `yaml:"scheduler"`
+	Collections             []CollectionSettingsInfo `yaml:"collections"`
+	GroupTokenPublicKeyPath string                   `yaml:"groupTokenPublicKeyPath"`
 }
 
 type MigrationManagerConfig struct {

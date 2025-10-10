@@ -15,6 +15,7 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/second-state/WasmEdge-go v0.14.0 // indirect
+	github.com/tetratelabs/wazero v1.9.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
 )
 

@@ -192,7 +192,7 @@ func hostCreateCollection(data any, callframe *wasmedge.CallingFrame, params []a
 
 	//TODO: this method should contact the cloud node and verify if there is already a collection with the same name and owner.
 	// If not the existence of the collection must be registered while returning the responses.
-	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, 0, metadata.Consistency == model.SequentialConsistent)
+	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Consistency == model.SequentialConsistent)
 	if err != nil {
 		returns[0] = wasmComponent.WriteError(model.RedisError, err)
 		return returns, wasmedge.Result_Success

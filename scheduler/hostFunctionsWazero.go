@@ -137,7 +137,7 @@ func hostWazeroCreateCollection(ctx context.Context, m api.Module, metadataPoint
 
 	collectionId := uuid.NewString()
 
-	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, 0, metadata.Consistency == model.SequentialConsistent)
+	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Consistency == model.SequentialConsistent)
 	if err != nil {
 		return wasmComponent.WriteError(model.RedisError, err)
 	}

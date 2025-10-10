@@ -9,6 +9,7 @@ import (
 	"errors"
 	"server"
 	"server/info"
+	"strconv"
 	"sync"
 
 	"github.com/ermes-thesis/ermes-common/logger"
@@ -138,10 +139,11 @@ func AccessRecords[T any](
 func UpdateRecord(
 	c *CollectionsDiscovererImp,
 	collectionId string,
-	dbFn func() error,
+	dbFn func(isStrong bool) error,
 	isInitiator bool,
 ) (map[string]struct{}, error) {
 	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
+	var isStrong bool = false
 	if !exists {
 		//can't verify if collection is strong or weak, so just notify father
 
@@ -154,7 +156,7 @@ func UpdateRecord(
 		return hosts, nil
 	}
 	if !collection.IsLocal() {
-		if collection.IsStrong() {
+		if collection.IsStrong() && isInitiator { //safety check
 			return nil, errors.New("strong collection can't be updated remotely")
 		}
 
@@ -172,10 +174,8 @@ func UpdateRecord(
 		if isInitiator && !collection.(*shared.StrongCollection).IsLeader { //safety check
 			return nil, errors.New("only leader can update strong collection")
 		}
-		if !isInitiator { //safety check
-			return nil, errors.New("strong collection can't be updated remotely")
-		}
 
+		isStrong = true
 		collection.(*shared.StrongCollection).ConsistencyClock++
 	}
 
@@ -193,7 +193,7 @@ func UpdateRecord(
 		defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
 	}
 
-	return hosts, dbFn() // update in local db
+	return hosts, dbFn(isStrong) // update in local db
 }
 
 func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdateMessage, groups []string, isInitiator bool, ignoredHostName string) error {
@@ -204,9 +204,9 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 
 	//write or delete in db and prepare messages for future propagation on other hosts
 	for _, update := range updates {
-		var dbFn func() error
+		var dbFn func(isStrong bool) error
 		if update.IsDelete {
-			dbFn = func() error {
+			dbFn = func(isStrong bool) error {
 				authorized, err := c.dbInterface.IsInGroups(update.CollectionId, groups...)
 				if err != nil {
 					return err
@@ -215,10 +215,13 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 					return &shared.UnauthorizedError{}
 				}
 
-				return c.dbInterface.DeleteRecords(update.CollectionId, update.RecordNames...)
+				if isStrong {
+					return c.dbInterface.DeleteRecords(update.CollectionId, "", update.RecordNames...)
+				}
+				return c.dbInterface.DeleteRecords(update.CollectionId, strconv.FormatInt(update.Time, 10)+update.UpdateHostIp, update.RecordNames...)
 			}
 		} else {
-			dbFn = func() error {
+			dbFn = func(isStrong bool) error {
 				authorized, err := c.dbInterface.IsInGroups(update.CollectionId, groups...)
 				if err != nil {
 					return err
@@ -226,10 +229,14 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 				if !authorized {
 					return &shared.UnauthorizedError{}
 				}
-
-				return c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues)
+				if isStrong {
+					return c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues, "")
+				}
+				return c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues, strconv.FormatInt(update.Time, 10)+update.UpdateHostIp)
 			}
 		}
+
+		//check conflict for strong update
 
 		//write or delete in db
 		hosts, err := UpdateRecord(c, update.CollectionId, dbFn, isInitiator)
@@ -262,7 +269,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 	c.collectionsPartialView.Mutex.Lock()
 
 	for _, update := range updates {
-		dbFn := func() error {
+		dbFn := func(isStrong bool) error {
 			return c.dbInterface.SetGroups(update.CollectionId, update.Sequence, update.GroupNames...)
 		}
 

@@ -37,8 +37,7 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the operation fails or if the collection does not exist
-	SetRecord(collectionId string, recordName string, value string) error
-	SetRecordWithTimestamp(collectionId string, recordName string, value string, timestamp string) error
+	SetRecord(collectionId string, recordName string, value string, timestamp string) error
 	// GetRecords retrieves multiple records from a collection in a single operation.
 	//
 	// Parameters:
@@ -61,8 +60,7 @@ type GenericDB interface {
 	// Returns:
 	//	- error: non-nil if the operation fails or if recordNames and recordValues
 	//			 have different lengths or if the collection does not exist
-	SetRecords(collectionId string, recordNames []string, recordValues []string) error
-	SetRecordsWithTimestamp(collectionId string, recordNames []string, recordValues []string, timestamp string) error
+	SetRecords(collectionId string, recordNames []string, recordValues []string, timestamp string) error
 	// RecordExists checks whether a specific record exists in the given collection.
 	//
 	// Parameters:
@@ -83,7 +81,7 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if any deletion operation fails
-	DeleteRecords(collectionId string, recordNames ...string) error
+	DeleteRecords(collectionId string, timestamp string, recordNames ...string) error
 
 	// GetCollection retrieves all records and associated groups for a collection.
 	//

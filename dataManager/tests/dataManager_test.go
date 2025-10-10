@@ -21,7 +21,7 @@ import (
 
 func createNewLogger(t *testing.T) *logger.Logger {
 	log, err := logger.NewLogger(logger.Config{
-		Level:  zerolog.DebugLevel,
+		Level:  zerolog.WarnLevel,
 		Format: "text",
 	})
 	require.NoError(t, err)

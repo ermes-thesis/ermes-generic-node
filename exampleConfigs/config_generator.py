@@ -1,6 +1,7 @@
 import yaml
 import os
 import argparse
+import copy
 
 def generate_node_configs(input_file, output_dir):
     # Load the initial YAML
@@ -30,56 +31,63 @@ def generate_node_configs(input_file, output_dir):
 
         # === Father ===
         parts = node_domain.split("/")
-        father = ["nil", "nil", "0"]
+        father = None
         if len(parts) > 1:  # has a parent
             father_domain = "/".join(parts[:-1])
             if father_domain in domain_map:
                 father_node = domain_map[father_domain]
-                father = [
-                    father_node["address"] + ":" + str(common["port"]), 
-                    father_node["domain"], 
-                    str(node["latency_up"])
-                ]
+                father = {
+                    "address": f"{father_node['address']}:{common['port']}",
+                    "domain": father_node["domain"],
+                    "latency_up": node.get("latency_up", 0)
+                }
 
         # === Children ===
         children = []
         for child in nodes:
             if child["domain"].startswith(node_domain + "/"):
-                # child is directly under this node
                 child_parts = child["domain"].split("/")
                 if child_parts[:-1] == parts:  # direct child
-                    children.extend([
-                        child["address"] + ":" + str(common["port"]),
-                        child["domain"],
-                        str(child["latency_up"])
-                    ])
-        if not children:
-            children = ["nil", "nil", "0"]
+                    children.append({
+                        "address": f"{child['address']}:{common['port']}",
+                        "domain": child["domain"],
+                        "latency_up": child.get("latency_up", 0)
+                    })
 
         # === Cloud ===
-        cloud = [cloud_node["address"] + ":" + str(common["port"]), cloud_node["domain"]]
+        cloud = {
+            "address": f"{cloud_node['address']}:{common['port']}",
+            "domain": cloud_node["domain"]
+        }
 
         # === Node Config ===
         node_config = {
             "node": {
-                "name": node["address"] + ":" + str(common["port"]),
+                "name": f"{node['address']}:{common['port']}",
                 "domain": node_domain,
                 "address": node["address"],
                 "port": common["port"],
                 "secret": common["secret"],
             },
             "hierarchy": {
-                "father": father,
                 "cloud": cloud,
-                "children": children,
+                "children": children
             },
-            "migrationManager": common["migrationManager"],
-            "lru": {
-                "size": common["lru"]["size"],
-                "safeLevel": common["lru"]["safeLevel"],
-                },
-            "redis": common["redis"],
         }
+
+        # Only include father if it exists
+        if father is not None:
+            node_config["hierarchy"]["father"] = father
+
+        # Include the rest of common, removing keys already used
+        common_copy = copy.deepcopy(common)
+        for k in ["port", "secret", "migrationManager", "lru", "redis"]:
+            common_copy.pop(k, None)
+        node_config.update(common_copy)
+        # Explicitly include these
+        node_config["migrationManager"] = common.get("migrationManager", {})
+        node_config["lru"] = common.get("lru", {})
+        node_config["redis"] = common.get("redis", {})
 
         # Save YAML
         output_file = os.path.join(output_dir, f"{node_name}.yaml")

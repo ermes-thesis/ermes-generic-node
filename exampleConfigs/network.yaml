@@ -51,3 +51,23 @@ common:
     db: 0
     password: eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
     protocol: 2
+
+  functionsCache:
+    binaryCache:
+      size: 100
+      ttl: 3600s
+      binDir: "./functionCache"
+    templateCache:
+      size: 100
+      ttl: 3600s
+    functionRegistry:
+      address: "localhost"
+      port: 8080
+    latestCacheTtl: 3600s
+
+  scheduler:
+    groupTokenProviderAddress: "localhost"
+    groupTokenProviderPort: 8081
+    wasmRuntime: "wasmtime"
+
+  groupTokenPublicKeyPath: "./keys/public.pem"

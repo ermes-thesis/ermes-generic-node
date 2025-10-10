@@ -134,12 +134,12 @@ func run(ctx context.Context, configPath string) error {
 	switch cfg.Scheduler.WasmRuntime {
 	case config.Wasmedge:
 		wasmExecutorPool = wasm.NewWasmedgeExecutorPool(10)
-		err = scheduler.RegisterHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{MetadataManager: metadataManager, ServerInfo: serverInfo, DataManager: dataManager})
+		err = scheduler.RegisterWasmedgeHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{MetadataManager: metadataManager, ServerInfo: serverInfo, DataManager: dataManager})
 	case config.Wasmtime:
 		wasmExecutorPool = wasm.NewWasmtimeExecutorPool(10)
 		err = scheduler.RegisterWasmtimeHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{MetadataManager: metadataManager, ServerInfo: serverInfo, DataManager: dataManager})
 	case config.Wazero:
-		wasmExecutorPool = wasm.NewWazeroExecutorPool(10)
+		wasmExecutorPool = wasm.NewWazeroExecutorPool(10, false)
 		err = scheduler.RegisterWazeroHostFns(wasmExecutorPool, scheduler.HostFnsDependencies{MetadataManager: metadataManager, ServerInfo: serverInfo, DataManager: dataManager})
 	}
 	if err != nil {

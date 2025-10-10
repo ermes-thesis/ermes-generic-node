@@ -22,7 +22,7 @@ type HostFnsDependencies struct {
 	ServerInfo      *info.ServerInfo
 }
 
-func RegisterHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDependencies) error {
+func RegisterWasmedgeHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDependencies) error {
 	fnOneParamOneReturnType := wasmedge.NewFunctionType(
 		[]*wasmedge.ValType{wasmedge.NewValTypeI32(), wasmedge.NewValTypeI32()},
 		[]*wasmedge.ValType{wasmedge.NewValTypeI32()},

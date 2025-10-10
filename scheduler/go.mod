@@ -3,6 +3,7 @@ module scheduler
 go 1.24.4
 
 require (
+	bou.ke/monkey v1.0.2
 	github.com/bytecodealliance/wasmtime-go/v37 v37.0.0
 	github.com/ermes-thesis/ermes-common/logger v0.0.0-00010101000000-000000000000
 	github.com/ermes-thesis/ermes-common/model v0.0.0-00010101000000-000000000000

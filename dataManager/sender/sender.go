@@ -70,11 +70,11 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		msg.IsLeader = false
 	}
 
-	s.server.SendGenericHTTPRequest(destination, repoPath, msg)
+	go s.server.SendGenericHTTPRequest(destination, repoPath, msg)
 }
 
 func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage, destination string) {
-	s.server.SendGenericHTTPRequest(destination, gossipPath, msg)
+	go s.server.SendGenericHTTPRequest(destination, gossipPath, msg)
 }
 
 func (s *MigrationManagerSenderImpl) GossipPath() string {
@@ -149,7 +149,7 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId
 func (s *CollectionDiscovererSenderImpl) NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage) {
 	s.logger.Println("SENDER", fmt.Sprintf("notify new collection %s to %s", newCollection.CollectionId, hostId), log.INFO)
 
-	s.server.SendGenericHTTPRequest(hostId, createCollectionPropagationPath, newCollection)
+	go s.server.SendGenericHTTPRequest(hostId, createCollectionPropagationPath, newCollection)
 }
 
 func (s *CollectionDiscovererSenderImpl) RemoveCollection(hostId string, collectionId string, senderIp string) {
@@ -160,19 +160,19 @@ func (s *CollectionDiscovererSenderImpl) RemoveCollection(hostId string, collect
 		SenderIp:     senderIp,
 	}
 
-	s.server.SendGenericHTTPRequest(hostId, removeCollectionPropagationPath, msg)
+	go s.server.SendGenericHTTPRequest(hostId, removeCollectionPropagationPath, msg)
 }
 
 func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages) {
 	s.logger.Println("SENDER", fmt.Sprintf("request collection update propagation to %s", hostId), log.INFO)
 
-	s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)
+	go s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)
 }
 
 func (s *CollectionDiscovererSenderImpl) PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages) {
 	s.logger.Println("SENDER", fmt.Sprintf("request collection group update propagation to %s", hostId), log.INFO)
 
-	s.server.SendGenericHTTPRequest(hostId, updateGroupPropagationPath, update)
+	go s.server.SendGenericHTTPRequest(hostId, updateGroupPropagationPath, update)
 }
 
 func (s *CollectionDiscovererSenderImpl) RemoteAccessPath() string {

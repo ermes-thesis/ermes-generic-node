@@ -133,10 +133,11 @@ func AccessRecords[T any](
 func UpdateRecord(
 	c *CollectionsDiscovererImp,
 	collectionId string,
-	dbFn func() error,
+	dbFn func(isStrong bool) error,
 	isInitiator bool,
 ) (map[string]struct{}, error) {
 	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
+	var isStrong bool = false
 	if !exists {
 		//can't verify if collection is strong or weak, so just notify father
 
@@ -149,7 +150,7 @@ func UpdateRecord(
 		return hosts, nil
 	}
 	if !collection.IsLocal() {
-		if collection.IsStrong() {
+		if collection.IsStrong() && isInitiator { //safety check
 			return nil, errors.New("strong collection can't be updated remotely")
 		}
 
@@ -167,10 +168,8 @@ func UpdateRecord(
 		if isInitiator && !collection.(*shared.StrongCollection).IsLeader { //safety check
 			return nil, errors.New("only leader can update strong collection")
 		}
-		if !isInitiator { //safety check
-			return nil, errors.New("strong collection can't be updated remotely")
-		}
 
+		isStrong = true
 		collection.(*shared.StrongCollection).ConsistencyClock++
 	}
 
@@ -182,7 +181,7 @@ func UpdateRecord(
 
 	addr := c.serverInfo.Father.HostName
 	hosts[addr] = struct{}{}
-	return hosts, dbFn() // update in local db
+	return hosts, dbFn(isStrong) // update in local db
 }
 
 func (c *CollectionsDiscovererImp) UpdateCollectionsRecorsAndPropogate(updates []messages.CollectionUpdateMessage, isInitiator bool, ignoredHostName string) error {
@@ -193,16 +192,18 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecorsAndPropogate(updates [
 
 	//write or delete in db and prepare messages for future propagation on other hosts
 	for _, update := range updates {
-		var dbFn func() error
+		var dbFn func(isStrong bool) error
 		if update.IsDelete {
-			dbFn = func() error {
+			dbFn = func(isStrong bool) error {
 				return c.dbInterface.DeleteRecords(update.CollectionId, update.RecordNames...)
 			}
 		} else {
-			dbFn = func() error {
+			dbFn = func(isStrong bool) error {
 				return c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues)
 			}
 		}
+
+		//check conflict for strong update
 
 		//write or delete in db
 		hosts, err := UpdateRecord(c, update.CollectionId, dbFn, isInitiator)
@@ -239,27 +240,16 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropogate(updates [
 	c.collectionsPartialView.Mutex.Lock()
 
 	for _, update := range updates {
-		var dbFn func() error
+		var dbFn func(isStrong bool) error
 		if update.IsDelete {
-			dbFn = func() error {
+			dbFn = func(isStrong bool) error {
 				return c.dbInterface.RemoveGroups(update.CollectionId, update.GroupNames...)
 			}
 		} else {
-			dbFn = func() error {
+			dbFn = func(isStrong bool) error {
 				return c.dbInterface.AddGroups(update.CollectionId, update.GroupNames...)
 			}
 		}
-		//check for conflicts  -> TODO: same time and id for put and groups?
-		/*if !isInitiator && !c.checkUpdateConflicts(update.CollectionId, update) {
-			continue //do not apply and propagate update
-		}*/
-
-		//TODO remove
-		collection, exists := c.collectionsPartialView.KnownCollections[update.CollectionId]
-		if exists && !collection.IsStrong() {
-			return errors.New("unimplemented ")
-		}
-		//TODO end remove
 
 		//write or delete in db
 		hosts, err := UpdateRecord(c, update.CollectionId, dbFn, isInitiator)

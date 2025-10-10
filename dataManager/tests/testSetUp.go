@@ -5,12 +5,12 @@ package tests
 
 import (
 	"config"
-	lru "dataManager/lru"
+	"dataManager/lru"
 	shared "dataManager/shared"
 	"db"
-	mockDb "db/mocks"
+	mockDb "mocks/db"
+	mockServer "mocks/server"
 	"server/info"
-	mockServer "server/mocks"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -51,7 +51,7 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 
 	db := mockDb.NewGenericDB(t)
 	db.On("GetCollectionMemoryUsage", mock.AnythingOfType("string")).Return(uint64(10), nil).Maybe()
-	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string")).Return(nil).Maybe()
+	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("uint64")).Return(nil).Maybe()
 
 	server := mockServer.NewServerType(t)
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
@@ -99,8 +99,8 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	db.On("GetCollectionMemoryUsage", "repoId4").Return(uint64(5), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", "repoId5").Return(uint64(10), nil).Maybe()
 	db.On("DeleteCollection", mock.AnythingOfType("string")).Return(nil).Maybe()
-	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string")).Return(nil).Maybe()
-	db.On("GetCollection", mock.AnythingOfType("string")).Return(map[string]string{"a": "1", "b": "2"}, []string{"a", "b"}, nil).Maybe()
+	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("uint64")).Return(nil).Maybe()
+	db.On("GetCollection", mock.AnythingOfType("string")).Return(map[string]string{"a": "1", "b": "2"}, []string{"a", "b"}, uint64(0), nil).Maybe()
 
 	server := mockServer.NewServerType(t)
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()

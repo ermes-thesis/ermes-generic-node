@@ -9,6 +9,7 @@ import (
 type RemoteAccessRequest struct {
 	CollectionId string   `json:"collectionId"`
 	RecordNames  []string `json:"recordNames"`
+	Groups       []string `json:"groups"`
 }
 
 type RemoteAccessResponse struct {
@@ -19,6 +20,7 @@ type RemoteUpdateRequest struct {
 	CollectionId string   `json:"collectionId"`
 	RecordNames  []string `json:"recordNames"`
 	Record       []string `json:"records"`
+	Groups       []string `json:"groups"`
 	SenderIp     string   `json:"senderIp"`
 	IsDelete     bool     `json:"isDelete"`
 }
@@ -42,7 +44,10 @@ type CollectionUpdateMessage struct {
 	IsDelete     bool     `json:"isDelete"`
 }
 
-type CollectionUpdateMessages []CollectionUpdateMessage
+type CollectionUpdateMessages struct {
+	Messages []CollectionUpdateMessage
+	Groups   []string
+}
 
 func ToCollectionUpdateMessages(
 	updates []CollectionUpdate,
@@ -73,30 +78,25 @@ func ToCollectionUpdateMessages(
 type CollectionGroupUpdate struct {
 	CollectionId string   `json:"collectionId"`
 	GroupNames   []string `json:"recordNames"`
-	IsDelete     bool     `json:"isDelete"`
+	Sequence     uint64   `json:"sequence"`
 }
 
 type CollectionGroupUpdateMessage struct {
 	CollectionId string   `json:"collectionId"`
 	GroupNames   []string `json:"recordNames"`
-	IsDelete     bool     `json:"isDelete"`
-	Time         int64    `json:"time"`
-	UpdateHostIp string   `json:"updateHostIp"`
+	Sequence     uint64   `json:"sequence"`
 	SenderIp     string   `json:"senderIp"`
 }
 
-func ToCollectionGroupUpdateMessages(updates []CollectionGroupUpdate, updateHostIp string, senderIp string) []CollectionGroupUpdateMessage {
+func ToCollectionGroupUpdateMessages(updates []CollectionGroupUpdate, senderIp string) []CollectionGroupUpdateMessage {
 	result := make([]CollectionGroupUpdateMessage, 0, len(updates))
-	time := time.Now().Unix()
 
 	for _, u := range updates {
 		msg := CollectionGroupUpdateMessage{
 			CollectionId: u.CollectionId,
 			GroupNames:   u.GroupNames,
-			Time:         time,
-			UpdateHostIp: updateHostIp,
+			Sequence:     u.Sequence,
 			SenderIp:     senderIp,
-			IsDelete:     u.IsDelete,
 		}
 		result = append(result, msg)
 	}
@@ -115,6 +115,7 @@ type NewCollectionMessage struct {
 }
 
 type RemoveCollectionMessage struct {
-	CollectionId string `json:"collectionId"`
-	SenderIp     string `json:"senderIp"`
+	CollectionId string   `json:"collectionId"`
+	SenderIp     string   `json:"senderIp"`
+	Groups       []string `json:"groups"`
 }

@@ -4,7 +4,7 @@ on: [ push, pull_request, workflow_dispatch ]
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     permissions:
       contents: write
       issues: read
@@ -15,37 +15,50 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          path: 'ermes-generic-node'
+
+      - name: Checkout wasm pool
+        uses: actions/checkout@v4
+        with:
+          repository: 'ermes-thesis/ermes-common'
+          token: '${{ secrets.READ_TOKEN }}'
+          path: 'ermes-common'
+
+      - name: Install WasmEdge
+        run: curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | sudo bash -s -- -p /usr/local
+
+      - name: Verify WasmEdge installation
+        run: wasmedge --version
 
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: "1.24.4"
-          cache-dependency-path: go.sum
+          cache-dependency-path: "**/go.sum"
 
       - name: Install mockery
         run: go install github.com/vektra/mockery/v3@latest
 
       - name: Generate mocks
         run: |
-          cd metadataManager
+          cd ermes-generic-node
           mockery
-          cd ..
-          cd db
-          mockery
-          cd ..
 
       - name: Install Go CTRF Reporter
         run: go install github.com/ctrf-io/go-ctrf-json-reporter/cmd/go-ctrf-json-reporter@latest
 
       - name: Run tests
-        run: go list -f '{{.Dir}}' -m | xargs -I {} go test -json {}/... --tags test | go-ctrf-json-reporter -output ctrf-report.json -v
+        run: |
+          cd ermes-generic-node
+          go list -f '{{.Dir}}' -m | xargs -I {} go test -json {}/... --tags test | go-ctrf-json-reporter -output ctrf-report.json -v
 
       - name: Publish Test Report
         uses: ctrf-io/github-test-reporter@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          report-path: './ctrf-report.json'
+          report-path: 'ermes-generic-node/ctrf-report.json'
           pull-request: true
         #          status-check: true
         #          status-check-name: 'Test Reporter Results'

@@ -2,7 +2,6 @@ package dataManagerShared
 
 import (
 	config "config"
-	log "logger"
 	"sync"
 )
 
@@ -77,7 +76,7 @@ type CollectionPartialView struct {
 	KnownCollections map[string]Collection //maps collectionID to info related to that collection
 }
 
-func (c *CollectionPartialView) RestoreInfoFromSettings(configData []config.CollectionSettingsInfo, logger log.Logger) error {
+func (c *CollectionPartialView) RestoreInfoFromSettings(configData []config.CollectionSettingsInfo) error {
 	//sync
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()

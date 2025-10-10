@@ -29,9 +29,13 @@ type ServerInfo struct {
 	Children []Node
 	// The secret is the private header value with which the ermes nodes can communicate.
 	// For privacy reasons it must not be exposed to the user.
-	Secret string
+	Secret           string
+	MiddlewareSecret string
 
 	CloudNode *Node
+
+	// Address:port of the Group Token Provider
+	GroupTokenProviderHostName string
 }
 
 type Node struct {
@@ -69,11 +73,12 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 	}
 
 	serverinfo := &ServerInfo{
-		HostName:       hostname,
-		Address:        address,
-		Port:           port,
-		MetadataDomain: domain,
-		Secret:         config.Node.Secret, // For the moment leave it hardcoded
+		HostName:         hostname,
+		Address:          address,
+		Port:             port,
+		MetadataDomain:   domain,
+		Secret:           config.Node.Secret,
+		MiddlewareSecret: config.Node.MiddlewareSecret,
 		CloudNode: &Node{
 			HostName:       cloudNode,
 			MetadataDomain: cloudNodeDomain,
@@ -83,7 +88,8 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 			MetadataDomain: parentDomain,
 			Latency:        parentLatency,
 		},
-		Children: children,
+		Children:                   children,
+		GroupTokenProviderHostName: config.Scheduler.GroupTokenProviderAddress + ":" + config.Scheduler.GroupTokenProviderPort,
 	}
 
 	return serverinfo, nil

@@ -21,7 +21,7 @@ type StrongCollection struct {
 	collectionState  CollectionState
 	IsLeader         bool
 	LeaderId         string
-	ConsistencyClock uint
+	ConsistencyClock uint64
 }
 
 func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLeader bool) Collection {

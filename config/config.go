@@ -1,9 +1,13 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"strings"
+	"time"
 
+	"github.com/ermes-thesis/ermes-common/caches"
 	"gopkg.in/yaml.v3" //go get gopkg.in/yaml.v3
 )
 
@@ -14,6 +18,8 @@ type Config struct {
 	MigrationManager MigrationManagerConfig   `yaml:"migrationManager"`
 	Redis            RedisConfig              `yaml:"redis"`
 	Lru              LruConfig                `yaml:"lru"`
+	FunctionsCache   FunctionsCacheConfig     `yaml:"functionsCache"`
+	Scheduler        SchedulerConfig          `yaml:"scheduler"`
 	Collections      []CollectionSettingsInfo `yaml:"collections"`
 }
 
@@ -38,12 +44,35 @@ type RedisConfig struct {
 	Protocol int    `yaml:"protocol"`
 }
 
+type FunctionsCacheConfig struct {
+	BinaryCache      caches.MetadataBinaryCacheConfig `yaml:"binaryCache"`
+	TemplateCache    TemplatesCacheConfig             `yaml:"templateCache"`
+	FunctionRegistry FunctionRegistryConfig           `yaml:"functionRegistry"`
+	LatestCacheTtl   time.Duration                    `yaml:"latestCacheTtl"`
+}
+
+type TemplatesCacheConfig struct {
+	Size int           `yaml:"size"`
+	Ttl  time.Duration `yaml:"ttl"`
+}
+
 type NodeConfig struct {
-	Name    string `yaml:"name"`
-	Domain  string `yaml:"domain"`
+	Name             string `yaml:"name"`
+	Domain           string `yaml:"domain"`
+	Address          string `yaml:"address"`
+	Port             string `yaml:"port"`
+	Secret           string `yaml:"secret"`
+	MiddlewareSecret string `yaml:"middlewareSecret"`
+}
+
+type FunctionRegistryConfig struct {
 	Address string `yaml:"address"`
 	Port    string `yaml:"port"`
-	Secret  string `yaml:"secret"`
+}
+type SchedulerConfig struct {
+	GroupTokenProviderAddress string            `yaml:"groupTokenProviderAddress"`
+	GroupTokenProviderPort    string            `yaml:"groupTokenProviderPort"`
+	WasmRuntime               ChosenWasmRuntime `yaml:"wasmRuntime"`
 }
 
 // The father should look something like:
@@ -87,7 +116,46 @@ func LoadConfig(filename string) Config {
 	}
 
 	return config
-	// Stampa i valori
+}
+
+type ChosenWasmRuntime int
+
+const (
+	Wasmedge ChosenWasmRuntime = iota
+	Wasmtime
+	Wazero
+)
+
+func (m *ChosenWasmRuntime) UnmarshalYAML(value *yaml.Node) error {
+	var s string
+	if err := value.Decode(&s); err != nil {
+		return err
+	}
+	switch strings.ToLower(s) {
+	case "wasmedge":
+		*m = Wasmedge
+	case "wasmtime":
+		*m = Wasmtime
+	case "wazero":
+		*m = Wazero
+	default:
+		return fmt.Errorf("unknown chosen wasm runtime: %s", s)
+	}
+
+	return nil
+}
+
+func (m ChosenWasmRuntime) String() string {
+	switch m {
+	case Wasmedge:
+		return "wasmedge"
+	case Wasmtime:
+		return "wasmtime"
+	case Wazero:
+		return "wazero"
+	default:
+		return "unknown"
+	}
 }
 
 type CollectionSettingsInfo struct {

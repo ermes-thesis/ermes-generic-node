@@ -9,24 +9,33 @@ import (
 	migrationManager "dataManager/migrationManager"
 	penality "dataManager/migrationManager/penalityFunction"
 	"fmt"
-	"io"
-	logger "logger"
-	"os"
 	"testing"
 	"time"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/mock"
 )
 
+func createNewLogger(t *testing.T) *logger.Logger {
+	log, err := logger.NewLogger(logger.Config{
+		Level:  zerolog.WarnLevel,
+		Format: "text",
+	})
+	require.NoError(t, err)
+	return log
+}
+
 func TestFromRemoteToLocalCollection(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
-	var loggerFile io.Writer = os.Stdout //TODO replace with file
-	var logger = logger.NewLogger(logger.ERROR, &loggerFile)
 
-	mig := migrationManager.GetMigrationManagerInstance(*logger)
-	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
-	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
-	clDiscovererImp.Init(collections, serverinfo, ser, *logger, db)
+	log := createNewLogger(t)
+	mig := migrationManager.GetMigrationManagerInstance()
+	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
+	clDiscovererImp.Init(collections, serverinfo, ser, db, log)
 	mig.ManageNewRequest("repoId", "childName", true, 3)
 
 	b, c, d := clDiscovererImp.IsCollectionLocallyPresent("repoId", 0)
@@ -35,7 +44,7 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 		t.Fatal("unexpected non null collection")
 	}
 
-	mig.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 13, false, "host")
+	mig.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 0, 13, false, "host")
 	b, c, d = clDiscovererImp.IsCollectionLocallyPresent("repoId", 0)
 	if c == nil || d != nil {
 		t.Fatal("unexpected null collection")
@@ -52,14 +61,12 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 
 func TestIterationModule(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := CycleTestSetUp(t)
-	var loggerFile io.Writer = os.Stdout //TODO replace with file
-	var logger = logger.NewLogger(logger.INFO, &loggerFile)
-	logger.SetAllowList([]string{"SENDER"}) // , "DEFAULT-STRONG-POLICY"
+	log := createNewLogger(t)
 
-	mig := migrationManager.GetMigrationManagerInstance(*logger)
-	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, *logger)
-	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
-	clDiscovererImp.Init(collections, serverinfo, ser, *logger, db)
+	mig := migrationManager.GetMigrationManagerInstance()
+	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
+	clDiscovererImp.Init(collections, serverinfo, ser, db, log)
 
 	// SET INITIAL STATE
 	fmt.Println("SET INITIAL STATE")
@@ -99,7 +106,7 @@ func TestIterationModule(t *testing.T) {
 	child2Gossip1 := gossip.NewChildStateMessage("2222", 0.10)
 	mig.ManageGossipMessage(child2Gossip1)
 	// decisionState
-	mig.NewCollectionReceived("repoId3", true, false, make(map[string]string), []string{}, 1, false, "host")
+	mig.NewCollectionReceived("repoId3", true, false, make(map[string]string), []string{}, 0, 1, false, "host")
 
 	// verify first cycle
 	time.Sleep(1 * time.Second)
@@ -133,8 +140,8 @@ func TestIterationModule(t *testing.T) {
 	mig.ManageGossipMessage(child2Gossip1)
 
 	// decisionState
-	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 4, false, "host")
-	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 4, false, "host")
+	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 0, 4, false, "host")
+	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 0, 4, false, "host")
 
 	// verify second cycle
 	time.Sleep(1 * time.Second)
@@ -174,7 +181,7 @@ func TestIterationModule(t *testing.T) {
 	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/gossip", mock.Anything).Return(200, nil).Times(3)
 
 	// idle
-	mig.NewCollectionReceived("repoId5", true, true, make(map[string]string), []string{}, 10, false, "host")
+	mig.NewCollectionReceived("repoId5", true, true, make(map[string]string), []string{}, 0, 10, false, "host")
 
 	// verify fourth cycle p1
 	time.Sleep(1 * time.Second)

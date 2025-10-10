@@ -5,27 +5,27 @@ import (
 	"dataManager/migrationManager"
 	shared "dataManager/shared"
 	"encoding/json"
+	"errors"
 	"io"
-	log "logger"
 	"net/http"
 )
 
-func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess(logger log.Logger) http.Handler {
+func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("HTTP-REQ", "New remote access request received through HTTP request", log.INFO)
+		c.log.Info("HTTP-REQ, New remote access request received through HTTP request")
 
 		defer r.Body.Close()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			c.log.Error("HTTP-REQ, Error reading request body")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		var msg gossip.RemoteAccessRequest
 		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
-			logger.Println("HTTP-REQ", "Error parsing remote access request", log.ERROR)
+			c.log.Error("HTTP-REQ, Error parsing remote access request")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -38,20 +38,55 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess(logger log.Logger)
 			return
 		} else if len(msg.RecordNames) == 1 {
 			dbFn := func() (interface{}, error) {
+				authorized, err := c.dbInterface.IsInGroups(msg.CollectionId, msg.Groups...)
+				if err != nil {
+					return nil, err
+				}
+				if !authorized {
+					return nil, &shared.UnauthorizedError{}
+				}
+
 				return c.dbInterface.GetRecord(msg.CollectionId, msg.RecordNames[0])
 			}
 			remoteFn := func(addr string) (interface{}, error) {
-				return c.WeakCollectionRemoteRecordAccess(addr, msg.CollectionId, msg.RecordNames[0])
+				return c.WeakCollectionRemoteRecordAccess(addr, msg.CollectionId, msg.Groups, msg.RecordNames[0])
 			}
 			res, dbErr = AccessRecords(c, msg.CollectionId, dbFn, remoteFn)
+			if dbErr != nil {
+				var unAuthErr *shared.UnauthorizedError
+				if errors.As(dbErr, &unAuthErr) {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 		} else {
 			dbFn := func() (interface{}, error) {
+				authorized, err := c.dbInterface.IsInGroups(msg.CollectionId, msg.Groups...)
+				if err != nil {
+					return nil, err
+				}
+				if !authorized {
+					return nil, &shared.UnauthorizedError{}
+				}
+
 				return c.dbInterface.GetRecords(msg.CollectionId, msg.RecordNames...)
 			}
 			remoteFn := func(addr string) (interface{}, error) {
-				return c.WeakCollectionRemoteRecordsAccess(addr, msg.CollectionId, msg.RecordNames...)
+				return c.WeakCollectionRemoteRecordsAccess(addr, msg.CollectionId, msg.Groups, msg.RecordNames...)
 			}
 			res, dbErr = AccessRecords(c, msg.CollectionId, dbFn, remoteFn)
+			if dbErr != nil {
+				var unAuthErr *shared.UnauthorizedError
+				if errors.As(dbErr, &unAuthErr) {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+
 		}
 
 		resp := gossip.RemoteAccessResponse{
@@ -62,7 +97,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess(logger log.Logger)
 		w.Header().Set("Content-Type", "application/json")
 
 		if dbErr != nil || jsonErr != nil {
-			logger.Println("HTTP-REQ", "Error accessing collection: "+dbErr.Error(), log.ERROR)
+			c.log.Error("HTTP-REQ, Error accessing collection: " + dbErr.Error())
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
@@ -73,74 +108,74 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess(logger log.Logger)
 	})
 }
 
-func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation(logger log.Logger) http.Handler {
+func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("HTTP-REQ", "New update propagation request received through HTTP request", log.INFO)
+		c.log.Info("HTTP-REQ, New update propagation request received through HTTP request")
 
 		defer r.Body.Close()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			c.log.Error("HTTP-REQ, Error reading request body")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		var msg gossip.CollectionUpdateMessages
 		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
-			logger.Println("HTTP-REQ", "Error parsing remote propagation request", log.ERROR)
+			c.log.Error("HTTP-REQ: Error parsing remote propagation request")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		w.WriteHeader(http.StatusOK) //response
 
-		c.UpdateCollectionsRecorsAndPropogate(msg, false, msg[0].SenderIp)
+		c.UpdateCollectionsRecordsAndPropagate(msg.Messages, msg.Groups, false, msg.Messages[0].SenderIp)
 	})
 }
 
-func (c *CollectionsDiscovererImp) handleIncomingUpdateGroupPropagation(logger log.Logger) http.Handler {
+func (c *CollectionsDiscovererImp) handleIncomingUpdateGroupPropagation() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("HTTP-REQ", "New group update propagation request received through HTTP request", log.INFO)
+		c.log.Info("HTTP-REQ", "New group update propagation request received through HTTP request")
 
 		defer r.Body.Close()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			c.log.Error("HTTP-REQ, Error reading request body")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		var msg gossip.CollectionGroupUpdateMessages
 		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
-			logger.Println("HTTP-REQ", "Error parsing remote group propagation request", log.ERROR)
+			c.log.Error("HTTP-REQ", "Error parsing remote group propagation request")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		w.WriteHeader(http.StatusOK) //response
 
-		c.UpdateCollectionsGroupsAndPropogate(msg, false, msg[0].SenderIp)
+		c.UpdateCollectionsGroupsAndPropagate(msg, false, msg[0].SenderIp)
 	})
 }
 
-func (c *CollectionsDiscovererImp) handleIncomingNewCollection(logger log.Logger) http.Handler {
+func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("HTTP-REQ", "New collection creation request received through HTTP request", log.INFO)
+		c.log.Info("HTTP-REQ: New collection creation request received through HTTP request")
 
 		defer r.Body.Close()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			c.log.Error("HTTP-REQ: Error reading request body")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		var msg gossip.NewCollectionMessage
 		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
-			logger.Println("HTTP-REQ", "Error parsing new collection message", log.ERROR)
+			c.log.Error("HTTP-REQ: Error parsing new collection message")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -153,7 +188,7 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection(logger log.Logger
 
 		_, exists := c.collectionsPartialView.KnownCollections[collectionId]
 		if exists {
-			logger.Println("HTTP-REQ", "Collection already exists", log.ERROR)
+			c.log.Error("HTTP-REQ: Collection already exists")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -177,22 +212,22 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection(logger log.Logger
 	})
 }
 
-func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection(logger log.Logger) http.Handler {
+func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		logger.Println("HTTP-REQ", "New collection removal request received through HTTP request", log.INFO)
+		c.log.Info("HTTP-REQ: New collection removal request received through HTTP request")
 
 		defer r.Body.Close()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
-			logger.Println("HTTP-REQ", "Error reading request body", log.ERROR)
+			c.log.Error("HTTP-REQ: Error reading request body")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
 
 		var msg gossip.RemoveCollectionMessage
 		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
-			logger.Println("HTTP-REQ", "Error parsing new collection message", log.ERROR)
+			c.log.Error("HTTP-REQ", "Error parsing new collection message")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
@@ -201,9 +236,9 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection(logger log.Log
 		w.WriteHeader(http.StatusOK)
 
 		//async
-		dbErr := c.RemoveCollectionAndProgate(collectionId, migrationManager.GetMigrationManagerInstance(c.logger), false, senderIp)
+		dbErr := c.RemoveCollectionAndPropagate(collectionId, migrationManager.GetMigrationManagerInstance(), msg.Groups, false, senderIp)
 		if dbErr != nil {
-			logger.Println("HTTP-REQ", "Error removing collection: "+dbErr.Error(), log.ERROR)
+			c.log.Error("HTTP-REQ", "Error removing collection: "+dbErr.Error())
 		}
 	})
 }

@@ -1,0 +1,36 @@
+name: ermes-generic-node
+
+services:
+  wasmedge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ..:/workspaces/ermes-generic-node:cached
+      - ../../ermes-common:/workspaces/ermes-common:cached
+      - gocache:/go/pkg/mod  # Go module cache persistente
+      - gocachebin:/root/.cache/go-build # cache di compilazione
+    cap_add:
+      - SYS_PTRACE
+    security_opt:
+      - seccomp:unconfined
+    working_dir: /workspaces/ermes-generic-node
+    command: sleep infinity
+
+  redis:
+    image: redis/redis-stack:latest
+    ports:
+      - '6379:6379'
+      - '8001:8001'
+    command: redis-stack-server --save 20 1 --loglevel warning --requirepass eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+    volumes:
+      - redis:/data
+
+volumes:
+  gocache:
+    driver: local
+  gocachebin:
+    driver: local
+  redis:
+    driver: local

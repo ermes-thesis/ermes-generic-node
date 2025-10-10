@@ -1,5 +1,7 @@
 package dataManagerShared
 
+import "sync"
+
 // Collection Info
 type Collection interface {
 	CollectionId() string //duplicated?
@@ -21,6 +23,7 @@ type StrongCollection struct {
 	collectionState  CollectionState
 	IsLeader         bool
 	LeaderId         string
+	WriteMutex       *sync.Mutex
 	ConsistencyClock uint64
 }
 
@@ -31,12 +34,14 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 			collectionId:    collectionId,
 			collectionState: NewRemoteCollection(hosts),
 			IsLeader:        false,
+			WriteMutex:      &sync.Mutex{},
 		}
 	}
 	return &StrongCollection{
 		collectionId:    collectionId,
 		collectionState: NewLocalCollection(size, hosts),
 		IsLeader:        isLeader,
+		WriteMutex:      &sync.Mutex{},
 	}
 }
 
@@ -137,6 +142,6 @@ func (w *WeakCollection) HostsId() map[string]struct{} {
 	return w.collectionState.HostsId()
 }
 
-func (s *WeakCollection) RemoveHost(hostId string) {
-	s.collectionState.RemoveHost(hostId)
+func (w *WeakCollection) RemoveHost(hostId string) {
+	w.collectionState.RemoveHost(hostId)
 }

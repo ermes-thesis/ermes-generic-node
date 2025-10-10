@@ -165,6 +165,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 	// Route based on collection analysis
 	// Priority: Sequential > Local Eventual > Remote Eventual
 	if sequentialCollection != nil {
+
 		// Sequential collection present - check if it is requested a write or read access
 		functionMetadata, err := s.cache.GetMetadata(functionName, functionVersion)
 		if err != nil {
@@ -181,6 +182,10 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 			// If Sequential collection is present, and it's the leader execute locally.
 			// If Sequential collection is present, and the function needs only to read it, execute locally
 			if sequentialCollection.IsLeader || !functionMetadata.StrongCollWriteAccess {
+				if functionMetadata.StrongCollWriteAccess {
+					sequentialCollection.WriteMutex.Lock()
+					defer sequentialCollection.WriteMutex.Unlock()
+				}
 				return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId, sequentialCollection.CollectionId())
 			}
 

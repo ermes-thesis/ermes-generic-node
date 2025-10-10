@@ -141,6 +141,7 @@ func UpdateRecord(
 	collectionId string,
 	dbFn func(isStrong bool) error,
 	isInitiator bool,
+	updateMessage messages.UpdateMessage,
 ) (map[string]struct{}, error) {
 	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
 	var isStrong bool = false
@@ -175,8 +176,15 @@ func UpdateRecord(
 			return nil, errors.New("only leader can update strong collection")
 		}
 
+		_, isCollectionUpdate := updateMessage.(*messages.CollectionUpdateMessage)
+		if isInitiator && isCollectionUpdate {
+			collection.(*shared.StrongCollection).ConsistencyClock++
+			updateMessage.SetSequence(collection.(*shared.StrongCollection).ConsistencyClock)
+		} else if !isInitiator && isCollectionUpdate && collection.(*shared.StrongCollection).ConsistencyClock > updateMessage.GetSequence() {
+			return nil, nil //ignore outdated update
+		}
+
 		isStrong = true
-		collection.(*shared.StrongCollection).ConsistencyClock++
 	}
 
 	//always notify to father
@@ -236,10 +244,8 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 			}
 		}
 
-		//check conflict for strong update
-
 		//write or delete in db
-		hosts, err := UpdateRecord(c, update.CollectionId, dbFn, isInitiator)
+		hosts, err := UpdateRecord(c, update.CollectionId, dbFn, isInitiator, &update)
 		if err != nil {
 			c.collectionsPartialView.Mutex.Unlock() // lock release
 			return err
@@ -273,11 +279,6 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 			return c.dbInterface.SetGroups(update.CollectionId, update.Sequence, update.GroupNames...)
 		}
 
-		//check for conflicts  -> TODO: same time and id for put and groups?
-		/*if !isInitiator && !c.checkUpdateConflicts(update.CollectionId, update) {
-			continue //do not apply and propagate update
-		}*/
-
 		//TODO remove
 		collection, exists := c.collectionsPartialView.KnownCollections[update.CollectionId]
 		if exists && !collection.IsStrong() {
@@ -286,7 +287,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 		//TODO end remove
 
 		//write or delete in db
-		hosts, err := UpdateRecord(c, update.CollectionId, dbFn, isInitiator)
+		hosts, err := UpdateRecord(c, update.CollectionId, dbFn, isInitiator, &update)
 		if err != nil {
 			c.collectionsPartialView.Mutex.Unlock() // lock release
 			return err

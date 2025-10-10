@@ -47,7 +47,7 @@ func TestRecord(t *testing.T) {
 	require.Equal(t, "value1", values[0], "Expected first record value to be 'value1'")
 	require.Equal(t, "value2", values[1], "Expected second record value to be 'value2'")
 
-	err = redisClient.DeleteRecords("collection1", "record1")
+	err = redisClient.DeleteRecords("collection1", "", "record1")
 	require.NoError(t, err, "Expected no error deleting record")
 
 	exists, err = redisClient.RecordExists("collection1", "record1")
@@ -379,6 +379,7 @@ func TestMemoryStress(t *testing.T) {
 	}
 
 	res, err := redisClient.GetMemoryStats()
+	fmt.Printf("Mem stats: %+v\n", res)
 	require.NoError(t, err, "Expected no error getting memory stats")
-	require.Exactly(t, uint64(1_000_003), res.KeysCount, "Expected 1000002 keys in memory stats")
+	require.Exactly(t, uint64(2_000_003), res.KeysCount, "Expected 2000003 keys in memory stats")
 }

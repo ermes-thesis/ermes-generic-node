@@ -5,7 +5,6 @@ package info
 import (
 	"config"
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -55,44 +54,46 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 	address := config.Node.Address
 	port := config.Node.Port // All the processes are open on the same port
 	domain := config.Node.Domain
-	parent := config.Hierarchy.Father[0]
-	parentDomain := config.Hierarchy.Father[1]
-	parentLatency, _ := strconv.ParseUint(config.Hierarchy.Father[2], 10, 64)
-	cloudNode := config.Hierarchy.Cloud[0]
-	cloudNodeDomain := config.Hierarchy.Cloud[1]
-	childrenArgs := config.Hierarchy.Children
-
-	children := make([]Node, len(childrenArgs)/3)
-	for i := 0; i < len(children); i++ {
-		childLatency, _ := strconv.ParseUint(childrenArgs[3*i+2], 10, 64)
-		children[i] = Node{
-			HostName:       childrenArgs[3*i],
-			MetadataDomain: childrenArgs[3*i+1],
-			Latency:        childLatency,
+	var father *Node = nil
+	var cloudNode *Node = nil
+	if config.Hierarchy.Father != nil {
+		father = &Node{
+			HostName:       config.Hierarchy.Father.Address,
+			MetadataDomain: config.Hierarchy.Father.Domain,
+			Latency:        config.Hierarchy.Father.LatencyUp,
+		}
+	}
+	if config.Hierarchy.Cloud != nil {
+		cloudNode = &Node{
+			HostName:       config.Hierarchy.Cloud.Address,
+			MetadataDomain: config.Hierarchy.Cloud.Domain,
+			Latency:        config.Hierarchy.Cloud.LatencyUp,
 		}
 	}
 
-	serverinfo := &ServerInfo{
-		HostName:         hostname,
-		Address:          address,
-		Port:             port,
-		MetadataDomain:   domain,
-		Secret:           config.Node.Secret,
-		MiddlewareSecret: config.Node.MiddlewareSecret,
-		CloudNode: &Node{
-			HostName:       cloudNode,
-			MetadataDomain: cloudNodeDomain,
-		},
-		Father: &Node{
-			HostName:       parent,
-			MetadataDomain: parentDomain,
-			Latency:        parentLatency,
-		},
+	children := make([]Node, len(config.Hierarchy.Children))
+	for i, child := range config.Hierarchy.Children {
+		children[i] = Node{
+			HostName:       child.Address,
+			MetadataDomain: child.Domain,
+			Latency:        child.LatencyUp,
+		}
+	}
+
+	serverInfo := &ServerInfo{
+		HostName:                   hostname,
+		Address:                    address,
+		Port:                       port,
+		MetadataDomain:             domain,
+		Secret:                     config.Node.Secret,
+		MiddlewareSecret:           config.Node.MiddlewareSecret,
+		CloudNode:                  cloudNode,
+		Father:                     father,
 		Children:                   children,
 		GroupTokenProviderHostName: config.Scheduler.GroupTokenProviderAddress + ":" + config.Scheduler.GroupTokenProviderPort,
 	}
 
-	return serverinfo, nil
+	return serverInfo, nil
 }
 
 // StringifyInfo returns a pretty-formatted string of the input ServerInfo.

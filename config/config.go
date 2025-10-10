@@ -76,33 +76,16 @@ type SchedulerConfig struct {
 	WasmRuntime               ChosenWasmRuntime `yaml:"wasmRuntime"`
 }
 
-// The father should look something like:
-//
-//	father:
-//		fatherName
-//		fatherDomain
-//		fatherLatency
-//
-// Children will be:
-//
-//	children:
-//		child1Name
-//		child1Domain
-//		child1Latency
-//		child2Name
-//		child2Domain
-//		child2Latency
-//		...
-//
-// In case of no children or no father:
-//
-// children:
-//
-//	nil
 type HierarchyConfig struct {
-	Father   []string `yaml:"father"`
-	Cloud    []string `yaml:"cloud"`
-	Children []string `yaml:"children"`
+	Father   *HierarchyNodeConfig  `yaml:"father,omitempty"`
+	Cloud    *HierarchyNodeConfig  `yaml:"cloud,omitempty"`
+	Children []HierarchyNodeConfig `yaml:"children"`
+}
+
+type HierarchyNodeConfig struct {
+	Address   string `yaml:"address"`
+	Domain    string `yaml:"domain"`
+	LatencyUp uint64 `yaml:"latency_up"`
 }
 
 func LoadConfig(filename string) Config {

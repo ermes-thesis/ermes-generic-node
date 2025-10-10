@@ -76,6 +76,14 @@ func run(ctx context.Context, configPath string) error {
 		return fmt.Errorf("failed to create scheduler logger: %v", err)
 	}
 
+	defer generalLog.Close()
+	defer httpLog.Close()
+	defer metadataLog.Close()
+	defer redisLog.Close()
+	defer cacheLog.Close()
+	defer dataLog.Close()
+	defer schedLog.Close()
+
 	cfg := config.LoadConfig(configPath)
 	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](cfg.Lru.Size) //TODO: replace with redis size
 

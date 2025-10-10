@@ -27,6 +27,12 @@ type RemoteUpdateRequest struct {
 
 // put and delete records
 
+type UpdateMessage interface {
+	GetSequence() uint64
+	SetSequence(seq uint64)
+	IncrementSequence()
+}
+
 type CollectionUpdate struct {
 	CollectionId string   `json:"collectionId"`
 	RecordNames  []string `json:"recordNames"`
@@ -42,6 +48,19 @@ type CollectionUpdateMessage struct {
 	UpdateHostIp string   `json:"updateHostIp"`
 	SenderIp     string   `json:"senderIp"`
 	IsDelete     bool     `json:"isDelete"`
+	Sequence     uint64   `json:"sequence"`
+}
+
+func (c *CollectionUpdateMessage) GetSequence() uint64 {
+	return c.Sequence
+}
+
+func (c *CollectionUpdateMessage) SetSequence(seq uint64) {
+	c.Sequence = seq
+}
+
+func (c *CollectionUpdateMessage) IncrementSequence() {
+	c.Sequence++
 }
 
 type CollectionUpdateMessages struct {
@@ -102,6 +121,16 @@ func ToCollectionGroupUpdateMessages(updates []CollectionGroupUpdate, senderIp s
 	}
 
 	return result
+}
+
+func (c *CollectionGroupUpdateMessage) GetSequence() uint64 {
+	return 0
+}
+
+func (c *CollectionGroupUpdateMessage) SetSequence(seq uint64) { //do nothing
+}
+
+func (c *CollectionGroupUpdateMessage) IncrementSequence() { //do nothing
 }
 
 type CollectionGroupUpdateMessages []CollectionGroupUpdateMessage

@@ -203,10 +203,6 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecorsAndPropogate(updates [
 				return c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues)
 			}
 		}
-		//check for conflicts
-		if !isInitiator && !c.checkUpdateConflicts(update.CollectionId, update) {
-			continue //do not apply and propagate update
-		}
 
 		//write or delete in db
 		hosts, err := UpdateRecord(c, update.CollectionId, dbFn, isInitiator)
@@ -290,44 +286,6 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropogate(updates [
 		c.sender.PropagateGroupUpdate(host, msg)
 	}
 	return nil
-}
-
-func (c *CollectionsDiscovererImp) checkUpdateConflicts(collectionId string, updateMessage messages.CollectionUpdateMessage) bool {
-	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
-	if !exists || !collection.IsLocal() || collection.IsStrong() { //conflict not possible
-		return true
-	}
-
-	//check conflict
-	res := collection.(*shared.WeakCollection).SetLastUpdate(updateMessage.Time, updateMessage.UpdateHostIp)
-	return res
-	/*if !res {
-		//conflict detected, propagate back old values
-		records, err := c.dbInterface.GetRecords(updateMessage.CollectionId, updateMessage.RecordNames...)
-		if err != nil {
-			return false
-		}
-
-		//propagate back the conflict resoultion  -> da rifare.
-		updateMessage := messages.CollectionUpdateMessage{
-			CollectionId: updateMessage.CollectionId,
-			RecordNames:  updateMessage.RecordNames,
-			IsDelete:     isDelete,
-			RecordValues: func() []string { //TODO: isDelete should be handled properly -> se sono stato cancellati precedentemente non posso mandarli indietro
-				strRecords := make([]string, len(records))
-				for i, r := range records {
-					strRecords[i] = r.(string)
-				}
-				return strRecords
-			}(),
-			Time:         collection.(*shared.WeakCollection).GetLastUpdateTimeStamp(),
-			UpdateHostIp: collection.(*shared.WeakCollection).GetLastUpdateSenderIp(),
-		}
-		print(updateMessage)
-		//c.propagateUpdate(updateMessage, false, []string{}, isDelete)
-		return false
-	}
-	return true*/
 }
 
 func (c *CollectionsDiscovererImp) SetCollectionAndProgate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error {

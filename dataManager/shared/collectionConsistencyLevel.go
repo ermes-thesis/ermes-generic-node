@@ -83,10 +83,8 @@ func (s *StrongCollection) RemoveHost(hostId string) {
 
 // WeakCollection weak collection
 type WeakCollection struct {
-	collectionId        string
-	collectionState     CollectionState
-	lastUpdateTimeStamp int64
-	lastUpdateSenderIp  string
+	collectionId    string
+	collectionState CollectionState
 }
 
 func NewWeakCollection(collectionId string, size uint64, isRemote bool) Collection {
@@ -105,23 +103,6 @@ func NewWeakCollection(collectionId string, size uint64, isRemote bool) Collecti
 
 func (w *WeakCollection) GetCollectionState() CollectionState {
 	return w.collectionState
-}
-
-func (w *WeakCollection) SetLastUpdate(time int64, senderIp string) bool {
-	if time >= w.lastUpdateTimeStamp || senderIp >= w.lastUpdateSenderIp {
-		w.lastUpdateTimeStamp = time
-		w.lastUpdateSenderIp = senderIp
-		return true
-	}
-	return false
-}
-
-func (w *WeakCollection) GetLastUpdateTimeStamp() int64 {
-	return w.lastUpdateTimeStamp
-}
-
-func (w *WeakCollection) GetLastUpdateSenderIp() string {
-	return w.lastUpdateSenderIp
 }
 
 func (w *WeakCollection) SetToLocal(size uint64) {

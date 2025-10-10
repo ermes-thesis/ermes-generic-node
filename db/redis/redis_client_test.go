@@ -21,13 +21,13 @@ func TestRecord(t *testing.T) {
 	require.NoError(t, err, "Expected no error checking record existence")
 	require.False(t, exists, "Expected record to not exist initially")
 
-	err = redisClient.SetRecord("collection1", "record1", "value1")
+	err = redisClient.SetRecord("collection1", "record1", "value1", "")
 	require.EqualError(t, err, "collection does not exist")
 
 	err = redisClient.SetCollection("collection1", nil, nil, 0)
 	require.NoError(t, err, "Expected no error setting collection")
 
-	err = redisClient.SetRecord("collection1", "record1", "value1")
+	err = redisClient.SetRecord("collection1", "record1", "value1", "")
 	require.NoError(t, err, "Expected no error setting record")
 
 	value, err := redisClient.GetRecord("collection1", "record1")
@@ -38,7 +38,7 @@ func TestRecord(t *testing.T) {
 	require.NoError(t, err, "Expected no error checking record existence")
 	require.True(t, exists, "Expected record to exist after setting it")
 
-	err = redisClient.SetRecord("collection1", "record2", "value2")
+	err = redisClient.SetRecord("collection1", "record2", "value2", "")
 	require.NoError(t, err, "Expected no error setting record")
 
 	values, err := redisClient.GetRecords("collection1", "record1", "record2")
@@ -58,10 +58,10 @@ func TestRecord(t *testing.T) {
 	require.NoError(t, err, "Expected no error checking record existence after deletion")
 	require.True(t, exists, "Expected record to not exist after deletion")
 
-	err = redisClient.SetRecords("collection1", []string{"record10", "record11", "record12", "record13"}, []string{"value10", "value11", "value12"})
+	err = redisClient.SetRecords("collection1", []string{"record10", "record11", "record12", "record13"}, []string{"value10", "value11", "value12"}, "")
 	require.Error(t, err, "Expected no error setting record")
 
-	err = redisClient.SetRecords("collection1", []string{"record10", "record11", "record12", "record13"}, []string{"value10", "value11", "value12", "value13"})
+	err = redisClient.SetRecords("collection1", []string{"record10", "record11", "record12", "record13"}, []string{"value10", "value11", "value12", "value13"}, "")
 	require.NoError(t, err, "Expected no error setting record")
 	values2, err := redisClient.GetRecords("collection1", "record10", "record11", "record12", "record13")
 	require.NoError(t, err, "Expected no error getting multiple records")
@@ -338,7 +338,7 @@ func TestMemStats(t *testing.T) {
 	require.NoError(t, err, "Expected no error getting collection memory usage")
 	require.Greater(t, collSize, uint64(0), "Expected collection memory usage to not be zero")
 
-	err = redisClient.SetRecord(collectionId, "recordTest", "valueTest")
+	err = redisClient.SetRecord(collectionId, "recordTest", "valueTest", "")
 	require.NoError(t, err, "Expected no error setting record")
 
 	collSize2, err := redisClient.GetCollectionMemoryUsage(collectionId)
@@ -349,7 +349,7 @@ func TestMemStats(t *testing.T) {
 	require.NoError(t, err, "Expected no error getting record")
 	require.Greater(t, recordSize, uint64(0), "Expected recordMemoryUsage to not be zero")
 
-	err = redisClient.SetRecord(collectionId, "recordTest", "Record with higher value size")
+	err = redisClient.SetRecord(collectionId, "recordTest", "Record with higher value size", "")
 	require.NoError(t, err, "Expected no error setting record")
 
 	recordSize2, err := redisClient.GetRecordMemoryUsage(collectionId, "recordTest")
@@ -371,7 +371,7 @@ func TestMemoryStress(t *testing.T) {
 			names[j] = "record" + strconv.Itoa(j) + "-" + strconv.Itoa(i)
 			val[j] = "valuevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevaluevalue" + strconv.Itoa(i)
 		}
-		err := redisClient.SetRecords("collection1", names, val)
+		err := redisClient.SetRecords("collection1", names, val, "")
 		require.NoError(t, err, "Expected no error setting record")
 		if i%10 == 0 {
 			fmt.Println("10.000 done, still going!!")

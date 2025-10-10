@@ -21,7 +21,7 @@ func TestWasmPool(t *testing.T) {
 
 	dataManager := datamanager_mock.NewDataManager(t)
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
@@ -58,7 +58,7 @@ func BenchmarkWasmPool(b *testing.B) {
 
 	dataManager := datamanager_mock.NewDataManager(b)
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
@@ -93,7 +93,7 @@ func BenchmarkWasmPool_Wasmtime(b *testing.B) {
 
 	dataManager := datamanager_mock.NewDataManager(b)
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
@@ -128,7 +128,7 @@ func BenchmarkWasmPool_Wazero(b *testing.B) {
 
 	dataManager := datamanager_mock.NewDataManager(b)
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
 	//metadataManager.EXPECT().AddGroupToCollection(mock.Anything, metadataManager2.FROM_LOCAL, []string{"testGroup"}).Return(nil)
@@ -165,7 +165,7 @@ func BenchmarkWasmPool_all(b *testing.B) {
 
 	dataManager := datamanager_mock.NewDataManager(b)
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
@@ -199,7 +199,7 @@ func BenchmarkWasmPool_all_Wasmtime(b *testing.B) {
 
 	dataManager := datamanager_mock.NewDataManager(b)
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
@@ -233,7 +233,7 @@ func BenchmarkWasmPool_AOT(b *testing.B) {
 
 	dataManager := datamanager_mock.NewDataManager(b)
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
@@ -267,7 +267,7 @@ func BenchmarkWasmPool_all_Wazero(b *testing.B) {
 
 	dataManager := datamanager_mock.NewDataManager(b)
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", "battiti", []string{"test"}).Return("100", nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, 0, false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
@@ -301,7 +301,7 @@ func BenchmarkWasmPool_AOT_O3(b *testing.B) {
 
 	dataManager := datamanager_mock.NewDataManager(b)
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "battiti").Return("100", nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, uint64(0), false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, map[string]string{}, []string{"test", "pippo"}, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(b)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)

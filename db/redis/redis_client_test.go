@@ -252,6 +252,10 @@ func TestMemStats(t *testing.T) {
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
+	emptyStats, err := redisClient.GetMemoryStats()
+	require.NoError(t, err, "Expected no error getting memory stats on empty DB")
+	require.Equal(t, uint64(0), emptyStats.KeysCount, "Expected 0 keys in empty DB")
+
 	collectionId := "collection1"
 	groups := []string{"group1", "group2"}
 

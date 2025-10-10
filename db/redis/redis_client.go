@@ -832,10 +832,13 @@ func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
 
 	statsMap := parseRedisInfo(stats)
 
+	var keysCount, bytesKeysRatio uint64 = 0, 0
+
 	re := regexp.MustCompile(`keys=(\d+)`)
 	match := re.FindStringSubmatch(statsMap["db0"])
-	if len(match) != 2 {
-		return nil, errors.New("keys not found")
+	if len(match) == 2 {
+		keysCount = strToInt(match[1])
+		bytesKeysRatio = strToInt(statsMap["used_memory_dataset"]) / keysCount
 	}
 
 	datasetPerc, err := strconv.ParseFloat(statsMap["used_memory_dataset_perc"][:len(statsMap["used_memory_dataset_perc"])-1], 64)
@@ -850,8 +853,8 @@ func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
 		},
 		ReplicationBacklogSize: strToInt(statsMap["mem_replication_backlog"]),
 		LuaScriptsCacheSize:    strToInt(statsMap["used_memory_scripts"]),
-		KeysCount:              strToInt(match[1]),
-		BytesKeysRatio:         strToInt(statsMap["used_memory_dataset"]) / strToInt(match[1]),
+		KeysCount:              keysCount,
+		BytesKeysRatio:         bytesKeysRatio,
 	}
 
 	return &memStats, err

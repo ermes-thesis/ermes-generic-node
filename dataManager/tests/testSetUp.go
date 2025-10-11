@@ -36,6 +36,47 @@ func SetupGetMemoryStatsMock(mockDB *mockDb.GenericDB, server *mockServer.Server
 
 }
 
+func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
+	migrationManagerConfig := config.MigrationManagerConfig{
+		IdleTimeoutMs:     1000000000000000000,
+		LeaderThreshold:   0,
+		FollowerThreshold: 1,
+		ViewSize:          3,
+		GravityConstant:   0.981,
+	}
+	lurConfig := config.LruConfig{
+		Size:      100000,
+		SafeLevel: 0.8,
+	}
+
+	db := mockDb.NewGenericDB(t)
+	db.On("GetCollectionMemoryUsage", mock.AnythingOfType("string")).Return(uint64(10), nil).Maybe()
+
+	server := mockServer.NewServerType(t)
+	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
+	server.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
+
+	collections := &shared.CollectionPartialView{
+		KnownCollections: make(map[string]shared.Collection),
+	}
+	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
+	serverInfo := info.ServerInfo{
+		HostName:       "localhost:0000",
+		MetadataDomain: "domain",
+		Address:        "localhost",
+		Port:           "0000",
+		Father:         &info.Node{HostName: "fName", MetadataDomain: "fDomain"},
+		Children: []info.Node{
+			{HostName: "child1", MetadataDomain: "Domain"},
+			{HostName: "child2", MetadataDomain: "Domain"},
+		},
+		Secret: "ermes-secret",
+	}
+
+	SetupGetMemoryStatsMock(db, server)
+	return migrationManagerConfig, lurConfig, collections, serverInfo, &lruCache, db, server
+}
+
 func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
 		IdleTimeoutMs:     1000000000000000000,

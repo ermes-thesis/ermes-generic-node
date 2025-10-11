@@ -5,11 +5,13 @@ import (
 	"context"
 	"db"
 	"errors"
+	"math/rand"
 	"metadataManager/types"
 	"regexp"
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
@@ -22,7 +24,9 @@ type RedisClient struct {
 	log    *logger.Logger
 }
 
-const maxRetries = 5
+const maxRetries = 10
+const defaultBackoff = time.Millisecond * 10
+const maxBackoff = time.Second * 1
 
 type StaleUpdateError struct {
 }
@@ -52,6 +56,8 @@ func (r *RedisClient) GetRecord(collectionId string, recordName string) (string,
 }
 
 func (r *RedisClient) SetRecord(collectionId string, recordName string, value string, timestamp string) error {
+	backoff := defaultBackoff
+
 	infoKey := "info:" + collectionId
 	dataKey := buildKey(collectionId, recordName)
 	keysKey := "info:" + collectionId + ":keys"
@@ -86,6 +92,13 @@ func (r *RedisClient) SetRecord(collectionId string, recordName string, value st
 		}, infoKey, timeKey)
 
 		if errors.Is(err, redis.TxFailedErr) {
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			time.Sleep(backoff + jitter)
+
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 			continue
 		}
 
@@ -103,6 +116,8 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 	if len(recordNames) != len(recordValues) {
 		return errors.New("recordNames and recordValues must be the same length")
 	}
+
+	backoff := defaultBackoff
 
 	infoKey := "info:" + collectionId
 	keysKey := "info:" + collectionId + ":keys"
@@ -151,6 +166,13 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 		}, append(timestampKeys, infoKey)...)
 
 		if errors.Is(err, redis.TxFailedErr) {
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			time.Sleep(backoff + jitter)
+
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 			continue
 		}
 
@@ -168,6 +190,8 @@ func (r *RedisClient) RecordExists(collectionId string, recordName string) (bool
 func (r *RedisClient) DeleteRecords(collectionId string, timestamp string, recordNames ...string) error {
 	keysKey := "info:" + collectionId + ":keys"
 	infoKey := "info:" + collectionId
+
+	backoff := defaultBackoff
 
 	timestampKeys := make([]string, len(recordNames))
 	for i, name := range recordNames {
@@ -206,7 +230,15 @@ func (r *RedisClient) DeleteRecords(collectionId string, timestamp string, recor
 			})
 			return err
 		}, append(timestampKeys, infoKey)...)
+
 		if errors.Is(err, redis.TxFailedErr) {
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			time.Sleep(backoff + jitter)
+
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 			continue
 		}
 
@@ -220,6 +252,8 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
+
+	backoff := defaultBackoff
 
 	var (
 		keys           []string
@@ -273,6 +307,13 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 		}
 
 		if errors.Is(err, redis.TxFailedErr) {
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			time.Sleep(backoff + jitter)
+
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 			continue
 		}
 
@@ -316,6 +357,8 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 	groupsKey := "info:" + collectionId + ":groups"
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
 
+	backoff := defaultBackoff
+
 	for retries := 0; retries < maxRetries; retries++ {
 		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 			keys, err := tx.SMembers(r.ctx, keysKey).Result()
@@ -335,6 +378,13 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 		}, keysKey)
 
 		if errors.Is(err, redis.TxFailedErr) {
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			time.Sleep(backoff + jitter)
+
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 			continue
 		}
 
@@ -384,6 +434,8 @@ func (r *RedisClient) AddGroupsToMetadata(collectionId string, groupsToAdd ...st
 	}
 
 	metadataKey := "meta:" + collectionId
+
+	backoff := defaultBackoff
 
 	var seq uint64
 	var groups []string
@@ -435,6 +487,13 @@ func (r *RedisClient) AddGroupsToMetadata(collectionId string, groupsToAdd ...st
 		}, metadataKey)
 
 		if errors.Is(err, redis.TxFailedErr) {
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			time.Sleep(backoff + jitter)
+
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 			continue
 		}
 
@@ -450,6 +509,8 @@ func (r *RedisClient) RemoveGroupsFromMetadata(collectionId string, groupsToRemo
 	}
 
 	metadataKey := "meta:" + collectionId
+
+	backoff := defaultBackoff
 
 	var groups []string
 	var seq uint64
@@ -495,6 +556,13 @@ func (r *RedisClient) RemoveGroupsFromMetadata(collectionId string, groupsToRemo
 		}, metadataKey)
 
 		if errors.Is(err, redis.TxFailedErr) {
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			time.Sleep(backoff + jitter)
+
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 			continue
 		}
 
@@ -511,6 +579,8 @@ func (r *RedisClient) UpdateGroupsInMetadata(collectionId string, groupsToAdd []
 	}
 
 	metadataKey := "meta:" + collectionId
+
+	backoff := defaultBackoff
 
 	var groups []string
 	var seq uint64
@@ -566,6 +636,13 @@ func (r *RedisClient) UpdateGroupsInMetadata(collectionId string, groupsToAdd []
 		}, metadataKey)
 
 		if errors.Is(err, redis.TxFailedErr) {
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			time.Sleep(backoff + jitter)
+
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 			continue
 		}
 
@@ -577,6 +654,8 @@ func (r *RedisClient) UpdateGroupsInMetadata(collectionId string, groupsToAdd []
 
 func (r *RedisClient) SetGroupsInMetadata(collectionId string, sequenceGroups uint64, groups ...string) error {
 	metadataKey := "meta:" + collectionId
+
+	backoff := defaultBackoff
 
 	for retries := 0; retries < maxRetries; retries++ {
 		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
@@ -611,6 +690,13 @@ func (r *RedisClient) SetGroupsInMetadata(collectionId string, sequenceGroups ui
 		}, metadataKey)
 
 		if errors.Is(err, redis.TxFailedErr) {
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			time.Sleep(backoff + jitter)
+
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 			continue
 		}
 
@@ -648,6 +734,8 @@ func (r *RedisClient) SetGroups(collectionId string, sequenceGroups uint64, grou
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
 	infoKey := "info:" + collectionId
 
+	backoff := defaultBackoff
+
 	var toAdd []any
 	for _, member := range groups {
 		toAdd = append(toAdd, member)
@@ -682,6 +770,13 @@ func (r *RedisClient) SetGroups(collectionId string, sequenceGroups uint64, grou
 		}, infoKey, groupsKey, groupsSequenceKey)
 
 		if errors.Is(err, redis.TxFailedErr) {
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			time.Sleep(backoff + jitter)
+
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
 			continue
 		}
 		return err

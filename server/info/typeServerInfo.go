@@ -102,9 +102,11 @@ func StringifyInfo(infoptr *ServerInfo) string {
 
 	sb.WriteString("HostName: " + infoptr.HostName + "\n")
 	sb.WriteString("Domain: " + infoptr.MetadataDomain + "\n")
-	sb.WriteString("Father: " + infoptr.Father.HostName + "\n")
-	sb.WriteString("FatherDomain: " + infoptr.Father.MetadataDomain + "\n")
-	sb.WriteString("FatherLatency: " + fmt.Sprint(infoptr.Father.Latency) + "\n")
+	if infoptr.Father != nil {
+		sb.WriteString("Father: " + infoptr.Father.HostName + "\n")
+		sb.WriteString("FatherDomain: " + infoptr.Father.MetadataDomain + "\n")
+		sb.WriteString("FatherLatency: " + fmt.Sprint(infoptr.Father.Latency) + "\n")
+	}
 	sb.WriteString("Children: ")
 
 	for _, str := range infoptr.Children {

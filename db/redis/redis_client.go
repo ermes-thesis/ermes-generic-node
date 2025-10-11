@@ -24,6 +24,13 @@ type RedisClient struct {
 
 const maxRetries = 5
 
+type StaleUpdateError struct {
+}
+
+func (e *StaleUpdateError) Error() string {
+	return "the update has not been applied since it was completely stale."
+}
+
 func NewRedisClient(config config.RedisConfig, ctx context.Context, log *logger.Logger) (*RedisClient, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     config.Address + ":" + config.Port,
@@ -66,7 +73,7 @@ func (r *RedisClient) SetRecord(collectionId string, recordName string, value st
 			}
 
 			if timestamp != "" && currentTimestamp >= timestamp {
-				return nil
+				return &StaleUpdateError{}
 			}
 
 			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
@@ -127,6 +134,10 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 					anyConvertedNames = append(anyConvertedNames, name)
 					inlineRecords = append(inlineRecords, buildKey(collectionId, name), recordValues[i], buildTimestampKey(collectionId, name), timestamp)
 				}
+			}
+
+			if len(anyConvertedNames) == 0 {
+				return &StaleUpdateError{}
 			}
 
 			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {

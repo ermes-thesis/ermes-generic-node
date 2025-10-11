@@ -30,7 +30,7 @@ func (s *Server) AddCustomRoute(path string, isPrivate bool, handler http.Handle
 	if isPrivate {
 		s.Handler.Handle(path, s.checkErmesSecret(handler))
 	} else {
-		s.Handler.Handle(path, s.checkMiddlewareSecret(handler))
+		s.Handler.Handle(path, s.checkClientSecret(handler))
 	}
 
 	return nil

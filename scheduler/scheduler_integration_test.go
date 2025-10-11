@@ -42,11 +42,11 @@ func createNewLogger(t *testing.T) *logger.Logger {
 
 func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:           nil,
-		CloudNode:        nil,
-		MetadataDomain:   "IT",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Father:         nil,
+		CloudNode:      nil,
+		MetadataDomain: "IT",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -111,10 +111,10 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 		Father: &info.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:         []info.Node{},
-		MetadataDomain:   "IT/Milan",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
 	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
@@ -194,11 +194,11 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 
 func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:           nil,
-		CloudNode:        nil,
-		MetadataDomain:   "IT",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Father:         nil,
+		CloudNode:      nil,
+		MetadataDomain: "IT",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -291,10 +291,10 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 		Father: &info.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:         []info.Node{},
-		MetadataDomain:   "IT/Milan",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
 	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
@@ -370,11 +370,11 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 
 func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:           nil,
-		CloudNode:        nil,
-		MetadataDomain:   "IT",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Father:         nil,
+		CloudNode:      nil,
+		MetadataDomain: "IT",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -429,10 +429,10 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 		Father: &info.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:         []info.Node{},
-		MetadataDomain:   "IT/Milan",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
 
@@ -499,11 +499,11 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 
 func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:           nil,
-		CloudNode:        nil,
-		MetadataDomain:   "IT",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Father:         nil,
+		CloudNode:      nil,
+		MetadataDomain: "IT",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -576,10 +576,10 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 		Father: &info.Node{
 			HostName: urlFather.Host,
 		},
-		Children:         []info.Node{},
-		MetadataDomain:   "IT/Milan",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
 
@@ -637,11 +637,11 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 
 func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:           nil,
-		CloudNode:        nil,
-		MetadataDomain:   "IT",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Father:         nil,
+		CloudNode:      nil,
+		MetadataDomain: "IT",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -707,10 +707,10 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 		Father: &info.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:         []info.Node{},
-		MetadataDomain:   "IT/Milan",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
 
@@ -779,11 +779,11 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 
 func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:           nil,
-		CloudNode:        nil,
-		MetadataDomain:   "IT",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Father:         nil,
+		CloudNode:      nil,
+		MetadataDomain: "IT",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -844,10 +844,10 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 		Father: &info.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:         []info.Node{},
-		MetadataDomain:   "IT/Milan",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
 
@@ -913,11 +913,11 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 
 func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:           nil,
-		CloudNode:        nil,
-		MetadataDomain:   "IT",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Father:         nil,
+		CloudNode:      nil,
+		MetadataDomain: "IT",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -999,10 +999,10 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 		Father: &info.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:         []info.Node{},
-		MetadataDomain:   "IT/Milan",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 
 	fnCacheChild := caches_mock.NewFunctionCache(t)
@@ -1082,11 +1082,11 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 
 func TestScheduleThreeNodes(t *testing.T) {
 	serverInfoFather := &info.ServerInfo{
-		Father:           nil,
-		CloudNode:        nil,
-		MetadataDomain:   "IT",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Father:         nil,
+		CloudNode:      nil,
+		MetadataDomain: "IT",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -1155,10 +1155,10 @@ func TestScheduleThreeNodes(t *testing.T) {
 		Father: &info.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:         []info.Node{},
-		MetadataDomain:   "IT/Milan",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 
 	fnCacheChild := caches_mock.NewFunctionCache(t)
@@ -1200,10 +1200,10 @@ func TestScheduleThreeNodes(t *testing.T) {
 		Father: &info.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:         []info.Node{},
-		MetadataDomain:   "IT/Milan",
-		Secret:           "secret",
-		MiddlewareSecret: "middleware-secret",
+		Children:       []info.Node{},
+		MetadataDomain: "IT/Milan",
+		Secret:         "secret",
+		ClientSecret:   "middleware-secret",
 	}
 
 	fnCacheChild2 := caches_mock.NewFunctionCache(t)

@@ -58,12 +58,12 @@ type TemplatesCacheConfig struct {
 }
 
 type NodeConfig struct {
-	Name             string `yaml:"name"`
-	Domain           string `yaml:"domain"`
-	Address          string `yaml:"address"`
-	Port             string `yaml:"port"`
-	Secret           string `yaml:"secret"`
-	MiddlewareSecret string `yaml:"middlewareSecret"`
+	Name         string `yaml:"name"`
+	Domain       string `yaml:"domain"`
+	Address      string `yaml:"address"`
+	Port         string `yaml:"port"`
+	Secret       string `yaml:"secret"`
+	ClientSecret string `yaml:"clientSecret"`
 }
 
 type FunctionRegistryConfig struct {

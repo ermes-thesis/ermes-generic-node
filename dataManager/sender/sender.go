@@ -14,14 +14,14 @@ import (
 )
 
 const (
-	gossipPath                      = "/gossip"
-	repoPath                        = "/repo"
-	remoteAccessPath                = "/dataRemoteAccess"
-	remoteUpdatePath                = "/dataRemoteUpdate"
-	updatePropagationPath           = "/dataUpdatePropagation"
-	updateGroupPropagationPath      = "/dataGroupUpdatePropagation"
-	createCollectionPropagationPath = "/newCollection"
-	removeCollectionPropagationPath = "/removeCollection"
+	gossipPath                      = "/pvt-gossip"
+	repoPath                        = "/pvt-repo"
+	remoteAccessPath                = "/pvt-dataRemoteAccess"
+	remoteUpdatePath                = "/pvt-dataRemoteUpdate"
+	updatePropagationPath           = "/pvt-dataUpdatePropagation"
+	updateGroupPropagationPath      = "/pvt-dataGroupUpdatePropagation"
+	createCollectionPropagationPath = "/pvt-newCollection"
+	removeCollectionPropagationPath = "/pvt-removeCollection"
 )
 
 //###############################################################
@@ -77,7 +77,12 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 }
 
 func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage, destination string) {
-	go s.server.SendGenericHTTPRequest(destination, gossipPath, msg)
+	go func() {
+		_, err := s.server.SendGenericHTTPRequest(destination, gossipPath, msg)
+		if err != nil {
+			s.log.Errorf("SENDER, Error sending gossip message to %s: %v", destination, err)
+		}
+	}()
 }
 
 func (s *MigrationManagerSenderImpl) GossipPath() string {

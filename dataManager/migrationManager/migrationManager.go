@@ -91,8 +91,16 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.collectionsLock = &sync.Mutex{}
 		//prepare server
 		m.sender = sender.NewMigrationManagerSender(m.log, server, serverInfo)
-		server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages().ServeHTTP)
-		server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection().ServeHTTP)
+		err := server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages().ServeHTTP)
+		if err != nil {
+			m.log.Error("Error adding route to server", "error", err)
+			return
+		}
+		err = server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection().ServeHTTP)
+		if err != nil {
+			m.log.Error("Error adding route to server", "error", err)
+			return
+		}
 
 		//policy
 

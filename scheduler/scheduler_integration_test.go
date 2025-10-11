@@ -46,7 +46,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 		CloudNode:      nil,
 		MetadataDomain: "IT",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -114,7 +114,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 		Children:       []info.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
 	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
@@ -124,6 +124,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 		DeployedOn:            nil,
 		StrongCollWriteAccess: false,
 	}, nil)
+	fnCacheChild.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
 
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345 := shared.NewWeakCollection("12345", 40, false)
@@ -142,7 +143,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -174,7 +175,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when creating request")
 
 	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-MIDDLEWARE-SECRET", "middleware-secret")
+	req.Header.Set("X-CLIENT-SECRET", "client-secret")
 	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
 	req.Header.Set("X-ERMES-GROUPS", tokenString)
 
@@ -198,7 +199,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 		CloudNode:      nil,
 		MetadataDomain: "IT",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -245,6 +246,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 		DeployedOn:            nil,
 		StrongCollWriteAccess: true,
 	}, nil)
+	fnCacheFather.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
 
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collFather12345 := shared.NewWeakCollection("12345", 40, true)
@@ -265,7 +267,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 
 	wasmExecutorFather := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorFather.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorFather.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -294,7 +296,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 		Children:       []info.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
 	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
@@ -351,7 +353,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when creating request")
 
 	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-MIDDLEWARE-SECRET", "middleware-secret")
+	req.Header.Set("X-CLIENT-SECRET", "client-secret")
 	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
 	req.Header.Set("X-ERMES-GROUPS", tokenString)
 
@@ -374,7 +376,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 		CloudNode:      nil,
 		MetadataDomain: "IT",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -432,15 +434,16 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 		Children:       []info.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
+	fnCacheChild.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
 
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -480,7 +483,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when creating request")
 
 	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-MIDDLEWARE-SECRET", "middleware-secret")
+	req.Header.Set("X-CLIENT-SECRET", "client-secret")
 	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
 	req.Header.Set("X-ERMES-GROUPS", tokenString)
 
@@ -503,7 +506,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 		CloudNode:      nil,
 		MetadataDomain: "IT",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -533,6 +536,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	tokenString := "JWTToken"
 
 	fnCacheFather := caches_mock.NewFunctionCache(t)
+	fnCacheFather.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
 
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collFather12345 := shared.NewWeakCollection("12345", 40, false)
@@ -547,7 +551,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 
 	wasmExecutorFather := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorFather.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorFather.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -579,7 +583,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 		Children:       []info.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
 
@@ -618,7 +622,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when creating request")
 
 	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-MIDDLEWARE-SECRET", "middleware-secret")
+	req.Header.Set("X-CLIENT-SECRET", "client-secret")
 	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
 	req.Header.Set("X-ERMES-GROUPS", tokenString)
 
@@ -641,7 +645,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 		CloudNode:      nil,
 		MetadataDomain: "IT",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -710,15 +714,16 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 		Children:       []info.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
+	fnCacheChild.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
 
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -760,7 +765,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when creating request")
 
 	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-MIDDLEWARE-SECRET", "middleware-secret")
+	req.Header.Set("X-CLIENT-SECRET", "client-secret")
 	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
 	req.Header.Set("X-ERMES-GROUPS", tokenString)
 
@@ -783,7 +788,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 		CloudNode:      nil,
 		MetadataDomain: "IT",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -847,15 +852,16 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 		Children:       []info.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	fnCacheChild := caches_mock.NewFunctionCache(t)
+	fnCacheChild.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
 
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -894,7 +900,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when creating request")
 
 	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-MIDDLEWARE-SECRET", "middleware-secret")
+	req.Header.Set("X-CLIENT-SECRET", "client-secret")
 	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
 	req.Header.Set("X-ERMES-GROUPS", tokenString)
 
@@ -917,7 +923,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 		CloudNode:      nil,
 		MetadataDomain: "IT",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -1002,7 +1008,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 		Children:       []info.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 
 	fnCacheChild := caches_mock.NewFunctionCache(t)
@@ -1013,12 +1019,13 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 		DeployedOn:            nil,
 		StrongCollWriteAccess: true,
 	}, nil)
+	fnCacheChild.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
 
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -1063,7 +1070,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when creating request")
 
 	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-MIDDLEWARE-SECRET", "middleware-secret")
+	req.Header.Set("X-CLIENT-SECRET", "client-secret")
 	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
 	req.Header.Set("X-ERMES-GROUPS", tokenString)
 
@@ -1086,7 +1093,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 		CloudNode:      nil,
 		MetadataDomain: "IT",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 	invokedFnName := "test_function"
 	invokedFnVer := "1.0.0"
@@ -1158,7 +1165,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 		Children:       []info.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 
 	fnCacheChild := caches_mock.NewFunctionCache(t)
@@ -1203,7 +1210,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 		Children:       []info.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
-		ClientSecret:   "middleware-secret",
+		ClientSecret:   "client-secret",
 	}
 
 	fnCacheChild2 := caches_mock.NewFunctionCache(t)
@@ -1214,12 +1221,13 @@ func TestScheduleThreeNodes(t *testing.T) {
 		DeployedOn:            nil,
 		StrongCollWriteAccess: true,
 	}, nil)
+	fnCacheChild2.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
 
 	tknDecoderChild2 := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild2.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	wasmExecutorChild2 := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild2.EXPECT().Invoke(invokedFnName+"@"+invokedFnVer, "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorChild2.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -1266,7 +1274,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when creating request")
 
 	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-MIDDLEWARE-SECRET", "middleware-secret")
+	req.Header.Set("X-CLIENT-SECRET", "client-secret")
 	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
 	req.Header.Set("X-ERMES-GROUPS", tokenString)
 

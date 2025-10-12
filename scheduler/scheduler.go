@@ -53,7 +53,7 @@ func NewScheduler(dataManager datamanager.DataManager, metadataManager metadataM
 }
 
 func (s *SchedulerImpl) RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager) error {
-	err := server.AddCustomRoute("/invoke-function/{name}/{version}/", false, s.handleFunctionInvocation(tokenDecoder, metadataManager))
+	err := server.AddCustomRoute("/invoke-function/{name}/{version}", false, s.handleFunctionInvocation(tokenDecoder, metadataManager))
 	if err != nil {
 		return fmt.Errorf("error adding route /invoke-function/{name}/{version}/: %v", err)
 	}
@@ -62,7 +62,7 @@ func (s *SchedulerImpl) RegisterRoutes(server server.ServerType, tokenDecoder to
 		return fmt.Errorf("error adding route /invoke-function/{name}: %v", err)
 	}
 
-	err = server.AddCustomRoute("/pvt-offload-function/{name}/{version}/", true, s.handleOffloadFunctionInvocation(tokenDecoder))
+	err = server.AddCustomRoute("/pvt-offload-function/{name}/{version}", true, s.handleOffloadFunctionInvocation(tokenDecoder))
 	if err != nil {
 		return fmt.Errorf("error adding route /pvt-offload-function/{name}/{version}/: %v", err)
 	}
@@ -247,7 +247,13 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		return nil, 0, fmt.Errorf("error marshalling wasm context: %v", err)
 	}
 
-	resp := executor.Invoke(functionName+"@"+functionVersion, "entry", reqBody, ctxJson)
+	wasmBinary, err := s.cache.GetBinary(functionName, functionVersion)
+	if err != nil {
+		s.log.Errorf("error retrieving function binary: %v", err)
+		return nil, 0, fmt.Errorf("error retrieving function binary: %v", err)
+	}
+
+	resp := executor.Invoke(wasmBinary, "entry", reqBody, ctxJson)
 	repBody, err := json.Marshal(resp.Response)
 	if err != nil {
 		s.log.Errorf("error marshalling response body: %v", err)

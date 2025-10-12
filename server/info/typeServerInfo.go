@@ -28,8 +28,8 @@ type ServerInfo struct {
 	Children []Node
 	// The secret is the private header value with which the ermes nodes can communicate.
 	// For privacy reasons it must not be exposed to the user.
-	Secret           string
-	MiddlewareSecret string
+	Secret       string
+	ClientSecret string
 
 	CloudNode *Node
 
@@ -86,7 +86,7 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 		Port:                       port,
 		MetadataDomain:             domain,
 		Secret:                     config.Node.Secret,
-		MiddlewareSecret:           config.Node.MiddlewareSecret,
+		ClientSecret:               config.Node.ClientSecret,
 		CloudNode:                  cloudNode,
 		Father:                     father,
 		Children:                   children,
@@ -102,9 +102,11 @@ func StringifyInfo(infoptr *ServerInfo) string {
 
 	sb.WriteString("HostName: " + infoptr.HostName + "\n")
 	sb.WriteString("Domain: " + infoptr.MetadataDomain + "\n")
-	sb.WriteString("Father: " + infoptr.Father.HostName + "\n")
-	sb.WriteString("FatherDomain: " + infoptr.Father.MetadataDomain + "\n")
-	sb.WriteString("FatherLatency: " + fmt.Sprint(infoptr.Father.Latency) + "\n")
+	if infoptr.Father != nil {
+		sb.WriteString("Father: " + infoptr.Father.HostName + "\n")
+		sb.WriteString("FatherDomain: " + infoptr.Father.MetadataDomain + "\n")
+		sb.WriteString("FatherLatency: " + fmt.Sprint(infoptr.Father.Latency) + "\n")
+	}
 	sb.WriteString("Children: ")
 
 	for _, str := range infoptr.Children {

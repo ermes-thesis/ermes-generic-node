@@ -82,9 +82,9 @@ func TestIterationModule(t *testing.T) {
 
 	// FIRST CYCLE
 	fmt.Println("START FIRST CYCLE")
-	ser.On("SendGenericHTTPRequest", "2222", "/repo", mock.Anything).Return(200, nil).Once()
-	ser.On("SendGenericHTTPRequest", "1111", "/repo", mock.Anything).Return(200, nil).Once()
-	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/gossip", mock.Anything).Return(200, nil).Times(3)
+	ser.On("SendGenericHTTPRequest", "2222", "/pvt-repo", mock.Anything).Return(200, nil).Once()
+	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Once()
+	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
 	//idle
 	mig.ManageNewRequest("repoId2", "user", true, 10)
 
@@ -118,10 +118,10 @@ func TestIterationModule(t *testing.T) {
 
 	// SECOND CYCLE
 	fmt.Println("START SECOND CYCLE")
-	ser.On("SendGenericHTTPRequest", "2222", "/repo", mock.Anything).Return(200, nil).Once()
-	ser.On("SendGenericHTTPRequest", "3333", "/repo", mock.Anything).Return(200, nil).Times(2)
-	ser.On("SendGenericHTTPRequest", "1111", "/repo", mock.Anything).Return(200, nil).Times(2)
-	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/gossip", mock.Anything).Return(200, nil).Times(3)
+	ser.On("SendGenericHTTPRequest", "2222", "/pvt-repo", mock.Anything).Return(200, nil).Once()
+	ser.On("SendGenericHTTPRequest", "3333", "/pvt-repo", mock.Anything).Return(200, nil).Times(2)
+	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Times(2)
+	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
 	// idle
 	mig.ManageNewRequest("repoId0", "2222", false, 10)
 	mig.ManageNewRequest("repoId0", "2222", false, 10)
@@ -152,9 +152,9 @@ func TestIterationModule(t *testing.T) {
 
 	// THIRD CYCLE
 	fmt.Println("START THIRD CYCLE")
-	ser.On("SendGenericHTTPRequest", "2222", "/repo", mock.Anything).Return(200, nil).Once()
-	ser.On("SendGenericHTTPRequest", "3333", "/repo", mock.Anything).Return(200, nil).Once()
-	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/gossip", mock.Anything).Return(200, nil).Times(3)
+	ser.On("SendGenericHTTPRequest", "2222", "/pvt-repo", mock.Anything).Return(200, nil).Once()
+	ser.On("SendGenericHTTPRequest", "3333", "/pvt-repo", mock.Anything).Return(200, nil).Once()
+	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
 	// idle
 	mig.ManageNewRequest("repoId3", "2222", false, 20)
 	mig.ManageNewRequest("repoId4", "3333", true, 20)
@@ -177,8 +177,8 @@ func TestIterationModule(t *testing.T) {
 
 	// FOURTH CYCLE
 	fmt.Println("START FOURTH CYCLE")
-	ser.On("SendGenericHTTPRequest", "1111", "/repo", mock.Anything).Return(200, nil).Once()
-	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/gossip", mock.Anything).Return(200, nil).Times(3)
+	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Once()
+	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
 
 	// idle
 	mig.NewCollectionReceived("repoId5", true, true, make(map[string]string), []string{}, 0, 10, false, "host")
@@ -189,7 +189,7 @@ func TestIterationModule(t *testing.T) {
 	if !lru.CheckOrder([]string{"repoId5"}) {
 		t.Fatal("fail in fourth cycle")
 	}
-	ser.On("SendGenericHTTPRequest", "1111", "/repo", mock.Anything).Return(200, nil).Once()
+	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Once()
 
 	child1Gossip1 = gossip.NewChildStateMessage("3333", 0.90)
 	mig.ManageGossipMessage(child1Gossip1)

@@ -44,7 +44,7 @@ func NewServer(log *logger.Logger, serverInfo *info.ServerInfo) (*Server, error)
 		ClientRepo: clientrepo.CreateClientRepo(),
 		Handler:    mux,
 		Server: &http.Server{
-			Addr:    net.JoinHostPort("localhost", serverInfo.Port),
+			Addr:    net.JoinHostPort("", serverInfo.Port),
 			Handler: mux,
 		},
 	}

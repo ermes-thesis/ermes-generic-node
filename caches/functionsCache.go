@@ -41,7 +41,7 @@ func NewFunctionCache(config config.FunctionsCacheConfig, fetcher caches.Fetcher
 	if err != nil {
 		return nil, fmt.Errorf("error creating binary cache: %v", err)
 	}
-	latest, err := caches.NewBaseCache[string](config.BinaryCache.Size, config.LatestCacheTtl)
+	latest, err := caches.NewBaseCache[string](config.LatestCache.Size, config.LatestCache.Ttl)
 	if err != nil {
 		return nil, fmt.Errorf("error creating latest versions cache: %v", err)
 	}
@@ -64,7 +64,7 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret str
 	if err != nil {
 		return nil, fmt.Errorf("error creating binary cache: %v", err)
 	}
-	latest, err := caches.NewBaseCache[string](config.BinaryCache.Size, config.LatestCacheTtl)
+	latest, err := caches.NewBaseCache[string](config.LatestCache.Size, config.LatestCache.Ttl)
 	if err != nil {
 		return nil, fmt.Errorf("error creating latest versions cache: %v", err)
 	}

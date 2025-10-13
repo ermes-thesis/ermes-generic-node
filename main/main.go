@@ -45,44 +45,9 @@ func run(ctx context.Context, configPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create general logger: %v", err)
 	}
-	// Create http logger for the HTTP Server component
-	httpLog, err := logFactory.New("http_server")
-	if err != nil {
-		return fmt.Errorf("failed to create http logger: %v", err)
-	}
-	// Create metadata logger for MetadataManager component
-	metadataLog, err := logFactory.New("metadata_manager")
-	if err != nil {
-		return fmt.Errorf("failed to create metadata logger: %v", err)
-	}
-	// Create redis logger for RedisClient component
-	redisLog, err := logFactory.New("redis")
-	if err != nil {
-		return fmt.Errorf("failed to create redis logger: %v", err)
-	}
-	// Create cache logger for FunctionCache component
-	cacheLog, err := logFactory.New("cache")
-	if err != nil {
-		return fmt.Errorf("failed to create cache logger: %v", err)
-	}
-	// Create data manager logger for DataManager component (includes MigrationManager and CollectionDiscoverer components)
-	dataLog, err := logFactory.New("data")
-	if err != nil {
-		return fmt.Errorf("failed to create data logger: %v", err)
-	}
-	// Create scheduler logger for Scheduler component
-	schedLog, err := logFactory.New("scheduler")
-	if err != nil {
-		return fmt.Errorf("failed to create scheduler logger: %v", err)
-	}
-
 	defer generalLog.Close()
-	defer httpLog.Close()
-	defer metadataLog.Close()
-	defer redisLog.Close()
-	defer cacheLog.Close()
-	defer dataLog.Close()
-	defer schedLog.Close()
+
+	generalLog.Info("Starting node...")
 
 	cfg := config.LoadConfig(configPath)
 	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](cfg.Lru.Size) //TODO: replace with redis size
@@ -95,17 +60,17 @@ func run(ctx context.Context, configPath string) error {
 		return fmt.Errorf("error creating server info: %w", err)
 	}
 
-	httpServer, err := server.NewServer(httpLog, serverInfo)
+	httpServer, err := server.NewServer(generalLog.Component("http_server"), serverInfo)
 	if err != nil {
 		return err
 	}
 
-	redisClient, err := redis.NewRedisClient(cfg.Redis, ctx, redisLog)
+	redisClient, err := redis.NewRedisClient(cfg.Redis, ctx, generalLog.Component("redis"))
 	if err != nil {
 		return fmt.Errorf("error creating redis client: %w", err)
 	}
 	// remoteFunctionName must be in the format: "functionName/functionVersion"
-	funcCache, err := caches.NewDefaultFunctionCache(cfg.FunctionsCache, cfg.Node.Secret, cacheLog)
+	funcCache, err := caches.NewDefaultFunctionCache(cfg.FunctionsCache, cfg.Node.Secret, generalLog.Component("cache"))
 	if err != nil {
 		return fmt.Errorf("error creating function cache: %w", err)
 	}
@@ -113,7 +78,7 @@ func run(ctx context.Context, configPath string) error {
 	if err != nil {
 		return fmt.Errorf("error creating token decoder: %w", err)
 	}
-	metadataManager := metadataManager.NewMetadataManager(redisClient, serverInfo, metadataLog, funcCache)
+	metadataManager := metadataManager.NewMetadataManager(redisClient, serverInfo, generalLog.Component("metadata_manager"), funcCache)
 	err = metadataManager.RegisterRoutes(httpServer, tknDecoder)
 	if err != nil {
 		return fmt.Errorf("error registering metadata routes: %w", err)
@@ -128,10 +93,10 @@ func run(ctx context.Context, configPath string) error {
 		return fmt.Errorf("error restoring collections from settings: %w", err)
 	}
 	dataManager := datamanager.GetDataManagerInstance()
-	dataManager.Init(collections, penality.LogPenalty(2), cfg.MigrationManager, cfg.Lru, httpServer, *httpServer.ServerInfo, &lruCache, redisClient, dataLog)
+	dataManager.Init(collections, penality.LogPenalty(2), cfg.MigrationManager, cfg.Lru, httpServer, *httpServer.ServerInfo, &lruCache, redisClient, generalLog.Component("data_manager"))
 
 	var wasmExecutorPool *wasm.WasmExecutorPool
-	hostFunctions := scheduler.NewHostFunctions(dataManager, metadataManager, serverInfo, schedLog)
+	hostFunctions := scheduler.NewHostFunctions(dataManager, metadataManager, serverInfo, generalLog.Component("host_functions"))
 	switch cfg.Scheduler.WasmRuntime {
 	case config.Wasmedge:
 		wasmExecutorPool = wasm.NewWasmedgeExecutorPool(10)
@@ -147,7 +112,7 @@ func run(ctx context.Context, configPath string) error {
 		return fmt.Errorf("error registering host functions: %w", err)
 	}
 
-	sched := scheduler.NewScheduler(dataManager, metadataManager, funcCache, wasmExecutorPool, serverInfo, schedLog)
+	sched := scheduler.NewScheduler(dataManager, metadataManager, funcCache, wasmExecutorPool, serverInfo, generalLog.Component("scheduler"))
 	err = sched.RegisterRoutes(httpServer, tknDecoder, metadataManager)
 	if err != nil {
 		return fmt.Errorf("error registering scheduler routes: %w", err)
@@ -161,8 +126,6 @@ func run(ctx context.Context, configPath string) error {
 		}
 	}()
 
-	// TODO: understand these lines of code
-	// I think it should be some synchronization method when the server shuts down
 	var wg sync.WaitGroup
 	wg.Add(1)
 

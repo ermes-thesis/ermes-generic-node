@@ -84,11 +84,9 @@ func TestWasmPool_Wasmedge(t *testing.T) {
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
-	err := scheduler.RegisterWasmedgeHostFns(pool, scheduler.HostFnsDependencies{
-		DataManager:     dataManager,
-		MetadataManager: metadataManager,
-		ServerInfo:      nil,
-	})
+	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, nil, nil)
+
+	err := hostFns.RegisterWasmedgeHostFns(pool)
 	require.NoError(t, err)
 
 	executor := pool.Acquire()
@@ -119,11 +117,9 @@ func TestWasmPool_Wasmtime(t *testing.T) {
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
-	err := scheduler.RegisterWasmtimeHostFns(pool, scheduler.HostFnsDependencies{
-		DataManager:     dataManager,
-		MetadataManager: metadataManager,
-		ServerInfo:      nil,
-	})
+	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, nil, nil)
+
+	err := hostFns.RegisterWasmtimeHostFns(pool)
 	require.NoError(t, err)
 
 	executor := pool.Acquire()
@@ -154,11 +150,8 @@ func TestWasmPool_Wazero(t *testing.T) {
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
-	err := scheduler.RegisterWazeroHostFns(pool, scheduler.HostFnsDependencies{
-		DataManager:     dataManager,
-		MetadataManager: metadataManager,
-		ServerInfo:      nil,
-	})
+	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, nil, nil)
+	err := hostFns.RegisterWazeroHostFns(pool)
 	require.NoError(t, err)
 
 	executor := pool.Acquire()

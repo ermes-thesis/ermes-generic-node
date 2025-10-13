@@ -8,16 +8,16 @@ import (
 	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
 )
 
-func RegisterWasmtimeHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDependencies) error {
+func (h *HostFunctions) RegisterWasmtimeHostFns(pool *wasm.WasmExecutorPool) error {
 	fns := map[string]any{
 		"hostGet": func(collIdPtr int32, collIdLength int32, recordNamePtr int32, recordNameLength int32, groupsPtr int32, groupsLength int32, caller *wasmtime.Caller) int32 {
-			return hostGet(createWasmtimeAdapter(caller), collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength, &dependencies)
+			return h.hostGet(createWasmtimeAdapter(caller), collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength)
 		},
 		"hostMultipleGet": func(collIdPtr int32, collIdLength int32, recordNamesPtr int32, recordNamesLength int32, groupsPtr int32, groupsLength int32, caller *wasmtime.Caller) int32 {
-			return hostMultipleGet(createWasmtimeAdapter(caller), collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength, &dependencies)
+			return h.hostMultipleGet(createWasmtimeAdapter(caller), collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength)
 		},
 		"hostCreateCollection": func(metadataPointer int32, metadataLength int32, caller *wasmtime.Caller) int32 {
-			return hostCreateCollection(createWasmtimeAdapter(caller), metadataPointer, metadataLength, &dependencies)
+			return h.hostCreateCollection(createWasmtimeAdapter(caller), metadataPointer, metadataLength)
 		},
 	}
 

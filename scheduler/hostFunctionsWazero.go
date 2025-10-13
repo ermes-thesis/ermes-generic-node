@@ -9,16 +9,16 @@ import (
 	"github.com/tetratelabs/wazero/api"
 )
 
-func RegisterWazeroHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDependencies) error {
+func (h *HostFunctions) RegisterWazeroHostFns(pool *wasm.WasmExecutorPool) error {
 	fns := map[string]any{
 		"hostGet": func(ctx context.Context, m api.Module, collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength int32) int32 {
-			return hostGet(createWazeroAdapter(m), collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength, &dependencies)
+			return h.hostGet(createWazeroAdapter(m), collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength)
 		},
 		"hostMultipleGet": func(ctx context.Context, m api.Module, collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength int32) int32 {
-			return hostMultipleGet(createWazeroAdapter(m), collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength, &dependencies)
+			return h.hostMultipleGet(createWazeroAdapter(m), collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength)
 		},
 		"hostCreateCollection": func(ctx context.Context, m api.Module, metadataPointer, metadataLength int32) int32 {
-			return hostCreateCollection(createWazeroAdapter(m), metadataPointer, metadataLength, &dependencies)
+			return h.hostCreateCollection(createWazeroAdapter(m), metadataPointer, metadataLength)
 		},
 	}
 

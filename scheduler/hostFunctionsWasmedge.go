@@ -1,23 +1,14 @@
 package scheduler
 
 import (
-	datamanager "dataManager"
 	"fmt"
-	"metadataManager"
-	"server/info"
 
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
 	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
 	"github.com/second-state/WasmEdge-go/wasmedge"
 )
 
-type HostFnsDependencies struct {
-	DataManager     datamanager.DataManager
-	MetadataManager metadataManager.MetadataManager
-	ServerInfo      *info.ServerInfo
-}
-
-func RegisterWasmedgeHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDependencies) error {
+func (h *HostFunctions) RegisterWasmedgeHostFns(pool *wasm.WasmExecutorPool) error {
 	fnOneParamOneReturnType := wasmedge.NewFunctionType(
 		[]*wasmedge.ValType{wasmedge.NewValTypeI32(), wasmedge.NewValTypeI32()},
 		[]*wasmedge.ValType{wasmedge.NewValTypeI32()},
@@ -33,13 +24,13 @@ func RegisterWasmedgeHostFns(pool *wasm.WasmExecutorPool, dependencies HostFnsDe
 	// The last parameter can be 0 if developers do not need the cost measuring.
 	fns := map[string]any{
 		"hostGet": wasmedge.NewFunction(fnThreeParamOneReturnType, func(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, wasmedge.Result) {
-			return createWasmedgeResult(hostGet(createWasmedgeAdapter(callframe), params[0].(int32), params[1].(int32), params[2].(int32), params[3].(int32), params[4].(int32), params[5].(int32), &dependencies))
+			return createWasmedgeResult(h.hostGet(createWasmedgeAdapter(callframe), params[0].(int32), params[1].(int32), params[2].(int32), params[3].(int32), params[4].(int32), params[5].(int32)))
 		}, nil, 0),
 		"hostMultipleGet": wasmedge.NewFunction(fnThreeParamOneReturnType, func(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, wasmedge.Result) {
-			return createWasmedgeResult(hostMultipleGet(createWasmedgeAdapter(callframe), params[0].(int32), params[1].(int32), params[2].(int32), params[3].(int32), params[4].(int32), params[5].(int32), &dependencies))
+			return createWasmedgeResult(h.hostMultipleGet(createWasmedgeAdapter(callframe), params[0].(int32), params[1].(int32), params[2].(int32), params[3].(int32), params[4].(int32), params[5].(int32)))
 		}, nil, 0),
 		"hostCreateCollection": wasmedge.NewFunction(fnOneParamOneReturnType, func(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, wasmedge.Result) {
-			return createWasmedgeResult(hostCreateCollection(createWasmedgeAdapter(callframe), params[0].(int32), params[1].(int32), &dependencies))
+			return createWasmedgeResult(h.hostCreateCollection(createWasmedgeAdapter(callframe), params[0].(int32), params[1].(int32)))
 		}, nil, 0),
 	}
 	// If the function object is not added into a module instance object, it should be released.

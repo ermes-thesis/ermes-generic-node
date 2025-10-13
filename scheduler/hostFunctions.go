@@ -1,17 +1,36 @@
 package scheduler
 
 import (
+	datamanager "dataManager"
 	shared "dataManager/shared"
 	"errors"
 	"metadataManager"
+	"server/info"
 
+	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
-func hostGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr int32, collIdLength int32, recordNamePtr int32, recordNameLength int32, groupsPtr int32, groupsLength int32, deps *HostFnsDependencies) int32 {
+type HostFunctions struct {
+	dataManager     datamanager.DataManager
+	metadataManager metadataManager.MetadataManager
+	serverInfo      *info.ServerInfo
+	logger          *logger.Logger
+}
+
+func NewHostFunctions(dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, serverInfo *info.ServerInfo, logger *logger.Logger) *HostFunctions {
+	return &HostFunctions{
+		dataManager:     dataManager,
+		metadataManager: metadataManager,
+		serverInfo:      serverInfo,
+		logger:          logger,
+	}
+}
+
+func (h *HostFunctions) hostGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr int32, collIdLength int32, recordNamePtr int32, recordNameLength int32, groupsPtr int32, groupsLength int32) int32 {
 	var groups []string
 	err := wasmComponent.GetWasmObject(groupsPtr, groupsLength, &groups)
 	if err != nil {
@@ -29,7 +48,7 @@ func hostGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr int32, collIdLe
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	value, err := deps.DataManager.GetRecord(collId, groups, recordName)
+	value, err := h.dataManager.GetRecord(collId, groups, recordName)
 	var ret int32
 	if err != nil {
 		var unAuthErr *shared.UnauthorizedError
@@ -47,7 +66,7 @@ func hostGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr int32, collIdLe
 	return ret
 }
 
-func hostMultipleGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr int32, collIdLength int32, recordNamesPtr int32, recordNamesLength int32, groupsPtr int32, groupsLength int32, deps *HostFnsDependencies) int32 {
+func (h *HostFunctions) hostMultipleGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr int32, collIdLength int32, recordNamesPtr int32, recordNamesLength int32, groupsPtr int32, groupsLength int32) int32 {
 	collId, err := wasmComponent.GetWasmString(collIdPtr, collIdLength)
 	if err != nil {
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
@@ -65,7 +84,7 @@ func hostMultipleGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr int32, 
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	values, err := deps.DataManager.GetRecords(collId, groups, recordNames...)
+	values, err := h.dataManager.GetRecords(collId, groups, recordNames...)
 	var ret int32
 	if err != nil {
 		if errors.Is(err, &shared.UnauthorizedError{}) {
@@ -82,7 +101,7 @@ func hostMultipleGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr int32, 
 	return ret
 }
 
-func hostCreateCollection(wasmComponent adapter.WasmRuntimeAdapter, metadataPointer int32, metadataLength int32, deps *HostFnsDependencies) int32 {
+func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAdapter, metadataPointer int32, metadataLength int32) int32 {
 	var metadata model.Metadata
 	err := wasmComponent.GetWasmObject(metadataPointer, metadataLength, &metadata)
 	if err != nil {
@@ -96,12 +115,12 @@ func hostCreateCollection(wasmComponent adapter.WasmRuntimeAdapter, metadataPoin
 
 	collectionId := uuid.NewString()
 
-	err = deps.DataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Consistency == model.SequentialConsistent)
+	err = h.dataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Consistency == model.SequentialConsistent)
 	if err != nil {
 		return wasmComponent.WriteError(model.RedisError, err)
 	}
 
-	go deps.MetadataManager.CreateMetadata(collectionId, metadata, metadataManager.FROM_LOCAL)
+	go h.metadataManager.CreateMetadata(collectionId, metadata, metadataManager.FROM_LOCAL)
 
 	return wasmComponent.WriteResult(collectionId)
 }

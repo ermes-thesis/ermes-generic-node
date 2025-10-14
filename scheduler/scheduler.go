@@ -24,7 +24,7 @@ import (
 )
 
 type Scheduler interface {
-	Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, error)
+	Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqHostname string, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, uint64, error)
 }
 
 type FunctionResult struct {
@@ -98,17 +98,18 @@ func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
 	return found, collection, fmt.Errorf("after %d retries: %w", retries, err)
 }
 
-func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, uint64, error) {
+func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqHostname string, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, uint64, error) {
 	fmt.Println("Scheduling function:", functionName, "version:", functionVersion)
 	fmt.Printf("With collections: %v\n", collections)
 
 	if len(collections) == 0 {
-		return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId, "")
+		return s.executeLocally(functionName, functionVersion, collections, reqHostname, reqBody, groups, userId, "", false, nil)
 	}
 
 	// Initializing vars for function returned collections analysis
 	var sequentialCollection *shared.StrongCollection
 	hasEventualLocal := false
+	localEventualCollections := make(map[string]*shared.LocalCollection)
 	eventualHostCounts := make(map[string]uint)
 	maxEventualCount := uint(0)
 	hostWithMoreEventual := ""
@@ -121,7 +122,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 		// Cycling over all the collections with the same "AS"
 		for _, col := range cols {
 			// Checking if the collection is locally present, the check is retried maximum 10 times, every 500ms if the
-			// collection is a sequential consistent one. (In case of a eventual consistent the seqNumber passed is ignored)
+			// collection is a sequential consistent one. (In case of an eventual consistent the seqNumber passed is ignored)
 			found, collection, err := s.retryIsCollectionLocallyPresent(col.Id, sequentialSeqNumber, 10, 500*time.Millisecond)
 			if err != nil {
 				return nil, 0, fmt.Errorf("wrong sequence number for collection: %v, %w", col.Id, err)
@@ -138,6 +139,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 			} else {
 				if found {
 					hasEventualLocal = true
+					localEventualCollections[collection.CollectionId()] = collection.GetCollectionState().(*shared.LocalCollection)
 				}
 
 				// If the currently iterated collection is known by the current node, we count the host for this collection
@@ -173,11 +175,15 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 		}
 
 		if sequentialCollection.IsLocal() {
-			sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
+			//sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 			defer sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
-			if !sequentialCollection.IsLocal() {
-				return s.forwardRequestWithSequential(functionName, functionVersion, collections, groupToken, sequentialSeqNumber, functionMetadata.StrongCollWriteAccess, sequentialCollection)
-			}
+
+			// Re-check if the collection is still local, after acquiring the lock
+			// This is needed because the collection could be migrated while we were waiting for the lock
+			// If the collection is not local anymore, we need to forward the request
+			//if !sequentialCollection.IsLocal() {
+			//	return s.forwardRequestWithSequential(functionName, functionVersion, collections, groupToken, sequentialSeqNumber, functionMetadata.StrongCollWriteAccess, sequentialCollection)
+			//}
 
 			// If Sequential collection is present, and it's the leader execute locally.
 			// If Sequential collection is present, and the function needs only to read it, execute locally
@@ -186,7 +192,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 					sequentialCollection.WriteMutex.Lock()
 					defer sequentialCollection.WriteMutex.Unlock()
 				}
-				return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId, sequentialCollection.CollectionId())
+				return s.executeLocally(functionName, functionVersion, collections, reqHostname, reqBody, groups, userId, sequentialCollection.CollectionId(), functionMetadata.StrongCollWriteAccess, localEventualCollections)
 			}
 
 			// In all the other cases forward to the leader replica of the sequential collection
@@ -199,7 +205,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 	// If is not requested a Sequential Collection, and the current node has at least one of the eventual collections
 	// requested, we execute the function locally
 	if hasEventualLocal {
-		return s.executeLocally(functionName, functionVersion, collections, reqBody, groups, userId, "")
+		return s.executeLocally(functionName, functionVersion, collections, reqHostname, reqBody, groups, userId, "", false, localEventualCollections)
 	}
 
 	// We have only Eventual Collection requested, and no one of them is local, we forward the scheduling request
@@ -233,7 +239,7 @@ func (s *SchedulerImpl) forwardRequestWithSequential(functionName string, functi
 	panic("No available host for sequential collection")
 }
 
-func (s *SchedulerImpl) executeLocally(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, reqBody []byte, groups []string, userId string, sequentialCollId string) (*FunctionResult, uint64, error) {
+func (s *SchedulerImpl) executeLocally(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, reqHostname string, reqBody []byte, groups []string, userId string, sequentialCollId string, writeSeqCollection bool, reservedCollections map[string]*shared.LocalCollection) (*FunctionResult, uint64, error) {
 	executor := s.wasmExecutorPool.Acquire()
 	defer executor.Release()
 	ctx := WasmContext{
@@ -272,6 +278,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		return result, 0, nil
 	}
 
+	var seqNumber uint64
 	if sequentialCollId != "" {
 		if update, ok := resp.CacheUpdates.CollectionUpdates[sequentialCollId]; ok {
 			if !writeSeqCollection {
@@ -344,6 +351,17 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 				}
 			}
 			delete(resp.CacheUpdates.CollectionUpdates, sequentialCollId)
+		}
+
+		err = s.dataManager.GetMigrationManager().ManageNewRequest(sequentialCollId, reqHostname, writeSeqCollection, s.serverInfo.GetLatencyFor(reqHostname))
+		if err != nil {
+			s.log.Errorf("error updating sequential collection state after function execution: %v", err)
+			return nil, 0, fmt.Errorf("error updating sequential collection state after function execution: %v", err)
+		}
+
+		seqNumber, err = s.dataManager.GetMigrationManager().GetCollectionVectorClockValue(sequentialCollId)
+		if err != nil {
+			return nil, 0, fmt.Errorf("error getting sequential collection vector clock value: %v", err)
 		}
 	}
 
@@ -423,13 +441,25 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		s.sendUpdateToGTP(resp.CacheUpdates.Groups)
 	}()
 
-	var seqNumber uint64
-	if sequentialCollId != "" {
-		seqNumber, err = s.dataManager.GetMigrationManager().GetCollectionVectorClockValue(sequentialCollId)
-		if err != nil {
-			return nil, 0, fmt.Errorf("error getting sequential collection vector clock value: %v", err)
+	go func() {
+		for collId, coll := range reservedCollections {
+			err = s.dataManager.GetMigrationManager().ManageNewRequest(collId, reqHostname, false, s.serverInfo.GetLatencyFor(reqHostname))
+			if err != nil {
+				s.log.Errorf("error updating eventual collection state after function execution: %v", err)
+				continue
+			}
+			coll.CollectionLock.RUnlock()
 		}
-	}
+
+		for _, colls := range collections {
+			for _, col := range colls {
+				if _, ok := reservedCollections[col.Id]; !ok {
+					//TODO: make http request
+				}
+			}
+		}
+
+	}()
 
 	return result, seqNumber, nil
 }
@@ -530,6 +560,7 @@ func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functio
 	req.Header.Set("X-ERMES-COLLECTIONS", string(collectionsJson))
 	req.Header.Set("X-ERMES-SECRET", s.serverInfo.Secret)
 	req.Header.Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", seqNumber))
+	req.Header.Set("X-ERMES-HOSTNAME", s.serverInfo.HostName)
 
 	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {

@@ -78,6 +78,9 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 	if !collection.IsLocal() {
 		return false, collection, nil
 	}
+
+	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
+
 	if collection.IsStrong() {
 		if collection.(*shared.StrongCollection).ConsistencyClock < consistencyClock {
 			return true, collection, errors.New("outdated data in a strong collection replica")
@@ -418,7 +421,7 @@ func (c *CollectionsDiscovererImp) propagateRemoveCollection(collection shared.C
 }
 
 func (c *CollectionsDiscovererImp) getClosestChild(hostSet map[string]struct{}) string {
-	var minLatency uint64
+	var minLatency int
 	var minLatencyHost string
 
 	for _, child := range c.serverInfo.Children {

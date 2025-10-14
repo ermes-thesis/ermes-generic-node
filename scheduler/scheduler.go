@@ -274,6 +274,11 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 
 	if sequentialCollId != "" {
 		if update, ok := resp.CacheUpdates.CollectionUpdates[sequentialCollId]; ok {
+			if !writeSeqCollection {
+				s.log.Errorf("error: function tried to update sequential collection without having write access")
+				return nil, 0, fmt.Errorf("error: function tried to update sequential collection without having write access")
+			}
+
 			if update.Deleted {
 				err := s.dataManager.RemoveCollectionAndPropagate(sequentialCollId, groups)
 				if err != nil {

@@ -8,7 +8,7 @@ import (
 	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
 )
 
-func (h *HostFunctions) RegisterWasmtimeHostFns(pool *wasm.WasmExecutorPool) error {
+func (h *HostFunctions) RegisterWasmtimeHostFns(pool wasm.ExecutorPool) error {
 	fns := map[string]any{
 		"hostGet": func(collIdPtr int32, collIdLength int32, recordNamePtr int32, recordNameLength int32, groupsPtr int32, groupsLength int32, caller *wasmtime.Caller) int32 {
 			return h.hostGet(createWasmtimeAdapter(caller), collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength)

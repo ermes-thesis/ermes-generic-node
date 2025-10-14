@@ -9,7 +9,7 @@ import (
 	"github.com/tetratelabs/wazero/api"
 )
 
-func (h *HostFunctions) RegisterWazeroHostFns(pool *wasm.WasmExecutorPool) error {
+func (h *HostFunctions) RegisterWazeroHostFns(pool wasm.ExecutorPool) error {
 	fns := map[string]any{
 		"hostGet": func(ctx context.Context, m api.Module, collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength int32) int32 {
 			return h.hostGet(createWazeroAdapter(m), collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength)

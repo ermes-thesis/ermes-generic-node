@@ -29,6 +29,9 @@ import (
 )
 
 func run(ctx context.Context, configPath string) error {
+	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
+	defer cancel()
+
 	logFactory := logger.NewFactory(logger.Config{
 		Level:  zerolog.InfoLevel,
 		Format: "text",
@@ -51,9 +54,6 @@ func run(ctx context.Context, configPath string) error {
 
 	cfg := config.LoadConfig(configPath)
 	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](cfg.Lru.Size) //TODO: replace with redis size
-
-	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
-	defer cancel()
 
 	serverInfo, err := info.NewServerInfo(cfg)
 	if err != nil {
@@ -95,7 +95,7 @@ func run(ctx context.Context, configPath string) error {
 	dataManager := datamanager.GetDataManagerInstance()
 	dataManager.Init(collections, penality.LogPenalty(2), cfg.MigrationManager, cfg.Lru, httpServer, *httpServer.ServerInfo, &lruCache, redisClient, generalLog.Component("data_manager"))
 
-	var wasmExecutorPool *wasm.WasmExecutorPool
+	var wasmExecutorPool wasm.ExecutorPool
 	hostFunctions := scheduler.NewHostFunctions(dataManager, metadataManager, serverInfo, generalLog.Component("host_functions"))
 	switch cfg.Scheduler.WasmRuntime {
 	case config.Wasmedge:
@@ -122,7 +122,7 @@ func run(ctx context.Context, configPath string) error {
 		generalLog.Infof("Server correctly created and listening on port %s", serverInfo.Port)
 
 		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			fmt.Fprintf(os.Stderr, "error listening and serving: %s\n", err)
+			generalLog.Errorf("error starting http server: %v", err)
 		}
 	}()
 
@@ -132,12 +132,11 @@ func run(ctx context.Context, configPath string) error {
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
-		shutdownCtx := context.Background()
-		shutdownCtx, newcancel := context.WithTimeout(shutdownCtx, 10*time.Second)
-		defer newcancel()
+		shutdownCtx, newCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer newCancel()
 
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			fmt.Fprintf(os.Stderr, "error shutting down http server: %s\n", err)
+			generalLog.Errorf("error shutting down http server: %v", err)
 		}
 	}()
 
@@ -148,16 +147,14 @@ func run(ctx context.Context, configPath string) error {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "No path specified for config file as argument, node cannot start.\n")
-		os.Exit(0)
+		_, _ = fmt.Fprintf(os.Stderr, "No path specified for config file as argument, node cannot start.\n")
+		return
 	}
 
 	ctx := context.Background()
 
 	if err := run(ctx, os.Args[1]); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+		_, _ = fmt.Fprintf(os.Stderr, "Fatal error running node: %v\n", err)
 		os.Exit(1)
 	}
-
-	os.Exit(0)
 }

@@ -85,7 +85,7 @@ type HierarchyConfig struct {
 type HierarchyNodeConfig struct {
 	Address   string `yaml:"address"`
 	Domain    string `yaml:"domain"`
-	LatencyUp uint64 `yaml:"latency_up"`
+	LatencyUp int    `yaml:"latency_up"`
 }
 
 func LoadConfig(filename string) Config {

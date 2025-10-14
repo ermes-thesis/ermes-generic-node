@@ -40,7 +40,7 @@ type ServerInfo struct {
 type Node struct {
 	HostName       string
 	MetadataDomain string
-	Latency        uint64
+	Latency        int
 }
 
 func NewServerInfo(config config.Config) (*ServerInfo, error) {
@@ -120,4 +120,17 @@ func StringifyInfo(infoptr *ServerInfo) string {
 	sb.WriteString("\n")
 
 	return sb.String()
+}
+
+func (s *ServerInfo) GetLatencyFor(hostname string) int {
+	if s.Father != nil && s.Father.HostName == hostname {
+		return s.Father.Latency
+	}
+
+	for _, child := range s.Children {
+		if child.HostName == hostname {
+			return child.Latency
+		}
+	}
+	return 0
 }

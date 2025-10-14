@@ -148,7 +148,7 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 	//compute decision
 	feW, req := m.computeElasticForce(buffer, usage.GetWrite)
 
-	var latency uint64
+	var latency int
 	for _, child := range m.policy.serverInfo.Children {
 		if child.HostName == innerKey {
 			latency = child.Latency

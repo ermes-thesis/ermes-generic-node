@@ -8,7 +8,7 @@ import (
 	"github.com/second-state/WasmEdge-go/wasmedge"
 )
 
-func (h *HostFunctions) RegisterWasmedgeHostFns(pool wasm.ExecutorPool) error {
+func (h *HostFunctions) RegisterWasmedgeHostFns(pool *wasm.WasmedgeExecutorPool) error {
 	fnOneParamOneReturnType := wasmedge.NewFunctionType(
 		[]*wasmedge.ValType{wasmedge.NewValTypeI32(), wasmedge.NewValTypeI32()},
 		[]*wasmedge.ValType{wasmedge.NewValTypeI32()},

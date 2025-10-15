@@ -99,14 +99,17 @@ func run(ctx context.Context, configPath string) error {
 	hostFunctions := scheduler.NewHostFunctions(dataManager, metadataManager, serverInfo, generalLog.Component("host_functions"))
 	switch cfg.Scheduler.WasmRuntime {
 	case config.Wasmedge:
-		wasmExecutorPool = wasm.NewWasmedgeExecutorPool(10)
-		err = hostFunctions.RegisterWasmedgeHostFns(wasmExecutorPool)
+		wasmedgeExecutorPool := wasm.NewWasmedgeExecutorPool(10)
+		err = hostFunctions.RegisterWasmedgeHostFns(wasmedgeExecutorPool)
+		wasmExecutorPool = wasmedgeExecutorPool
 	case config.Wasmtime:
-		wasmExecutorPool = wasm.NewWasmtimeExecutorPool(10)
-		err = hostFunctions.RegisterWasmtimeHostFns(wasmExecutorPool)
+		wasmtimeExecutorPool := wasm.NewWasmtimeExecutorPool(10)
+		err = hostFunctions.RegisterWasmtimeHostFns(wasmtimeExecutorPool)
+		wasmExecutorPool = wasmtimeExecutorPool
 	case config.Wazero:
-		wasmExecutorPool = wasm.NewWazeroExecutorPool(10, false)
-		err = hostFunctions.RegisterWazeroHostFns(wasmExecutorPool)
+		wazeroExecutorPool := wasm.NewWazeroExecutorPool(10, false, ctx)
+		err = hostFunctions.RegisterWazeroHostFns(wazeroExecutorPool)
+		wasmExecutorPool = wazeroExecutorPool
 	}
 	if err != nil {
 		return fmt.Errorf("error registering host functions: %w", err)

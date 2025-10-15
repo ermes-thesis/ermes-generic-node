@@ -67,6 +67,10 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 			Ttl:    30 * time.Second,
 			BinDir: tmpDir,
 		},
+		LatestCache: caches.LatestCacheConfig{
+			Size: 10,
+			Ttl:  30 * time.Second,
+		},
 	}
 
 	cache, err := NewFunctionCache(cfg, fetcher, log)
@@ -134,6 +138,10 @@ func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
 			Size:   10,
 			Ttl:    1 * time.Second,
 			BinDir: tmpDir,
+		},
+		LatestCache: caches.LatestCacheConfig{
+			Size: 10,
+			Ttl:  30 * time.Second,
 		},
 	}
 

@@ -1,0 +1,18 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="BenchmarkExecution in scheduler/wasm_integration_test" type="GoTestRunConfiguration" factoryName="Go Test" nameIsGenerated="true">
+    <output_file path="$PROJECT_DIR$/scheduler/wasm_integration_test/results.json" is_save="true" />
+    <module name="ermes-generic-node" />
+    <target name="WSL - Ubuntu" />
+    <working_directory value="$PROJECT_DIR$/scheduler/wasm_integration_test" />
+    <parameters value="-test.benchtime=10s -test.benchmem" />
+    <root_directory value="$PROJECT_DIR$/scheduler" />
+    <kind value="PACKAGE" />
+    <package value="scheduler/wasm_integration_test" />
+    <directory value="$PROJECT_DIR$" />
+    <filePath value="$PROJECT_DIR$" />
+    <option name="build_on_remote_target" value="true" />
+    <framework value="gobench" />
+    <pattern value="BenchmarkExecution" />
+    <method v="2" />
+  </configuration>
+</component>

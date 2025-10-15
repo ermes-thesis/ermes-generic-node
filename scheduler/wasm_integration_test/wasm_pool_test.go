@@ -1,6 +1,7 @@
 package wasm_integration_test
 
 import (
+	"context"
 	"fmt"
 	metadataManager2 "metadataManager"
 	datamanager_mock "mocks/dataManager"
@@ -140,7 +141,7 @@ func TestWasmPool_Wasmtime(t *testing.T) {
 }
 
 func TestWasmPool_Wazero(t *testing.T) {
-	pool := wasm.NewWazeroExecutorPool(10, false)
+	pool := wasm.NewWazeroExecutorPool(10, false, context.Background())
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(t)
@@ -655,7 +656,7 @@ func BenchmarkExecutionTime_Wasmtime_WithOptimizations_Lightweight(b *testing.B)
 }
 
 func BenchmarkExecutionTime_Wazero_NoOptimization_CpuIntensive(b *testing.B) {
-	pool := wasm.NewWazeroExecutorPool(10, false)
+	pool := wasm.NewWazeroExecutorPool(10, false, context.Background())
 	defer pool.Close()
 
 	for b.Loop() {
@@ -672,7 +673,7 @@ func BenchmarkExecutionTime_Wazero_NoOptimization_CpuIntensive(b *testing.B) {
 }
 
 func BenchmarkExecutionTime_Wazero_NoOptimization_Recursive(b *testing.B) {
-	pool := wasm.NewWazeroExecutorPool(10, false)
+	pool := wasm.NewWazeroExecutorPool(10, false, context.Background())
 	defer pool.Close()
 
 	for b.Loop() {
@@ -689,7 +690,7 @@ func BenchmarkExecutionTime_Wazero_NoOptimization_Recursive(b *testing.B) {
 }
 
 func BenchmarkExecutionTime_Wazero_NoOptimization_Lightweight(b *testing.B) {
-	pool := wasm.NewWazeroExecutorPool(10, false)
+	pool := wasm.NewWazeroExecutorPool(10, false, context.Background())
 	defer pool.Close()
 
 	for b.Loop() {
@@ -706,7 +707,7 @@ func BenchmarkExecutionTime_Wazero_NoOptimization_Lightweight(b *testing.B) {
 }
 
 func BenchmarkExecutionTime_Wazero_WithOptimizations_CpuIntensive(b *testing.B) {
-	pool := wasm.NewWazeroExecutorPool(10, false)
+	pool := wasm.NewWazeroExecutorPool(10, false, context.Background())
 	defer pool.Close()
 
 	for b.Loop() {
@@ -723,7 +724,7 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_CpuIntensive(b *testing.B) 
 }
 
 func BenchmarkExecutionTime_Wazero_WithOptimizations_Recursive(b *testing.B) {
-	pool := wasm.NewWazeroExecutorPool(10, false)
+	pool := wasm.NewWazeroExecutorPool(10, false, context.Background())
 	defer pool.Close()
 
 	for b.Loop() {
@@ -740,7 +741,7 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_Recursive(b *testing.B) {
 }
 
 func BenchmarkExecutionTime_Wazero_WithOptimizations_Lightweight(b *testing.B) {
-	pool := wasm.NewWazeroExecutorPool(10, false)
+	pool := wasm.NewWazeroExecutorPool(10, false, context.Background())
 	defer pool.Close()
 
 	for b.Loop() {
@@ -762,7 +763,7 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_CpuIntensive_Interpreter(b 
 	})
 	defer patch.Unpatch()
 
-	pool := wasm.NewWazeroExecutorPool(10, true)
+	pool := wasm.NewWazeroExecutorPool(10, true, context.Background())
 	defer pool.Close()
 
 	for b.Loop() {
@@ -784,7 +785,7 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_Recursive_Interpreter(b *te
 	})
 	defer patch.Unpatch()
 
-	pool := wasm.NewWazeroExecutorPool(10, true)
+	pool := wasm.NewWazeroExecutorPool(10, true, context.Background())
 	defer pool.Close()
 
 	for b.Loop() {
@@ -806,7 +807,7 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_Lightweight_Interpreter(b *
 	})
 	defer patch.Unpatch()
 
-	pool := wasm.NewWazeroExecutorPool(10, true)
+	pool := wasm.NewWazeroExecutorPool(10, true, context.Background())
 	defer pool.Close()
 
 	for b.Loop() {

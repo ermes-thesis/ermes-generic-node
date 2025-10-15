@@ -79,14 +79,13 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 		return false, collection, nil
 	}
 
-	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-
 	if collection.IsStrong() {
 		if collection.(*shared.StrongCollection).ConsistencyClock < consistencyClock {
 			return true, collection, errors.New("outdated data in a strong collection replica")
 		}
 	}
 
+	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 	return true, collection, nil
 }
 

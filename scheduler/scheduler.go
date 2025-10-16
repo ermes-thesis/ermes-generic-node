@@ -95,7 +95,7 @@ func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
 			time.Sleep(delay)
 		}
 	}
-	return found, collection, s.log.ErrorfErr("after %d retries: %w", retries, err)
+	return found, collection, s.log.ErrorfErr("after %d retries: %v", retries, err)
 }
 
 func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqHostname string, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, uint64, error) {
@@ -124,7 +124,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 			// collection is a sequential consistent one. (In case of an eventual consistent the seqNumber passed is ignored)
 			found, collection, err := s.retryIsCollectionLocallyPresent(col.Id, sequentialSeqNumber, 10, 500*time.Millisecond)
 			if err != nil {
-				return nil, 0, s.log.ErrorfErr("wrong sequence number for collection: %v, %w", col.Id, err)
+				return nil, 0, s.log.ErrorfErr("wrong sequence number for collection: %v, %v", col.Id, err)
 			}
 
 			if found {

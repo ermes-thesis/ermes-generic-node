@@ -993,7 +993,7 @@ func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, err
 		metaKeys := []string{keysKey, groupsKey, infoKey, groupSequenceKey}
 		for _, metaKey := range metaKeys {
 			memUsage, err := tx.MemoryUsage(r.ctx, metaKey).Result()
-			if err != nil {
+			if err != nil && !errors.Is(err, redis.Nil) {
 				return err
 			}
 			totalMemory += uint64(memUsage)

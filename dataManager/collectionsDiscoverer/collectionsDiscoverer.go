@@ -135,7 +135,7 @@ func AccessRecords[T any](
 		return zero, errors.New("strong collection can't be accessed remotely")
 	}
 	c.collectionsPartialView.Mutex.Unlock() // lock release
-	return remoteFn(c.getClosestChild(collection.HostsId()))
+	return remoteFn(c.collectionsPartialView.GetClosestChild(collection.HostsId(), c.serverInfo))
 }
 
 func UpdateRecord(
@@ -394,9 +394,9 @@ func (c *CollectionsDiscovererImp) RemoveCollectionAndPropagate(collectionId str
 		return &shared.UnauthorizedError{}
 	}
 
-	c.collectionsPartialView.KnownCollections[collectionId] = nil //remove from local view
-	c.dbInterface.DeleteCollection(collectionId)                  //remove from local db
-	migrationManager.RemoveCollectionFromLru(collectionId)        //remove from lru
+	delete(c.collectionsPartialView.KnownCollections, collectionId) //remove from local view
+	c.dbInterface.DeleteCollection(collectionId)                    //remove from local db
+	migrationManager.RemoveCollectionFromLru(collectionId)          //remove from lru
 
 	c.collectionsPartialView.Mutex.Unlock()                                        // lock release
 	c.propagateRemoveCollection(collection, collectionId, groups, ignoredHostName) //propagate to other hosts
@@ -416,21 +416,4 @@ func (c *CollectionsDiscovererImp) propagateRemoveCollection(collection shared.C
 	if c.serverInfo.Father != nil && c.serverInfo.Father.HostName != ignoredHostName {
 		c.sender.RemoveCollection(c.serverInfo.Father.HostName, collectionId, c.serverInfo.HostName, groups)
 	}
-}
-
-func (c *CollectionsDiscovererImp) getClosestChild(hostSet map[string]struct{}) string {
-	var minLatency int
-	var minLatencyHost string
-
-	for _, child := range c.serverInfo.Children {
-		if _, ok := hostSet[child.HostName]; !ok {
-			continue
-		}
-		if minLatencyHost == "" || child.Latency < minLatency {
-			minLatency = child.Latency
-			minLatencyHost = child.HostName
-		}
-	}
-
-	return minLatencyHost
 }

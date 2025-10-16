@@ -93,3 +93,29 @@ func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 		w.WriteHeader(http.StatusOK)
 	})
 }
+
+func (m *MigrationManagerImp) handleIncomingRequestInfoMessages() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		m.log.Info("HTTP-REQ, New collection request info message received through HTTP request")
+
+		defer r.Body.Close()
+
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			m.log.Error("HTTP-REQ, Error reading request body")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		var msg gossip.CollectionRequestInfoMessages
+		if err := json.Unmarshal(bodyBytes, &msg); err != nil {
+			m.log.Error("HTTP-REQ, Error parsing collection request info message")
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK) //response
+
+		m.updatesRequestsInfo(msg)
+	})
+}

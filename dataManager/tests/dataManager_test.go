@@ -36,7 +36,14 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscovererImp.Init(collections, serverinfo, ser, db, log)
-	mig.ManageNewRequest("repoId", "childName", true, 3)
+	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName",
+			IsWrite:        true,
+			RequestLatency: 3,
+		},
+	})
 
 	b, c, d := clDiscovererImp.IsCollectionLocallyPresent("repoId", 0)
 
@@ -86,21 +93,62 @@ func TestIterationModule(t *testing.T) {
 	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Once()
 	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
 	//idle
-	mig.ManageNewRequest("repoId2", "user", true, 10)
-
-	mig.ManageNewRequest("repoId0", "2222", true, 20)
-	mig.ManageNewRequest("repoId0", "1111", true, 20)
-
-	mig.ManageNewRequest("repoId0", "user", false, 1)
-	mig.ManageNewRequest("repoId0", "1111", false, 6)
-	mig.ManageNewRequest("repoId0", "2222", false, 1)
-
-	mig.ManageNewRequest("repoId1", "2222", true, 15)
+	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
+		{
+			CollectionId:   "repoId2",
+			NodeName:       "user",
+			IsWrite:        true,
+			RequestLatency: 10,
+		},
+		{
+			CollectionId:   "repoId0",
+			NodeName:       "2222",
+			IsWrite:        true,
+			RequestLatency: 20,
+		},
+		{
+			CollectionId:   "repoId0",
+			NodeName:       "1111",
+			IsWrite:        true,
+			RequestLatency: 20,
+		},
+		{
+			CollectionId:   "repoId0",
+			NodeName:       "user",
+			IsWrite:        false,
+			RequestLatency: 1,
+		},
+		{
+			CollectionId:   "repoId0",
+			NodeName:       "1111",
+			IsWrite:        false,
+			RequestLatency: 6,
+		},
+		{
+			CollectionId:   "repoId0",
+			NodeName:       "2222",
+			IsWrite:        false,
+			RequestLatency: 1,
+		},
+		{
+			CollectionId:   "repoId1",
+			NodeName:       "2222",
+			IsWrite:        true,
+			RequestLatency: 15,
+		},
+	})
 
 	leaderGossip1 := gossip.NewLeaderDelegaMessage("1111", 0.90)
 	mig.ManageGossipMessage(leaderGossip1)
 	// gossipState
-	mig.ManageNewRequest("repoId0", "3333", true, 20)
+	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
+		{
+			CollectionId:   "repoId0",
+			NodeName:       "3333",
+			IsWrite:        true,
+			RequestLatency: 20,
+		},
+	})
 	child1Gossip1 := gossip.NewChildStateMessage("3333", 0.00)
 	mig.ManageGossipMessage(child1Gossip1)
 	child2Gossip1 := gossip.NewChildStateMessage("2222", 0.10)
@@ -123,13 +171,44 @@ func TestIterationModule(t *testing.T) {
 	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Times(2)
 	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
 	// idle
-	mig.ManageNewRequest("repoId0", "2222", false, 10)
-	mig.ManageNewRequest("repoId0", "2222", false, 10)
-	mig.ManageNewRequest("repoId0", "3333", false, 5)
-	mig.ManageNewRequest("repoId0", "3333", false, 15)
-
-	mig.ManageNewRequest("repoId3", "3333", false, 5)
-	mig.ManageNewRequest("repoId3", "2222", false, 1)
+	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
+		{
+			CollectionId:   "repoId0",
+			NodeName:       "2222",
+			IsWrite:        false,
+			RequestLatency: 10,
+		},
+		{
+			CollectionId:   "repoId0",
+			NodeName:       "2222",
+			IsWrite:        false,
+			RequestLatency: 10,
+		},
+		{
+			CollectionId:   "repoId0",
+			NodeName:       "3333",
+			IsWrite:        false,
+			RequestLatency: 5,
+		},
+		{
+			CollectionId:   "repoId0",
+			NodeName:       "3333",
+			IsWrite:        false,
+			RequestLatency: 15,
+		},
+		{
+			CollectionId:   "repoId3",
+			NodeName:       "3333",
+			IsWrite:        false,
+			RequestLatency: 5,
+		},
+		{
+			CollectionId:   "repoId3",
+			NodeName:       "2222",
+			IsWrite:        false,
+			RequestLatency: 1,
+		},
+	})
 
 	child1Gossip1 = gossip.NewChildStateMessage("3333", 0.90)
 	mig.ManageGossipMessage(child1Gossip1)
@@ -156,8 +235,20 @@ func TestIterationModule(t *testing.T) {
 	ser.On("SendGenericHTTPRequest", "3333", "/pvt-repo", mock.Anything).Return(200, nil).Once()
 	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
 	// idle
-	mig.ManageNewRequest("repoId3", "2222", false, 20)
-	mig.ManageNewRequest("repoId4", "3333", true, 20)
+	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
+		{
+			CollectionId:   "repoId3",
+			NodeName:       "2222",
+			IsWrite:        false,
+			RequestLatency: 20,
+		},
+		{
+			CollectionId:   "repoId4",
+			NodeName:       "3333",
+			IsWrite:        true,
+			RequestLatency: 20,
+		},
+	})
 	child1Gossip1 = gossip.NewChildStateMessage("3333", 0.90)
 	mig.ManageGossipMessage(child1Gossip1)
 	// gossipState

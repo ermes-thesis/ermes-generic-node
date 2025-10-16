@@ -191,12 +191,11 @@ func UpdateRecord(
 
 	//always notify to father
 	hosts := collection.HostsId()
-	if c.serverInfo.Father == nil {
-		return hosts, nil
-	}
 
-	addr := c.serverInfo.Father.HostName
-	hosts[addr] = struct{}{}
+	if c.serverInfo.Father != nil {
+		addr := c.serverInfo.Father.HostName
+		hosts[addr] = struct{}{}
+	}
 
 	if !collection.IsStrong() {
 		collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()

@@ -7,12 +7,16 @@ import (
 	usage "dataManager/migrationManager/childUsage"
 )
 
-func (s *ErmesStrongCollectionPolicy) GetUnstableEquilibriumState() map[string]map[string]*usage.CircularBuffer {
-	return s.equilibriumState
+func (s *ErmesStrongCollectionPolicy) GetUnstableEquilibriumState() *MyMap {
+	return &s.equilibriumState
 }
 
 func (s *ErmesStrongCollectionPolicy) GetBuffer(collection string, child string) *usage.CircularBuffer {
-	return s.equilibriumState[collection][child]
+	val, _ := s.equilibriumState.Load(collection)
+	if val == nil {
+		return nil
+	}
+	return val.(map[string]*usage.CircularBuffer)[child]
 }
 
 func (s *ErmesStrongCollectionPolicy) GetCurrentState() MigrationManagerState {

@@ -54,8 +54,7 @@ func TestManageNewStrongRequest(t *testing.T) {
 			RequestLatency: 10,
 		},
 	})
-
-	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()["repoId"]["childName"] == nil {
+	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName") == nil {
 		t.Fatal("Expected non-nil entry - 1")
 	}
 
@@ -86,23 +85,23 @@ func TestManageNewStrongRequest(t *testing.T) {
 		},
 	})
 
-	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()["repoId"]["childName1"] == nil {
+	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName1") == nil {
 		t.Fatal("Expected non-nil entry - 2")
 	}
-	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()["repoId1"]["childName1"] == nil {
+	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId1", "childName1") == nil {
 		t.Fatal("Expected non-nil entry - 3")
 	}
-	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()["repoId1"]["childName"] != nil {
+	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId1", "childName") != nil {
 		t.Fatal("Expected nil entry")
 	}
 
-	var equilibrium = instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()
-	if equilibrium["repoId"]["childName"].Head().Write.CumulativeLatency != 13 ||
-		equilibrium["repoId"]["childName"].Head().Read.CumulativeLatency != 3 ||
-		equilibrium["repoId"]["childName1"].Head().Write.CumulativeLatency != 0 ||
-		equilibrium["repoId"]["childName1"].Head().Read.CumulativeLatency != 7 ||
-		equilibrium["repoId1"]["childName1"].Head().Write.CumulativeLatency != 7 ||
-		equilibrium["repoId1"]["childName1"].Head().Read.CumulativeLatency != 0 {
+	mig := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy)
+	if mig.GetBuffer("repoId", "childName").Head().Write.CumulativeLatency != 13 ||
+		mig.GetBuffer("repoId", "childName").Head().Read.CumulativeLatency != 3 ||
+		mig.GetBuffer("repoId", "childName1").Head().Write.CumulativeLatency != 0 ||
+		mig.GetBuffer("repoId", "childName1").Head().Read.CumulativeLatency != 7 ||
+		mig.GetBuffer("repoId1", "childName1").Head().Write.CumulativeLatency != 7 ||
+		mig.GetBuffer("repoId1", "childName1").Head().Read.CumulativeLatency != 0 {
 		t.Error("wrong latency values")
 	}
 
@@ -144,13 +143,13 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 			RequestLatency: 3,
 		},
 	})
+	mig := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy)
 
-	var equilibrium = instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()
+	if mig.GetBuffer("repoId", "childName").Head().Write.GetElasticForce() != 26 {
 
-	if equilibrium["repoId"]["childName"].Head().Write.GetElasticForce() != 26 {
 		t.Error("wrong write force")
 	}
-	if equilibrium["repoId"]["childName"].Head().Read.GetElasticForce() != 3 {
+	if mig.GetBuffer("repoId", "childName").Head().Read.GetElasticForce() != 3 {
 		t.Error("wrong read force")
 	}
 

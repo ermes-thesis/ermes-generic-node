@@ -5,6 +5,7 @@ import (
 	stack "dataManager/migrationManager/callbackStack"
 	usage "dataManager/migrationManager/childUsage"
 	shared "dataManager/shared"
+	"fmt"
 	"sync"
 )
 
@@ -26,6 +27,8 @@ func (m *MigrationManagerDecisionState) Setup(args ...any) {
 	if !ok {
 		panic("expected []ChildStateInfo for childrenResourceUsage")
 	}
+
+	fmt.Printf("DEFAULT-STRONG-POLICY, switch to DECISION state\n")
 	m.requestStack = stack.NewCallStack()
 
 	m.NodeResourceUsage = childrenResourceUsage
@@ -52,6 +55,7 @@ func (m *MigrationManagerDecisionState) consumeStrongRequests() {
 		call := m.requestStack.Pop()
 		call()
 	}
+	fmt.Printf("DEFAULT-STRONG-POLICY, all strong requests consumed\n")
 }
 
 func (m *MigrationManagerDecisionState) ManageGossipMessage(msg gossip.GossipMessage) {
@@ -82,22 +86,24 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 
 	//imp
 	var wg sync.WaitGroup
-	wg.Add(len(m.policy.equilibriumState))
+	wg.Add(m.policy.equilibriumState.Count())
 
-	for outerKey, innerMap := range m.policy.equilibriumState {
+	m.policy.equilibriumState.Range(func(key, value any) bool {
+		outerKey := key.(string)
+		innerMap := value.(map[string]*usage.CircularBuffer)
 		//apply decision only on strong local collections
 		if m.policy.partialView.KnownCollections[outerKey] == nil ||
 			!m.policy.partialView.KnownCollections[outerKey].IsLocal() ||
 			!m.policy.partialView.KnownCollections[outerKey].IsStrong() {
-			continue
+			wg.Done()
+			return true
 		}
 
 		m.policy.log.Infof("DEFAULT-STRONG-POLICY, start taking decisions for collection %s", outerKey)
 		//take decision on a secondary thread
 		go m.innerKeyDecision(outerKey, innerMap, &wg, len(innerMap))
-
-	}
-
+		return true
+	})
 	//wait for all the decision to ends
 	wg.Wait()
 }
@@ -194,8 +200,7 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 	m.policy.lruCache.Remove(outerKey)
 
 	//stop keep track of access for a remote collection
-	delete(m.policy.equilibriumState, outerKey)
-
+	m.policy.equilibriumState.Delete(outerKey)
 	return true
 }
 
@@ -241,7 +246,7 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 		m.policy.lruCache.Remove(outerKey)
 
 		//stop keep track of access for a remote collection
-		delete(m.policy.equilibriumState, outerKey)
+		m.policy.equilibriumState.Delete(outerKey)
 	}
 
 	return true

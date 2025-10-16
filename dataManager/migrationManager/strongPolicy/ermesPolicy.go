@@ -4,7 +4,6 @@ import (
 	"config"
 	"dataManager/lru"
 	gossipmessages "dataManager/messages"
-	usage "dataManager/migrationManager/childUsage"
 	penality "dataManager/migrationManager/penalityFunction"
 	sender "dataManager/sender"
 	shared "dataManager/shared"
@@ -39,8 +38,9 @@ type ErmesStrongCollectionPolicy struct {
 	stateTimer *time.Timer
 
 	//impl
-	equilibriumState map[string]map[string]*usage.CircularBuffer //mapping resource - nodeName
-	partialView      *shared.CollectionPartialView               //set of local and remotes collections
+	//equilibriumState map[string]map[string]*usage.CircularBuffer OLD
+	equilibriumState MyMap                         // key: string (resource), value: map[string]*usage.CircularBuffer mapping resource - nodeName
+	partialView      *shared.CollectionPartialView //set of local and remotes collections
 
 	dbInterface db.GenericDB
 	sender      sender.MigrationManagerSender
@@ -59,7 +59,7 @@ func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.Lru
 		currentConfig:    config,
 		serverInfo:       serverInfo,
 		partialView:      collections,
-		equilibriumState: make(map[string]map[string]*usage.CircularBuffer),
+		equilibriumState: MyMap{},
 		penalityFunc:     penalityFunc,
 		dbInterface:      dbInterface,
 	}
@@ -84,7 +84,7 @@ func (s *ErmesStrongCollectionPolicy) SetDefaultState() {
 	s.startIdleTimer()
 }
 func (s *ErmesStrongCollectionPolicy) RemoveInfo(collectionId string) {
-	delete(s.equilibriumState, collectionId)
+	s.equilibriumState.Delete(collectionId)
 }
 
 func (s *ErmesStrongCollectionPolicy) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {

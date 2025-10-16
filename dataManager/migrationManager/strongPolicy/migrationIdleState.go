@@ -20,15 +20,17 @@ func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, 
 	defer m.policy.partialView.Mutex.Unlock()
 
 	//imp
-	if m.policy.equilibriumState[collectionId] == nil { //first time accessing resource in general
-		m.policy.equilibriumState[collectionId] = make(map[string]*usage.CircularBuffer)
+	innerAny, ok := m.policy.equilibriumState.Load(collectionId)
+	if !ok { //first time accessing resource in general
+		m.policy.equilibriumState.Store(collectionId, make(map[string]*usage.CircularBuffer))
+		innerAny, _ = m.policy.equilibriumState.Load(collectionId)
 		//m.MigrationManagerImp.addNewRemoteCollection(collectionId, "fatherName") //TODO: change with real name
 	}
-
-	resUsage, exists := m.policy.equilibriumState[collectionId][childName]
+	innerMap := innerAny.(map[string]*usage.CircularBuffer)
+	resUsage, exists := innerMap[childName]
 	if !exists { //first time accessing resource from a child
 		resUsage = usage.NewCircularBuffer(m.policy.currentConfig.ViewSize)
-		m.policy.equilibriumState[collectionId][childName] = resUsage
+		innerMap[childName] = resUsage
 	}
 
 	if isWrite { //update saved info

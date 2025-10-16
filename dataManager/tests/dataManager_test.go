@@ -157,7 +157,7 @@ func TestIterationModule(t *testing.T) {
 	mig.NewCollectionReceived("repoId3", true, false, make(map[string]string), []string{}, 0, 1, false, "host")
 
 	// verify first cycle
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
 
 	if !lru.CheckOrder([]string{"repoId3", "repoId0", "repoId1", "repoId2"}) {
@@ -223,7 +223,7 @@ func TestIterationModule(t *testing.T) {
 	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 0, 4, false, "host")
 
 	// verify second cycle
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
 	if !lru.CheckOrder([]string{"repoId4", "repoId3", "repoId0"}) {
 		t.Fatal("fail in second cycle")
@@ -260,7 +260,7 @@ func TestIterationModule(t *testing.T) {
 	// ---
 
 	// verify third cycle
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
 	if !lru.CheckOrder([]string{"repoId0"}) {
 		t.Fatal("fail in third cycle")
@@ -275,7 +275,7 @@ func TestIterationModule(t *testing.T) {
 	mig.NewCollectionReceived("repoId5", true, true, make(map[string]string), []string{}, 0, 10, false, "host")
 
 	// verify fourth cycle p1
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
 	if !lru.CheckOrder([]string{"repoId5"}) {
 		t.Fatal("fail in fourth cycle")
@@ -291,7 +291,7 @@ func TestIterationModule(t *testing.T) {
 	mig.ManageGossipMessage(child2Gossip1)
 
 	// verify fourth cycle p2
-	time.Sleep(1 * time.Second)
+	time.Sleep(2 * time.Second)
 	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
 	lru.PrintLRU()
 

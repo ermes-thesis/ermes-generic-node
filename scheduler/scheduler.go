@@ -417,16 +417,18 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 				}
 			}
 
-			updateResp, err := s.metadataManager.UpdateGroupsInCollection(sequentialCollId, groups, groupsToAdd, groupsToRemove)
-			if err != nil {
-				s.log.Errorf("error updating sequential collection groups: %v", err)
-				continue
+			if len(groupsToAdd) > 0 || len(groupsToRemove) > 0 {
+				updateResp, err := s.metadataManager.UpdateGroupsInCollection(sequentialCollId, groups, groupsToAdd, groupsToRemove)
+				if err != nil {
+					s.log.Errorf("error updating eventual collection groups: %v", err)
+					continue
+				}
+				groupUpdateMessage = append(groupUpdateMessage, messages.CollectionGroupUpdate{
+					CollectionId: sequentialCollId,
+					GroupNames:   updateResp.Groups,
+					Sequence:     updateResp.Sequence,
+				})
 			}
-			groupUpdateMessage = append(groupUpdateMessage, messages.CollectionGroupUpdate{
-				CollectionId: sequentialCollId,
-				GroupNames:   updateResp.Groups,
-				Sequence:     updateResp.Sequence,
-			})
 		}
 
 		if len(updateMessage) > 0 {

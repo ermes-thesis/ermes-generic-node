@@ -133,7 +133,7 @@ func (c *CollectionPartialView) restoreWeakCollectionFromSettings(info config.Co
 }
 
 func (c *CollectionPartialView) GetClosestChild(hostSet map[string]struct{}, serverInfo info.ServerInfo) string {
-	var minLatency uint64
+	var minLatency int
 	var minLatencyHost string
 
 	for _, child := range serverInfo.Children {

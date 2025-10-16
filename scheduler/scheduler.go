@@ -55,20 +55,20 @@ func NewScheduler(dataManager datamanager.DataManager, metadataManager metadataM
 func (s *SchedulerImpl) RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager) error {
 	err := server.AddCustomRoute("/invoke-function/{name}/{version}", false, s.handleFunctionInvocation(tokenDecoder, metadataManager))
 	if err != nil {
-		return fmt.Errorf("error adding route /invoke-function/{name}/{version}/: %v", err)
+		return s.log.ErrorfErr("error adding route /invoke-function/{name}/{version}/: %v", err)
 	}
 	err = server.AddCustomRoute("/invoke-function/{name}", false, s.handleFunctionInvocation(tokenDecoder, metadataManager))
 	if err != nil {
-		return fmt.Errorf("error adding route /invoke-function/{name}: %v", err)
+		return s.log.ErrorfErr("error adding route /invoke-function/{name}: %v", err)
 	}
 
 	err = server.AddCustomRoute("/pvt-offload-function/{name}/{version}", true, s.handleOffloadFunctionInvocation(tokenDecoder))
 	if err != nil {
-		return fmt.Errorf("error adding route /pvt-offload-function/{name}/{version}/: %v", err)
+		return s.log.ErrorfErr("error adding route /pvt-offload-function/{name}/{version}/: %v", err)
 	}
 	err = server.AddCustomRoute("/pvt-offload-function/{name}", true, s.handleOffloadFunctionInvocation(tokenDecoder))
 	if err != nil {
-		return fmt.Errorf("error adding route /pvt-offload-function/{name}: %v", err)
+		return s.log.ErrorfErr("error adding route /pvt-offload-function/{name}: %v", err)
 	}
 
 	return nil
@@ -95,12 +95,12 @@ func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
 			time.Sleep(delay)
 		}
 	}
-	return found, collection, fmt.Errorf("after %d retries: %w", retries, err)
+	return found, collection, s.log.ErrorfErr("after %d retries: %w", retries, err)
 }
 
 func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqHostname string, reqBody []byte, groups []string, userId string, groupToken string) (*FunctionResult, uint64, error) {
-	fmt.Println("Scheduling function:", functionName, "version:", functionVersion)
-	fmt.Printf("With collections: %v\n", collections)
+	s.log.Infof("Scheduling function: %v, version: %v", functionName, functionVersion)
+	s.log.Infof("With collections: %v\n", collections)
 
 	if len(collections) == 0 {
 		return s.executeLocally(functionName, functionVersion, collections, reqHostname, reqBody, groups, userId, "", false, nil)
@@ -125,12 +125,12 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 			// collection is a sequential consistent one. (In case of an eventual consistent the seqNumber passed is ignored)
 			found, collection, err := s.retryIsCollectionLocallyPresent(col.Id, sequentialSeqNumber, 10, 500*time.Millisecond)
 			if err != nil {
-				return nil, 0, fmt.Errorf("wrong sequence number for collection: %v, %w", col.Id, err)
+				return nil, 0, s.log.ErrorfErr("wrong sequence number for collection: %v, %w", col.Id, err)
 			}
 
 			if col.Metadata.Consistency == model.SequentialConsistent {
 				if sequentialCollection != nil {
-					return nil, 0, fmt.Errorf("multiple sequentially consistent collections are not supported")
+					return nil, 0, s.log.ErrorfErr("multiple sequentially consistent collections are not supported")
 				}
 				// If collection is NIL, it means that the current node does not know its existence
 				if collection != nil {
@@ -171,7 +171,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 		// Sequential collection present - check if it is requested a write or read access
 		functionMetadata, err := s.cache.GetMetadata(functionName, functionVersion)
 		if err != nil {
-			return nil, 0, fmt.Errorf("error retrieving function metadata: %v", err)
+			return nil, 0, s.log.ErrorfErr("error retrieving function metadata: %v", err)
 		}
 
 		if sequentialCollection.IsLocal() {
@@ -250,20 +250,23 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 	ctxJson, err := json.Marshal(ctx)
 	if err != nil {
 		s.log.Errorf("error marshalling wasm context: %v", err)
-		return nil, 0, fmt.Errorf("error marshalling wasm context: %v", err)
+		return nil, 0, s.log.ErrorfErr("error marshalling wasm context: %v", err)
 	}
 
 	wasmBinary, err := s.cache.GetBinary(functionName, functionVersion)
 	if err != nil {
 		s.log.Errorf("error retrieving function binary: %v", err)
-		return nil, 0, fmt.Errorf("error retrieving function binary: %v", err)
+		return nil, 0, s.log.ErrorfErr("error retrieving function binary: %v", err)
 	}
 
+	s.log.Infof("Invoking function %s, version %s", functionName, functionVersion)
 	resp := executor.Invoke(wasmBinary, "entry", reqBody, ctxJson)
+	s.log.Infof("Function executed with response: %v", resp)
+
 	repBody, err := json.Marshal(resp.Response)
 	if err != nil {
 		s.log.Errorf("error marshalling response body: %v", err)
-		return nil, 0, fmt.Errorf("error marshalling response body: %v", err)
+		return nil, 0, s.log.ErrorfErr("error marshalling response body: %v", err)
 	}
 	result := &FunctionResult{
 		StatusCode: resp.HttpCode,
@@ -271,6 +274,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 	}
 
 	if resp.CacheUpdates == nil {
+		s.log.Infof("No cache updates, returning result: %v", result)
 		if sequentialCollId != "" {
 			seqNumber, err := s.dataManager.GetMigrationManager().GetCollectionVectorClockValue(sequentialCollId)
 			return result, seqNumber, err
@@ -283,14 +287,14 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		if update, ok := resp.CacheUpdates.CollectionUpdates[sequentialCollId]; ok {
 			if !writeSeqCollection {
 				s.log.Errorf("error: function tried to update sequential collection without having write access")
-				return nil, 0, fmt.Errorf("error: function tried to update sequential collection without having write access")
+				return nil, 0, s.log.ErrorfErr("error: function tried to update sequential collection without having write access")
 			}
 
 			if update.Deleted {
 				err := s.dataManager.RemoveCollectionAndPropagate(sequentialCollId, groups)
 				if err != nil {
 					s.log.Errorf("error removing sequential collection: %v", err)
-					return nil, 0, fmt.Errorf("error removing sequential collection: %v", err)
+					return nil, 0, s.log.ErrorfErr("error removing sequential collection: %v", err)
 				}
 			} else {
 				var recordNames []string
@@ -308,7 +312,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 					}}, groups)
 					if err != nil {
 						s.log.Errorf("error updating sequential collection records: %v", err)
-						return nil, 0, fmt.Errorf("error updating sequential collection records: %v", err)
+						return nil, 0, s.log.ErrorfErr("error updating sequential collection records: %v", err)
 					}
 				}
 				if len(update.DeletedRecords) > 0 {
@@ -319,7 +323,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 					}}, groups)
 					if err != nil {
 						s.log.Errorf("error deleting sequential collection records: %v", err)
-						return nil, 0, fmt.Errorf("error deleting sequential collection records: %v", err)
+						return nil, 0, s.log.ErrorfErr("error deleting sequential collection records: %v", err)
 					}
 				}
 
@@ -336,7 +340,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 					updateResp, err := s.metadataManager.UpdateGroupsInCollection(sequentialCollId, groups, groupsToAdd, groupsToRemove)
 					if err != nil {
 						s.log.Errorf("error updating sequential collection groups: %v", err)
-						return nil, 0, fmt.Errorf("error updating sequential collection groups: %v", err)
+						return nil, 0, s.log.ErrorfErr("error updating sequential collection groups: %v", err)
 					}
 
 					err = s.dataManager.UpdateCollectionsGroupsAndPropagate([]messages.CollectionGroupUpdate{{
@@ -346,7 +350,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 					}})
 					if err != nil {
 						s.log.Errorf("error propagating sequential collection group updates: %v", err)
-						return nil, 0, fmt.Errorf("error propagating sequential collection group updates: %v", err)
+						return nil, 0, s.log.ErrorfErr("error propagating sequential collection group updates: %v", err)
 					}
 				}
 			}
@@ -356,12 +360,12 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		err = s.dataManager.GetMigrationManager().ManageNewRequest(sequentialCollId, reqHostname, writeSeqCollection, s.serverInfo.GetLatencyFor(reqHostname))
 		if err != nil {
 			s.log.Errorf("error updating sequential collection state after function execution: %v", err)
-			return nil, 0, fmt.Errorf("error updating sequential collection state after function execution: %v", err)
+			return nil, 0, s.log.ErrorfErr("error updating sequential collection state after function execution: %v", err)
 		}
 
 		seqNumber, err = s.dataManager.GetMigrationManager().GetCollectionVectorClockValue(sequentialCollId)
 		if err != nil {
-			return nil, 0, fmt.Errorf("error getting sequential collection vector clock value: %v", err)
+			return nil, 0, s.log.ErrorfErr("error getting sequential collection vector clock value: %v", err)
 		}
 	}
 
@@ -461,6 +465,8 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 
 	}()
 
+	s.log.Infof("Returning result: %v", result)
+
 	return result, seqNumber, nil
 }
 
@@ -550,12 +556,12 @@ func (s *SchedulerImpl) makeHTTPRequest(method string, url string, body io.Reade
 func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functionVersion string, collections map[string][]types.CollectionInfo, groupToken string, seqNumber uint64) (*FunctionResult, uint64, error) {
 	req, err := http.NewRequest(http.MethodGet, fmt.Sprintf("http://%s/pvt-offload-function/%s/%s", dest, functionName, functionVersion), nil)
 	if err != nil {
-		return nil, 0, fmt.Errorf("error creating request to leader: %v", err)
+		return nil, 0, s.log.ErrorfErr("error creating request to leader: %v", err)
 	}
 	req.Header.Set("X-ERMES-GROUPS", groupToken)
 	collectionsJson, err := json.Marshal(collections)
 	if err != nil {
-		return nil, 0, fmt.Errorf("error marshalling collections: %v", err)
+		return nil, 0, s.log.ErrorfErr("error marshalling collections: %v", err)
 	}
 	req.Header.Set("X-ERMES-COLLECTIONS", string(collectionsJson))
 	req.Header.Set("X-ERMES-SECRET", s.serverInfo.Secret)
@@ -564,7 +570,7 @@ func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functio
 
 	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {
-		return nil, 0, fmt.Errorf("error forwarding request to leader: %v", err)
+		return nil, 0, s.log.ErrorfErr("error forwarding request to leader: %v", err)
 	}
 
 	sequentialSeqNumberStr := resp.Header.Get("X-ERMES-SEQUENTIAL-NUMBER")
@@ -572,14 +578,14 @@ func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functio
 	if sequentialSeqNumberStr != "" {
 		_, err = fmt.Sscanf(sequentialSeqNumberStr, "%d", &sequentialSeqNumber)
 		if err != nil {
-			return nil, 0, fmt.Errorf("error parsing sequential sequence number: %v", err)
+			return nil, 0, s.log.ErrorfErr("error parsing sequential sequence number: %v", err)
 		}
 	}
 
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, 0, fmt.Errorf("error reading response from leader: %v", err)
+		return nil, 0, s.log.ErrorfErr("error reading response from leader: %v", err)
 	}
 	return &FunctionResult{
 		StatusCode: resp.StatusCode,

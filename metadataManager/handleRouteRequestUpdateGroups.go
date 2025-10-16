@@ -6,44 +6,50 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 )
 
 func (m *MetadataManagerImpl) handleRouteRequestUpdateGroups() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		m.log.Infof("[%s], got /pvt-request-update-groups \n", m.serverInfo.MetadataDomain)
 		defer r.Body.Close()
-
 		collectionId := r.PathValue("collection_id")
+
+		m.log.Info("Received group update request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
+		m.log.Debug("Received group update request", "collection_id", collectionId)
 
 		var message GroupMessage
 		err := json.NewDecoder(r.Body).Decode(&message)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error decoding metadata: %v\n", err)
-			w.WriteHeader(http.StatusInternalServerError)
+			m.log.Error("Failed to decode request body", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_id", collectionId, "error", err)
+			http.Error(w, fmt.Sprintf("Invalid request body: %v", err), http.StatusInternalServerError)
 			return
 		}
+
+		m.log.Debug("Decoded group update message", "collection_id", collectionId, "user_access_groups", message.UserGroups, "groups_to_add", message.GroupsToAdd, "groups_to_remove", message.GroupsToRemove)
 
 		resp, err := m.UpdateGroupsInCollection(collectionId, message.UserGroups, message.GroupsToAdd, message.GroupsToRemove)
 		if err != nil {
 			var unAuthErr *dataManagerShared.UnauthorizedError
 			if errors.As(err, &unAuthErr) {
-				w.WriteHeader(http.StatusUnauthorized)
+				m.log.Warn("Unauthorized group update attempt", "collection_id", collectionId, "user_access_groups", message.UserGroups, "error", err)
+				http.Error(w, "Unauthorized", http.StatusUnauthorized)
 				return
 			}
-			fmt.Fprintf(os.Stderr, "Error when creating metadata: %s \n", err)
-			w.WriteHeader(http.StatusInternalServerError)
+
+			m.log.Error("Failed to update groups in collection", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_id", collectionId, "user_access_groups", message.UserGroups, "groups_to_add", message.GroupsToAdd, "groups_to_remove", message.GroupsToRemove, "error", err)
+			http.Error(w, fmt.Sprintf("Internal Server Error: Failed to update groups in collection: %v", err), http.StatusInternalServerError)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		err = json.NewEncoder(w).Encode(resp)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error encoding response: %v\n", err)
-			w.WriteHeader(http.StatusInternalServerError)
+			m.log.Error("Failed to encode response", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_id", collectionId, "new_group_set", resp.Groups, "new_group_sequence_num", resp.Sequence, "error", err)
+			http.Error(w, fmt.Sprintf("Internal Server Error: Failed to encode response: %v", err), http.StatusInternalServerError)
 			return
 		}
 
+		m.log.Info("Group update in collection's metadata handled successfully", "collection_id", collectionId)
+		m.log.Debug("Group update in collection's metadata handled successfully", "new_groups", resp.Groups, "new_group_sequence_num", resp.Sequence)
 		w.WriteHeader(http.StatusOK)
 	}
 }

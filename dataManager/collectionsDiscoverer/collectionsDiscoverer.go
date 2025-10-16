@@ -133,7 +133,7 @@ func AccessRecords[T any](
 		return zero, errors.New("strong collection can't be accessed remotely")
 	}
 	c.collectionsPartialView.Mutex.Unlock() // lock release
-	return remoteFn(c.getClosestChild(collection.HostsId()))
+	return remoteFn(c.collectionsPartialView.GetClosestChild(collection.HostsId(), c.serverInfo))
 }
 
 func UpdateRecord(
@@ -415,21 +415,4 @@ func (c *CollectionsDiscovererImp) propagateRemoveCollection(collection shared.C
 	if c.serverInfo.Father != nil && c.serverInfo.Father.HostName != ignoredHostName {
 		c.sender.RemoveCollection(c.serverInfo.Father.HostName, collectionId, c.serverInfo.HostName, groups)
 	}
-}
-
-func (c *CollectionsDiscovererImp) getClosestChild(hostSet map[string]struct{}) string {
-	var minLatency uint64
-	var minLatencyHost string
-
-	for _, child := range c.serverInfo.Children {
-		if _, ok := hostSet[child.HostName]; !ok {
-			continue
-		}
-		if minLatencyHost == "" || child.Latency < minLatency {
-			minLatency = child.Latency
-			minLatencyHost = child.HostName
-		}
-	}
-
-	return minLatencyHost
 }

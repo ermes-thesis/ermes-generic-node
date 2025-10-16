@@ -3,7 +3,7 @@ package migrationManager
 import (
 	"config"
 	"dataManager/lru"
-	gossip "dataManager/messages"
+	"dataManager/messages"
 	penality "dataManager/migrationManager/penalityFunction"
 	"dataManager/migrationManager/strongPolicy"
 	weakpolicy "dataManager/migrationManager/weakPolicy"
@@ -21,12 +21,12 @@ import (
 type MigrationManager interface {
 	// Init initialize the singleton pattern
 	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger)
-	// ManageNewRequest used to update lru in real time (collectionID)
-	// if the collection is strong used to update forces in real time (collectionID, nodeName, write?, request cumulative latency).
+	// UpdatesRequestsInfo used to update lru in real time (collectionID)
+	// if the collection is strong used to update forces in real time.
 	// if the request comes from a user => nodeName = "user"
-	ManageNewRequest(string, string, bool, int) error
+	UpdatesRequestsInfo(info []messages.CollectionRequestInfo)
 	// ManageGossipMessage used to update non realtime info
-	ManageGossipMessage(gossip.GossipMessage)
+	ManageGossipMessage(messages.GossipMessage)
 	// NewCollectionReceived used when the node receive  a collection from one of the directly connected nodes (collectionID,isStrong,leader)
 	//return True if the collection is already stored locally and must not be stored in Redis
 	NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]string, groups []string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool
@@ -91,16 +91,9 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.collectionsLock = &sync.Mutex{}
 		//prepare server
 		m.sender = sender.NewMigrationManagerSender(m.log, server, serverInfo)
-		err := server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages().ServeHTTP)
-		if err != nil {
-			m.log.Error("Error adding route to server", "error", err)
-			return
-		}
-		err = server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection().ServeHTTP)
-		if err != nil {
-			m.log.Error("Error adding route to server", "error", err)
-			return
-		}
+		server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages().ServeHTTP)
+		server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection().ServeHTTP)
+		server.AddCustomRoute(m.sender.RequestInfoPath(), true, m.handleIncomingRequestInfoMessages().ServeHTTP)
 
 		//policy
 
@@ -211,38 +204,64 @@ func (m *MigrationManagerImp) NewCollectionCreated(collectionId string, collecti
 	return nil
 }
 
-func (m *MigrationManagerImp) ManageGossipMessage(msg gossip.GossipMessage) {
+func (m *MigrationManagerImp) ManageGossipMessage(msg messages.GossipMessage) {
 	m.log.Info("MIG-MANAGER, gossip message received")
 	m.StrongCollectionPolicy.ManageGossipMessage(msg)
 }
 
-// ManageNewRequest call this when wasm function has completed
-func (m *MigrationManagerImp) ManageNewRequest(collectionId string, nodeName string, isWrite bool, requestLatency int) error {
+// UpdatesRequestsInfo call this when wasm function has completed
+func (m *MigrationManagerImp) UpdatesRequestsInfo(info []messages.CollectionRequestInfo) {
+	m.updatesRequestsInfo(messages.ToCollectionRequestInfoMessages(info, m.serverInfo.HostName))
+}
+
+func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionRequestInfoMessages) {
+	var msgs = make(map[string]messages.CollectionRequestInfoMessages) // host -> message
 	//sync
 	m.collectionsLock.Lock()
 	defer m.collectionsLock.Unlock()
 
-	//if no local info on the collection
-	if m.collectionsPartialView.KnownCollections[collectionId] == nil || !m.collectionsPartialView.KnownCollections[collectionId].IsLocal() {
-		m.log.Errorf("MIG-MANAGER, collection %s not found locally or not local", collectionId)
-		return errors.New("collection not found locally or not local")
+	for _, i := range info.Messages {
+		//if no local info on the collection -> remote update -> save the message to send it later
+		if m.collectionsPartialView.KnownCollections[i.CollectionId] == nil {
+			fatherId := m.serverInfo.Father.HostName
+			if fatherId == "" {
+				m.log.Error("MIG-MANAGER, no info on the collection and no father to send the info")
+				continue
+			}
+			msgs[fatherId] = messages.CollectionRequestInfoMessages{Messages: append(msgs[fatherId].Messages, i)}
+		} else if !m.collectionsPartialView.KnownCollections[i.CollectionId].IsStrong() && !m.collectionsPartialView.KnownCollections[i.CollectionId].IsLocal() {
+			hostId := m.collectionsPartialView.GetClosestChild(m.collectionsPartialView.KnownCollections[i.CollectionId].HostsId(), m.serverInfo)
+			if hostId == "" {
+				m.log.Error("MIG-MANAGER, no info on the collection and no child to send the info")
+				continue
+			}
+			msgs[hostId] = messages.CollectionRequestInfoMessages{Messages: append(msgs[hostId].Messages, i)}
+		} else { // local update
+			m.localUpdateRequestInfo(i)
+		}
 	}
+
+	//send remote updates
+	for host, message := range msgs {
+		m.sender.SendRequestInfoMessage(message, host)
+	}
+}
+
+func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionRequestInfoMessage) {
 	m.log.Info("MIG-MANAGER, new request for a local collection received")
 
 	//place on top in the LRU
-	m.updateLru(collectionId, uint(m.collectionsPartialView.KnownCollections[collectionId].GetCollectionState().(*shared.LocalCollection).Size()))
+	m.updateLru(i.CollectionId, uint(m.collectionsPartialView.KnownCollections[i.CollectionId].GetCollectionState().(*shared.LocalCollection).Size()))
 	m.log.Info("MIG-MANAGER, collection placed on top in the LRU")
 
 	//if the collection is strong update forces
-	if m.collectionsPartialView.KnownCollections[collectionId].IsStrong() {
+	if m.collectionsPartialView.KnownCollections[i.CollectionId].IsStrong() {
 		m.log.Info("MIG-MANAGER, handle request for a strong collection")
-		m.StrongCollectionPolicy.ManageNewStrongRequest(collectionId, nodeName, isWrite, requestLatency)
+		m.StrongCollectionPolicy.ManageNewStrongRequest(i.CollectionId, i.NodeName, i.IsWrite, i.RequestLatency)
 	} else {
 		m.log.Info("MIG-MANAGER, handle request for a week collection")
-		m.WeakCollectionPolicy.ManageNewWeakRequest(collectionId, nodeName, isWrite, requestLatency)
+		m.WeakCollectionPolicy.ManageNewWeakRequest(i.CollectionId, i.NodeName, i.IsWrite, i.RequestLatency)
 	}
-
-	return nil
 }
 
 func (m *MigrationManagerImp) updateLru(collectionId string, collectionSize uint) {

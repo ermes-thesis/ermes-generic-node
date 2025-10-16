@@ -46,16 +46,45 @@ func TestManageNewStrongRequest(t *testing.T) {
 	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string, 13), []string{}, 0, 13, false, "host")
 	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string, 14), []string{}, 0, 14, false, "host")
 
-	instance1.ManageNewRequest("repoId", "childName", true, 10)
+	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName",
+			IsWrite:        true,
+			RequestLatency: 10,
+		},
+	})
 
 	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()["repoId"]["childName"] == nil {
 		t.Fatal("Expected non-nil entry - 1")
 	}
 
-	instance1.ManageNewRequest("repoId", "childName", true, 3)
-	instance1.ManageNewRequest("repoId", "childName", false, 3)
-	instance1.ManageNewRequest("repoId", "childName1", false, 7)
-	instance1.ManageNewRequest("repoId1", "childName1", true, 7)
+	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName",
+			IsWrite:        true,
+			RequestLatency: 3,
+		},
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName",
+			IsWrite:        false,
+			RequestLatency: 3,
+		},
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName1",
+			IsWrite:        false,
+			RequestLatency: 7,
+		},
+		{
+			CollectionId:   "repoId1",
+			NodeName:       "childName1",
+			IsWrite:        true,
+			RequestLatency: 7,
+		},
+	})
 
 	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()["repoId"]["childName1"] == nil {
 		t.Fatal("Expected non-nil entry - 2")
@@ -95,9 +124,26 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 0, 12, false, "host")
 	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string), []string{}, 0, 13, false, "host")
 
-	instance1.ManageNewRequest("repoId", "childName", true, 10)
-	instance1.ManageNewRequest("repoId", "childName", true, 3)
-	instance1.ManageNewRequest("repoId", "childName", false, 3)
+	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName",
+			IsWrite:        true,
+			RequestLatency: 10,
+		},
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName",
+			IsWrite:        true,
+			RequestLatency: 3,
+		},
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName",
+			IsWrite:        false,
+			RequestLatency: 3,
+		},
+	})
 
 	var equilibrium = instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetUnstableEquilibriumState()
 
@@ -122,14 +168,43 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 0, 13, false, "host")
 	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string), []string{}, 0, 14, false, "host")
 
-	instance1.ManageNewRequest("repoId", "childName", true, 10)
-	instance1.ManageNewRequest("repoId", "childName", true, 3)
-	instance1.ManageNewRequest("repoId", "childName", false, 7)
+	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName",
+			IsWrite:        true,
+			RequestLatency: 10,
+		},
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName",
+			IsWrite:        true,
+			RequestLatency: 3,
+		},
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName",
+			IsWrite:        false,
+			RequestLatency: 7,
+		},
+	})
 
 	instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName").MoveHead() //skip to next window
 
-	instance1.ManageNewRequest("repoId", "childName", true, 14)
-	instance1.ManageNewRequest("repoId", "childName", false, 9)
+	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName",
+			IsWrite:        true,
+			RequestLatency: 14,
+		},
+		{
+			CollectionId:   "repoId",
+			NodeName:       "childName",
+			IsWrite:        false,
+			RequestLatency: 9,
+		},
+	})
 	//fmt.Println(migrationManager.GetBuffer("repoId", "childName"))
 
 	instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).SetState(instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetDecisionState())

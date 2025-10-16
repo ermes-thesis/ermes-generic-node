@@ -16,6 +16,7 @@ import (
 const (
 	gossipPath                      = "/pvt-gossip"
 	repoPath                        = "/pvt-repo"
+	requestInfoPath                 = "/pvt-collectionRequestInfo"
 	remoteAccessPath                = "/pvt-dataRemoteAccess"
 	remoteUpdatePath                = "/pvt-dataRemoteUpdate"
 	updatePropagationPath           = "/pvt-dataUpdatePropagation"
@@ -31,8 +32,10 @@ const (
 type MigrationManagerSender interface {
 	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]string, []string, uint64, uint64)
 	SendGossipMessages(gossip.GossipMessage, string)
+	SendRequestInfoMessage(gossip.CollectionRequestInfoMessages, string)
 	GossipPath() string
 	RepoPath() string
+	RequestInfoPath() string
 }
 
 type MigrationManagerSenderImpl struct {
@@ -85,12 +88,22 @@ func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage
 	}()
 }
 
+func (s *MigrationManagerSenderImpl) SendRequestInfoMessage(msg gossip.CollectionRequestInfoMessages, destination string) {
+	s.log.Infof("SENDER: send collection request info to %s", destination)
+
+	go s.server.SendGenericHTTPRequest(destination, requestInfoPath, msg)
+}
+
 func (s *MigrationManagerSenderImpl) GossipPath() string {
 	return gossipPath
 }
 
 func (s *MigrationManagerSenderImpl) RepoPath() string {
 	return repoPath
+}
+
+func (s *MigrationManagerSenderImpl) RequestInfoPath() string {
+	return requestInfoPath
 }
 
 //###############################################################

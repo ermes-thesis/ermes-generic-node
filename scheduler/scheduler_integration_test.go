@@ -145,7 +145,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -270,7 +270,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 
 	wasmExecutorFather := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorFather.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorFather.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -448,7 +448,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -558,7 +558,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 
 	wasmExecutorFather := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorFather.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorFather.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -730,7 +730,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -869,7 +869,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -1036,7 +1036,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
@@ -1239,7 +1239,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	tknDecoderChild2.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	wasmExecutorChild2 := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild2.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{{}, wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorChild2.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})

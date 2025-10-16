@@ -42,11 +42,14 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 			return
 		}
 
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error reading request body: %s \n", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
+		body := []byte("{}")
+		if r.Body != http.NoBody {
+			body, err = io.ReadAll(r.Body)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "Error reading request body: %s \n", err)
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
 		}
 
 		var sequentialSeqNumber uint64

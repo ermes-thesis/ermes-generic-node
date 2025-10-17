@@ -103,7 +103,7 @@ func (p *CreateMetadataPropagatorImpl) sendHttpReqToDest(dest string, collection
 
 	if resp.StatusCode != http.StatusCreated {
 		p.log.ErrorfWith("Unexpected status code received while contacting '%s' path", []any{EndpointCreateMetadata}, "collection_id", collectionId, "destination", dest, "metadata", fmt.Sprintf("%+v", metadata), "received_status_code", resp.Status, "expected_status_code", http.StatusCreated, "error", err)
-		return fmt.Errorf("unexpected status code %d from %s", resp.Status, dest)
+		return fmt.Errorf("unexpected status code %d from %s", resp.StatusCode, dest)
 	}
 
 	p.log.Info("Metadata creation successfully propagated", "collection_id", collectionId)

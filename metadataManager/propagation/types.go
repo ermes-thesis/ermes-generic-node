@@ -21,13 +21,6 @@ const (
 	FROM_LOCAL
 )
 
-type MetadataAction int
-
-const (
-	Add = iota
-	Remove
-)
-
 type UpdateGroupResponse struct {
 	Groups   []string `json:"groups"`
 	Sequence uint64   `json:"sequence"`

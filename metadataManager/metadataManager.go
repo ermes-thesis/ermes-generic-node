@@ -11,8 +11,8 @@ import (
 	"metadataManager/types"
 	"server"
 	"server/info"
-	"slices"
 	"strings"
+	"sync"
 	"tokenDecoder"
 
 	"github.com/ermes-thesis/ermes-common/logger"
@@ -38,7 +38,7 @@ type MetadataManagerImpl struct {
 	createMetadataPropagator     propagation.CreateMetadataPropagator
 	groupUpdateRequestPropagator propagation.GroupUpdateRequestPropagator
 	updateGroupsPropagator       propagation.UpdateGroupsPropagator
-	customMetadataKeys           []string
+	customMetadataKeys           sync.Map
 }
 
 func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, log *logger.Logger, cache caches.FunctionCache) *MetadataManagerImpl {
@@ -51,7 +51,7 @@ func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, log *lo
 		createMetadataPropagator:     propagation.NewCreateMetadataPropagator(serverInfo, log),
 		queryPropagator:              propagation.NewQueryPropagator(serverInfo, log),
 		groupUpdateRequestPropagator: propagation.NewGroupUpdateRequestPropagator(serverInfo, log),
-		customMetadataKeys:           []string{},
+		customMetadataKeys:           sync.Map{},
 	}
 }
 
@@ -85,28 +85,24 @@ func (m *MetadataManagerImpl) RegisterRoutes(server server.ServerType, tokenDeco
 
 func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin propagation.PropagationOrigin) error {
 	m.log.Info("Creating metadata", "collection_id", collectionId, "origin", reqOrigin, "geolocation", metadata.Geolocation)
-	m.log.Debug("Creating metadata", "metadata", metadata)
+	m.log.Debug("Creating metadata", "metadata", fmt.Sprintf("%+v", metadata))
 
 	if strings.HasPrefix(metadata.Geolocation, m.serverInfo.MetadataDomain) {
-		var newMetadata []string
-		for key, value := range metadata.CustomMetadata {
-			if !slices.Contains(m.customMetadataKeys, key) {
-				newMetadata = append(newMetadata, key, value)
+		for key := range metadata.CustomMetadata {
+			if _, ok := m.customMetadataKeys.LoadOrStore(key, true); !ok {
+				m.log.Info("New custom metadata added. Altering Redis index", "new_custom_metadata", key)
+				err := m.redis.AlterIndex(key)
+				if err != nil {
+					m.log.Error("Error altering index in Redis", "collection_id", collectionId, "origin", reqOrigin, "geolocation", metadata.Geolocation, "metadata", fmt.Sprintf("%+v", metadata), "error", err)
+					m.customMetadataKeys.Delete(key)
+					return err
+				}
 			}
-		}
-		if len(newMetadata) > 0 {
-			m.log.Info("New custom metadata added. Altering Redis index", "new_custom_metadata", newMetadata)
-			err := m.redis.AlterIndex(newMetadata...)
-			if err != nil {
-				m.log.Error("Error altering index in Redis", "error", err)
-				return err
-			}
-			m.customMetadataKeys = append(m.customMetadataKeys, newMetadata...)
 		}
 
 		err := m.redis.SetMetadata(collectionId, metadata)
 		if err != nil {
-			m.log.Error("Error setting metadata in Redis", "collection_id", collectionId, "error", err)
+			m.log.Error("Error setting metadata in Redis", "collection_id", collectionId, "origin", reqOrigin, "geolocation", metadata.Geolocation, "metadata", fmt.Sprintf("%+v", metadata), "error", err)
 			return err
 		}
 		m.log.Info("Metadata created locally successfully", "collection_id", collectionId)
@@ -114,7 +110,7 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model
 
 	err := m.createMetadataPropagator.Propagate(collectionId, metadata, reqOrigin)
 	if err != nil {
-		m.log.Error("Error propagating metadata", "collection_id", collectionId, "error", err)
+		m.log.Error("Error propagating metadata", "collection_id", collectionId, "origin", reqOrigin, "geolocation", metadata.Geolocation, "metadata", fmt.Sprintf("%+v", metadata), "error", err)
 		return err
 	}
 

@@ -1,0 +1,23 @@
+all: true
+force-file-write: true
+formatter: goimports
+log-level: info
+structname: '{{.InterfaceName}}'
+filename: '{{.InterfaceName}}.go'
+pkgname: '{{.SrcPackageName}}_mock'
+dir: 'mocks/{{.InterfaceDirRelative}}'
+recursive: true
+require-template-schema-exists: true
+template: testify
+template-schema: '{{.Template}}.schema.json'
+packages:
+  tokenDecoder:
+  metadataManager:
+  db:
+  dataManager:
+  caches:
+  server:
+  scheduler:
+  github.com/ermes-thesis/ermes-common:
+    config:
+      dir: 'mocks/ermes-common/{{.InterfaceDirRelative}}'

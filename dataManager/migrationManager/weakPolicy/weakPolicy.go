@@ -2,11 +2,11 @@ package weakpolicy
 
 import (
 	"config"
-	sender "dataManager/migrationManager/migrationSender"
+	sender "dataManager/sender"
 	shared "dataManager/shared"
 	"db"
-	"fmt"
-	log "logger"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 type WeakCollectionPolicy interface {
@@ -22,21 +22,21 @@ const (
 
 type AlwaysCopyPolicy struct {
 	//config
-	logger log.Logger
+	log *logger.Logger
 
 	//impl
 	partialView *shared.CollectionPartialView
 
 	dbInterface db.GenericDB
-	sender      sender.Sender
+	sender      sender.MigrationManagerSender
 }
 
-func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.Sender, logger log.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB) WeakCollectionPolicy {
+func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.MigrationManagerSender, logger *logger.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB) WeakCollectionPolicy {
 	policy := &AlwaysCopyPolicy{
 		dbInterface: dbInterface,
 		partialView: partialView,
 		sender:      sender,
-		logger:      logger,
+		log:         logger,
 	}
 
 	return policy
@@ -48,12 +48,15 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 		return
 	}
 
-	a.logger.Println("WEAK-POLICY", "handle request for a weak collection", log.INFO)
+	a.log.Info("WEAK-POLICY, handle request for a weak collection")
 	weakCollection := a.partialView.KnownCollections[collectionId]
 
-	res, groups, err := a.dbInterface.GetCollection(collectionId)
+	weakCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+	defer weakCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+
+	res, groups, groupsSequence, err := a.dbInterface.GetCollection(collectionId)
 	if err != nil {
-		a.logger.Println("WEAK-POLICY", "got an error getting the collection from redis", log.ERROR)
+		a.log.Error("WEAK-POLICY, got an error getting the collection from redis")
 		panic(err) //TODO: decide
 	}
 	collectionSize, sizeError := a.dbInterface.GetCollectionMemoryUsage(collectionId)
@@ -62,6 +65,6 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 	}
 
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	a.logger.Println("WEAK-POLICY", fmt.Sprintf("send weak collection%s to node %s", collectionId, childName), log.INFO)
-	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups, collectionSize)
+	a.log.Infof("WEAK-POLICY, send weak collection%s to node %s", collectionId, childName)
+	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups, groupsSequence, collectionSize)
 }

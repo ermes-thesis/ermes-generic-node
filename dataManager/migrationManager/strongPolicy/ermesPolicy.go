@@ -3,16 +3,16 @@ package strongPolicy
 import (
 	"config"
 	"dataManager/lru"
-	usage "dataManager/migrationManager/childUsage"
-	gossipmessages "dataManager/migrationManager/gossipMessages"
-	sender "dataManager/migrationManager/migrationSender"
+	gossipmessages "dataManager/messages"
 	penality "dataManager/migrationManager/penalityFunction"
+	sender "dataManager/sender"
 	shared "dataManager/shared"
 	"db"
-	log "logger"
 	"server/info"
 	"sync"
 	"time"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 // ErmesStrongCollectionPolicy default policy
@@ -23,7 +23,7 @@ type ErmesStrongCollectionPolicy struct {
 	currentConfig config.MigrationManagerConfig
 	lruConfig     config.LruConfig
 	serverInfo    info.ServerInfo
-	logger        log.Logger
+	log           *logger.Logger
 
 	//state
 	currentState MigrationManagerState
@@ -38,27 +38,28 @@ type ErmesStrongCollectionPolicy struct {
 	stateTimer *time.Timer
 
 	//impl
-	equilibriumState map[string]map[string]*usage.CircularBuffer //mapping resource - nodeName
-	partialView      *shared.CollectionPartialView               //set of local and remotes collections
+	//equilibriumState map[string]map[string]*usage.CircularBuffer OLD
+	equilibriumState MyMap                         // key: string (resource), value: map[string]*usage.CircularBuffer mapping resource - nodeName
+	partialView      *shared.CollectionPartialView //set of local and remotes collections
 
 	dbInterface db.GenericDB
-	sender      sender.Sender
+	sender      sender.MigrationManagerSender
 
 	//used to define a penalization factor for past data -> func(bufferPos int, currentValue int)
 	penalityFunc penality.PenalityFunc
 }
 
-func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.LruConfig, collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo, sender sender.Sender, lruCache *lru.LRUCache[shared.Collection], logger log.Logger) StrongCollectionPolicy {
+func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.LruConfig, collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo info.ServerInfo, sender sender.MigrationManagerSender, lruCache *lru.LRUCache[shared.Collection], logger *logger.Logger) StrongCollectionPolicy {
 	policy := &ErmesStrongCollectionPolicy{
 		lruCache:         lruCache,
 		lruConfig:        lruConfig,
 		sender:           sender,
-		logger:           logger,
+		log:              logger,
 		migLock:          &sync.Mutex{},
 		currentConfig:    config,
 		serverInfo:       serverInfo,
 		partialView:      collections,
-		equilibriumState: make(map[string]map[string]*usage.CircularBuffer),
+		equilibriumState: MyMap{},
 		penalityFunc:     penalityFunc,
 		dbInterface:      dbInterface,
 	}
@@ -71,7 +72,7 @@ func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.Lru
 //impl StrongCollectionPolicy
 
 func (s *ErmesStrongCollectionPolicy) SetDefaultState() {
-	s.logger.Println("DEFAULT-STRONG-POLICY", "Setting default state", log.INFO)
+	s.log.Info("[DEFAULT-STRONG-POLICY], Setting default state")
 	//state pattern
 	s.idleState = &MigrationManagerIdleState{policy: s}
 	s.gossipState = &MigrationManagerGossipState{policy: s, dbInterface: s.dbInterface, MissingMessageCounter: 0, NodeResourceUsage: make(map[string]NodeStateInfo)}
@@ -83,7 +84,7 @@ func (s *ErmesStrongCollectionPolicy) SetDefaultState() {
 	s.startIdleTimer()
 }
 func (s *ErmesStrongCollectionPolicy) RemoveInfo(collectionId string) {
-	delete(s.equilibriumState, collectionId)
+	s.equilibriumState.Delete(collectionId)
 }
 
 func (s *ErmesStrongCollectionPolicy) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
@@ -101,7 +102,7 @@ func (s *ErmesStrongCollectionPolicy) setState(state MigrationManagerState) {
 
 // transitionToGossip handles automatic transition from idle to gossip
 func (s *ErmesStrongCollectionPolicy) transitionToGossip() {
-	s.logger.Println("DEFAULT-STRONG-POLICY", "transition to gossip state", log.INFO)
+	s.log.Info("[DEFAULT-STRONG-POLICY], transition to gossip state")
 	//sync
 	s.migLock.Lock()
 	defer s.migLock.Unlock()
@@ -113,19 +114,19 @@ func (s *ErmesStrongCollectionPolicy) transitionToGossip() {
 		s.setState(s.gossipState)
 		s.stopIdleTimer()
 		if s.serverInfo.Father != nil {
-			s.logger.Println("DEFAULT-STRONG-POLICY", "fog node set in gossip state", log.INFO)
+			s.log.Info("DEFAULT-STRONG-POLICY, fog node set in gossip state")
 			s.gossipState.Setup(len(s.serverInfo.Children) + 1)
 		} else {
-			s.logger.Println("DEFAULT-STRONG-POLICY", "cloud node set in gossip state", log.INFO)
+			s.log.Info("DEFAULT-STRONG-POLICY, cloud node set in gossip state")
 			s.gossipState.Setup(len(s.serverInfo.Children)) //number of adjacent nodes - TODO: manage cloud nodes.
 		}
 	} else {
-		s.logger.Println("DEFAULT-STRONG-POLICY", "can't translate to gossip state from a state different from idle", log.ERROR)
+		s.log.Error("DEFAULT-STRONG-POLICY, can't translate to gossip state from a state different from idle")
 	}
 }
 
 func (s *ErmesStrongCollectionPolicy) transitionToDecision(childrenResourceUsage map[string]NodeStateInfo) {
-	s.logger.Println("DEFAULT-STRONG-POLICY", "transition to decision state", log.INFO)
+	s.log.Info("DEFAULT-STRONG-POLICY, transition to decision state")
 	// Only transition if still in gossip state
 	if _, isGossip := s.currentState.(*MigrationManagerGossipState); isGossip {
 		//fmt.Println("Auto-transitioning from gossip to decision state")
@@ -133,12 +134,12 @@ func (s *ErmesStrongCollectionPolicy) transitionToDecision(childrenResourceUsage
 		s.decisionState.Setup(childrenResourceUsage)
 
 	} else {
-		s.logger.Println("DEFAULT-STRONG-POLICY", "can't translate to decision state from a state different from gossip", log.ERROR)
+		s.log.Error("DEFAULT-STRONG-POLICY, can't translate to decision state from a state different from gossip")
 	}
 }
 
 func (s *ErmesStrongCollectionPolicy) transitionToIdle() {
-	s.logger.Println("DEFAULT-STRONG-POLICY", "transition to idle state", log.INFO)
+	s.log.Info("DEFAULT-STRONG-POLICY, transition to idle state")
 
 	//imp
 	// Only transition if still in decision state
@@ -147,13 +148,13 @@ func (s *ErmesStrongCollectionPolicy) transitionToIdle() {
 		s.setState(s.idleState)
 		s.startIdleTimer()
 	} else {
-		s.logger.Println("DEFAULT-STRONG-POLICY", "can't translate to idle state from a state different from decision", log.ERROR)
+		s.log.Error("DEFAULT-STRONG-POLICY, can't translate to idle state from a state different from decision")
 	}
 }
 
 // startIdleTimer starts or restarts the timer for idle->gossip transition
 func (s *ErmesStrongCollectionPolicy) startIdleTimer() {
-	s.logger.Println("DEFAULT-STRONG-POLICY", "start idle timer", log.INFO)
+	s.log.Info("DEFAULT-STRONG-POLICY, start idle timer")
 	// Cancel existing timer if any
 	if s.stateTimer != nil {
 		s.stateTimer.Stop()
@@ -170,7 +171,7 @@ func (s *ErmesStrongCollectionPolicy) startIdleTimer() {
 
 func (s *ErmesStrongCollectionPolicy) stopIdleTimer() {
 	if s.stateTimer != nil {
-		s.logger.Println("DEFAULT-STRONG-POLICY", "stop idle timer", log.INFO)
+		s.log.Info("DEFAULT-STRONG-POLICY, stop idle timer")
 		s.stateTimer.Stop()
 		s.stateTimer = nil
 	}

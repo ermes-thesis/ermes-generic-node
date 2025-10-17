@@ -9,18 +9,11 @@ import (
 
 // Method to add pre-defined routes to the server.
 func (s *Server) compileRoutes() {
-	s.Handler.Handle("/add-client", public.HandleRouteAddClient(&s.Logger, s.Serverinfo, s.ClientRepo))
-	s.Handler.Handle("/ask-client-exists", public.HandleRouteAskClientExists(&s.Logger, s.Serverinfo, s.ClientRepo))
-	s.Handler.Handle("/pvt-add-client", s.checkSecret(private.HandleRoutePvtAddClient(&s.Logger, s.Serverinfo, s.ClientRepo)))
-	s.Handler.Handle("/pvt-ask-client-exists", s.checkSecret(private.HandleRoutePvtAskClientExists(&s.Logger, s.Serverinfo, s.ClientRepo)))
-	s.Handler.Handle("/pvt-data-transfer-request", s.checkSecret(private.HandleRoutePvtDataTransferRequest(&s.Logger, s.Serverinfo)))
-	s.Handler.Handle("/lookup", s.checkSecret(private.HandleRouteLookup(&s.Logger, s.MetadataManager)))
-	s.Handler.Handle("/create_metadata/{collection_id}", s.checkSecret(private.HandleRouteCreateMetadata(&s.Logger, s.MetadataManager, s.Serverinfo)))
-	s.Handler.Handle("/info", public.HandleRouteInfo(&s.Logger, s.Serverinfo))
+	s.Handler.Handle("/pvt-data-transfer-request", s.checkErmesSecret(private.HandleRoutePvtDataTransferRequest(s.logger, s.ServerInfo)))
+	s.Handler.Handle("/info", public.HandleRouteInfo(s.logger, s.ServerInfo))
 
 	// Let's test the method AddCustomRoute with the /info handler but calling it /info2
-
-	s.AddCustomRoute("/info2", false, public.HandleRouteInfo(&s.Logger, s.Serverinfo))
+	s.AddCustomRoute("/info2", false, public.HandleRouteInfo(s.logger, s.ServerInfo))
 }
 
 // AddCustomRoute Method to add a route defined by the user to the server. DO NOT ADD IT AFTER THE SERVER HAS BEEN STARTED PLS (idk what could happen)
@@ -35,9 +28,9 @@ func (s *Server) AddCustomRoute(path string, isPrivate bool, handler http.Handle
 	}
 
 	if isPrivate {
-		s.Handler.Handle(path, s.checkSecret(handler))
+		s.Handler.Handle(path, s.checkErmesSecret(handler))
 	} else {
-		s.Handler.Handle(path, handler)
+		s.Handler.Handle(path, s.checkClientSecret(handler))
 	}
 
 	return nil

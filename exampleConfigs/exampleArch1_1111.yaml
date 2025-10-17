@@ -37,3 +37,14 @@ redis:
   db: 0
   password: eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
   protocol: 2
+
+collections:
+  - collection_id: "string"     # mandatory
+    collection_size: 10         # mandatory for local collections
+    is_strong: true             # mandatory
+    is_leader: false            # mandatory for strong collections
+    is_local: true              # mandatory
+    hosts_id:                   # optional (child where the collection is stored if local, child that know the collection if remote)
+      - "string1"
+      - "string2"
+    leader_id: "string"         # optional for strong collections (child where the leader is stored if local, child that know the leader if remote)

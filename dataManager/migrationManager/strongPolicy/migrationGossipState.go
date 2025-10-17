@@ -1,10 +1,9 @@
 package strongPolicy
 
 import (
-	gossip "dataManager/migrationManager/gossipMessages"
+	gossip "dataManager/messages"
 	"db"
 	"fmt"
-	"logger"
 )
 
 // MigrationManagerGossipState
@@ -38,18 +37,18 @@ func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string
 func (m *MigrationManagerGossipState) SendGossipMessages() {
 	memStats, err := m.dbInterface.GetMemoryStats()
 	if err != nil {
-		m.policy.logger.Println("GOSSIP-STATE", fmt.Sprintf("failed to get memory stats: %v", err), logger.ERROR)
+		m.policy.log.Errorf("GOSSIP-STATE, failed to get memory stats: %v", err)
 	}
 	redisFreeSize := 1.0 - memStats.UsedMemoryDatasetPercentage
 
 	for value := range m.policy.serverInfo.Children {
-		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.Address, redisFreeSize)
-		m.policy.sender.SendGossipMessages(msgToChild, m.policy.serverInfo.Children[value].Address)
+		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.HostName, redisFreeSize)
+		m.policy.sender.SendGossipMessages(msgToChild, m.policy.serverInfo.Children[value].HostName)
 	}
 
 	if m.policy.serverInfo.Father != nil {
-		msgToFather := gossip.NewChildStateMessage(m.policy.serverInfo.Address, redisFreeSize)
-		m.policy.sender.SendGossipMessages(msgToFather, m.policy.serverInfo.Father.Address)
+		msgToFather := gossip.NewChildStateMessage(m.policy.serverInfo.HostName, redisFreeSize)
+		m.policy.sender.SendGossipMessages(msgToFather, m.policy.serverInfo.Father.HostName)
 	}
 }
 

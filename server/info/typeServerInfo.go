@@ -5,7 +5,6 @@ package info
 import (
 	"config"
 	"fmt"
-	"strconv"
 	"strings"
 )
 
@@ -14,32 +13,34 @@ import (
 // Every field of the struct should be treated as a constant value,
 // hence after creation it should not be modified by any goroutine.
 type ServerInfo struct {
-	Node
+	HostName       string
+	Address        string
+	Port           string
+	MetadataDomain string
 	// Father contains the address where the father is located (as a string).
-	//
-	// For the moment it contains only the port,
-	// hence it can be localized as 'http://localhost:<Father>'.
 	//
 	// If no father is set for the current node, a special 'nil' value should be used.
 	Father *Node
 	// Children contains an array of string literals, one per child,
 	// whom identify uniquely the name of each child of the current Ermes node.
 	//
-	// Again as the father each child can be localized as 'http://localhost:<Children[i]>',
-	//
 	// If the node is a leaf, a special 'nil' value should be used.
 	Children []Node
 	// The secret is the private header value with which the ermes nodes can communicate.
 	// For privacy reasons it must not be exposed to the user.
-	Secret string
+	Secret       string
+	ClientSecret string
 
 	CloudNode *Node
+
+	// Address:port of the Group Token Provider
+	GroupTokenProviderHostName string
 }
 
 type Node struct {
-	Address        string
+	HostName       string
 	MetadataDomain string
-	Latency        uint64
+	Latency        int
 }
 
 func NewServerInfo(config config.Config) (*ServerInfo, error) {
@@ -49,59 +50,67 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 
 	// NB: these operations just copy the references !
 	// TODO: careful for the moment we do not manage errors in the configuration
-	name := config.Node.Port
+	hostname := config.Node.Name
+	address := config.Node.Address
+	port := config.Node.Port // All the processes are open on the same port
 	domain := config.Node.Domain
-	parent := config.Hierarchy.Father[0]
-	parentDomain := config.Hierarchy.Father[1]
-	parentLatency, _ := strconv.ParseUint(config.Hierarchy.Father[2], 10, 64)
-	cloudNode := config.Hierarchy.Cloud[0]
-	cloudNodeDomain := config.Hierarchy.Cloud[1]
-	childrenArgs := config.Hierarchy.Children
-
-	children := make([]Node, len(childrenArgs)/3)
-	for i := 0; i < len(children); i++ {
-		childLatency, _ := strconv.ParseUint(childrenArgs[3*i+2], 10, 64)
-		children[i] = Node{
-			Address:        childrenArgs[3*i],
-			MetadataDomain: childrenArgs[3*i+1],
-			Latency:        childLatency,
+	var father *Node = nil
+	var cloudNode *Node = nil
+	if config.Hierarchy.Father != nil {
+		father = &Node{
+			HostName:       config.Hierarchy.Father.Address,
+			MetadataDomain: config.Hierarchy.Father.Domain,
+			Latency:        config.Hierarchy.Father.LatencyUp,
+		}
+	}
+	if config.Hierarchy.Cloud != nil {
+		cloudNode = &Node{
+			HostName:       config.Hierarchy.Cloud.Address,
+			MetadataDomain: config.Hierarchy.Cloud.Domain,
+			Latency:        config.Hierarchy.Cloud.LatencyUp,
 		}
 	}
 
-	serverinfo := &ServerInfo{
-		Secret: config.Node.Secret, // For the moment leave it hardcoded
-		CloudNode: &Node{
-			Address:        cloudNode,
-			MetadataDomain: cloudNodeDomain,
-		},
-		Father: &Node{
-			Address:        parent,
-			MetadataDomain: parentDomain,
-			Latency:        parentLatency,
-		},
-		Children: children,
-		Node: Node{
-			Address:        name,
-			MetadataDomain: domain,
-		},
+	children := make([]Node, len(config.Hierarchy.Children))
+	for i, child := range config.Hierarchy.Children {
+		children[i] = Node{
+			HostName:       child.Address,
+			MetadataDomain: child.Domain,
+			Latency:        child.LatencyUp,
+		}
 	}
 
-	return serverinfo, nil
+	serverInfo := &ServerInfo{
+		HostName:                   hostname,
+		Address:                    address,
+		Port:                       port,
+		MetadataDomain:             domain,
+		Secret:                     config.Node.Secret,
+		ClientSecret:               config.Node.ClientSecret,
+		CloudNode:                  cloudNode,
+		Father:                     father,
+		Children:                   children,
+		GroupTokenProviderHostName: config.Scheduler.GroupTokenProviderAddress + ":" + config.Scheduler.GroupTokenProviderPort,
+	}
+
+	return serverInfo, nil
 }
 
 // StringifyInfo returns a pretty-formatted string of the input ServerInfo.
 func StringifyInfo(infoptr *ServerInfo) string {
 	var sb strings.Builder
 
-	sb.WriteString("Name: " + infoptr.Address + "\n")
+	sb.WriteString("HostName: " + infoptr.HostName + "\n")
 	sb.WriteString("Domain: " + infoptr.MetadataDomain + "\n")
-	sb.WriteString("Father: " + infoptr.Father.Address + "\n")
-	sb.WriteString("FatherDomain: " + infoptr.Father.MetadataDomain + "\n")
-	sb.WriteString("FatherLatency: " + fmt.Sprint(infoptr.Father.Latency) + "\n")
+	if infoptr.Father != nil {
+		sb.WriteString("Father: " + infoptr.Father.HostName + "\n")
+		sb.WriteString("FatherDomain: " + infoptr.Father.MetadataDomain + "\n")
+		sb.WriteString("FatherLatency: " + fmt.Sprint(infoptr.Father.Latency) + "\n")
+	}
 	sb.WriteString("Children: ")
 
 	for _, str := range infoptr.Children {
-		sb.WriteString(str.Address)
+		sb.WriteString(str.HostName)
 		sb.WriteString(" ")
 		sb.WriteString(str.MetadataDomain)
 		sb.WriteString(" ")
@@ -111,4 +120,17 @@ func StringifyInfo(infoptr *ServerInfo) string {
 	sb.WriteString("\n")
 
 	return sb.String()
+}
+
+func (s *ServerInfo) GetLatencyFor(hostname string) int {
+	if s.Father != nil && s.Father.HostName == hostname {
+		return s.Father.Latency
+	}
+
+	for _, child := range s.Children {
+		if child.HostName == hostname {
+			return child.Latency
+		}
+	}
+	return 0
 }

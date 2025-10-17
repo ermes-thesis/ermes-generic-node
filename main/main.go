@@ -1,94 +1,145 @@
 package main
 
 import (
+	"caches"
 	"config"
 	"context"
-	clDiscoverer "dataManager/collectionsDiscoverer"
+	datamanager "dataManager"
 	"dataManager/lru"
-	"dataManager/migrationManager"
+	penality "dataManager/migrationManager/penalityFunction"
 	dataManagerShared "dataManager/shared"
-	"db"
+	"db/redis"
 	"errors"
 	"fmt"
-	"io"
-	"logger"
 	"metadataManager"
-	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"scheduler"
 	"server"
 	"server/info"
 	"sync"
 	"time"
+	"tokenDecoder"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/rs/zerolog"
+
+	"github.com/ermes-thesis/ermes-common/wasm-pool"
 )
 
-// TODO replace
-func myPenalityFunc(bufferPos int, currentValue int) int {
-	return currentValue
-}
-
-func run(ctx context.Context, w io.Writer, configPath string) error {
-	var loggerFile io.Writer = os.Stdout //TODO replace with file
-	var logger = logger.NewLogger(logger.INFO, &loggerFile)
-
-	config := config.LoadConfig(configPath)
-	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](config.Lru.Size) //TODO: replace with redis size
-
+func run(ctx context.Context, configPath string) error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	serverInfo, err := info.NewServerInfo(config)
+	logFactory := logger.NewFactory(logger.Config{
+		Level:  zerolog.InfoLevel,
+		Format: "text",
+		Output: &logger.LogFile{
+			LogDir: "genLogs",
+		},
+		StdoutEnabled: true,
+		AddSource:     true,
+		Colored:       true,
+	})
+
+	// Create general logger
+	generalLog, err := logFactory.New("general")
+	if err != nil {
+		return fmt.Errorf("failed to create general logger: %v", err)
+	}
+	defer generalLog.Close()
+
+	generalLog.Info("Starting node...")
+
+	cfg := config.LoadConfig(configPath)
+	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](cfg.Lru.Size) //TODO: replace with redis size
+
+	serverInfo, err := info.NewServerInfo(cfg)
 	if err != nil {
 		return fmt.Errorf("error creating server info: %w", err)
 	}
 
-	redisClient := db.NewRedisClient(config.Redis, ctx)
-	metadataLookup := metadataManager.NewMetadataManager(redisClient, serverInfo, w)
-
-	//Run server
-	ser, err := server.NewServer(w, serverInfo, redisClient, metadataLookup)
-
+	httpServer, err := server.NewServer(generalLog.Component("http_server"), serverInfo)
 	if err != nil {
 		return err
 	}
 
-	httpServer := &http.Server{
-		Addr:    net.JoinHostPort("localhost", ser.Port),
-		Handler: ser.Handler,
+	redisClient, err := redis.NewRedisClient(cfg.Redis, ctx, generalLog.Component("redis"))
+	if err != nil {
+		return fmt.Errorf("error creating redis client: %w", err)
 	}
-
-	go func() {
-		fmt.Fprintf(w, "Server correctly created and listening on port %s \n", ser.Port)
-
-		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			fmt.Fprintf(os.Stderr, "error listening and serving: %s\n", err)
-		}
-	}()
+	// remoteFunctionName must be in the format: "functionName/functionVersion"
+	funcCache, err := caches.NewDefaultFunctionCache(cfg.FunctionsCache, cfg.Node.Secret, generalLog.Component("cache"))
+	if err != nil {
+		return fmt.Errorf("error creating function cache: %w", err)
+	}
+	tknDecoder, err := tokenDecoder.NewTokenDecoder(cfg.GroupTokenPublicKeyPath)
+	if err != nil {
+		return fmt.Errorf("error creating token decoder: %w", err)
+	}
+	metadataManager := metadataManager.NewMetadataManager(redisClient, serverInfo, generalLog.Component("metadata_manager"), funcCache)
+	err = metadataManager.RegisterRoutes(httpServer, tknDecoder)
+	if err != nil {
+		return fmt.Errorf("error registering metadata routes: %w", err)
+	}
 
 	//node set up
 	collections := &dataManagerShared.CollectionPartialView{
 		KnownCollections: make(map[string]dataManagerShared.Collection),
 	}
-	migrationManagerInstance := migrationManager.GetMigrationManagerInstance(*logger)
-	migrationManagerInstance.Init(collections, myPenalityFunc, config.MigrationManager, config.Lru, ser, *ser.Serverinfo, &lruCache, redisClient, *logger)
-	clDiscovererInstance := clDiscoverer.GetCollectionsDiscovererInstance(*logger)
-	clDiscovererInstance.Init(collections)
+	err = collections.RestoreInfoFromSettings(cfg.Collections)
+	if err != nil {
+		return fmt.Errorf("error restoring collections from settings: %w", err)
+	}
+	dataManager := datamanager.GetDataManagerInstance()
+	dataManager.Init(collections, penality.LogPenalty(2), cfg.MigrationManager, cfg.Lru, httpServer, *httpServer.ServerInfo, &lruCache, redisClient, generalLog.Component("data_manager"))
 
-	// TODO: understand these lines of code
-	// I think it should be some synchronization method when the server shuts down
+	var wasmExecutorPool wasm.ExecutorPool
+	hostFunctions := scheduler.NewHostFunctions(dataManager, metadataManager, serverInfo, generalLog.Component("host_functions"))
+	switch cfg.Scheduler.WasmRuntime {
+	case config.Wasmedge:
+		wasmedgeExecutorPool := wasm.NewWasmedgeExecutorPool(10)
+		err = hostFunctions.RegisterWasmedgeHostFns(wasmedgeExecutorPool)
+		wasmExecutorPool = wasmedgeExecutorPool
+	case config.Wasmtime:
+		wasmtimeExecutorPool := wasm.NewWasmtimeExecutorPool(10)
+		err = hostFunctions.RegisterWasmtimeHostFns(wasmtimeExecutorPool)
+		wasmExecutorPool = wasmtimeExecutorPool
+	case config.Wazero:
+		wazeroExecutorPool := wasm.NewWazeroExecutorPool(10, false, ctx)
+		err = hostFunctions.RegisterWazeroHostFns(wazeroExecutorPool)
+		wasmExecutorPool = wazeroExecutorPool
+	}
+	if err != nil {
+		return fmt.Errorf("error registering host functions: %w", err)
+	}
+
+	sched := scheduler.NewScheduler(dataManager, metadataManager, funcCache, wasmExecutorPool, serverInfo, generalLog.Component("scheduler"))
+	err = sched.RegisterRoutes(httpServer, tknDecoder, metadataManager)
+	if err != nil {
+		return fmt.Errorf("error registering scheduler routes: %w", err)
+	}
+
+	go func() {
+		generalLog.Infof("Server correctly created and listening on port %s", serverInfo.Port)
+
+		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			generalLog.Errorf("error starting http server: %v", err)
+		}
+	}()
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
-		shutdownCtx := context.Background()
-		shutdownCtx, newcancel := context.WithTimeout(shutdownCtx, 10*time.Second)
-		defer newcancel()
+		shutdownCtx, newCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer newCancel()
 
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			fmt.Fprintf(os.Stderr, "error shutting down http server: %s\n", err)
+			generalLog.Errorf("error shutting down http server: %v", err)
 		}
 	}()
 
@@ -99,16 +150,14 @@ func run(ctx context.Context, w io.Writer, configPath string) error {
 
 func main() {
 	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "No path specified for config file as argument, node cannot start.\n")
-		os.Exit(0)
+		_, _ = fmt.Fprintf(os.Stderr, "No path specified for config file as argument, node cannot start.\n")
+		return
 	}
 
 	ctx := context.Background()
 
-	if err := run(ctx, os.Stdout, os.Args[1]); err != nil {
-		fmt.Fprintf(os.Stderr, "%s\n", err)
+	if err := run(ctx, os.Args[1]); err != nil {
+		_, _ = fmt.Fprintf(os.Stderr, "Fatal error running node: %v\n", err)
 		os.Exit(1)
 	}
-
-	os.Exit(0)
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/ermes-thesis/ermes-common/model"
+	"metadataManager/propagation"
 	"net/http"
 )
 
@@ -24,11 +25,11 @@ func (m *MetadataManagerImpl) handleRouteCreateMetadata() http.HandlerFunc {
 			return
 		}
 
-		var reqOrigin PropagationOrigin
+		var reqOrigin propagation.PropagationOrigin
 		if m.serverInfo.Father != nil && reqMetadataDomain == m.serverInfo.Father.MetadataDomain {
-			reqOrigin = FROM_FATHER
+			reqOrigin = propagation.FROM_FATHER
 		} else {
-			reqOrigin = FROM_CHILD
+			reqOrigin = propagation.FROM_CHILD
 		}
 
 		m.log.Debug("Request body decoded successfully", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", meta), "request_origin", reqOrigin, "previous_node_geolocation", reqMetadataDomain)

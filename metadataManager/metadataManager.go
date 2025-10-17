@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"metadataManager/propagation"
 	"metadataManager/types"
 	"server"
 	"server/info"
@@ -21,16 +22,10 @@ import (
 // QueryTemplatesParamsMapping map[tmpl_name]map[param_name]param_value
 type QueryTemplatesParamsMapping[T any] map[string]map[string]T
 
-type GroupMessage struct {
-	UserGroups     []string `json:"userGroups"`
-	GroupsToAdd    []string `json:"groupsToAdd,omitempty"`
-	GroupsToRemove []string `json:"groupsToRemove,omitempty"`
-}
-
 type MetadataManager interface {
-	CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin PropagationOrigin) error
-	UpdateGroupsInCollection(collectionId string, userGroups []string, groupsToAdd []string, groupsToRemove []string) (*UpdateGroupResponse, error)
-	SetCollectionGroups(collectionId string, message UpdateGroupResponse) error
+	CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin propagation.PropagationOrigin) error
+	UpdateGroupsInCollection(collectionId string, userGroups []string, groupsToAdd []string, groupsToRemove []string) (*propagation.UpdateGroupResponse, error)
+	SetCollectionGroups(collectionId string, message propagation.UpdateGroupResponse) error
 	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error)
 }
 
@@ -39,10 +34,10 @@ type MetadataManagerImpl struct {
 	log                          *logger.Logger
 	templateCache                caches.FunctionCache
 	serverInfo                   *info.ServerInfo
-	queryPropagator              QueryPropagator
-	createMetadataPropagator     CreateMetadataPropagator
-	groupUpdateRequestPropagator GroupUpdateRequestPropagator
-	updateGroupsPropagator       UpdateGroupsPropagator
+	queryPropagator              propagation.QueryPropagator
+	createMetadataPropagator     propagation.CreateMetadataPropagator
+	groupUpdateRequestPropagator propagation.GroupUpdateRequestPropagator
+	updateGroupsPropagator       propagation.UpdateGroupsPropagator
 	customMetadataKeys           []string
 }
 
@@ -53,9 +48,9 @@ func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, log *lo
 		log:                          log,
 		templateCache:                cache,
 		serverInfo:                   serverInfo,
-		createMetadataPropagator:     NewCreateMetadataPropagator(serverInfo, log),
-		queryPropagator:              NewQueryPropagator(serverInfo, log),
-		groupUpdateRequestPropagator: NewGroupUpdateRequestPropagator(serverInfo, log),
+		createMetadataPropagator:     propagation.NewCreateMetadataPropagator(serverInfo, log),
+		queryPropagator:              propagation.NewQueryPropagator(serverInfo, log),
+		groupUpdateRequestPropagator: propagation.NewGroupUpdateRequestPropagator(serverInfo, log),
 		customMetadataKeys:           []string{},
 	}
 }
@@ -88,7 +83,7 @@ func (m *MetadataManagerImpl) RegisterRoutes(server server.ServerType, tokenDeco
 	return nil
 }
 
-func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin PropagationOrigin) error {
+func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin propagation.PropagationOrigin) error {
 	m.log.Info("Creating metadata", "collection_id", collectionId, "origin", reqOrigin, "geolocation", metadata.Geolocation)
 	m.log.Debug("Creating metadata", "metadata", metadata)
 
@@ -127,7 +122,7 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model
 	return nil
 }
 
-func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, userGroups []string, groupsToAdd []string, groupsToRemove []string) (*UpdateGroupResponse, error) {
+func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, userGroups []string, groupsToAdd []string, groupsToRemove []string) (*propagation.UpdateGroupResponse, error) {
 	m.log.Info("Updating groups in collection", "collection_id", collectionId, "user_access_groups", userGroups, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove)
 	if m.serverInfo.Father == nil {
 		exists, err := m.redis.MetadataExists(collectionId)
@@ -152,7 +147,7 @@ func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, user
 				m.log.Error("Error updating metadata groups", "collection_id", collectionId, "error", err)
 				return nil, err
 			}
-			respMessage := &UpdateGroupResponse{Groups: newGroups, Sequence: seq}
+			respMessage := &propagation.UpdateGroupResponse{Groups: newGroups, Sequence: seq}
 			m.log.Info("Groups in metadata updated successfully", "collection_id", collectionId)
 			m.log.Debug("Groups in metadata updated successfully", "new_groups_set", newGroups, "new_groups_seq_num", seq)
 
@@ -181,10 +176,10 @@ func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, user
 	}
 
 	m.log.Info("Offloading group update request to parent node", "collection_id", collectionId, "user_access_groups", userGroups, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove)
-	return m.groupUpdateRequestPropagator.Propagate(collectionId, GroupMessage{UserGroups: userGroups, GroupsToAdd: groupsToAdd, GroupsToRemove: groupsToRemove})
+	return m.groupUpdateRequestPropagator.Propagate(collectionId, propagation.GroupMessage{UserGroups: userGroups, GroupsToAdd: groupsToAdd, GroupsToRemove: groupsToRemove})
 }
 
-func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message UpdateGroupResponse) error {
+func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message propagation.UpdateGroupResponse) error {
 	m.log.Info("Setting collection groups in metadata", "collection_id", collectionId)
 	m.log.Debug("Setting collection groups in metadata", "groups_set", message.Groups, "groups_seq_num", message.Sequence)
 

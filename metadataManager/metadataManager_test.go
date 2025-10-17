@@ -3,9 +3,10 @@ package metadataManager_test
 import (
 	"encoding/json"
 	"metadataManager"
+	"metadataManager/propagation"
 	"metadataManager/types"
 	"mocks/caches"
-	"mocks/metadataManager"
+	"mocks/metadataManager/propagation"
 	"server/info"
 	"testing"
 	"time"
@@ -125,15 +126,15 @@ func TestCreateMetadata(t *testing.T) {
 		},
 	}
 
-	mPropagator := &metadataManager_mock.CreateMetadataPropagator{}
-	mPropagator.EXPECT().Propagate("collection_id_test", metadata, metadataManager.FROM_LOCAL).Return(nil).Once()
+	mPropagator := &propagation_mock.CreateMetadataPropagator{}
+	mPropagator.EXPECT().Propagate("collection_id_test", metadata, propagation.FROM_LOCAL).Return(nil).Once()
 
 	fnCache := &caches_mock.FunctionCache{}
 	log := createNewLogger(t)
 	manager := metadataManager.CreateMetadataManagerWithMocks(redisClient, srvInfo, log, nil, mPropagator, fnCache)
 
 	// Execute the query
-	err := manager.CreateMetadata("collection_id_test", metadata, metadataManager.FROM_LOCAL)
+	err := manager.CreateMetadata("collection_id_test", metadata, propagation.FROM_LOCAL)
 	require.NoError(t, err, "Expected no error when creating metadata")
 
 	metaFromRedis, err := redisClient.GetMetadata("collection_id_test")

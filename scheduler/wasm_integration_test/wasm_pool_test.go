@@ -3,7 +3,7 @@ package wasm_integration_test
 import (
 	"context"
 	"fmt"
-	metadataManager2 "metadataManager"
+	metadataManager2 "metadataManager/propagation"
 	datamanager_mock "mocks/dataManager"
 	metadataManager_mock "mocks/metadataManager"
 	"os"

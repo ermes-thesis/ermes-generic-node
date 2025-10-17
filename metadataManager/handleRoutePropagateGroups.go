@@ -3,6 +3,7 @@ package metadataManager
 import (
 	"encoding/json"
 	"fmt"
+	"metadataManager/propagation"
 	"net/http"
 )
 
@@ -14,7 +15,7 @@ func (m *MetadataManagerImpl) handleRoutePropagateGroups() http.HandlerFunc {
 		m.log.Info("Received group update propagation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 		m.log.Debug("Received group update propagation request", "collection_id", collectionId, "node_geolocation", m.serverInfo.MetadataDomain)
 
-		var message UpdateGroupResponse
+		var message propagation.UpdateGroupResponse
 		err := json.NewDecoder(r.Body).Decode(&message)
 		if err != nil {
 			m.log.Error("Failed to decode group propagation payload", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_id", collectionId, "node_geolocation", m.serverInfo.MetadataDomain, "error", err)

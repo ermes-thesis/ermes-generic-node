@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"metadataManager"
+	"metadataManager/propagation"
 	"metadataManager/types"
 	"mocks/caches"
 	"mocks/tokenDecoder"
@@ -533,7 +534,7 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 		CustomMetadata: map[string]string{},
 	}
 
-	err = metadataManagerLocal.CreateMetadata("12345678", metadata, metadataManager.FROM_LOCAL)
+	err = metadataManagerLocal.CreateMetadata("12345678", metadata, propagation.FROM_LOCAL)
 	assert.NoError(t, err, "Expected no error when creating metadata from local")
 
 	// Verify that the metadata was created in both father and child
@@ -559,7 +560,7 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 		CustomMetadata: map[string]string{},
 	}
 
-	err = metadataManagerLocal.CreateMetadata("test2", metadata2, metadataManager.FROM_LOCAL)
+	err = metadataManagerLocal.CreateMetadata("test2", metadata2, propagation.FROM_LOCAL)
 	assert.NoError(t, err, "Expected no error when creating metadata from local")
 
 	// Verify that the metadata was created in both father and child

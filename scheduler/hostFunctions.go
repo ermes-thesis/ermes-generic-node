@@ -5,6 +5,7 @@ import (
 	shared "dataManager/shared"
 	"errors"
 	"metadataManager"
+	"metadataManager/propagation"
 	"server/info"
 
 	"github.com/ermes-thesis/ermes-common/logger"
@@ -120,7 +121,7 @@ func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAd
 		return wasmComponent.WriteError(model.RedisError, err)
 	}
 
-	go h.metadataManager.CreateMetadata(collectionId, metadata, metadataManager.FROM_LOCAL)
+	go h.metadataManager.CreateMetadata(collectionId, metadata, propagation.FROM_LOCAL)
 
 	return wasmComponent.WriteResult(collectionId)
 }

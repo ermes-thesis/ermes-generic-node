@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"metadataManager/propagation"
 	"net/http"
 )
 
@@ -16,7 +17,7 @@ func (m *MetadataManagerImpl) handleRouteRequestUpdateGroups() http.HandlerFunc 
 		m.log.Info("Received group update new request for metadata", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 		m.log.Debug("Received group update new request for metadata", "collection_id", collectionId)
 
-		var message GroupMessage
+		var message propagation.GroupMessage
 		err := json.NewDecoder(r.Body).Decode(&message)
 		if err != nil {
 			m.log.Error("Failed to decode request body", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_id", collectionId, "error", err)

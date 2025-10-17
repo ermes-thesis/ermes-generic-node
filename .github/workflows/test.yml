@@ -18,7 +18,7 @@ jobs:
         with:
           path: 'ermes-generic-node'
 
-      - name: Checkout wasm pool
+      - name: Checkout ermes-common
         uses: actions/checkout@v4
         with:
           repository: 'ermes-thesis/ermes-common'

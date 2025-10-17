@@ -20,6 +20,19 @@ import (
 
 type PropagationOrigin int
 
+func (p PropagationOrigin) String() string {
+	switch p {
+	case FROM_FATHER:
+		return "FATHER"
+	case FROM_CHILD:
+		return "CHILD"
+	case FROM_LOCAL:
+		return "LOCAL"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 const (
 	FROM_FATHER PropagationOrigin = iota
 	FROM_CHILD

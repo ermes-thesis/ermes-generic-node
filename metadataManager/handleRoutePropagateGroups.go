@@ -4,31 +4,34 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"os"
 )
 
 func (m *MetadataManagerImpl) handleRoutePropagateGroups() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		m.log.Infof("[%s], got /pvt-propagate-groups \n", m.serverInfo.MetadataDomain)
 		defer r.Body.Close()
-
 		collectionId := r.PathValue("collection_id")
+
+		m.log.Info("Received group update propagation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
+		m.log.Debug("Received group update propagation request", "collection_id", collectionId, "node_geolocation", m.serverInfo.MetadataDomain)
 
 		var message UpdateGroupResponse
 		err := json.NewDecoder(r.Body).Decode(&message)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error decoding metadata: %v\n", err)
-			w.WriteHeader(http.StatusInternalServerError)
+			m.log.Error("Failed to decode group propagation payload", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_id", collectionId, "node_geolocation", m.serverInfo.MetadataDomain, "error", err)
+			http.Error(w, fmt.Sprintf("Internal Server Error: invalid request body: %v", err), http.StatusInternalServerError)
 			return
 		}
+
+		m.log.Debug("Decoded group propagation payload", "collection_id", collectionId, "new_groups_set", message.Groups, "new_groups_sequence_num", message.Sequence)
 
 		err = m.SetCollectionGroups(collectionId, message)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error when propagating groups: %s \n", err)
-			w.WriteHeader(http.StatusInternalServerError)
+			m.log.Error("Failed to propagate group updates", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_id", collectionId, "new_groups_set", message.Groups, "new_groups_sequence_num", message.Sequence, "error", err)
+			http.Error(w, fmt.Sprintf("Internal Server Error: invalid request body: %v", err), http.StatusInternalServerError)
 			return
 		}
 
+		m.log.Info("Group propagation completed successfully for the current node", "collection_id", collectionId, "new_groups_set", message.Groups, "new_groups_sequence_num", message.Sequence)
 		w.WriteHeader(http.StatusOK)
 	}
 }

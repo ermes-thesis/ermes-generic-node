@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
 	"metadataManager/types"
 	"server"
 	"server/info"
@@ -155,7 +154,7 @@ func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, user
 			}
 			respMessage := &UpdateGroupResponse{Groups: newGroups, Sequence: seq}
 			m.log.Info("Groups in metadata updated successfully", "collection_id", collectionId)
-			m.log.Debug("Groups in metadata updated successfully", "collection_id", collectionId, "new_groups_set", newGroups, "new_groups_seq_num", seq)
+			m.log.Debug("Groups in metadata updated successfully", "new_groups_set", newGroups, "new_groups_seq_num", seq)
 
 			m.log.Info("Starting propagation of the group update to lower metadata domains", "collection_id", collectionId)
 			go func() {
@@ -167,8 +166,8 @@ func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, user
 
 				err = m.updateGroupsPropagator.Propagate(collectionId, *respMessage, metadata.Geolocation)
 				if err != nil {
-					m.log.Error("Error propagating group update", "collection_id", collectionId, "error", err)
-					m.log.Debug("Error propagating group update", "collection_id", collectionId, "response_message_groups", respMessage.Groups, "response_message_seq_num", respMessage.Sequence, "metadata_geolocation", metadata.Geolocation)
+					m.log.Error("Error propagating group update", "collection_id", collectionId, "response_message_groups", respMessage.Groups, "response_message_seq_num", respMessage.Sequence, "metadata_geolocation", metadata.Geolocation, "error", err)
+					return
 				}
 
 				m.log.Info("Groups update propagation completed", "collection_id", collectionId)
@@ -187,7 +186,7 @@ func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, user
 
 func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message UpdateGroupResponse) error {
 	m.log.Info("Setting collection groups in metadata", "collection_id", collectionId)
-	m.log.Debug("Setting collection groups in metadata", "collection_id", collectionId, "groups_set", message.Groups, "groups_seq_num", message.Sequence)
+	m.log.Debug("Setting collection groups in metadata", "groups_set", message.Groups, "groups_seq_num", message.Sequence)
 
 	metadata, err := m.redis.GetMetadata(collectionId)
 	if err != nil {
@@ -201,8 +200,7 @@ func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message U
 
 	err = m.redis.SetGroupsInMetadata(collectionId, message.Sequence, message.Groups...)
 	if err != nil {
-		m.log.Debug("Error setting metadata groups", "collection_id", collectionId, "groups_set", message.Groups, "groups_seq_num", message.Sequence, "error", err)
-		m.log.Error("Error setting metadata groups", "collection_id", collectionId, "error", err)
+		m.log.Error("Error setting metadata groups", "collection_id", collectionId, "groups_set", message.Groups, "groups_seq_num", message.Sequence, "error", err)
 		return err
 	}
 
@@ -213,7 +211,7 @@ func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message U
 
 func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error) {
 	m.log.Info("Trying to execute queries", "fn_name", functionName, "fn_version", functionVersion)
-	m.log.Debug("Trying to execute queries", "fn_name", functionName, "fn_version", functionVersion, "tmpl_param_mapping", templateParamsMapping, "user_access_groups", groups, "node_geolocation", m.serverInfo.MetadataDomain, "queries_geolocation", geolocation, "in_cloud", m.serverInfo.Father == nil)
+	m.log.Debug("Trying to execute queries", "tmpl_param_mapping", templateParamsMapping, "user_access_groups", groups, "node_geolocation", m.serverInfo.MetadataDomain, "queries_geolocation", geolocation, "in_cloud", m.serverInfo.Father == nil)
 
 	// Execute the query locally if the server's metadata domain match the geolocation, it is its prefix or if the local node is a cloud node.
 	//Otherwise, propagate the query to the cloud node or the father node.
@@ -231,7 +229,7 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 		// For each template specified in the HTTP request
 		for templateName, params := range queryMap {
 			m.log.InfofWith("Processing query template '%s'", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion)
-			m.log.DebugfWith("Processing query template '%s'", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion, "tmpl_parameters", params)
+			m.log.DebugfWith("Processing query template '%s'", []any{templateName}, "tmpl_parameters", params)
 
 			// Getting from the cache (or remotely) the templates of the function name
 			if query, err := m.templateCache.GetTemplate(functionName, functionVersion, templateName); err == nil {
@@ -253,10 +251,7 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 				}
 
 				m.log.InfofWith("Query template '%s' executed successfully", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion)
-				if m.log.Enabled(zerolog.DebugLevel) {
-					c, _ := json.Marshal(collInfo)
-					m.log.DebugfWith("Query template '%s' executed successfully", []any{templateName}, "query_AS", query.As, "retrieved_collections", string(c))
-				}
+				m.log.DebugfWith("Query template '%s' executed successfully", []any{templateName}, "query_AS", query.As, "retrieved_collections", fmt.Sprintf("%+v", collInfo))
 
 				if len(collInfo) > 0 {
 					hash := types.NewQueryIdentifier(templateName, params).Hash()
@@ -272,10 +267,8 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 		}
 
 		m.log.Info("Query templates execution completed successfully", "fn_name", functionName, "fn_version", functionVersion)
-		if m.log.Enabled(zerolog.DebugLevel) {
-			r, _ := json.Marshal(result)
-			m.log.Debug("Query templates execution completed successfully", "queries_results", string(r))
-		}
+		m.log.Debug("Query templates execution completed successfully", "queries_results", fmt.Sprintf("%+v", result))
+
 		return result, nil
 	}
 

@@ -29,15 +29,18 @@ func NewCreateMetadataPropagator(serverInfo *info.ServerInfo, log *logger.Logger
 }
 
 func (p *CreateMetadataPropagatorImpl) Propagate(collectionId string, metadata model.Metadata, reqOrigin PropagationOrigin) error {
-	p.log.Info("Starting to propagating groups update request...")
+	p.log.Info("Starting propagation of metadata creation", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain)
+	p.log.Debug("Starting propagation of metadata creation", "metadata", fmt.Sprintf("%v", metadata), "request_origin", reqOrigin)
 
 	switch reqOrigin {
 	case FROM_FATHER:
+		p.log.Debug("Propagation origin: FROM_FATHER", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_children", fmt.Sprintf("%+v", p.serverInfo.Children))
 		for _, child := range p.serverInfo.Children {
 			if strings.HasPrefix(metadata.Geolocation, child.MetadataDomain) {
+				p.log.Info("Forwarding metadata creation to child", "collection_id", collectionId, "child_hostname", child.HostName, "child_geolocation", child.MetadataDomain)
 				err := p.sendHttpReqToDest(child.HostName, collectionId, metadata)
 				if err != nil {
-					p.log.Errorf("Error sending request to child: %v\n", err)
+					p.log.Error("Failed to propagate metadata creation to child", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", metadata), "request_origin", reqOrigin, "node_geolocation", p.serverInfo.MetadataDomain, "child_geolocation", child.MetadataDomain, "child_hostname", child.HostName, "error", err)
 					return err
 				}
 
@@ -45,27 +48,32 @@ func (p *CreateMetadataPropagatorImpl) Propagate(collectionId string, metadata m
 			}
 		}
 	case FROM_CHILD:
+		p.log.Debug("Propagation origin: FROM_CHILD", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_father", fmt.Sprintf("%+v", p.serverInfo.Father))
 		if p.serverInfo.Father != nil {
+			p.log.Info("Forwarding metadata creation to father", "collection_id", collectionId, "father_hostname", p.serverInfo.Father.HostName, "father_geolocation", p.serverInfo.Father.MetadataDomain)
 			err := p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, metadata)
 			if err != nil {
-				p.log.Errorf("Error sending request to father : %v\n", err)
+				p.log.Error("Failed to propagate metadata to father", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", metadata), "request_origin", reqOrigin, "node_geolocation", p.serverInfo.MetadataDomain, "father_geolocation", p.serverInfo.Father.MetadataDomain, "father_hostname", p.serverInfo.Father.HostName, "error", err)
 				return err
 			}
 		}
 	case FROM_LOCAL:
+		p.log.Debug("Propagation origin: FROM_LOCAL", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_children", fmt.Sprintf("%+v", p.serverInfo.Children), "node_father", fmt.Sprintf("%+v", p.serverInfo.Father))
 		if p.serverInfo.Father != nil {
+			p.log.Info("Forwarding metadata creation to father", "collection_id", collectionId, "father_hostname", p.serverInfo.Father.HostName, "father_geolocation", p.serverInfo.Father.MetadataDomain)
 			err := p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, metadata)
 			if err != nil {
-				p.log.Errorf("Error sending request to father : %v\n", err)
+				p.log.Error("Failed to propagate metadata to father", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", metadata), "request_origin", reqOrigin, "node_geolocation", p.serverInfo.MetadataDomain, "father_geolocation", p.serverInfo.Father.MetadataDomain, "father_hostname", p.serverInfo.Father.HostName, "error", err)
 				return err
 			}
 		}
 
 		for _, child := range p.serverInfo.Children {
 			if strings.HasPrefix(metadata.Geolocation, child.MetadataDomain) {
+				p.log.Info("Forwarding metadata creation to child", "collection_id", collectionId, "child_hostname", child.HostName, "child_geolocation", child.MetadataDomain)
 				err := p.sendHttpReqToDest(child.HostName, collectionId, metadata)
 				if err != nil {
-					p.log.Errorf("Error sending request to child : %v\n", err)
+					p.log.Error("Failed to propagate metadata creation to child", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", metadata), "request_origin", reqOrigin, "node_geolocation", p.serverInfo.MetadataDomain, "child_geolocation", child.MetadataDomain, "child_hostname", child.HostName, "error", err)
 					return err
 				}
 
@@ -77,22 +85,28 @@ func (p *CreateMetadataPropagatorImpl) Propagate(collectionId string, metadata m
 }
 
 func (p *CreateMetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, metadata model.Metadata) error {
+	p.log.Debug("Creating HTTP request for metadata propagation", "collection_id", collectionId, "destination", dest, "metadata", fmt.Sprintf("%+v", metadata))
+
 	req, err := p.httpHelper.CreateBasicPvtHttpRequest(http.MethodPost, dest, EndpointCreateMetadata, collectionId, metadata)
 	if err != nil {
-		p.log.Errorf("Error creating request: %v\n", err)
+		p.log.ErrorfWith("Failed to create basic HTTP request for '%s' path", []any{EndpointCreateMetadata}, "collection_id", collectionId, "destination", dest, "metadata", fmt.Sprintf("%+v", metadata), "error", err)
 		return err
 	}
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", p.serverInfo.MetadataDomain)
 
 	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {
-		p.log.Errorf("[%s] Error sending request: %v\n", p.serverInfo.MetadataDomain, err)
+		p.log.ErrorfWith("Failed to send HTTP request for '%s' path", []any{EndpointCreateMetadata}, "collection_id", collectionId, "destination", dest, "metadata", fmt.Sprintf("%+v", metadata), "request_headers", fmt.Sprintf("%+v", req.Header), "error", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
-		return fmt.Errorf("error when contacting the node: %s", resp.Status)
+		p.log.ErrorfWith("Unexpected status code received while contacting '%s' path", []any{EndpointCreateMetadata}, "collection_id", collectionId, "destination", dest, "metadata", fmt.Sprintf("%+v", metadata), "received_status_code", resp.Status, "expected_status_code", http.StatusCreated, "error", err)
+		return fmt.Errorf("unexpected status code %d from %s", resp.Status, dest)
 	}
+
+	p.log.Info("Metadata creation successfully propagated", "collection_id", collectionId)
+	p.log.Debug("Metadata creation successfully propagated", "destination", dest, "metadata", fmt.Sprintf("%+v", metadata))
 	return nil
 }

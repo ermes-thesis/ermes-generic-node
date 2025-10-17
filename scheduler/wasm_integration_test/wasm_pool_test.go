@@ -441,7 +441,7 @@ func BenchmarkExecutionTime_Wasmedge_NoOptimization_Lightweight(b *testing.B) {
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 0)
+		req, ctx := getTestReqAndCtx("userId", 20000)
 		response := executor.Invoke(lightweight, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -492,7 +492,7 @@ func BenchmarkExecutionTime_Wasmedge_WithOptimizations_Lightweight(b *testing.B)
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 0)
+		req, ctx := getTestReqAndCtx("userId", 20000)
 		response := executor.Invoke(lightweightWOpts, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -543,7 +543,7 @@ func BenchmarkExecutionTime_Wasmedge_AOT_Lightweight(b *testing.B) {
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 0)
+		req, ctx := getTestReqAndCtx("userId", 20000)
 		response := executor.Invoke(lightweightAOT, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -594,7 +594,7 @@ func BenchmarkExecutionTime_Wasmtime_NoOptimization_Lightweight(b *testing.B) {
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 0)
+		req, ctx := getTestReqAndCtx("userId", 20000)
 		response := executor.Invoke(lightweight, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -645,7 +645,7 @@ func BenchmarkExecutionTime_Wasmtime_WithOptimizations_Lightweight(b *testing.B)
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 0)
+		req, ctx := getTestReqAndCtx("userId", 20000)
 		response := executor.Invoke(lightweightWOpts, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -696,7 +696,7 @@ func BenchmarkExecutionTime_Wazero_NoOptimization_Lightweight(b *testing.B) {
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 0)
+		req, ctx := getTestReqAndCtx("userId", 20000)
 		response := executor.Invoke(lightweight, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -747,7 +747,7 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_Lightweight(b *testing.B) {
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 0)
+		req, ctx := getTestReqAndCtx("userId", 20000)
 		response := executor.Invoke(lightweightWOpts, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -813,7 +813,7 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_Lightweight_Interpreter(b *
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 40)
+		req, ctx := getTestReqAndCtx("userId", 20000)
 		response := executor.Invoke(lightweightWOpts, "entry", req, ctx)
 
 		if response.HttpCode != 200 {

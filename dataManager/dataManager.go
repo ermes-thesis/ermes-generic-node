@@ -30,7 +30,7 @@ type DataManager interface {
 	GetRecords(collectionId string, groups []string, userId string, recordNames ...string) ([]any, error)
 	UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdate, groups []string, userId string) error
 	UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdate) error
-	SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, userId string, isStrong bool) error
+	SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]string, groups []string, userId string, isStrong bool) error
 	RemoveCollectionAndPropagate(collectionId string, groups []string, userId string) error
 }
 
@@ -140,9 +140,10 @@ func (m *DataManagerImp) UpdateCollectionsGroupsAndPropagate(updates []messages.
 	), true, m.serverInfo.HostName)
 }
 
-func (m *DataManagerImp) SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, userId string, isStrong bool) error {
+func (m *DataManagerImp) SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]string, groups []string, userId string, isStrong bool) error {
 	return m.collectionsDiscoverer.SetCollectionAndPropagate(
 		collectionId,
+		collectionName,
 		records,
 		groups,
 		userId,

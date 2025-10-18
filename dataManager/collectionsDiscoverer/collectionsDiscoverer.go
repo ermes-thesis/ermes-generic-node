@@ -24,7 +24,7 @@ type CollectionsDiscoverer interface {
 
 	UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdateMessage, groups []string, userId string, isInitiator bool, ignoredHostName string) error
 	UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdateMessage, isInitiator bool, ignoredHostName string) error
-	SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong bool) error
+	SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]string, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong bool) error
 	RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, userId string, isInitiator bool, ignoredHostName string) error
 }
 
@@ -314,48 +314,59 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 	return nil
 }
 
-func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong bool) error {
+func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]string, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong bool) error {
 	//sync
 	c.collectionsPartialView.Mutex.Lock()
+	defer c.collectionsPartialView.Mutex.Unlock()
 	//imp
 
 	//if collection  already exists return error
 	_, exists := c.collectionsPartialView.KnownCollections[collectionId]
 	if exists {
-		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return errors.New("collection already exists")
+	}
+
+	//propagate update to father
+	if c.serverInfo.Father != nil {
+		newCollectionMessage := messages.NewCollectionMessage{
+			CollectionId:    collectionId,
+			CollectionName:  collectionName,
+			CollectionOwner: userId,
+			IsStrong:        isStrong,
+			SenderIp:        c.serverInfo.HostName,
+		}
+		err := c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, newCollectionMessage)
+		if err != nil {
+			return err
+		}
+	} else {
+		ok, err := c.dbInterface.IsUniqueForOwner(collectionName, userId)
+		if err != nil {
+			c.log.Error("HTTP-REQ: Error checking if collection is unique")
+			return err
+		}
+		if !ok {
+			c.log.Error("HTTP-REQ: Error checking if collection is unique")
+			return errors.New("tried to create collection that already exists")
+		}
 	}
 
 	//try to add collection in redis
 	dbErr := c.dbInterface.SetCollection(collectionId, records, groups, userId, 0)
 	if dbErr != nil {
-		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return dbErr
 	}
 
 	//get size of collection in db
 	size, sizeErr := c.dbInterface.GetCollectionMemoryUsage(collectionId)
 	if sizeErr != nil {
-		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return sizeErr
 	}
 
 	//add collection in local view
 	migrationManagerErr := migrationManager.NewCollectionCreated(collectionId, size, isStrong)
 	if migrationManagerErr != nil {
-		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return migrationManagerErr
-	}
-	c.collectionsPartialView.Mutex.Unlock() // lock release
-
-	//propagate update to father
-	if c.serverInfo.Father != nil {
-		newCollectionMessage := messages.NewCollectionMessage{
-			CollectionId: collectionId,
-			IsStrong:     isStrong,
-			SenderIp:     c.serverInfo.HostName,
-		}
-		c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, newCollectionMessage)
 	}
 
 	return nil

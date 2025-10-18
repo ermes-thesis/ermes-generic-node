@@ -142,7 +142,11 @@ type GenericDB interface {
 	// Returns:
 	//	- error: non-nil if the operation fails
 	SetMetadata(collectionId string, metadata model.Metadata) error
+
 	MetadataExists(collectionId string) (bool, error)
+
+	IsUniqueForOwner(collectionName string, owner string) (bool, error)
+
 	// DeleteMetadata removes all metadata associated with a collection.
 	// The collection itself and its records remain unchanged. They must
 	// be explicitly deleted using the DeleteCollection method.

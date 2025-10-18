@@ -8,9 +8,12 @@ import (
 	"dataManager/lru"
 	shared "dataManager/shared"
 	"db"
+	"io"
 	mockDb "mocks/db"
 	mockServer "mocks/server"
+	"net/http"
 	"server/info"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/mock"
@@ -54,7 +57,7 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 
 	server := mockServer.NewServerType(t)
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
-	server.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
+	server.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-newCollection", mock.Anything).Return(&http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("response"))}, nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
 		KnownCollections: make(map[string]shared.Collection),
@@ -65,7 +68,7 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 		MetadataDomain: "domain",
 		Address:        "localhost",
 		Port:           "0000",
-		Father:         &info.Node{HostName: "fName", MetadataDomain: "fDomain"},
+		Father:         nil,
 		Children: []info.Node{
 			{HostName: "child1", MetadataDomain: "Domain"},
 			{HostName: "child2", MetadataDomain: "Domain"},

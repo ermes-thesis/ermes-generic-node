@@ -126,7 +126,7 @@ func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAd
 
 	collectionId := uuid.NewString()
 
-	err = h.dataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Owner, metadata.Consistency == model.SequentialConsistent)
+	err = h.dataManager.SetCollectionAndPropagate(collectionId, metadata.Name, make(map[string]string), metadata.Groups, metadata.Owner, metadata.Consistency == model.SequentialConsistent)
 	if err != nil {
 		return wasmComponent.WriteError(model.RedisError, err)
 	}

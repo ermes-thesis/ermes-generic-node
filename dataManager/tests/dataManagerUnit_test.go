@@ -25,9 +25,9 @@ func TestGetRecordLocally(t *testing.T) {
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Times(2)
 
 	//insert a strong collection
-	dm.SetCollectionAndPropagate("strongRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
+	dm.SetCollectionAndPropagate("strongRepoId", "strongRepoName", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
 	//insert a weak collection
-	dm.SetCollectionAndPropagate("weakRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", false)
+	dm.SetCollectionAndPropagate("weakRepoId", "strongRepoName", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", false)
 
 	//check strong collection
 	bool, _, _ := cd.IsCollectionLocallyPresent("strongRepoId", 0)
@@ -126,9 +126,10 @@ func TestUpdateCollectionsRecordsAndPropagate(t *testing.T) {
 	dm.Init(collections, myT1PenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	cd := dm.GetCollectionsDiscoverer()
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Times(1)
+	ser.EXPECT().SendGenericHTTPRequest(mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
 
 	//insert a strong collection
-	dm.SetCollectionAndPropagate("strongRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
+	dm.SetCollectionAndPropagate("strongRepoId", "strongRepoName", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
 
 	//check strong collection
 	bool, _, _ := cd.IsCollectionLocallyPresent("strongRepoId", 0)
@@ -172,9 +173,10 @@ func TestUpdateCollectionsGroupsAndPropagate(t *testing.T) {
 	dm.Init(collections, myT1PenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	cd := dm.GetCollectionsDiscoverer()
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Times(1)
+	ser.EXPECT().SendGenericHTTPRequest(mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
 
 	//insert a strong collection
-	dm.SetCollectionAndPropagate("strongRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
+	dm.SetCollectionAndPropagate("strongRepoId", "strongRepoName", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
 
 	//check strong collection
 	bool, _, _ := cd.IsCollectionLocallyPresent("strongRepoId", 0)
@@ -198,6 +200,7 @@ func TestUpdateCollectionsGroupsAndPropagate(t *testing.T) {
 	db.On("SetGroups", "strongRepoId", mock.Anything, mock.Anything).Return(nil).Times(1)
 
 	err := dm.UpdateCollectionsGroupsAndPropagate(updates)
+
 	if err != nil {
 		t.Error("Unexpected error:", err)
 	}
@@ -215,11 +218,12 @@ func TestRemoveCollectionAndPropagate(t *testing.T) {
 	dm.Init(collections, myT1PenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	cd := dm.GetCollectionsDiscoverer()
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Times(2)
+	ser.EXPECT().SendGenericHTTPRequest(mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
 
 	//insert a strong collection
-	dm.SetCollectionAndPropagate("strongRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
+	dm.SetCollectionAndPropagate("strongRepoId", "strongRepoName", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
 	//insert a weak collection
-	dm.SetCollectionAndPropagate("weakRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", false)
+	dm.SetCollectionAndPropagate("weakRepoId", "weakRepoName", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", false)
 
 	//check strong collection
 	bool, _, _ := cd.IsCollectionLocallyPresent("strongRepoId", 0)

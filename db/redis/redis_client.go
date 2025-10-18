@@ -434,6 +434,50 @@ func (r *RedisClient) MetadataExists(collectionId string) (bool, error) {
 	return res > 0, err
 }
 
+func (r *RedisClient) IsUniqueForOwner(collectionName string, owner string) (bool, error) {
+	existenceKey := "exist:" + owner
+
+	backoff := defaultBackoff
+
+	var exists bool
+	var err error
+	for retries := 0; retries < maxRetries; retries++ {
+		err = r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+			exists, err = tx.SIsMember(r.ctx, "exist:"+owner, collectionName).Result()
+			if err != nil {
+				return err
+			}
+			if !exists {
+				_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+					pipe.SAdd(r.ctx, "exist:"+owner, collectionName)
+					return nil
+				})
+			}
+
+			return err
+		}, existenceKey)
+
+		if errors.Is(err, redis.TxFailedErr) {
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			time.Sleep(backoff + jitter)
+
+			backoff *= 2
+			if backoff > maxBackoff {
+				backoff = maxBackoff
+			}
+			continue
+		}
+
+		if err != nil {
+			return false, err
+		}
+
+		return !exists, nil
+	}
+
+	return false, errors.New("transaction retries exhausted")
+}
+
 func (r *RedisClient) DeleteMetadata(collectionId string) error {
 	return r.client.Del(r.ctx, "meta:"+collectionId).Err()
 }

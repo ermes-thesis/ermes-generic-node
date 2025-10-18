@@ -4,6 +4,7 @@ import (
 	gossip "dataManager/messages"
 	shared "dataManager/shared"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -115,7 +116,7 @@ type CollectionDiscovererSender interface {
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error)
 	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages)
 	PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages)
-	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage)
+	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage) error
 	RemoveCollection(hostId string, collectionId string, senderIp string, groups []string, userId string)
 
 	RemoteAccessPath() string
@@ -180,10 +181,23 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId
 	return resp.Records, err
 }
 
-func (s *CollectionDiscovererSenderImpl) NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage) {
+func (s *CollectionDiscovererSenderImpl) NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage) error {
 	s.log.Infof("SENDER: notify new collection %s to %s", newCollection.CollectionId, hostId)
 
-	go s.server.SendGenericHTTPRequest(hostId, createCollectionPropagationPath, newCollection)
+	resp, err := s.server.SendGenericHTTPRequestReturnResponse(hostId, createCollectionPropagationPath, newCollection)
+	if err != nil {
+		s.log.Errorf("SENDER, Error sending create collection to %s: %v", hostId, err)
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			s.log.Error("SENDER, Error reading response body")
+			return err
+		}
+		return errors.New(fmt.Sprintf("non-200 response from create collection: %v %s", resp.StatusCode, b))
+	}
+	return nil
 }
 
 func (s *CollectionDiscovererSenderImpl) RemoveCollection(hostId string, collectionId string, senderIp string, groups []string, userId string) {

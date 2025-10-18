@@ -6,6 +6,7 @@ import (
 	shared "dataManager/shared"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 )
@@ -193,7 +194,27 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 			return
 		}
 
-		w.WriteHeader(http.StatusOK)
+		//propagate update to father
+		if c.serverInfo.Father != nil {
+			msg.SenderIp = c.serverInfo.HostName
+			err = c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, msg)
+			if err != nil {
+				http.Error(w, fmt.Sprintf("Error creating new collection: %v", err), http.StatusInternalServerError)
+				return
+			}
+		} else {
+			ok, err := c.dbInterface.IsUniqueForOwner(msg.CollectionName, msg.CollectionOwner)
+			if err != nil {
+				c.log.Error("HTTP-REQ: Error checking if collection is unique")
+				http.Error(w, fmt.Sprintf("Error checking if collection is unique: %v", err), http.StatusInternalServerError)
+				return
+			}
+			if !ok {
+				c.log.Error("HTTP-REQ: Error checking if collection is unique")
+				http.Error(w, fmt.Sprintf("Cannot create collection, since another one with the same name already exists: %v", err), http.StatusConflict)
+				return
+			}
+		}
 
 		// Process the new collection creation
 		if isStrong {
@@ -203,12 +224,7 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 		}
 		c.collectionsPartialView.KnownCollections[collectionId].AddHost(msg.SenderIp)
 
-		//propagate update to father
-		if c.serverInfo.Father != nil {
-			msg.SenderIp = c.serverInfo.HostName
-			c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, msg)
-		}
-
+		w.WriteHeader(http.StatusOK)
 	})
 }
 

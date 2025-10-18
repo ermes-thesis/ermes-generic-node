@@ -5,11 +5,11 @@ type PropagationOrigin int
 func (p PropagationOrigin) String() string {
 	switch p {
 	case FROM_FATHER:
-		return "FATHER"
+		return "FROM_FATHER"
 	case FROM_CHILD:
-		return "CHILD"
+		return "FROM_CHILD"
 	case FROM_LOCAL:
-		return "LOCAL"
+		return "FROM_LOCAL"
 	default:
 		return "UNKNOWN"
 	}

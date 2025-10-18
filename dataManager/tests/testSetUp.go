@@ -68,7 +68,7 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 		MetadataDomain: "domain",
 		Address:        "localhost",
 		Port:           "0000",
-		Father:         nil,
+		Father:         &info.Node{HostName: "fName", MetadataDomain: "fDomain"},
 		Children: []info.Node{
 			{HostName: "child1", MetadataDomain: "Domain"},
 			{HostName: "child2", MetadataDomain: "Domain"},

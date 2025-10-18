@@ -22,12 +22,12 @@ func TestGetRecordLocally(t *testing.T) {
 	log := createNewLogger(t)
 	dm.Init(collections, myT1PenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	cd := dm.GetCollectionsDiscoverer()
-	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("uint64")).Return(nil).Times(2)
+	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Times(2)
 
 	//insert a strong collection
-	dm.SetCollectionAndPropagate("strongRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, true)
+	dm.SetCollectionAndPropagate("strongRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
 	//insert a weak collection
-	dm.SetCollectionAndPropagate("weakRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, false)
+	dm.SetCollectionAndPropagate("weakRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", false)
 
 	//check strong collection
 	bool, _, _ := cd.IsCollectionLocallyPresent("strongRepoId", 0)
@@ -39,12 +39,12 @@ func TestGetRecordLocally(t *testing.T) {
 	}
 
 	//setup mock for get record and get records from db
-	db.On("IsInGroups", mock.AnythingOfType("string")).Return(true, nil).Times(2)
+	db.On("IsAuthorized", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(true, nil).Times(2)
 	db.On("GetRecord", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return("value1", nil).Times(1)
 	db.On("GetRecords", mock.AnythingOfType("string"), []string{"record1", "record2"}).Return([]any{"value1", "value2"}, nil).Times(1)
 
 	//get record from strong collection
-	value, err := dm.GetRecord("strongRepoId", []string{}, "record1")
+	value, err := dm.GetRecord("strongRepoId", []string{}, "", "record1")
 	if err != nil {
 		t.Error("Unexpected error:", err)
 	}
@@ -55,7 +55,7 @@ func TestGetRecordLocally(t *testing.T) {
 	//get records from weak collection
 	records := []string{"record1", "record2"}
 
-	values, err := dm.GetRecords("weakRepoId", []string{}, records...)
+	values, err := dm.GetRecords("weakRepoId", []string{}, "", records...)
 	if err != nil {
 		t.Error("Unexpected error:", err)
 	}
@@ -83,7 +83,7 @@ func TestGetRecordRemotelyToFather(t *testing.T) {
 	//cd := dm.GetCollectionsDiscoverer()
 
 	//set up assertions on db and server
-	db.AssertNotCalled(t, "IsInGroups", mock.Anything)
+	db.AssertNotCalled(t, "IsAuthorized", mock.Anything)
 	db.AssertNotCalled(t, "GetRecord", mock.Anything, mock.Anything)
 	db.AssertNotCalled(t, "GetRecords", mock.Anything, mock.Anything)
 
@@ -99,7 +99,7 @@ func TestGetRecordRemotelyToFather(t *testing.T) {
 		Body:       io.NopCloser(strings.NewReader(string(respJSON))),
 	}, nil).Times(1)
 
-	dm.GetRecord("strongRepoId", []string{}, "record1")
+	dm.GetRecord("strongRepoId", []string{}, "", "record1")
 
 	respBody.Records = []any{"value1", "value2"}
 	respJSON, err = json.Marshal(respBody)
@@ -125,10 +125,10 @@ func TestUpdateCollectionsRecordsAndPropagate(t *testing.T) {
 	log := createNewLogger(t)
 	dm.Init(collections, myT1PenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	cd := dm.GetCollectionsDiscoverer()
-	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("uint64")).Return(nil).Times(1)
+	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Times(1)
 
 	//insert a strong collection
-	dm.SetCollectionAndPropagate("strongRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, true)
+	dm.SetCollectionAndPropagate("strongRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
 
 	//check strong collection
 	bool, _, _ := cd.IsCollectionLocallyPresent("strongRepoId", 0)
@@ -151,10 +151,10 @@ func TestUpdateCollectionsRecordsAndPropagate(t *testing.T) {
 
 	updates := []messages.CollectionUpdate{update, update1}
 
-	db.On("IsInGroups", mock.AnythingOfType("string")).Return(true, nil).Times(1)
+	db.On("IsAuthorized", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(true, nil).Times(1)
 	db.On("SetRecords", "strongRepoId", []string{"record1"}, []string{"value1Updated"}, mock.AnythingOfType("string")).Return(nil).Times(1)
 
-	err := dm.UpdateCollectionsRecordsAndPropagate(updates, []string{})
+	err := dm.UpdateCollectionsRecordsAndPropagate(updates, []string{}, "")
 	if err != nil {
 		t.Error("Unexpected error:", err)
 	}
@@ -171,10 +171,10 @@ func TestUpdateCollectionsGroupsAndPropagate(t *testing.T) {
 	log := createNewLogger(t)
 	dm.Init(collections, myT1PenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	cd := dm.GetCollectionsDiscoverer()
-	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("uint64")).Return(nil).Times(1)
+	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Times(1)
 
 	//insert a strong collection
-	dm.SetCollectionAndPropagate("strongRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, true)
+	dm.SetCollectionAndPropagate("strongRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
 
 	//check strong collection
 	bool, _, _ := cd.IsCollectionLocallyPresent("strongRepoId", 0)
@@ -214,12 +214,12 @@ func TestRemoveCollectionAndPropagate(t *testing.T) {
 	log := createNewLogger(t)
 	dm.Init(collections, myT1PenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	cd := dm.GetCollectionsDiscoverer()
-	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("uint64")).Return(nil).Times(2)
+	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Times(2)
 
 	//insert a strong collection
-	dm.SetCollectionAndPropagate("strongRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, true)
+	dm.SetCollectionAndPropagate("strongRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
 	//insert a weak collection
-	dm.SetCollectionAndPropagate("weakRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, false)
+	dm.SetCollectionAndPropagate("weakRepoId", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", false)
 
 	//check strong collection
 	bool, _, _ := cd.IsCollectionLocallyPresent("strongRepoId", 0)
@@ -231,18 +231,18 @@ func TestRemoveCollectionAndPropagate(t *testing.T) {
 	}
 
 	//setup mock for get record and get records from db
-	db.On("IsInGroups", mock.AnythingOfType("string")).Return(true, nil).Times(2)
+	db.On("IsAuthorized", mock.AnythingOfType("string"), mock.AnythingOfType("string")).Return(true, nil).Times(2)
 	db.On("DeleteCollection", "strongRepoId").Return(nil).Times(1)
 	db.On("DeleteCollection", "weakRepoId").Return(nil).Times(1)
 
-	dm.RemoveCollectionAndPropagate("strongRepoId", []string{})
+	dm.RemoveCollectionAndPropagate("strongRepoId", []string{}, "")
 	bool, _, _ = cd.IsCollectionLocallyPresent("strongRepoId", 0)
 
 	if bool {
 		t.Error("Expected collections not to be present")
 	}
 
-	dm.RemoveCollectionAndPropagate("weakRepoId", []string{})
+	dm.RemoveCollectionAndPropagate("weakRepoId", []string{}, "")
 	bool1, _, _ = cd.IsCollectionLocallyPresent("weakRepoId", 0)
 
 	if bool1 {

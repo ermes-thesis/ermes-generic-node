@@ -51,7 +51,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 		}
 
 		if queryParams != "" {
-			res, err := metadataManager.ExecuteQueries(fnName, fnVersion, queryParams, groups, groupToken, geolocation)
+			res, err := metadataManager.ExecuteQueries(fnName, fnVersion, queryParams, groups, userId, groupToken, geolocation)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error when executing queries: %s \n", err)
 				w.WriteHeader(http.StatusInternalServerError)

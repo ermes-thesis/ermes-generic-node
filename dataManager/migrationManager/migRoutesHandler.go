@@ -88,7 +88,7 @@ func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 		}
 		address := ip + ":" + port //TODO: verify
 
-		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.GroupsSequence, collection.CollectionSize, collection.HostToRemove, address)
+		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.Owner, collection.GroupsSequence, collection.CollectionSize, collection.HostToRemove, address)
 
 		w.WriteHeader(http.StatusOK)
 	})

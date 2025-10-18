@@ -248,10 +248,11 @@ func (r *RedisClient) DeleteRecords(collectionId string, timestamp string, recor
 	return errors.New("transaction retries exhausted")
 }
 
-func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []string, uint64, error) {
+func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []string, string, uint64, error) {
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
+	ownerKey := "info:" + collectionId + ":owner"
 
 	backoff := defaultBackoff
 
@@ -260,6 +261,7 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 		groups         []string
 		groupsSequence uint64
 		values         []any
+		owner          string
 	)
 
 	for retries := 0; retries < maxRetries; retries++ {
@@ -276,6 +278,11 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 			}
 
 			groupsSequence, err = tx.Get(r.ctx, groupsSequenceKey).Uint64()
+			if err != nil {
+				return err
+			}
+
+			owner, err = tx.Get(r.ctx, ownerKey).Result()
 			if err != nil {
 				return err
 			}
@@ -303,7 +310,7 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 				result[key] = values[i].(string)
 			}
 
-			return result, groups, groupsSequence, nil
+			return result, groups, owner, groupsSequence, nil
 		}
 
 		if errors.Is(err, redis.TxFailedErr) {
@@ -317,23 +324,25 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 			continue
 		}
 
-		return nil, nil, 0, err
+		return nil, nil, "", 0, err
 	}
 
-	return nil, nil, 0, errors.New("transaction retries exhausted")
+	return nil, nil, "", 0, errors.New("transaction retries exhausted")
 }
 
 // Implemented like this, we allow the overwrite of a collection. If we want to avoid to overwrite a collection
 // we would need to add a Watch( ..., infoKey) to check the existence of the collection
-func (r *RedisClient) SetCollection(collectionId string, records map[string]string, groups []string, groupsSequence uint64) error {
+func (r *RedisClient) SetCollection(collectionId string, records map[string]string, groups []string, owner string, groupsSequence uint64) error {
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
+	ownerKey := "info:" + collectionId + ":owner"
 
 	groupsAny := toListAny(groups)
 
 	_, err := r.client.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
 		pipe.Set(r.ctx, "info:"+collectionId, "", 0)
+		pipe.Set(r.ctx, ownerKey, owner, 0)
 
 		for key, value := range records {
 			pipe.Set(r.ctx, buildKey(collectionId, key), value, 0)
@@ -356,6 +365,7 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 	infoKey := "info:" + collectionId
 	groupsKey := "info:" + collectionId + ":groups"
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
+	ownerKey := "info:" + collectionId + ":owner"
 
 	backoff := defaultBackoff
 
@@ -367,7 +377,7 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 			}
 
 			dataKeys := buildKeys(collectionId, keys)
-			allKeysToDelete := append(dataKeys, infoKey, keysKey, groupsKey, groupsSequenceKey)
+			allKeysToDelete := append(dataKeys, infoKey, keysKey, groupsKey, groupsSequenceKey, ownerKey)
 
 			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
 				pipe.Del(r.ctx, allKeysToDelete...)
@@ -705,23 +715,30 @@ func (r *RedisClient) SetGroupsInMetadata(collectionId string, sequenceGroups ui
 	return errors.New("max retries exceeded")
 }
 
-func (r *RedisClient) IsInMetadataGroups(collectionId string, userGroups ...string) (bool, error) {
+func (r *RedisClient) IsAuthorizedInMetadata(collectionId string, userId string, userGroups ...string) (bool, error) {
 	if len(userGroups) == 0 {
 		return false, nil
 	}
 
-	authorizedGroupsStr, err := r.client.HGet(r.ctx, "meta:"+collectionId, "groups").Result()
+	collMetadataAuthorizations, err := r.client.HMGet(r.ctx, "meta:"+collectionId, "owner", "groups").Result()
 	if err != nil {
 		return false, err
 	}
-	if authorizedGroupsStr == "" {
+
+	collOwner := collMetadataAuthorizations[0].(string)
+	collGroupsStr := collMetadataAuthorizations[1].(string)
+
+	if collOwner == userId {
+		return true, nil
+	}
+
+	if collGroupsStr == "" {
 		return false, nil
 	}
 
-	authorizedGroups := strings.Split(authorizedGroupsStr, ",")
-
+	collGroups := strings.Split(collGroupsStr, ",")
 	for _, group := range userGroups {
-		if slices.Contains(authorizedGroups, group) {
+		if slices.Contains(collGroups, group) {
 			return true, nil
 		}
 	}
@@ -785,18 +802,20 @@ func (r *RedisClient) SetGroups(collectionId string, sequenceGroups uint64, grou
 	return errors.New("transaction retries exhausted")
 }
 
-func (r *RedisClient) IsInGroups(collectionId string, members ...string) (bool, error) {
-	if len(members) == 0 {
-		return false, nil
-	}
+func (r *RedisClient) IsAuthorized(collectionId string, userId string, members ...string) (bool, error) {
+	ownerKey := "info:" + collectionId + ":owner"
 
 	m := make([]any, len(members))
 	for i, member := range members {
 		m[i] = member
 	}
 
-	res, err := r.client.SMIsMember(r.ctx, "info:"+collectionId+":groups", m...).Result()
+	storedOwner, err := r.client.Get(r.ctx, ownerKey).Result()
+	if storedOwner == userId {
+		return true, nil
+	}
 
+	res, err := r.client.SMIsMember(r.ctx, "info:"+collectionId+":groups", m...).Result()
 	return slices.Contains(res, true), err
 }
 
@@ -805,7 +824,7 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 	for i, key := range customMetadataKeys {
 		fields[i] = &redis.FieldSchema{
 			FieldName: key,
-			FieldType: redis.SearchFieldTypeText,
+			FieldType: redis.SearchFieldTypeTag,
 		}
 	}
 
@@ -814,10 +833,10 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 		Prefix: []any{1, "meta:"},
 	}, append([]*redis.FieldSchema{{
 		FieldName: "name",
-		FieldType: redis.SearchFieldTypeText,
+		FieldType: redis.SearchFieldTypeTag,
 	}, {
 		FieldName: "owner",
-		FieldType: redis.SearchFieldTypeText,
+		FieldType: redis.SearchFieldTypeTag,
 	}, {
 		FieldName: "created_at",
 		FieldType: redis.SearchFieldTypeNumeric,
@@ -827,12 +846,27 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 	}}, fields...)...).Err()
 }
 
-func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userGroups []string) ([]types.CollectionInfo, error) {
+func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, owner string, userGroups []string) ([]types.CollectionInfo, error) {
+
 	redisQuery, err := query.ToRedisSearchCommand()
 	if err != nil {
 		return nil, err
 	}
-	redisQuery = redisQuery + " @groups:{" + strings.Join(userGroups, " | ") + "}"
+
+	var authorizationPart string
+	if owner != "" {
+		if len(userGroups) > 0 {
+			authorizationPart = " ((@groups:{" + strings.Join(userGroups, " | ") + "}) | (@owner:{" + owner + "}))"
+		} else {
+			authorizationPart = " @owner:{" + owner + "}"
+		}
+	} else {
+		if len(userGroups) > 0 {
+			authorizationPart = " @groups:{" + strings.Join(userGroups, " | ") + "}"
+		}
+	}
+
+	redisQuery = redisQuery + authorizationPart
 
 	res, err := r.client.FTSearch(r.ctx, "metadata_index", redisQuery).Result()
 	if err != nil {
@@ -868,7 +902,7 @@ func (r *RedisClient) AlterIndex(customMetadataKeys ...string) error {
 	fields := make([]any, len(customMetadataKeys)*2)
 	for i := 0; i < len(fields); i += 2 {
 		fields[i] = customMetadataKeys[i/2]
-		fields[i+1] = "TEXT"
+		fields[i+1] = "TAG"
 	}
 
 	return r.client.FTAlter(r.ctx, "metadata_index", true, fields).Err()
@@ -971,6 +1005,7 @@ func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, err
 	groupsKey := "info:" + collectionId + ":groups"
 	groupSequenceKey := "info:" + collectionId + ":groupsSequence"
 	infoKey := "info:" + collectionId
+	ownerKey := "info:" + collectionId + ":owner"
 
 	var totalMemory uint64
 
@@ -990,7 +1025,7 @@ func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, err
 			totalMemory += uint64(memUsage)
 		}
 
-		metaKeys := []string{keysKey, groupsKey, infoKey, groupSequenceKey}
+		metaKeys := []string{keysKey, groupsKey, infoKey, groupSequenceKey, ownerKey}
 		for _, metaKey := range metaKeys {
 			memUsage, err := tx.MemoryUsage(r.ctx, metaKey).Result()
 			if err != nil && !errors.Is(err, redis.Nil) {

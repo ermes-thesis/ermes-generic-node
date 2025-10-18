@@ -24,9 +24,9 @@ type QueryTemplatesParamsMapping[T any] map[string]map[string]T
 
 type MetadataManager interface {
 	CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin propagation.PropagationOrigin) error
-	UpdateGroupsInCollection(collectionId string, userGroups []string, groupsToAdd []string, groupsToRemove []string) (*propagation.UpdateGroupResponse, error)
+	UpdateGroupsInCollection(collectionId string, userGroups []string, userId string, groupsToAdd []string, groupsToRemove []string) (*propagation.UpdateGroupResponse, error)
 	SetCollectionGroups(collectionId string, message propagation.UpdateGroupResponse) error
-	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error)
+	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, userId string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error)
 }
 
 type MetadataManagerImpl struct {
@@ -51,6 +51,7 @@ func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, log *lo
 		createMetadataPropagator:     propagation.NewCreateMetadataPropagator(serverInfo, log),
 		queryPropagator:              propagation.NewQueryPropagator(serverInfo, log),
 		groupUpdateRequestPropagator: propagation.NewGroupUpdateRequestPropagator(serverInfo, log),
+		updateGroupsPropagator:       propagation.NewUpdateGroupsPropagator(serverInfo, log),
 		customMetadataKeys:           sync.Map{},
 	}
 }
@@ -118,7 +119,7 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model
 	return nil
 }
 
-func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, userGroups []string, groupsToAdd []string, groupsToRemove []string) (*propagation.UpdateGroupResponse, error) {
+func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, userGroups []string, userId string, groupsToAdd []string, groupsToRemove []string) (*propagation.UpdateGroupResponse, error) {
 	m.log.Info("Updating groups in collection", "collection_id", collectionId, "user_access_groups", userGroups, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove)
 	if m.serverInfo.Father == nil {
 		exists, err := m.redis.MetadataExists(collectionId)
@@ -128,7 +129,7 @@ func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, user
 		}
 
 		if exists {
-			authorized, err := m.redis.IsInMetadataGroups(collectionId, userGroups...)
+			authorized, err := m.redis.IsAuthorizedInMetadata(collectionId, userId, userGroups...)
 			if err != nil {
 				m.log.Error("Error verifying user group authorization", "collection_id", collectionId, "error", err)
 				return nil, err
@@ -172,7 +173,7 @@ func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, user
 	}
 
 	m.log.Info("Offloading group update request to parent node", "collection_id", collectionId, "user_access_groups", userGroups, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove)
-	return m.groupUpdateRequestPropagator.Propagate(collectionId, propagation.GroupMessage{UserGroups: userGroups, GroupsToAdd: groupsToAdd, GroupsToRemove: groupsToRemove})
+	return m.groupUpdateRequestPropagator.Propagate(collectionId, propagation.GroupMessage{UserGroups: userGroups, GroupsToAdd: groupsToAdd, GroupsToRemove: groupsToRemove, UserId: userId})
 }
 
 func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message propagation.UpdateGroupResponse) error {
@@ -200,7 +201,7 @@ func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message p
 	return m.updateGroupsPropagator.Propagate(collectionId, message, metadata.Geolocation)
 }
 
-func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error) {
+func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, userId string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error) {
 	m.log.Info("Trying to execute queries", "fn_name", functionName, "fn_version", functionVersion)
 	m.log.Debug("Trying to execute queries", "tmpl_param_mapping", templateParamsMapping, "user_access_groups", groups, "node_geolocation", m.serverInfo.MetadataDomain, "queries_geolocation", geolocation, "in_cloud", m.serverInfo.Father == nil)
 
@@ -235,7 +236,7 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 					return nil, err
 				}
 
-				collInfo, err := m.redis.SearchOnMetadata(*query, groups)
+				collInfo, err := m.redis.SearchOnMetadata(*query, userId, groups)
 				if err != nil {
 					m.log.ErrorfWith("Error executing query template '%s'", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion, "query", query, "user_access_groups", groups, "error", err)
 					return nil, err

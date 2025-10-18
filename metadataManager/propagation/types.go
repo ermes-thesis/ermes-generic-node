@@ -28,6 +28,7 @@ type UpdateGroupResponse struct {
 
 type GroupMessage struct {
 	UserGroups     []string `json:"userGroups"`
+	UserId         string   `json:"userId"`
 	GroupsToAdd    []string `json:"groupsToAdd,omitempty"`
 	GroupsToRemove []string `json:"groupsToRemove,omitempty"`
 }

@@ -85,7 +85,7 @@ func TestExecuteQueries(t *testing.T) {
 	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, metadataLog, fnCache)
 
 	// Execute the query
-	result, err := manager.ExecuteQueries(requestedFnName, requestedFnVersion, string(queryParams), []string{"groupC"}, "boh", "IT/Milan")
+	result, err := manager.ExecuteQueries(requestedFnName, requestedFnVersion, string(queryParams), []string{"groupC"}, "12345", "boh", "IT/Milan")
 	assert.NoError(t, err, "Expected no error when executing queries")
 
 	assert.Len(t, result, 1, "Expected result to be non-empty")

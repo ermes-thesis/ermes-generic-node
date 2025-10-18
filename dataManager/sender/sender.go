@@ -30,7 +30,7 @@ const (
 //###############################################################
 
 type MigrationManagerSender interface {
-	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]string, []string, uint64, uint64)
+	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]string, []string, string, uint64, uint64)
 	SendGossipMessages(gossip.GossipMessage, string)
 	SendRequestInfoMessage(gossip.CollectionRequestInfoMessages, string)
 	GossipPath() string
@@ -52,7 +52,7 @@ func NewMigrationManagerSender(logger *logger.Logger, server server.ServerType, 
 	}
 }
 
-func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]string, groups []string, groupsSequence uint64, collectionSize uint64) {
+func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]string, groups []string, owner string, groupsSequence uint64, collectionSize uint64) {
 	//imp
 	s.log.Infof("[SENDER] send collection %s to %s", collection.CollectionId(), destination)
 	if destination != s.serverInfo.Father.HostName {
@@ -64,6 +64,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		CollectionId:   collection.CollectionId(),
 		Records:        res,
 		Groups:         groups,
+		Owner:          owner,
 		GroupsSequence: groupsSequence,
 		IsStrong:       collection.IsStrong(),
 		CollectionSize: collectionSize,
@@ -111,11 +112,11 @@ func (s *MigrationManagerSenderImpl) RequestInfoPath() string {
 //###############################################################
 
 type CollectionDiscovererSender interface {
-	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, recordNames ...string) ([]any, error)
+	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error)
 	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages)
 	PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages)
 	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage)
-	RemoveCollection(hostId string, collectionId string, senderIp string, groups []string)
+	RemoveCollection(hostId string, collectionId string, senderIp string, groups []string, userId string)
 
 	RemoteAccessPath() string
 	RemoteUpdatePath() string
@@ -137,13 +138,14 @@ func NewCollectionDiscovererSender(log *logger.Logger, server server.ServerType)
 	}
 }
 
-func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, recordNames ...string) ([]any, error) {
+func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error) {
 	s.log.Infof("[SENDER] request collection %s access to %s", collectionId, hostId)
 
 	msg := gossip.RemoteAccessRequest{
 		CollectionId: collectionId,
 		RecordNames:  recordNames,
 		Groups:       groups,
+		UserId:       userId,
 	}
 
 	print("SENDER: sending remote access request to ", hostId, " for collection ", collectionId, "\n")
@@ -184,13 +186,14 @@ func (s *CollectionDiscovererSenderImpl) NewCollectionCreated(hostId string, new
 	go s.server.SendGenericHTTPRequest(hostId, createCollectionPropagationPath, newCollection)
 }
 
-func (s *CollectionDiscovererSenderImpl) RemoveCollection(hostId string, collectionId string, senderIp string, groups []string) {
+func (s *CollectionDiscovererSenderImpl) RemoveCollection(hostId string, collectionId string, senderIp string, groups []string, userId string) {
 	s.log.Infof("SENDER: request collection %s removal to %s", collectionId, hostId)
 
 	msg := gossip.RemoveCollectionMessage{
 		CollectionId: collectionId,
 		SenderIp:     senderIp,
 		Groups:       groups,
+		UserId:       userId,
 	}
 
 	go s.server.SendGenericHTTPRequest(hostId, removeCollectionPropagationPath, msg)

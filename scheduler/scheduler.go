@@ -227,7 +227,7 @@ func (s *SchedulerImpl) forwardRequestWithSequential(functionName string, functi
 		return s.forwardRequest(hostId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber)
 	}
 
-	// If "HostId" is empty we fallback to the father (shouldn't happen, since if we are in this branch, it means that
+	// If "HostId" is empty we fall back to the father (shouldn't happen, since if we are in this branch, it means that
 	// the node knows the existence of the collection, therefore the collection should be local to the node, or in
 	// one of its children, meaning that "HostId" should NOT be empty)
 	if s.serverInfo.Father != nil {
@@ -290,7 +290,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 			}
 
 			if update.Deleted {
-				err := s.dataManager.RemoveCollectionAndPropagate(sequentialCollId, groups)
+				err := s.dataManager.RemoveCollectionAndPropagate(sequentialCollId, groups, userId)
 				if err != nil {
 					s.log.Errorf("error removing sequential collection: %v", err)
 					return nil, 0, s.log.ErrorfErr("error removing sequential collection: %v", err)
@@ -308,7 +308,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 						RecordNames:  recordNames,
 						RecordValues: recordValues,
 						IsDelete:     false,
-					}}, groups)
+					}}, groups, userId)
 					if err != nil {
 						s.log.Errorf("error updating sequential collection records: %v", err)
 						return nil, 0, s.log.ErrorfErr("error updating sequential collection records: %v", err)
@@ -319,7 +319,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 						CollectionId: sequentialCollId,
 						RecordNames:  update.DeletedRecords,
 						IsDelete:     false,
-					}}, groups)
+					}}, groups, userId)
 					if err != nil {
 						s.log.Errorf("error deleting sequential collection records: %v", err)
 						return nil, 0, s.log.ErrorfErr("error deleting sequential collection records: %v", err)
@@ -336,7 +336,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 					}
 				}
 				if len(groupsToAdd) > 0 || len(groupsToRemove) > 0 {
-					updateResp, err := s.metadataManager.UpdateGroupsInCollection(sequentialCollId, groups, groupsToAdd, groupsToRemove)
+					updateResp, err := s.metadataManager.UpdateGroupsInCollection(sequentialCollId, groups, userId, groupsToAdd, groupsToRemove)
 					if err != nil {
 						s.log.Errorf("error updating sequential collection groups: %v", err)
 						return nil, 0, s.log.ErrorfErr("error updating sequential collection groups: %v", err)
@@ -369,7 +369,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		for collId, update := range resp.CacheUpdates.CollectionUpdates {
 			if update.Deleted {
 				go func() {
-					err := s.dataManager.RemoveCollectionAndPropagate(collId, groups)
+					err := s.dataManager.RemoveCollectionAndPropagate(collId, groups, userId)
 					if err != nil {
 						s.log.Errorf("error removing collection: %v", err)
 					}
@@ -411,7 +411,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 			}
 
 			if len(groupsToAdd) > 0 || len(groupsToRemove) > 0 {
-				updateResp, err := s.metadataManager.UpdateGroupsInCollection(sequentialCollId, groups, groupsToAdd, groupsToRemove)
+				updateResp, err := s.metadataManager.UpdateGroupsInCollection(sequentialCollId, groups, userId, groupsToAdd, groupsToRemove)
 				if err != nil {
 					s.log.Errorf("error updating eventual collection groups: %v", err)
 					continue
@@ -425,7 +425,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		}
 
 		if len(updateMessage) > 0 {
-			err := s.dataManager.UpdateCollectionsRecordsAndPropagate(updateMessage, groups)
+			err := s.dataManager.UpdateCollectionsRecordsAndPropagate(updateMessage, groups, userId)
 			if err != nil {
 				s.log.Errorf("error propagating collection updates: %v", err)
 			}

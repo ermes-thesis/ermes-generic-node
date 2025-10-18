@@ -31,7 +31,7 @@ func NewHostFunctions(dataManager datamanager.DataManager, metadataManager metad
 	}
 }
 
-func (h *HostFunctions) hostGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr int32, collIdLength int32, recordNamePtr int32, recordNameLength int32, groupsPtr int32, groupsLength int32) int32 {
+func (h *HostFunctions) hostGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength, userIdPtr, userIdLength int32) int32 {
 	var groups []string
 	err := wasmComponent.GetWasmObject(groupsPtr, groupsLength, &groups)
 	if err != nil {
@@ -49,7 +49,12 @@ func (h *HostFunctions) hostGet(wasmComponent adapter.WasmRuntimeAdapter, collId
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	value, err := h.dataManager.GetRecord(collId, groups, recordName)
+	userId, err := wasmComponent.GetWasmString(userIdPtr, userIdLength)
+	if err != nil {
+		return wasmComponent.WriteError(model.WasmRuntimeError, err)
+	}
+
+	value, err := h.dataManager.GetRecord(collId, groups, userId, recordName)
 	var ret int32
 	if err != nil {
 		var unAuthErr *shared.UnauthorizedError
@@ -67,7 +72,7 @@ func (h *HostFunctions) hostGet(wasmComponent adapter.WasmRuntimeAdapter, collId
 	return ret
 }
 
-func (h *HostFunctions) hostMultipleGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr int32, collIdLength int32, recordNamesPtr int32, recordNamesLength int32, groupsPtr int32, groupsLength int32) int32 {
+func (h *HostFunctions) hostMultipleGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength, userIdPtr, userIdLength int32) int32 {
 	collId, err := wasmComponent.GetWasmString(collIdPtr, collIdLength)
 	if err != nil {
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
@@ -85,7 +90,12 @@ func (h *HostFunctions) hostMultipleGet(wasmComponent adapter.WasmRuntimeAdapter
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
-	values, err := h.dataManager.GetRecords(collId, groups, recordNames...)
+	userId, err := wasmComponent.GetWasmString(userIdPtr, userIdLength)
+	if err != nil {
+		return wasmComponent.WriteError(model.WasmRuntimeError, err)
+	}
+
+	values, err := h.dataManager.GetRecords(collId, groups, userId, recordNames...)
 	var ret int32
 	if err != nil {
 		if errors.Is(err, &shared.UnauthorizedError{}) {
@@ -116,7 +126,7 @@ func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAd
 
 	collectionId := uuid.NewString()
 
-	err = h.dataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Consistency == model.SequentialConsistent)
+	err = h.dataManager.SetCollectionAndPropagate(collectionId, make(map[string]string), metadata.Groups, metadata.Owner, metadata.Consistency == model.SequentialConsistent)
 	if err != nil {
 		return wasmComponent.WriteError(model.RedisError, err)
 	}

@@ -4,6 +4,7 @@ type SendCollectionMessage struct {
 	CollectionId   string            `json:"collectionId"`
 	Records        map[string]string `json:"records"`
 	Groups         []string          `json:"groups"`
+	Owner          string            `json:"owner"`
 	GroupsSequence uint64            `json:"groupsSequence"`
 	IsStrong       bool              `json:"isStrong"`
 	IsLeader       bool              `json:"isLeader"`

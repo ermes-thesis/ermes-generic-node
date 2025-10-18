@@ -38,7 +38,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 			return
 		} else if len(msg.RecordNames) == 1 {
 			dbFn := func() (interface{}, error) {
-				authorized, err := c.dbInterface.IsInGroups(msg.CollectionId, msg.Groups...)
+				authorized, err := c.dbInterface.IsAuthorized(msg.CollectionId, msg.UserId, msg.Groups...)
 				if err != nil {
 					return nil, err
 				}
@@ -49,7 +49,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 				return c.dbInterface.GetRecord(msg.CollectionId, msg.RecordNames[0])
 			}
 			remoteFn := func(addr string) (interface{}, error) {
-				return c.WeakCollectionRemoteRecordAccess(addr, msg.CollectionId, msg.Groups, msg.RecordNames[0])
+				return c.WeakCollectionRemoteRecordAccess(addr, msg.CollectionId, msg.Groups, msg.UserId, msg.RecordNames[0])
 			}
 			res, dbErr = AccessRecords(c, msg.CollectionId, dbFn, remoteFn)
 			if dbErr != nil {
@@ -63,7 +63,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 			}
 		} else {
 			dbFn := func() (interface{}, error) {
-				authorized, err := c.dbInterface.IsInGroups(msg.CollectionId, msg.Groups...)
+				authorized, err := c.dbInterface.IsAuthorized(msg.CollectionId, msg.UserId, msg.Groups...)
 				if err != nil {
 					return nil, err
 				}
@@ -74,7 +74,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 				return c.dbInterface.GetRecords(msg.CollectionId, msg.RecordNames...)
 			}
 			remoteFn := func(addr string) (interface{}, error) {
-				return c.WeakCollectionRemoteRecordsAccess(addr, msg.CollectionId, msg.Groups, msg.RecordNames...)
+				return c.WeakCollectionRemoteRecordsAccess(addr, msg.CollectionId, msg.Groups, msg.UserId, msg.RecordNames...)
 			}
 			res, dbErr = AccessRecords(c, msg.CollectionId, dbFn, remoteFn)
 			if dbErr != nil {
@@ -130,7 +130,7 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation() http.Handle
 
 		w.WriteHeader(http.StatusOK) //response
 
-		c.UpdateCollectionsRecordsAndPropagate(msg.Messages, msg.Groups, false, msg.Messages[0].SenderIp)
+		c.UpdateCollectionsRecordsAndPropagate(msg.Messages, msg.Groups, msg.UserId, false, msg.Messages[0].SenderIp)
 	})
 }
 
@@ -236,7 +236,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler
 		w.WriteHeader(http.StatusOK)
 
 		//async
-		dbErr := c.RemoveCollectionAndPropagate(collectionId, migrationManager.GetMigrationManagerInstance(), msg.Groups, false, senderIp)
+		dbErr := c.RemoveCollectionAndPropagate(collectionId, migrationManager.GetMigrationManagerInstance(), msg.Groups, msg.UserId, false, senderIp)
 		if dbErr != nil {
 			c.log.Error("HTTP-REQ", "Error removing collection: "+dbErr.Error())
 		}

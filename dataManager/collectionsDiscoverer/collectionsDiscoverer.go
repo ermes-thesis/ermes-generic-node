@@ -19,13 +19,13 @@ type CollectionsDiscoverer interface {
 	IsCollectionLocallyPresent(collectionId string, consistencyClock uint64) (bool, shared.Collection, error)
 	Init(*shared.CollectionPartialView, info.ServerInfo, server.ServerType, db.GenericDB, *logger.Logger)
 
-	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, recordNames string) (string, error)
-	WeakCollectionRemoteRecordsAccess(hostId string, collectionId string, groups []string, recordNames ...string) ([]any, error)
+	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames string) (string, error)
+	WeakCollectionRemoteRecordsAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error)
 
-	UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdateMessage, groups []string, isInitiator bool, ignoredHostName string) error
+	UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdateMessage, groups []string, userId string, isInitiator bool, ignoredHostName string) error
 	UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdateMessage, isInitiator bool, ignoredHostName string) error
-	SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error
-	RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, isInitiator bool, ignoredHostName string) error
+	SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong bool) error
+	RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, userId string, isInitiator bool, ignoredHostName string) error
 }
 
 type CollectionsDiscovererImp struct {
@@ -89,15 +89,15 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 	return true, collection, nil
 }
 
-func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, recordName string) (string, error) {
-	res, err := c.sender.WeakCollectionRemoteRecordAccess(hostId, collectionId, groups, recordName)
+func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordName string) (string, error) {
+	res, err := c.sender.WeakCollectionRemoteRecordAccess(hostId, collectionId, groups, userId, recordName)
 	if len(res) != 0 {
 		return "", errors.New("unexpected output")
 	}
 	return res[0].(string), err
 }
-func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordsAccess(hostId string, collectionId string, groups []string, recordNames ...string) ([]any, error) {
-	return c.sender.WeakCollectionRemoteRecordAccess(hostId, collectionId, groups, recordNames...)
+func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordsAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error) {
+	return c.sender.WeakCollectionRemoteRecordAccess(hostId, collectionId, groups, userId, recordNames...)
 }
 
 // use generics to preserve type-safety, unfortunately generics are not supported for methods.
@@ -205,7 +205,7 @@ func UpdateRecord(
 	return hosts, dbFn(isStrong) // update in local db
 }
 
-func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdateMessage, groups []string, isInitiator bool, ignoredHostName string) error {
+func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdateMessage, groups []string, userId string, isInitiator bool, ignoredHostName string) error {
 	var msgs = make(map[string]messages.CollectionUpdateMessages) // host -> message
 	//sync
 	c.collectionsPartialView.Mutex.Lock()
@@ -216,7 +216,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 		var dbFn func(isStrong bool) error
 		if update.IsDelete {
 			dbFn = func(isStrong bool) error {
-				authorized, err := c.dbInterface.IsInGroups(update.CollectionId, groups...)
+				authorized, err := c.dbInterface.IsAuthorized(update.CollectionId, userId, groups...)
 				if err != nil {
 					return err
 				}
@@ -231,7 +231,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 			}
 		} else {
 			dbFn = func(isStrong bool) error {
-				authorized, err := c.dbInterface.IsInGroups(update.CollectionId, groups...)
+				authorized, err := c.dbInterface.IsAuthorized(update.CollectionId, userId, groups...)
 				if err != nil {
 					return err
 				}
@@ -314,7 +314,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 	return nil
 }
 
-func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, migrationManager migrationManager.MigrationManager, isStrong bool) error {
+func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong bool) error {
 	//sync
 	c.collectionsPartialView.Mutex.Lock()
 	//imp
@@ -327,7 +327,7 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 	}
 
 	//try to add collection in redis
-	dbErr := c.dbInterface.SetCollection(collectionId, records, groups, 0)
+	dbErr := c.dbInterface.SetCollection(collectionId, records, groups, userId, 0)
 	if dbErr != nil {
 		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return dbErr
@@ -361,7 +361,7 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 	return nil
 }
 
-func (c *CollectionsDiscovererImp) RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, isInitiator bool, ignoredHostName string) error {
+func (c *CollectionsDiscovererImp) RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, userId string, isInitiator bool, ignoredHostName string) error {
 	//sync
 	c.collectionsPartialView.Mutex.Lock()
 	//imp
@@ -369,7 +369,7 @@ func (c *CollectionsDiscovererImp) RemoveCollectionAndPropagate(collectionId str
 	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
 	if !exists {
 		if c.serverInfo.Father != nil && c.serverInfo.Father.HostName != ignoredHostName {
-			c.sender.RemoveCollection(c.serverInfo.Father.HostName, collectionId, c.serverInfo.HostName, groups) //propagate to father
+			c.sender.RemoveCollection(c.serverInfo.Father.HostName, collectionId, c.serverInfo.HostName, groups, userId) //propagate to father
 			return nil
 		}
 		return errors.New("collection doesn't exists")
@@ -381,12 +381,12 @@ func (c *CollectionsDiscovererImp) RemoveCollectionAndPropagate(collectionId str
 			return errors.New("strong collection can't be removed remotely")
 		}
 
-		c.collectionsPartialView.Mutex.Unlock()                                        // lock release
-		c.propagateRemoveCollection(collection, collectionId, groups, ignoredHostName) //propagate to other hosts
+		c.collectionsPartialView.Mutex.Unlock()                                                // lock release
+		c.propagateRemoveCollection(collection, collectionId, groups, userId, ignoredHostName) //propagate to other hosts
 		return nil
 	}
 
-	authorized, err := c.dbInterface.IsInGroups(collectionId, groups...)
+	authorized, err := c.dbInterface.IsAuthorized(collectionId, userId, groups...)
 	if err != nil {
 		return err
 	}
@@ -398,22 +398,22 @@ func (c *CollectionsDiscovererImp) RemoveCollectionAndPropagate(collectionId str
 	c.dbInterface.DeleteCollection(collectionId)                    //remove from local db
 	migrationManager.RemoveCollectionFromLru(collectionId)          //remove from lru
 
-	c.collectionsPartialView.Mutex.Unlock()                                        // lock release
-	c.propagateRemoveCollection(collection, collectionId, groups, ignoredHostName) //propagate to other hosts
+	c.collectionsPartialView.Mutex.Unlock()                                                // lock release
+	c.propagateRemoveCollection(collection, collectionId, groups, userId, ignoredHostName) //propagate to other hosts
 
 	return nil
 }
 
-func (c *CollectionsDiscovererImp) propagateRemoveCollection(collection shared.Collection, collectionId string, groups []string, ignoredHostName string) {
+func (c *CollectionsDiscovererImp) propagateRemoveCollection(collection shared.Collection, collectionId string, groups []string, userId string, ignoredHostName string) {
 	hosts := collection.HostsId()
 	for host := range hosts {
 		if host == ignoredHostName {
 			continue
 		}
-		c.sender.RemoveCollection(host, collectionId, c.serverInfo.HostName, groups)
+		c.sender.RemoveCollection(host, collectionId, c.serverInfo.HostName, groups, userId)
 	}
 
 	if c.serverInfo.Father != nil && c.serverInfo.Father.HostName != ignoredHostName {
-		c.sender.RemoveCollection(c.serverInfo.Father.HostName, collectionId, c.serverInfo.HostName, groups)
+		c.sender.RemoveCollection(c.serverInfo.Father.HostName, collectionId, c.serverInfo.HostName, groups, userId)
 	}
 }

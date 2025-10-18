@@ -10,6 +10,7 @@ type RemoteAccessRequest struct {
 	CollectionId string   `json:"collectionId"`
 	RecordNames  []string `json:"recordNames"`
 	Groups       []string `json:"groups"`
+	UserId       string   `json:"userId"`
 }
 
 type RemoteAccessResponse struct {
@@ -21,6 +22,7 @@ type RemoteUpdateRequest struct {
 	RecordNames  []string `json:"recordNames"`
 	Record       []string `json:"records"`
 	Groups       []string `json:"groups"`
+	UserId       string   `json:"userId"`
 	SenderIp     string   `json:"senderIp"`
 	IsDelete     bool     `json:"isDelete"`
 }
@@ -66,6 +68,7 @@ func (c *CollectionUpdateMessage) IncrementSequence() {
 type CollectionUpdateMessages struct {
 	Messages []CollectionUpdateMessage
 	Groups   []string
+	UserId   string
 }
 
 func ToCollectionUpdateMessages(
@@ -147,4 +150,5 @@ type RemoveCollectionMessage struct {
 	CollectionId string   `json:"collectionId"`
 	SenderIp     string   `json:"senderIp"`
 	Groups       []string `json:"groups"`
+	UserId       string   `json:"userId"`
 }

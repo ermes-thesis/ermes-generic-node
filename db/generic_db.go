@@ -92,7 +92,7 @@ type GenericDB interface {
 	//	- map[string]string: map of record names to values (empty if collection doesn't exist)
 	//	- []string: slice of group names associated with the collection
 	//	- error: non-nil if the operation fails
-	GetCollection(collectionId string) (map[string]string, []string, uint64, error)
+	GetCollection(collectionId string) (map[string]string, []string, string, uint64, error)
 	// SetCollection creates or completely replaces a collection with the provided
 	// records and groups. This operation will overwrite any existing data.
 	//
@@ -103,7 +103,7 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the operation fails
-	SetCollection(collectionId string, records map[string]string, groups []string, groupsSequence uint64) error
+	SetCollection(collectionId string, records map[string]string, groups []string, owner string, groupsSequence uint64) error
 	// DeleteCollection removes a collection and all its associated data including
 	// records, and groups. This operation is irreversible.
 	//
@@ -179,10 +179,10 @@ type GenericDB interface {
 	UpdateGroupsInMetadata(collectionId string, groupsToAdd []string, groupsToRemove []string) ([]string, uint64, error)
 
 	SetGroupsInMetadata(collectionId string, sequenceGroups uint64, groups ...string) error
-	IsInMetadataGroups(collectionId string, groups ...string) (bool, error)
+	IsAuthorizedInMetadata(collectionId string, owner string, groups ...string) (bool, error)
 
 	SetGroups(collectionId string, sequenceGroups uint64, groups ...string) error
-	// IsInGroups checks if any of the specified members belong to the collection's
+	// IsAuthorized checks if any of the specified members belong to the collection's
 	// groups. Returns true if al least one member is found.
 	//
 	// Parameters:
@@ -193,7 +193,7 @@ type GenericDB interface {
 	//	- bool: true if at least one group is found, false if no groups are
 	//			provided or none are found in the collection's groups
 	//	- error: non-nil if the check operation fails
-	IsInGroups(collectionId string, groups ...string) (bool, error)
+	IsAuthorized(collectionId string, owner string, groups ...string) (bool, error)
 
 	// CreateIndex creates a search index on collection metadata fields.
 	// The index automatically includes standard fields (name, owner, created_at,
@@ -217,7 +217,7 @@ type GenericDB interface {
 	// Returns:
 	//	- []db.CollectionInfo: slice of matching collection information (empty if no matches)
 	//	- error: non-nil if the search operation fails
-	SearchOnMetadata(query model.QueryTemplate, groups []string) ([]types.CollectionInfo, error)
+	SearchOnMetadata(query model.QueryTemplate, owner string, groups []string) ([]types.CollectionInfo, error)
 	// DropIndex removes the metadata search index, disabling search functionality.
 	// This operation is irreversible and will require CreateIndex to be called
 	// again to restore search capabilities.

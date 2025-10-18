@@ -5,6 +5,7 @@ import (
 	"db"
 	"metadataManager/propagation"
 	"server/info"
+	"sync"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 )
@@ -17,6 +18,6 @@ func CreateMetadataManagerWithMocks(client db.GenericDB, serverInfo *info.Server
 		serverInfo:               serverInfo,
 		queryPropagator:          qPropagator,
 		createMetadataPropagator: mPropagator,
-		customMetadataKeys:       []string{},
+		customMetadataKeys:       sync.Map{},
 	}
 }

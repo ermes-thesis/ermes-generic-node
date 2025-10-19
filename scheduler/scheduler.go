@@ -7,6 +7,7 @@ import (
 	"dataManager/messages"
 	shared "dataManager/shared"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"metadataManager"
@@ -110,6 +111,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 
 	// Initializing vars for function returned collections analysis
 	var sequentialCollection *shared.StrongCollection
+	sequentialCollectionNeeded := false
 	hasEventualLocal := false
 	eventualHostCounts := make(map[string]uint)
 	maxEventualCount := uint(0)
@@ -134,6 +136,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 			}
 
 			if col.Metadata.Consistency == model.SequentialConsistent {
+				sequentialCollectionNeeded = true
 				if sequentialCollection != nil {
 					return nil, 0, s.log.ErrorfErr("multiple sequentially consistent collections are not supported")
 				}
@@ -170,7 +173,18 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 
 	// Route based on collection analysis
 	// Priority: Sequential > Local Eventual > Remote Eventual
-	if sequentialCollection != nil {
+	if sequentialCollectionNeeded {
+		s.log.Debug("Sequential collection requested for execution. Scheduling accordingly", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", collections), "with_request_body", reqBody, "sequential_seq_num", sequentialSeqNumber, "req_hostname", reqHostname)
+
+		if sequentialCollection == nil {
+			if s.serverInfo.Father == nil {
+				s.log.Error("Couldn't find in the architecture the requested sequential collection", "fn_name", functionName, "fn_version", functionVersion, "with_collections", fmt.Sprintf("%+v", collections), "with_request_body", reqBody, "sequential_seq_num", sequentialSeqNumber, "req_hostname", reqHostname)
+				return nil, 0, errors.New("sequential collection requested does not exists")
+			}
+			s.log.Info("Sequential collection existence not found. Trying to forward the request to father node",
+				"fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "forwarded_to", s.serverInfo.Father.HostName)
+			return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, groupToken, sequentialSeqNumber, cumulativeLatency)
+		}
 
 		// Sequential collection present - check if it is requested a write or read access
 		functionMetadata, err := s.cache.GetMetadata(functionName, functionVersion)

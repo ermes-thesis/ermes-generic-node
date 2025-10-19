@@ -781,6 +781,11 @@ func (r *RedisClient) IsAuthorizedInMetadata(collectionId string, userId string,
 	}
 
 	collGroups := strings.Split(collGroupsStr, ",")
+
+	if slices.Contains(collGroups, model.PublicGroup) {
+		return true, nil
+	}
+
 	for _, group := range userGroups {
 		if slices.Contains(collGroups, group) {
 			return true, nil
@@ -859,7 +864,7 @@ func (r *RedisClient) IsAuthorized(collectionId string, userId string, members .
 		return true, nil
 	}
 
-	res, err := r.client.SMIsMember(r.ctx, "info:"+collectionId+":groups", m...).Result()
+	res, err := r.client.SMIsMember(r.ctx, "info:"+collectionId+":groups", append(m, model.PublicGroup)...).Result()
 	return slices.Contains(res, true), err
 }
 

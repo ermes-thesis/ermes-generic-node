@@ -92,8 +92,6 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model
 		for key := range metadata.CustomMetadata {
 			if _, ok := m.customMetadataKeys.LoadOrStore(key, true); !ok {
 				m.log.Info("New custom metadata added. Altering Redis index", "new_custom_metadata", key)
-				// TODO: Check if it is necessary to log the current custom metadata state
-				m.log.Debug("New custom metadata added. Altering Redis index", "current_custom_metadata")
 				err := m.redis.AlterIndex(key)
 				if err != nil {
 					m.log.Error("Error altering index in Redis", "collection_id", collectionId, "origin", reqOrigin, "geolocation", metadata.Geolocation, "metadata", fmt.Sprintf("%+v", metadata), "new_custom_metadata", key, "error", err)

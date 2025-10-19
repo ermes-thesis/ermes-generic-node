@@ -7,7 +7,7 @@ import (
 	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"metadataManager/types"
 	"net/http"
-	"server/info"
+	"server"
 	"strings"
 )
 
@@ -16,12 +16,12 @@ type QueryPropagator interface {
 }
 
 type QueryPropagatorImpl struct {
-	serverInfo *info.ServerInfo
+	serverInfo *server.ServerInfo
 	httpHelper *HTTPHelper
 	log        *logger.Logger
 }
 
-func NewQueryPropagator(serverInfo *info.ServerInfo, log *logger.Logger) QueryPropagator {
+func NewQueryPropagator(serverInfo *server.ServerInfo, log *logger.Logger) QueryPropagator {
 	return &QueryPropagatorImpl{
 		serverInfo: serverInfo,
 		httpHelper: NewHTTPHelper(serverInfo, log),

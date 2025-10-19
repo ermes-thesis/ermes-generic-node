@@ -10,7 +10,6 @@ import (
 	shared "dataManager/shared"
 	"db"
 	"server"
-	"server/info"
 	"sync"
 
 	"github.com/ermes-thesis/ermes-common/logger"
@@ -18,7 +17,7 @@ import (
 
 type DataManager interface {
 	// Init initialize the singleton pattern
-	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger)
+	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger)
 
 	//sub components
 	GetMigrationManager() migrationManager.MigrationManager
@@ -39,7 +38,7 @@ type DataManagerImp struct {
 	collectionsDiscoverer collectionsDiscoverer.CollectionsDiscoverer
 
 	dbInterface db.GenericDB
-	serverInfo  info.ServerInfo
+	serverInfo  server.ServerInfo
 }
 
 // Singleton pattern
@@ -56,7 +55,7 @@ func GetDataManagerInstance() DataManager {
 	return dataManagerInstance
 }
 
-func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger) {
+func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger) {
 	initOnce.Do(func() {
 		m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger)
 		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger)

@@ -6,12 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ermes-thesis/ermes-common/logger"
 	"io"
 	"net/http"
 	"server"
-	info "server/info"
-
-	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 const (
@@ -40,12 +38,12 @@ type MigrationManagerSender interface {
 }
 
 type MigrationManagerSenderImpl struct {
-	serverInfo info.ServerInfo
+	serverInfo server.ServerInfo
 	server     server.ServerType
 	log        *logger.Logger
 }
 
-func NewMigrationManagerSender(logger *logger.Logger, server server.ServerType, serverInfo info.ServerInfo) MigrationManagerSender {
+func NewMigrationManagerSender(logger *logger.Logger, server server.ServerType, serverInfo server.ServerInfo) MigrationManagerSender {
 	return &MigrationManagerSenderImpl{
 		server:     server,
 		log:        logger,

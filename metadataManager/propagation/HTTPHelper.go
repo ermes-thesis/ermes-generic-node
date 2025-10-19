@@ -7,15 +7,15 @@ import (
 	"github.com/ermes-thesis/ermes-common/logger"
 	"io"
 	"net/http"
-	"server/info"
+	"server"
 )
 
 type HTTPHelper struct {
-	serverInfo *info.ServerInfo
+	serverInfo *server.ServerInfo
 	log        *logger.Logger
 }
 
-func NewHTTPHelper(serverInfo *info.ServerInfo, log *logger.Logger) *HTTPHelper {
+func NewHTTPHelper(serverInfo *server.ServerInfo, log *logger.Logger) *HTTPHelper {
 	return &HTTPHelper{serverInfo, log}
 }
 

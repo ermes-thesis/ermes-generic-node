@@ -4,25 +4,24 @@ import (
 	datamanager "dataManager"
 	shared "dataManager/shared"
 	"errors"
-	"metadataManager"
-	"metadataManager/propagation"
-	"server/info"
-
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
+	"metadataManager"
+	"metadataManager/propagation"
+	"server"
 )
 
 type HostFunctions struct {
 	dataManager     datamanager.DataManager
 	metadataManager metadataManager.MetadataManager
-	serverInfo      *info.ServerInfo
+	serverInfo      *server.ServerInfo
 	logger          *logger.Logger
 }
 
-func NewHostFunctions(dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, serverInfo *info.ServerInfo, logger *logger.Logger) *HostFunctions {
+func NewHostFunctions(dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, serverInfo *server.ServerInfo, logger *logger.Logger) *HostFunctions {
 	return &HostFunctions{
 		dataManager:     dataManager,
 		metadataManager: metadataManager,

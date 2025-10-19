@@ -18,7 +18,6 @@ import (
 	"net/url"
 	"scheduler"
 	"server"
-	"server/info"
 	"strings"
 	"testing"
 	"time"
@@ -41,7 +40,7 @@ func createNewLogger(t *testing.T) *logger.Logger {
 }
 
 func TestScheduleOnChild_ReadStrong(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -107,11 +106,11 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -167,7 +166,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName: httpServerChild.URL,
 		},
@@ -196,7 +195,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 }
 
 func TestScheduleOnFather_WriteStrong(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -292,11 +291,11 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -348,7 +347,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when parsing url")
 	collFather12345.AddHost(urlChild.Host)
 	collFather1111.AddHost(urlChild.Host)
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
@@ -376,7 +375,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 }
 
 func TestScheduleOnChild_WeakReplicated(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -432,11 +431,11 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -479,7 +478,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
@@ -507,7 +506,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 }
 
 func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -583,11 +582,11 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	urlFather, err := url.Parse(httpServerFather.URL)
 	assert.NoError(t, err, "Expected no error when parsing url")
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: urlFather.Host,
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -619,7 +618,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
@@ -647,7 +646,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 }
 
 func TestScheduleOnChild_DoubleWeak(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -714,11 +713,11 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -763,7 +762,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
@@ -791,7 +790,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 }
 
 func TestScheduleOnChild_EmptyFather(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -853,11 +852,11 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -927,7 +926,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 }
 
 func TestScheduleOnChild_WriteStrong(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -1012,11 +1011,11 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -1100,7 +1099,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 }
 
 func TestScheduleThreeNodes(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -1170,11 +1169,11 @@ func TestScheduleThreeNodes(t *testing.T) {
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -1215,11 +1214,11 @@ func TestScheduleThreeNodes(t *testing.T) {
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
-	serverInfoChild2 := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild2 := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",

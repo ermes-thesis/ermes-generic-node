@@ -4,13 +4,13 @@ import (
 	"caches"
 	"db"
 	"metadataManager/propagation"
-	"server/info"
+	"server"
 	"sync"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 )
 
-func CreateMetadataManagerWithMocks(client db.GenericDB, serverInfo *info.ServerInfo, logger *logger.Logger, qPropagator propagation.QueryPropagator, mPropagator propagation.CreateMetadataPropagator, fnCache caches.FunctionCache) MetadataManager {
+func CreateMetadataManagerWithMocks(client db.GenericDB, serverInfo *server.ServerInfo, logger *logger.Logger, qPropagator propagation.QueryPropagator, mPropagator propagation.CreateMetadataPropagator, fnCache caches.FunctionCache) MetadataManager {
 	return &MetadataManagerImpl{
 		redis:                    client,
 		log:                      logger,

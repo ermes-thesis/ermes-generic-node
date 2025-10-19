@@ -12,7 +12,7 @@ import (
 	mockDb "mocks/db"
 	mockServer "mocks/server"
 	"net/http"
-	"server/info"
+	info "server"
 	"strings"
 	"testing"
 

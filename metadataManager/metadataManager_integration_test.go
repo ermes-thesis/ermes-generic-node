@@ -16,7 +16,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"server"
-	"server/info"
 	"testing"
 	"time"
 
@@ -86,7 +85,7 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	defer shutdownFunc2()
 	defer redisClient2.Close()
 
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -121,11 +120,11 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	urlFather, err := url.Parse(httpServerFather.URL)
 	assert.NoError(t, err, "Expected no error when parsing URL")
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: urlFather.Host,
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 
 		Secret: "secret",
@@ -151,7 +150,7 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	urlChild, err := url.Parse(httpServerChild.URL)
 	assert.NoError(t, err, "Expected no error when parsing URL")
 
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName: urlChild.Host,
 		},
@@ -216,7 +215,7 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	defer shutdownFuncChild()
 	defer redisClientChild.Close()
 
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -244,12 +243,12 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	urlFather, err := url.Parse(httpServerFather.URL)
 	assert.NoError(t, err, "Expected no error when parsing URL")
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName:       urlFather.Host,
 			MetadataDomain: "IT",
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 	}
@@ -273,7 +272,7 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	urlChild, err := url.Parse(httpServerChild.URL)
 	assert.NoError(t, err, "Expected no error when parsing URL")
 
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName:       urlChild.Host,
 			MetadataDomain: "IT/Milan",
@@ -327,8 +326,8 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	defer shutdownFuncChild()
 	defer redisClientChild.Close()
 
-	serverInfoFather := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoFather := &server.ServerInfo{
+		Father: &server.Node{
 			//root node, so that the father can think that the message arrive from top
 		},
 		CloudNode:      nil,
@@ -357,12 +356,12 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	urlFather, err := url.Parse(httpServerFather.URL)
 	assert.NoError(t, err, "Expected no error when parsing URL")
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName:       urlFather.Host,
 			MetadataDomain: "IT",
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 	}
@@ -386,7 +385,7 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	urlChild, err := url.Parse(httpServerChild.URL)
 	assert.NoError(t, err, "Expected no error when parsing URL")
 
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName:       urlChild.Host,
 			MetadataDomain: "IT/Milan",
@@ -444,11 +443,11 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	defer shutdownFuncChild()
 	defer redisClientChild.Close()
 
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
-		Children: []info.Node{
+		Children: []server.Node{
 			{
 				MetadataDomain: "IT/Milan",
 			},
@@ -474,11 +473,11 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			MetadataDomain: "IT/Milan",
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan/Polimi",
 		Secret:         "secret",
 	}
@@ -505,12 +504,12 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	urlChild, err := url.Parse(httpServerChild.URL)
 	assert.NoError(t, err, "Expected no error when parsing URL")
 
-	serverInfoLocal := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoLocal := &server.ServerInfo{
+		Father: &server.Node{
 			HostName:       urlFather.Host,
 			MetadataDomain: "IT",
 		},
-		Children: []info.Node{
+		Children: []server.Node{
 			{
 				HostName:       urlChild.Host,
 				MetadataDomain: "IT/Milan/Polimi",

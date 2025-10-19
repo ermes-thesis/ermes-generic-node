@@ -6,7 +6,7 @@ import (
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"net/http"
-	"server/info"
+	"server"
 	"strings"
 )
 
@@ -15,12 +15,12 @@ type UpdateGroupsPropagator interface {
 }
 
 type UpdateGroupsPropagatorImpl struct {
-	serverInfo *info.ServerInfo
+	serverInfo *server.ServerInfo
 	httpHelper *HTTPHelper
 	log        *logger.Logger
 }
 
-func NewUpdateGroupsPropagator(serverInfo *info.ServerInfo, log *logger.Logger) *UpdateGroupsPropagatorImpl {
+func NewUpdateGroupsPropagator(serverInfo *server.ServerInfo, log *logger.Logger) *UpdateGroupsPropagatorImpl {
 	return &UpdateGroupsPropagatorImpl{
 		serverInfo: serverInfo,
 		httpHelper: NewHTTPHelper(serverInfo, log),

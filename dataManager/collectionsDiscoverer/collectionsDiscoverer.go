@@ -8,7 +8,6 @@ import (
 	"db"
 	"errors"
 	"server"
-	"server/info"
 	"strconv"
 	"sync"
 
@@ -17,7 +16,7 @@ import (
 
 type CollectionsDiscoverer interface {
 	IsCollectionLocallyPresent(collectionId string, consistencyClock uint64) (bool, shared.Collection, error)
-	Init(*shared.CollectionPartialView, info.ServerInfo, server.ServerType, db.GenericDB, *logger.Logger)
+	Init(*shared.CollectionPartialView, server.ServerInfo, server.ServerType, db.GenericDB, *logger.Logger)
 
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames string) (string, error)
 	WeakCollectionRemoteRecordsAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error)
@@ -31,7 +30,7 @@ type CollectionsDiscoverer interface {
 type CollectionsDiscovererImp struct {
 	//data
 	collectionsPartialView *shared.CollectionPartialView
-	serverInfo             info.ServerInfo
+	serverInfo             server.ServerInfo
 	sender                 sender.CollectionDiscovererSender
 	log                    *logger.Logger
 	dbInterface            db.GenericDB
@@ -49,7 +48,7 @@ func GetCollectionsDiscovererInstance() CollectionsDiscoverer {
 	return collectionsDiscovererInstance
 }
 
-func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo info.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger *logger.Logger) {
+func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger *logger.Logger) {
 	initOnce.Do(func() {
 		c.collectionsPartialView = collections
 		c.serverInfo = serverInfo

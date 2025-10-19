@@ -12,7 +12,6 @@ import (
 	"db"
 	"errors"
 	"server"
-	"server/info"
 	"sync"
 
 	"github.com/ermes-thesis/ermes-common/logger"
@@ -20,7 +19,7 @@ import (
 
 type MigrationManager interface {
 	// Init initialize the singleton pattern
-	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger)
+	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger)
 	// UpdatesRequestsInfo used to update lru in real time (collectionID)
 	// if the collection is strong used to update forces in real time.
 	// if the request comes from a user => nodeName = "user"
@@ -44,7 +43,7 @@ type MigrationManager interface {
 type MigrationManagerImp struct {
 	//config
 	config     config.MigrationManagerConfig
-	serverInfo info.ServerInfo
+	serverInfo server.ServerInfo
 	log        *logger.Logger
 
 	//policy
@@ -76,7 +75,7 @@ func GetMigrationManagerInstance() MigrationManager {
 	return migrationManagerInstance
 }
 
-func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger) {
+func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger) {
 	initOnce.Do(func() {
 		//imp
 		if m.collectionsPartialView != nil { //if singleton already initialized

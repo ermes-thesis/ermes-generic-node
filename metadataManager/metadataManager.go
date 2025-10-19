@@ -11,7 +11,6 @@ import (
 	"metadataManager/propagation"
 	"metadataManager/types"
 	"server"
-	"server/info"
 	"strings"
 	"sync"
 	"tokenDecoder"
@@ -34,7 +33,7 @@ type MetadataManagerImpl struct {
 	redis                        db.GenericDB
 	log                          *logger.Logger
 	templateCache                caches.FunctionCache
-	serverInfo                   *info.ServerInfo
+	serverInfo                   *server.ServerInfo
 	queryPropagator              propagation.QueryPropagator
 	createMetadataPropagator     propagation.CreateMetadataPropagator
 	groupUpdateRequestPropagator propagation.GroupUpdateRequestPropagator
@@ -42,7 +41,7 @@ type MetadataManagerImpl struct {
 	customMetadataKeys           sync.Map
 }
 
-func NewMetadataManager(redis db.GenericDB, serverInfo *info.ServerInfo, log *logger.Logger, cache caches.FunctionCache) *MetadataManagerImpl {
+func NewMetadataManager(redis db.GenericDB, serverInfo *server.ServerInfo, log *logger.Logger, cache caches.FunctionCache) *MetadataManagerImpl {
 	log.Info("Initializing MetadataManager", "metadata_domain", serverInfo.MetadataDomain, "has_father", serverInfo.Father != nil)
 	return &MetadataManagerImpl{
 		redis:                        redis,

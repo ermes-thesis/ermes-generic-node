@@ -17,7 +17,6 @@ import (
 	"os/signal"
 	"scheduler"
 	"server"
-	"server/info"
 	"sync"
 	"time"
 	"tokenDecoder"
@@ -55,7 +54,7 @@ func run(ctx context.Context, configPath string) error {
 	cfg := config.LoadConfig(configPath)
 	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](cfg.Lru.Size) //TODO: replace with redis size
 
-	serverInfo, err := info.NewServerInfo(cfg)
+	serverInfo, err := server.NewServerInfo(cfg)
 	if err != nil {
 		return fmt.Errorf("error creating server info: %w", err)
 	}

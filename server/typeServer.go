@@ -5,14 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"net"
 	"net/http"
 	"os"
-	"server/clientrepo"
-	"server/info"
-
-	"github.com/ermes-thesis/ermes-common/logger"
-	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 )
 
 type ServerType interface {
@@ -23,13 +20,12 @@ type ServerType interface {
 
 type Server struct {
 	*http.Server
-	ServerInfo *info.ServerInfo
+	ServerInfo *ServerInfo
 	logger     *logger.Logger
 	Handler    *http.ServeMux
-	ClientRepo *clientrepo.ClientRepo
 }
 
-func NewServer(log *logger.Logger, serverInfo *info.ServerInfo) (*Server, error) {
+func NewServer(log *logger.Logger, serverInfo *ServerInfo) (*Server, error) {
 	log.Info("Creating a new Server instance...")
 
 	mux := http.NewServeMux()
@@ -41,7 +37,6 @@ func NewServer(log *logger.Logger, serverInfo *info.ServerInfo) (*Server, error)
 	ser := &Server{
 		ServerInfo: serverInfo,
 		logger:     log,
-		ClientRepo: clientrepo.CreateClientRepo(),
 		Handler:    mux,
 		Server: &http.Server{
 			Addr:    net.JoinHostPort("", serverInfo.Port),

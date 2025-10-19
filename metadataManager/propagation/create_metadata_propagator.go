@@ -6,7 +6,7 @@ import (
 	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"net/http"
-	"server/info"
+	"server"
 	"strings"
 )
 
@@ -15,12 +15,12 @@ type CreateMetadataPropagator interface {
 }
 
 type CreateMetadataPropagatorImpl struct {
-	serverInfo *info.ServerInfo
+	serverInfo *server.ServerInfo
 	httpHelper *HTTPHelper
 	log        *logger.Logger
 }
 
-func NewCreateMetadataPropagator(serverInfo *info.ServerInfo, log *logger.Logger) *CreateMetadataPropagatorImpl {
+func NewCreateMetadataPropagator(serverInfo *server.ServerInfo, log *logger.Logger) *CreateMetadataPropagatorImpl {
 	return &CreateMetadataPropagatorImpl{
 		serverInfo: serverInfo,
 		log:        log,

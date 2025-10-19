@@ -2,7 +2,7 @@ package dataManagerShared
 
 import (
 	config "config"
-	"server/info"
+	"server"
 	"sync"
 )
 
@@ -132,7 +132,7 @@ func (c *CollectionPartialView) restoreWeakCollectionFromSettings(info config.Co
 	c.KnownCollections[info.CollectionID] = coll
 }
 
-func (c *CollectionPartialView) GetClosestChild(hostSet map[string]struct{}, serverInfo info.ServerInfo) string {
+func (c *CollectionPartialView) GetClosestChild(hostSet map[string]struct{}, serverInfo server.ServerInfo) string {
 	var minLatency int
 	var minLatencyHost string
 

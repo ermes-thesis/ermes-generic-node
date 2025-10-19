@@ -7,7 +7,7 @@ import (
 	"metadataManager/types"
 	"mocks/caches"
 	"mocks/metadataManager/propagation"
-	"server/info"
+	"server"
 	"testing"
 	"time"
 
@@ -22,7 +22,7 @@ func TestExecuteQueries(t *testing.T) {
 	defer shutdownFun()
 	defer redisClient.Close()
 
-	srvInfo := &info.ServerInfo{
+	srvInfo := &server.ServerInfo{
 		MetadataDomain: "IT",
 	}
 
@@ -109,7 +109,7 @@ func TestCreateMetadata(t *testing.T) {
 	defer shutdownFun()
 	defer redisClient.Close()
 
-	srvInfo := &info.ServerInfo{
+	srvInfo := &server.ServerInfo{
 		MetadataDomain: "IT",
 	}
 

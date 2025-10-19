@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"metadataManager"
 	"metadataManager/types"
 	"net/http"
@@ -150,7 +151,6 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 				}
 
 				// If the currently iterated collection is known by the current node, we count the host for this collection
-				// TODO: Should replace this counter with a check to find the host with lower latency
 				if collection != nil {
 					for hostId := range collection.HostsId() {
 						eventualHostCounts[hostId]++
@@ -245,10 +245,19 @@ func (s *SchedulerImpl) forwardRequestWithSequential(functionName string, functi
 
 	// If the Sequential collection is not locally present, and the function require only reading it. Forward towards to
 	// one of the available replicas
-	// TODO: Should replace this forwarding with a check to find the host with lower latency
+	minLatency := math.MaxInt
+	var hostWithMinLatency string
 	for hostId := range sequentialCollection.HostsId() {
-		s.log.Debug("Forwarding function scheduling to one of the available sequential collection replicas since we have to access it in read", "fn_name", functionName, "fn_version", functionVersion, "forward_to", hostId)
-		return s.forwardRequest(hostId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber, cumulativeLatency)
+		currLatency := s.serverInfo.GetLatencyFor(hostId)
+		if currLatency < minLatency {
+			hostWithMinLatency = hostId
+			minLatency = currLatency
+		}
+	}
+
+	if hostWithMinLatency != "" {
+		s.log.Debug("Forwarding function scheduling to one of the available sequential collection replicas since we have to access it in read", "fn_name", functionName, "fn_version", functionVersion, "forward_to", hostWithMinLatency)
+		return s.forwardRequest(hostWithMinLatency, functionName, functionVersion, collections, groupToken, sequentialSeqNumber, cumulativeLatency)
 	}
 
 	// If "HostId" is empty we fall back to the father (shouldn't happen, since if we are in this branch, it means that

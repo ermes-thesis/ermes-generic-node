@@ -210,6 +210,14 @@ func TestIndex(t *testing.T) {
 	err := redisClient.CreateIndex("unused_key")
 	require.NoError(t, err, "Expected no error creating index")
 
+	err = redisClient.SetMetadata("collId", model.Metadata{
+		Name:           "TestMetadata",
+		Owner:          "owner1",
+		Groups:         []string{"group1"},
+		CustomMetadata: map[string]string{"unused_key": "value_unused"},
+	})
+	require.NoError(t, err, "Expected no error setting metadata")
+
 	err = redisClient.AlterIndex("custom_key")
 	require.NoError(t, err, "Expected no error altering index")
 
@@ -235,6 +243,17 @@ func TestIndex(t *testing.T) {
 			},
 		},
 	}
+	query2 := model.QueryTemplate{
+		Select: "ALL",
+		As:     "test2",
+		Where: &model.ConditionWrapper{
+			Condition: &model.EqCondition{
+				Field: "unused_key",
+				Value: "value_unused",
+			},
+		},
+	}
+
 	groups := []string{"group1"}
 	results, err := redisClient.SearchOnMetadata(query, "", groups)
 	require.NoError(t, err, "Expected no error searching on metadata")
@@ -254,6 +273,15 @@ func TestIndex(t *testing.T) {
 	require.Equal(t, metadata.Name, results[0].Metadata.Name, "Expected result name to match metadata name")
 	require.ElementsMatch(t, metadata.Groups, results[0].Metadata.Groups, "Expected result groups to match metadata groups")
 	require.Equal(t, metadata.CustomMetadata, results[0].Metadata.CustomMetadata, "Expected result custom metadata to match")
+
+	results, err = redisClient.SearchOnMetadata(query2, "owner1", groups)
+	require.NoError(t, err, "Expected no error searching on metadata")
+	require.Len(t, results, 1, "Expected one result from search")
+	require.Equal(t, "collId", results[0].Id, "Expected result ID to match collection ID")
+	require.Equal(t, "owner1", results[0].Metadata.Owner, "Expected result owner to match metadata owner")
+	require.Equal(t, "TestMetadata", results[0].Metadata.Name, "Expected result name to match metadata name")
+	require.ElementsMatch(t, []string{"group1"}, results[0].Metadata.Groups, "Expected result groups to match metadata groups")
+	require.Equal(t, map[string]string{"unused_key": "value_unused"}, results[0].Metadata.CustomMetadata, "Expected result custom metadata to match")
 
 	err = redisClient.DropIndex()
 	require.NoError(t, err, "Expected no error dropping index")

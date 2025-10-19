@@ -70,8 +70,6 @@ func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo stri
 
 	s.logger.Infof("got a generic request %s", pathTo)
 
-	// Check if the node is valid TODO: refactor with slices if possible
-
 	ok := false
 
 	for _, elem := range s.ServerInfo.Children {

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rs/xid"
 	"metadataManager/propagation"
 	"metadataManager/types"
 	"server"
@@ -92,9 +93,11 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model
 		for key := range metadata.CustomMetadata {
 			if _, ok := m.customMetadataKeys.LoadOrStore(key, true); !ok {
 				m.log.Info("New custom metadata added. Altering Redis index", "new_custom_metadata", key)
+				// TODO: Check if it is necessary to log the current custom metadata state
+				m.log.Debug("New custom metadata added. Altering Redis index", "current_custom_metadata")
 				err := m.redis.AlterIndex(key)
 				if err != nil {
-					m.log.Error("Error altering index in Redis", "collection_id", collectionId, "origin", reqOrigin, "geolocation", metadata.Geolocation, "metadata", fmt.Sprintf("%+v", metadata), "error", err)
+					m.log.Error("Error altering index in Redis", "collection_id", collectionId, "origin", reqOrigin, "geolocation", metadata.Geolocation, "metadata", fmt.Sprintf("%+v", metadata), "new_custom_metadata", key, "error", err)
 					m.customMetadataKeys.Delete(key)
 					return err
 				}
@@ -131,7 +134,7 @@ func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, user
 		if exists {
 			authorized, err := m.redis.IsAuthorizedInMetadata(collectionId, userId, userGroups...)
 			if err != nil {
-				m.log.Error("Error verifying user group authorization", "collection_id", collectionId, "error", err)
+				m.log.Error("Error verifying user group authorization", "collection_id", collectionId, "user_access_groups", userGroups, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove, "error", err)
 				return nil, err
 			}
 			if !authorized {
@@ -141,7 +144,7 @@ func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, user
 
 			newGroups, seq, err := m.redis.UpdateGroupsInMetadata(collectionId, groupsToAdd, groupsToRemove)
 			if err != nil {
-				m.log.Error("Error updating metadata groups", "collection_id", collectionId, "error", err)
+				m.log.Error("Error updating metadata groups", "collection_id", collectionId, "user_access_groups", userGroups, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove, "error", err)
 				return nil, err
 			}
 			respMessage := &propagation.UpdateGroupResponse{Groups: newGroups, Sequence: seq}
@@ -150,19 +153,21 @@ func (m *MetadataManagerImpl) UpdateGroupsInCollection(collectionId string, user
 
 			m.log.Info("Starting propagation of the group update to lower metadata domains", "collection_id", collectionId)
 			go func() {
+				routinePrefix := fmt.Sprintf("GO#%s", xid.New().String())
+
 				metadata, err := m.redis.GetMetadata(collectionId)
 				if err != nil {
-					m.log.Error("Error getting metadata for propagation", "collection_id", collectionId, "error", err)
+					m.log.ErrorfWith("[%s] Error getting metadata for propagation", []any{routinePrefix}, "collection_id", collectionId, "user_access_groups", userGroups, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove, "error", err)
 					return
 				}
 
 				err = m.updateGroupsPropagator.Propagate(collectionId, *respMessage, metadata.Geolocation)
 				if err != nil {
-					m.log.Error("Error propagating group update", "collection_id", collectionId, "response_message_groups", respMessage.Groups, "response_message_seq_num", respMessage.Sequence, "metadata_geolocation", metadata.Geolocation, "error", err)
+					m.log.ErrorfWith("[%s] Error propagating group update", []any{routinePrefix}, "collection_id", collectionId, "response_message_groups", respMessage.Groups, "response_message_seq_num", respMessage.Sequence, "metadata_geolocation", metadata.Geolocation, "error", err)
 					return
 				}
 
-				m.log.Info("Groups update propagation completed", "collection_id", collectionId)
+				m.log.InfofWith("[%s] Groups update propagation completed", []any{routinePrefix}, "collection_id", collectionId)
 			}()
 
 			return respMessage, nil
@@ -182,7 +187,7 @@ func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message p
 
 	metadata, err := m.redis.GetMetadata(collectionId)
 	if err != nil {
-		m.log.Error("Error getting metadata for propagation", "collection_id", collectionId, "error", err)
+		m.log.Error("Error getting metadata for propagation", "collection_id", collectionId, "groups_set", message.Groups, "groups_seq_num", message.Sequence, "error", err)
 		return err
 	}
 	if metadata == nil {
@@ -192,7 +197,7 @@ func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message p
 
 	err = m.redis.SetGroupsInMetadata(collectionId, message.Sequence, message.Groups...)
 	if err != nil {
-		m.log.Error("Error setting metadata groups", "collection_id", collectionId, "groups_set", message.Groups, "groups_seq_num", message.Sequence, "error", err)
+		m.log.Error("Error setting metadata groups", "collection_id", collectionId, "groups_set", message.Groups, "groups_seq_num", message.Sequence, "metadata", fmt.Sprintf("%+v", metadata), "error", err)
 		return err
 	}
 
@@ -202,7 +207,7 @@ func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message p
 }
 
 func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, userId string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error) {
-	m.log.Info("Trying to execute queries", "fn_name", functionName, "fn_version", functionVersion)
+	m.log.Info("Trying to execute queries", "fn_name", functionName, "fn_version", functionVersion, "user_id", userId)
 	m.log.Debug("Trying to execute queries", "tmpl_param_mapping", templateParamsMapping, "user_access_groups", groups, "node_geolocation", m.serverInfo.MetadataDomain, "queries_geolocation", geolocation, "in_cloud", m.serverInfo.Father == nil)
 
 	// Execute the query locally if the server's metadata domain match the geolocation, it is its prefix or if the local node is a cloud node.
@@ -214,7 +219,7 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 		var queryMap QueryTemplatesParamsMapping[string]
 		err := json.Unmarshal([]byte(templateParamsMapping), &queryMap)
 		if err != nil {
-			m.log.Error("Error when unmarshalling template parameters mapping", "fn_name", functionName, "fn_version", functionVersion, "tmpl_param_mapping", templateParamsMapping, "error", err)
+			m.log.Error("Error when unmarshalling template parameters mapping", "fn_name", functionName, "fn_version", functionVersion, "tmpl_param_mapping", templateParamsMapping, "user_access_groups", groups, "user_id", userId, "node_geolocation", m.serverInfo.MetadataDomain, "queries_geolocation", geolocation, "in_cloud", m.serverInfo.Father == nil, "error", err)
 			return nil, err
 		}
 
@@ -227,18 +232,18 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 			if query, err := m.templateCache.GetTemplate(functionName, functionVersion, templateName); err == nil {
 				err = query.ReplacePlaceholderFromStrings(params)
 				if err != nil {
-					m.log.ErrorfWith("Error replacing placeholders in query template '%s'", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion, "tmpl_parameters", params, "error", err)
+					m.log.ErrorfWith("Error replacing placeholders in query template '%s'", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion, "tmpl_param_mapping", templateParamsMapping, "user_access_groups", groups, "user_id", userId, "node_geolocation", m.serverInfo.MetadataDomain, "queries_geolocation", geolocation, "in_cloud", m.serverInfo.Father == nil, "tmpl_parameters", params, "error", err)
 					return nil, err
 				}
 
 				if err = query.Validate(); err != nil {
-					m.log.ErrorfWith("Validation failed for query template '%s'", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion, "tmpl_parameters", params, "query", query, "error", err)
+					m.log.ErrorfWith("Validation failed for query template '%s'", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion, "tmpl_param_mapping", templateParamsMapping, "user_access_groups", groups, "user_id", userId, "node_geolocation", m.serverInfo.MetadataDomain, "queries_geolocation", geolocation, "in_cloud", m.serverInfo.Father == nil, "tmpl_parameters", params, "query", query, "error", err)
 					return nil, err
 				}
 
 				collInfo, err := m.redis.SearchOnMetadata(*query, userId, groups)
 				if err != nil {
-					m.log.ErrorfWith("Error executing query template '%s'", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion, "query", query, "user_access_groups", groups, "error", err)
+					m.log.ErrorfWith("Error executing query template '%s'", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion, "tmpl_param_mapping", templateParamsMapping, "user_access_groups", groups, "user_id", userId, "node_geolocation", m.serverInfo.MetadataDomain, "queries_geolocation", geolocation, "in_cloud", m.serverInfo.Father == nil, "query", query, "user_access_groups", groups, "error", err)
 					return nil, err
 				}
 
@@ -253,7 +258,7 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 					}
 				}
 			} else {
-				m.log.ErrorfWith("Error retrieving query template '%s'", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion, "error", err)
+				m.log.ErrorfWith("Error retrieving query template '%s'", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion, "tmpl_param_mapping", templateParamsMapping, "user_access_groups", groups, "user_id", userId, "node_geolocation", m.serverInfo.MetadataDomain, "queries_geolocation", geolocation, "in_cloud", m.serverInfo.Father == nil, "error", err)
 				return nil, fmt.Errorf("error while retrieving template %s for function %s:%s, with error: %v", templateName, functionName, functionVersion, err)
 			}
 		}

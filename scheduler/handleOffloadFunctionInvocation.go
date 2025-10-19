@@ -7,6 +7,7 @@ import (
 	"metadataManager/types"
 	"net/http"
 	"os"
+	"strconv"
 	"tokenDecoder"
 )
 
@@ -27,6 +28,12 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 		groupToken := r.Header.Get("X-ERMES-GROUPS")
 		sequentialSeqNumberStr := r.Header.Get("X-ERMES-SEQUENTIAL-NUMBER")
 		hostname := r.Header.Get("X-ERMES-HOSTNAME")
+		cumulativeLatency := r.Header.Get("X-ERMES-LATENCY")
+
+		cumuLatInt, err := strconv.Atoi(cumulativeLatency)
+		if err != nil {
+			http.Error(w, "Error converting latency from string to int", http.StatusInternalServerError)
+		}
 
 		groups, userId, err := tokenDecoder.DecodeGroupToken(groupToken)
 		if err != nil {
@@ -61,7 +68,7 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 				return
 			}
 		}
-		functionResponse, resSeqNumber, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, hostname, body, groups, userId, groupToken)
+		functionResponse, resSeqNumber, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, hostname, body, groups, userId, groupToken, cumuLatInt)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when scheduling function: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)

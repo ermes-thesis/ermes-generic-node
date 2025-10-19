@@ -86,7 +86,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 				return
 			}
 		}
-		functionResponse, resSeqNumber, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, "user", body, groups, userId, groupToken)
+		functionResponse, resSeqNumber, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, "user", body, groups, userId, groupToken, 0)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error when scheduling function: %s \n", err)
 			w.WriteHeader(http.StatusInternalServerError)

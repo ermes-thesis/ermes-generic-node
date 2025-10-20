@@ -5,6 +5,7 @@ import (
 	"context"
 	"db"
 	"errors"
+	"fmt"
 	"math/rand"
 	"metadataManager/types"
 	"regexp"
@@ -42,20 +43,23 @@ func NewRedisClient(config config.RedisConfig, ctx context.Context, log *logger.
 		DB:       config.DB,
 		Protocol: config.Protocol,
 	})
-	pong, err := rdb.Ping(ctx).Result()
+	_, err := rdb.Ping(ctx).Result()
 	if err != nil {
-		log.Error("Failed to connect to Redis", "error", err)
+		log.Error("Failed to connect to Redis", "configs", fmt.Sprintf("%+v", config), "error", err)
 		return nil, err
 	}
-	log.Info("Connected to Redis", "response", pong)
+	log.Info("Connected to Redis successfully")
 	return &RedisClient{client: rdb, ctx: ctx, log: log}, nil
 }
 
 func (r *RedisClient) GetRecord(collectionId string, recordName string) (string, error) {
+	r.log.Info("GetRecord called", "collection_id", collectionId, "record_name", recordName)
 	return r.client.Get(r.ctx, buildKey(collectionId, recordName)).Result()
 }
 
 func (r *RedisClient) SetRecord(collectionId string, recordName string, value string, timestamp string) error {
+	r.log.Info("SetRecord called", "collection_id", collectionId, "record_name", recordName, "record_value", value, "timestamp", timestamp)
+
 	backoff := defaultBackoff
 
 	infoKey := "info:" + collectionId
@@ -93,6 +97,7 @@ func (r *RedisClient) SetRecord(collectionId string, recordName string, value st
 
 		if errors.Is(err, redis.TxFailedErr) {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			r.log.DebugfWith("SetRecord: Transaction failed due to high concurrency. Retrying with %s delay", []any{backoff + jitter}, "collection_id", collectionId, "record_name", recordName, "record_value", value, "timestamp", timestamp)
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
@@ -105,14 +110,18 @@ func (r *RedisClient) SetRecord(collectionId string, recordName string, value st
 		return err
 	}
 
+	r.log.Warn("SetRecord failed due to retries exhaustion. The record has NOT been set", "collection_id", collectionId, "record_name", recordName, "value", value, "timestamp", timestamp)
 	return errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) GetRecords(collectionId string, recordNames ...string) ([]any, error) {
+	r.log.Info("GetRecords called", "collection_id", collectionId, "record_names", recordNames)
 	return r.client.MGet(r.ctx, buildKeys(collectionId, recordNames)...).Result()
 }
 
 func (r *RedisClient) SetRecords(collectionId string, recordNames []string, recordValues []string, timestamp string) error {
+	r.log.Info("SetRecords called", "collection_id", collectionId, "record_names", recordNames, "record_values", recordValues, "timestamp", timestamp)
+
 	if len(recordNames) != len(recordValues) {
 		return errors.New("recordNames and recordValues must be the same length")
 	}
@@ -167,6 +176,7 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 
 		if errors.Is(err, redis.TxFailedErr) {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			r.log.DebugfWith("SetRecords: Transaction failed due to high concurrency. Retrying with %s delay", []any{backoff + jitter}, "collection_id", collectionId, "record_names", recordNames, "record_values", recordValues, "timestamp", timestamp)
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
@@ -179,15 +189,20 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 		return err
 	}
 
+	r.log.Warn("SetRecords failed due to retries exhaustion. The records have NOT been set", "collection_id", collectionId, "record_names", recordNames, "record_values", recordValues, "timestamp", timestamp)
 	return errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) RecordExists(collectionId string, recordName string) (bool, error) {
+	r.log.Info("RecordExists called", "collection_id", collectionId, "record_name", recordName)
+
 	res, err := r.client.Exists(r.ctx, buildKey(collectionId, recordName)).Result()
 	return res > 0, err
 }
 
 func (r *RedisClient) DeleteRecords(collectionId string, timestamp string, recordNames ...string) error {
+	r.log.Info("DeleteRecords called", "collection_id", collectionId, "record_names", recordNames, "timestamp", timestamp)
+
 	keysKey := "info:" + collectionId + ":keys"
 	infoKey := "info:" + collectionId
 
@@ -233,6 +248,7 @@ func (r *RedisClient) DeleteRecords(collectionId string, timestamp string, recor
 
 		if errors.Is(err, redis.TxFailedErr) {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			r.log.DebugfWith("DeleteRecords: Transaction failed due to high concurrency. Retrying with %s delay", []any{backoff + jitter}, "collection_id", collectionId, "record_names", recordNames, "timestamp", timestamp)
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
@@ -245,10 +261,13 @@ func (r *RedisClient) DeleteRecords(collectionId string, timestamp string, recor
 		return err
 	}
 
+	r.log.Warn("DeleteRecords failed due to retries exhaustion. The records have NOT been deleted", "collection_id", collectionId, "record_names", recordNames, "timestamp", timestamp)
 	return errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []string, string, uint64, error) {
+	r.log.Info("GetCollection called", "collection_id", collectionId)
+
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
@@ -315,6 +334,7 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 
 		if errors.Is(err, redis.TxFailedErr) {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			r.log.DebugfWith("GetCollection: Transaction failed due to high concurrency. Retrying with %s delay", []any{backoff + jitter}, "collection_id", collectionId)
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
@@ -327,12 +347,15 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 		return nil, nil, "", 0, err
 	}
 
+	r.log.Warn("GetCollection failed due to retries exhaustion. The collection has NOT been returned", "collection_id", collectionId)
 	return nil, nil, "", 0, errors.New("transaction retries exhausted")
 }
 
 // Implemented like this, we allow the overwrite of a collection. If we want to avoid to overwrite a collection
 // we would need to add a Watch( ..., infoKey) to check the existence of the collection
 func (r *RedisClient) SetCollection(collectionId string, records map[string]string, groups []string, owner string, groupsSequence uint64) error {
+	r.log.Info("SetCollection called", "collection_id", collectionId, "recors", fmt.Sprintf("%+v", records), "groups", groups, "owner", owner, "groupsSequence", groupsSequence)
+
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
@@ -361,6 +384,8 @@ func (r *RedisClient) SetCollection(collectionId string, records map[string]stri
 }
 
 func (r *RedisClient) DeleteCollection(collectionId string) error {
+	r.log.Info("DeleteCollection called", "collection_id", collectionId)
+
 	keysKey := "info:" + collectionId + ":keys"
 	infoKey := "info:" + collectionId
 	groupsKey := "info:" + collectionId + ":groups"
@@ -389,6 +414,7 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 
 		if errors.Is(err, redis.TxFailedErr) {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			r.log.DebugfWith("DeleteCollection: Transaction failed due to high concurrency. Retrying with %s delay", []any{backoff + jitter}, "collection_id", collectionId)
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
@@ -401,10 +427,13 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 		return err
 	}
 
+	r.log.Warn("DeleteCollection failed due to retries exhaustion. The collection has NOT been deleted", "collection_id", collectionId)
 	return errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) CollectionExists(collectionId string) (bool, error) {
+	r.log.Info("CollectionExists called", "collection_id", collectionId)
+
 	res, err := r.client.Exists(r.ctx, "info:"+collectionId).Result()
 	if err != nil {
 		return false, err
@@ -413,6 +442,8 @@ func (r *RedisClient) CollectionExists(collectionId string) (bool, error) {
 }
 
 func (r *RedisClient) GetMetadata(collectionId string) (*model.Metadata, error) {
+	r.log.Info("GetMetadata called", "collection_id", collectionId)
+
 	res, err := r.client.HGetAll(r.ctx, "meta:"+collectionId).Result()
 	if err != nil {
 		return nil, err
@@ -425,16 +456,22 @@ func (r *RedisClient) GetMetadata(collectionId string) (*model.Metadata, error) 
 }
 
 func (r *RedisClient) SetMetadata(collectionId string, metadata model.Metadata) error {
+	r.log.Info("SetMetadata called", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", metadata))
+
 	metaList := append(metadata.ToList(), "groupsSequence", 0)
 	return r.client.HSet(r.ctx, "meta:"+collectionId, metaList).Err()
 }
 
 func (r *RedisClient) MetadataExists(collectionId string) (bool, error) {
+	r.log.Info("MetadataExists called", "collection_id", collectionId)
+
 	res, err := r.client.Exists(r.ctx, "meta:"+collectionId).Result()
 	return res > 0, err
 }
 
 func (r *RedisClient) IsUniqueForOwner(collectionName string, owner string) (bool, error) {
+	r.log.Info("IsUniqueForOwner called", "collection_name", collectionName, "owner", owner)
+
 	existenceKey := "exist:" + owner
 
 	backoff := defaultBackoff
@@ -459,6 +496,7 @@ func (r *RedisClient) IsUniqueForOwner(collectionName string, owner string) (boo
 
 		if errors.Is(err, redis.TxFailedErr) {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			r.log.DebugfWith("IsUniqueForOwner: Transaction failed due to high concurrency. Retrying with %s delay", []any{backoff + jitter}, "collection_name", collectionName, "owner", owner)
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
@@ -475,14 +513,20 @@ func (r *RedisClient) IsUniqueForOwner(collectionName string, owner string) (boo
 		return !exists, nil
 	}
 
+	r.log.Warn("IsUniqueForOwner failed due to retries exhaustion. The pair (<collection_name>,<owner>) has NOT been 'declared' as existing. New calls may 'declare' it", "collection_name", collectionName, "owner", owner)
 	return false, errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) DeleteMetadata(collectionId string) error {
+	r.log.Info("DeleteMetadata called", "collection_id", collectionId)
+
 	return r.client.Del(r.ctx, "meta:"+collectionId).Err()
 }
 
+// TODO: Probably not needed anymore
 func (r *RedisClient) AddGroupsToMetadata(collectionId string, groupsToAdd ...string) ([]string, uint64, error) {
+	r.log.Info("AddGroupsToMetadata called", "collection_id", collectionId, "groups_to_add", groupsToAdd)
+
 	if len(groupsToAdd) == 0 {
 		return nil, 0, nil
 	}
@@ -542,6 +586,7 @@ func (r *RedisClient) AddGroupsToMetadata(collectionId string, groupsToAdd ...st
 
 		if errors.Is(err, redis.TxFailedErr) {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			r.log.DebugfWith("AddGroupsToMetadata: Transaction failed due to high concurrency. Retrying with %s delay", []any{backoff + jitter}, "collection_id", collectionId, "groups_to_add", groupsToAdd)
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
@@ -554,10 +599,14 @@ func (r *RedisClient) AddGroupsToMetadata(collectionId string, groupsToAdd ...st
 		return groups, seq, err
 	}
 
+	r.log.Warn("AddGroupsToMetadata failed due to retries exhaustion. The groups has NOT been added to metadata", "collection_id", collectionId, "groups_to_add", groupsToAdd)
 	return nil, 0, errors.New("transaction retries exhausted")
 }
 
+// TODO: Probably not needed anymore
 func (r *RedisClient) RemoveGroupsFromMetadata(collectionId string, groupsToRemove ...string) ([]string, uint64, error) {
+	r.log.Info("RemoveGroupsFromMetadata called", "collection_id", collectionId, "groups_to_remove", groupsToRemove)
+
 	if len(groupsToRemove) == 0 {
 		return nil, 0, nil
 	}
@@ -611,6 +660,7 @@ func (r *RedisClient) RemoveGroupsFromMetadata(collectionId string, groupsToRemo
 
 		if errors.Is(err, redis.TxFailedErr) {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			r.log.DebugfWith("RemoveGroupsFromMetadata: Transaction failed due to high concurrency. Retrying with %s delay", []any{backoff + jitter}, "collection_id", collectionId, "groups_to_remove", groupsToRemove)
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
@@ -624,10 +674,13 @@ func (r *RedisClient) RemoveGroupsFromMetadata(collectionId string, groupsToRemo
 
 	}
 
+	r.log.Warn("RemoveGroupsFromMetadata failed due to retries exhaustion. The groups has NOT been removed from metadata", "collection_id", collectionId, "groups_to_remove", groupsToRemove)
 	return nil, 0, errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) UpdateGroupsInMetadata(collectionId string, groupsToAdd []string, groupsToRemove []string) ([]string, uint64, error) {
+	r.log.Info("UpdateGroupsInMetadata called", "collection_id", collectionId, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove)
+
 	if len(groupsToRemove) == 0 {
 		return nil, 0, nil
 	}
@@ -691,6 +744,7 @@ func (r *RedisClient) UpdateGroupsInMetadata(collectionId string, groupsToAdd []
 
 		if errors.Is(err, redis.TxFailedErr) {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			r.log.DebugfWith("UpdateGroupsInMetadata: Transaction failed due to high concurrency. Retrying with %s delay", []any{backoff + jitter}, "collection_id", collectionId, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove)
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
@@ -703,10 +757,13 @@ func (r *RedisClient) UpdateGroupsInMetadata(collectionId string, groupsToAdd []
 		return groups, seq, err
 	}
 
+	r.log.Warn("UpdateGroupsInMetadata failed due to retries exhaustion. The groups has NOT been updated in metadata", "collection_id", collectionId, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove)
 	return nil, 0, errors.New("transaction retries exhausted")
 }
 
 func (r *RedisClient) SetGroupsInMetadata(collectionId string, sequenceGroups uint64, groups ...string) error {
+	r.log.Info("SetGroupsInMetadata called", "collection_id", collectionId, "sequence_groups", sequenceGroups, "groups", groups)
+
 	metadataKey := "meta:" + collectionId
 
 	backoff := defaultBackoff
@@ -745,6 +802,7 @@ func (r *RedisClient) SetGroupsInMetadata(collectionId string, sequenceGroups ui
 
 		if errors.Is(err, redis.TxFailedErr) {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			r.log.DebugfWith("SetGroupsInMetadata: Transaction failed due to high concurrency. Retrying with %s delay", []any{backoff + jitter}, "collection_id", collectionId, "sequenceGroups", sequenceGroups, "groups", groups)
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
@@ -756,10 +814,14 @@ func (r *RedisClient) SetGroupsInMetadata(collectionId string, sequenceGroups ui
 
 		return err
 	}
+
+	r.log.Warn("SetGroupsInMetadata failed due to retries exhaustion. The groups have NOT been set in metadata", "collection_id", collectionId, "sequence_groups", sequenceGroups, "groups", groups)
 	return errors.New("max retries exceeded")
 }
 
 func (r *RedisClient) IsAuthorizedInMetadata(collectionId string, userId string, userGroups ...string) (bool, error) {
+	r.log.Info("IsAuthorizedInMetadata called", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups)
+
 	if len(userGroups) == 0 {
 		return false, nil
 	}
@@ -792,10 +854,13 @@ func (r *RedisClient) IsAuthorizedInMetadata(collectionId string, userId string,
 		}
 	}
 
+	r.log.Warn("IsAuthorizedInMetadata failed due to retries exhaustion. The user has been marked as UNAUTHORIZED, despite potentially having the necessary right accesses", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups)
 	return false, nil
 }
 
 func (r *RedisClient) SetGroups(collectionId string, sequenceGroups uint64, groups ...string) error {
+	r.log.Info("SetGroups called", "collection_id", collectionId, "sequence_groups", sequenceGroups, "groups", groups)
+
 	groupsKey := "info:" + collectionId + ":groups"
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
 	infoKey := "info:" + collectionId
@@ -837,6 +902,7 @@ func (r *RedisClient) SetGroups(collectionId string, sequenceGroups uint64, grou
 
 		if errors.Is(err, redis.TxFailedErr) {
 			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			r.log.DebugfWith("SetGroups: Transaction failed due to high concurrency. Retrying with %s delay", []any{backoff + jitter}, "collection_id", collectionId, "sequence_groups", sequenceGroups, "groups", groups)
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
@@ -848,14 +914,17 @@ func (r *RedisClient) SetGroups(collectionId string, sequenceGroups uint64, grou
 		return err
 	}
 
+	r.log.Warn("SetGroups failed due to retries exhaustion. The groups has NOT been set", "collection_id", collectionId, "sequence_groups", sequenceGroups, "groups", groups)
 	return errors.New("transaction retries exhausted")
 }
 
-func (r *RedisClient) IsAuthorized(collectionId string, userId string, members ...string) (bool, error) {
+func (r *RedisClient) IsAuthorized(collectionId string, userId string, userGroups ...string) (bool, error) {
+	r.log.Info("IsAuthorized called", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups)
+
 	ownerKey := "info:" + collectionId + ":owner"
 
-	m := make([]any, len(members))
-	for i, member := range members {
+	m := make([]any, len(userGroups))
+	for i, member := range userGroups {
 		m[i] = member
 	}
 
@@ -869,6 +938,8 @@ func (r *RedisClient) IsAuthorized(collectionId string, userId string, members .
 }
 
 func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
+	r.log.Info("CreateIndex called", "custom_metadata_keys", customMetadataKeys)
+
 	fields := make([]*redis.FieldSchema, len(customMetadataKeys))
 	for i, key := range customMetadataKeys {
 		fields[i] = &redis.FieldSchema{
@@ -895,7 +966,8 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 	}}, fields...)...).Err()
 }
 
-func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, owner string, userGroups []string) ([]types.CollectionInfo, error) {
+func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userId string, userGroups []string) ([]types.CollectionInfo, error) {
+	r.log.Info("SearchOnMetadata called", "query", fmt.Sprintf("%+v", query), "user_id", userId, "user_access_groups", userGroups)
 
 	redisQuery, err := query.ToRedisSearchCommand()
 	if err != nil {
@@ -903,11 +975,11 @@ func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, owner string, 
 	}
 
 	var authorizationPart string
-	if owner != "" {
+	if userId != "" {
 		if len(userGroups) > 0 {
-			authorizationPart = " ((@groups:{" + strings.Join(userGroups, " | ") + "}) | (@owner:{" + owner + "}))"
+			authorizationPart = " ((@groups:{" + strings.Join(userGroups, " | ") + "}) | (@userId:{" + userId + "}))"
 		} else {
-			authorizationPart = " @owner:{" + owner + "}"
+			authorizationPart = " @userId:{" + userId + "}"
 		}
 	} else {
 		if len(userGroups) > 0 {
@@ -944,10 +1016,14 @@ func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, owner string, 
 }
 
 func (r *RedisClient) DropIndex() error {
+	r.log.Info("DropIndex called")
+
 	return r.client.FTDropIndex(r.ctx, "metadata_index").Err()
 }
 
 func (r *RedisClient) AlterIndex(customMetadataKeys ...string) error {
+	r.log.Info("AlterIndex called", "custom_metadata_keys", customMetadataKeys)
+
 	fields := make([]any, len(customMetadataKeys)*2)
 	for i := 0; i < len(fields); i += 2 {
 		fields[i] = customMetadataKeys[i/2]
@@ -957,36 +1033,9 @@ func (r *RedisClient) AlterIndex(customMetadataKeys ...string) error {
 	return r.client.FTAlter(r.ctx, "metadata_index", true, fields).Err()
 }
 
-func strToInt(s string) uint64 {
-	i, err := strconv.ParseUint(s, 10, 64)
-	if err != nil {
-		return 0
-	}
-	return i
-}
-
-func parseRedisInfo(info string) map[string]string {
-	lines := strings.Split(info, "\r\n")
-	result := make(map[string]string, len(lines))
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) == 2 {
-			key := parts[0]
-			value := parts[1]
-			result[key] = value
-		}
-	}
-
-	return result
-}
-
 func (r *RedisClient) GetMaxMemory() (uint64, error) {
+	r.log.Info("GetMaxMemory called")
+
 	stats, err := r.client.ConfigGet(r.ctx, "maxmemory").Result()
 	if err != nil {
 		return 0, err
@@ -998,6 +1047,8 @@ func (r *RedisClient) GetMaxMemory() (uint64, error) {
 }
 
 func (r *RedisClient) GetAvailableMemory() (uint64, error) {
+	r.log.Info("GetAvailableMemory called")
+
 	maxMem, err := r.GetMaxMemory()
 	if err != nil {
 		return 0, err
@@ -1014,6 +1065,8 @@ func (r *RedisClient) GetAvailableMemory() (uint64, error) {
 }
 
 func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
+	r.log.Info("RecordExists called")
+
 	stats, err := r.client.Info(r.ctx, "MEMORY", "KEYSPACE").Result()
 	if err != nil {
 		return nil, err
@@ -1050,6 +1103,8 @@ func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
 }
 
 func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, error) {
+	r.log.Info("GetCollectionMemoryUsage called", "collection_id", collectionId)
+
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
 	groupSequenceKey := "info:" + collectionId + ":groupsSequence"
@@ -1058,6 +1113,7 @@ func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, err
 
 	var totalMemory uint64
 
+	// TODO: Fix this. Watch without TxPipelined does not make sense
 	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 		keys, err := tx.SMembers(r.ctx, keysKey).Result()
 		if err != nil {
@@ -1094,6 +1150,8 @@ func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, err
 }
 
 func (r *RedisClient) GetRecordMemoryUsage(collectionId string, recordName string) (uint64, error) {
+	r.log.Info("GetRecordMemoryUsage called", "collection_id", collectionId, "record_name", recordName)
+
 	memUsage, err := r.client.MemoryUsage(r.ctx, buildKey(collectionId, recordName)).Result()
 	return uint64(memUsage), err
 }
@@ -1133,4 +1191,33 @@ func toListAny(s []string) []any {
 		res[i] = v
 	}
 	return res
+}
+
+func strToInt(s string) uint64 {
+	i, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return i
+}
+
+func parseRedisInfo(info string) map[string]string {
+	lines := strings.Split(info, "\r\n")
+	result := make(map[string]string, len(lines))
+
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 {
+			key := parts[0]
+			value := parts[1]
+			result[key] = value
+		}
+	}
+
+	return result
 }

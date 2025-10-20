@@ -977,9 +977,9 @@ func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userId string,
 	var authorizationPart string
 	if userId != "" {
 		if len(userGroups) > 0 {
-			authorizationPart = " ((@groups:{" + strings.Join(userGroups, " | ") + "}) | (@userId:{" + userId + "}))"
+			authorizationPart = " ((@groups:{" + strings.Join(userGroups, " | ") + "}) | (@owner:{" + userId + "}))"
 		} else {
-			authorizationPart = " @userId:{" + userId + "}"
+			authorizationPart = " @owner:{" + userId + "}"
 		}
 	} else {
 		if len(userGroups) > 0 {

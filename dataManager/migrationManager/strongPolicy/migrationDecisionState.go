@@ -15,7 +15,7 @@ type MigrationManagerDecisionState struct {
 	policy            *ErmesStrongCollectionPolicy
 	NodeResourceUsage map[string]NodeStateInfo
 
-	requestStack stack.CallStack
+	requestStack *stack.CallStack
 }
 
 // methods
@@ -37,10 +37,10 @@ func (m *MigrationManagerDecisionState) Setup(args ...any) {
 
 	m.setLruToSafeLevel()
 
-	go m.consumeStrongRequests()
-
 	//back in idle state
 	m.policy.transitionToIdle()
+
+	go m.consumeStrongRequests()
 }
 
 // ManageNewStrongRequest save strong request in a buffer for future consumption
@@ -51,7 +51,7 @@ func (m *MigrationManagerDecisionState) ManageNewStrongRequest(collectionId stri
 
 // after taking all the decisions strong request can be consumed => in the next idle round
 func (m *MigrationManagerDecisionState) consumeStrongRequests() {
-	for len(m.requestStack) > 0 {
+	for m.requestStack.Len() > 0 {
 		call := m.requestStack.Pop()
 		call()
 	}

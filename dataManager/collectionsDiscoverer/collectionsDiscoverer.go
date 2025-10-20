@@ -132,8 +132,9 @@ func AccessRecords[T any](
 		c.collectionsPartialView.Mutex.Unlock() // lock release
 		return zero, errors.New("strong collection can't be accessed remotely")
 	}
+	child := c.collectionsPartialView.GetClosestChild(collection.HostsId(), c.serverInfo)
 	c.collectionsPartialView.Mutex.Unlock() // lock release
-	return remoteFn(c.collectionsPartialView.GetClosestChild(collection.HostsId(), c.serverInfo))
+	return remoteFn(child)
 }
 
 func UpdateRecord(

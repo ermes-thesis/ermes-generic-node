@@ -9,6 +9,8 @@ import (
 )
 
 func (h *HostFunctions) RegisterWasmtimeHostFns(pool *wasm.WasmtimeExecutorPool) error {
+	h.logger.Info("Starting registration of Wasmtime host functions")
+
 	fns := map[string]any{
 		"hostGet": func(collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength, userIdPtr, userIdLength int32, caller *wasmtime.Caller) int32 {
 			return h.hostGet(createWasmtimeAdapter(caller), collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength, userIdPtr, userIdLength)
@@ -23,8 +25,10 @@ func (h *HostFunctions) RegisterWasmtimeHostFns(pool *wasm.WasmtimeExecutorPool)
 
 	err := pool.RegisterHostFns(fns)
 	if err != nil {
+		h.logger.Error("Error registering Wasmtime host functions", "host_functions_map", fmt.Sprintf("%+v", fns), "error", err)
 		return fmt.Errorf("failed to register module: %v", err)
 	}
+	h.logger.Info("Registration of Wasmtime host functions completed successfully")
 	return nil
 }
 

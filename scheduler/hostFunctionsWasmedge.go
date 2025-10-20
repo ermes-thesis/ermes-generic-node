@@ -9,6 +9,7 @@ import (
 )
 
 func (h *HostFunctions) RegisterWasmedgeHostFns(pool *wasm.WasmedgeExecutorPool) error {
+	h.logger.Info("Starting registration of Wasmedge host functions")
 	fnOneParamOneReturnType := wasmedge.NewFunctionType(
 		[]*wasmedge.ValType{wasmedge.NewValTypeI32(), wasmedge.NewValTypeI32()},
 		[]*wasmedge.ValType{wasmedge.NewValTypeI32()},
@@ -39,8 +40,10 @@ func (h *HostFunctions) RegisterWasmedgeHostFns(pool *wasm.WasmedgeExecutorPool)
 
 	err := pool.RegisterHostFns(fns)
 	if err != nil {
+		h.logger.Error("Error registering Wasmedge host functions", "host_functions_map", fmt.Sprintf("%+v", fns), "error", err)
 		return fmt.Errorf("failed to register module: %v", err)
 	}
+	h.logger.Info("Registration of Wasmedge host functions completed successfully")
 	return nil
 }
 

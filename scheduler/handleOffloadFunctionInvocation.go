@@ -6,14 +6,12 @@ import (
 	"io"
 	"metadataManager/types"
 	"net/http"
-	"os"
 	"strconv"
 	"tokenDecoder"
 )
 
 func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.log.Info("got offloaded function invocation")
 		defer r.Body.Close()
 
 		fnName := r.PathValue("name")
@@ -22,7 +20,7 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 			fnVersion = "latest"
 		}
 
-		s.log.Infof("Function name: %s, version: %s", fnName, fnVersion)
+		s.log.Info("Received offloaded function invocation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion)
 
 		collectionJson := r.Header.Get("X-ERMES-COLLECTIONS")
 		groupToken := r.Header.Get("X-ERMES-GROUPS")
@@ -32,20 +30,25 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 
 		cumuLatInt, err := strconv.Atoi(cumulativeLatency)
 		if err != nil {
+			s.log.Error("Error converting latency from string to int", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
 			http.Error(w, "Error converting latency from string to int", http.StatusInternalServerError)
+			return
 		}
 
 		groups, userId, err := tokenDecoder.DecodeGroupToken(groupToken)
+		s.log.Info("Token decoded successfully", "executing_user", userId, "user_acces_groups", groups)
 		if err != nil {
+			s.log.Error("Failed to decode group token for offloaded invocation", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
 			http.Error(w, "Error decoding group token", http.StatusUnauthorized)
 			return
 		}
+		s.log.Debug("Received offloaded function invocation request", "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt)
 
 		var collections map[string][]types.CollectionInfo
 		err = json.Unmarshal([]byte(collectionJson), &collections)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error unmarshalling cached query: %s \n", err)
-			w.WriteHeader(http.StatusInternalServerError)
+			s.log.Error("Error unmarshalling collections JSON from header", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
+			http.Error(w, fmt.Sprintf("Error unmarshalling collections JSON from header: %v", err), http.StatusInternalServerError)
 			return
 		}
 
@@ -53,8 +56,8 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 		if r.Body != http.NoBody {
 			body, err = io.ReadAll(r.Body)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading request body: %s \n", err)
-				w.WriteHeader(http.StatusInternalServerError)
+				s.log.Error("Error reading request body", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
+				http.Error(w, fmt.Sprintf("error reading request body: %v", err), http.StatusInternalServerError)
 				return
 			}
 		}
@@ -63,21 +66,28 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 		if sequentialSeqNumberStr != "" {
 			_, err := fmt.Sscanf(sequentialSeqNumberStr, "%d", &sequentialSeqNumber)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error parsing sequential sequence number: %s \n", err)
-				w.WriteHeader(http.StatusBadRequest)
+				s.log.Error("Error parsing sequential sequence number", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
+				http.Error(w, fmt.Sprintf("error parsing sequential number: %v", err), http.StatusBadRequest)
 				return
 			}
 		}
 		functionResponse, resSeqNumber, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, hostname, body, groups, userId, groupToken, cumuLatInt)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error when scheduling function: %s \n", err)
-			w.WriteHeader(http.StatusInternalServerError)
+			s.log.Error("Error parsing sequential sequence number", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
+			http.Error(w, fmt.Sprintf("error executing function: %v", err), http.StatusInternalServerError)
 			return
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", resSeqNumber))
 		w.WriteHeader(functionResponse.StatusCode)
-		w.Write(functionResponse.Body)
+		if _, err = w.Write(functionResponse.Body); err != nil {
+			s.log.Error("Error parsing sequential sequence number", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
+			http.Error(w, fmt.Sprintf("error while writing HTTP response: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		s.log.Info("Function invocation completed successfully", "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups)
+
 	}
 }

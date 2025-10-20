@@ -54,6 +54,7 @@ func createNewLogger(t *testing.T) *logger.Logger {
 		Level:     zerolog.DebugLevel,
 		Format:    "text",
 		AddSource: false,
+		Muted:     true,
 	})
 	require.NoError(t, err)
 	return log

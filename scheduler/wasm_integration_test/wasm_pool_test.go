@@ -3,6 +3,7 @@ package wasm_integration_test
 import (
 	"context"
 	"fmt"
+	"github.com/rs/zerolog"
 	metadataManager2 "metadataManager/propagation"
 	datamanager_mock "mocks/dataManager"
 	metadataManager_mock "mocks/metadataManager"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/tetratelabs/wazero"
 
+	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
 
 	"bou.ke/monkey"
@@ -22,6 +24,7 @@ import (
 )
 
 var authFn, fun, fibonacci, fibonacciWOpts, fibonacciAOT, primeNums, primeNumsWOpt, primeNumsAOT, lightweight, lightweightWOpts, lightweightAOT []byte
+var log *logger.Logger
 
 func TestMain(m *testing.M) {
 	var err error
@@ -71,6 +74,20 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 
+	log, err = logger.NewLogger(logger.Config{
+		Level:         zerolog.InfoLevel,
+		Format:        "text",
+		Output:        nil,
+		StdoutEnabled: false,
+		AddSource:     false,
+		Colored:       false,
+		Rolling:       false,
+		Muted:         true,
+	})
+	if err != nil {
+		panic(err)
+	}
+
 	m.Run()
 }
 
@@ -88,7 +105,7 @@ func TestWasmPool_Wasmedge(t *testing.T) {
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
-	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, nil, nil)
+	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, nil, log)
 
 	err := hostFns.RegisterWasmedgeHostFns(pool)
 	require.NoError(t, err)
@@ -124,7 +141,7 @@ func TestWasmPool_Wasmtime(t *testing.T) {
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
-	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, nil, nil)
+	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, nil, log)
 
 	err := hostFns.RegisterWasmtimeHostFns(pool)
 	require.NoError(t, err)
@@ -160,7 +177,7 @@ func TestWasmPool_Wazero(t *testing.T) {
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
-	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, nil, nil)
+	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, nil, log)
 	err := hostFns.RegisterWazeroHostFns(pool)
 	require.NoError(t, err)
 

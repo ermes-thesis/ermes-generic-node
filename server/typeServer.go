@@ -9,7 +9,6 @@ import (
 	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"net"
 	"net/http"
-	"os"
 )
 
 type ServerType interface {
@@ -30,9 +29,7 @@ func NewServer(log *logger.Logger, serverInfo *ServerInfo) (*Server, error) {
 
 	mux := http.NewServeMux()
 
-	log.Info("Mux created correctly")
-
-	log.Info("Creating server data structure...")
+	log.Debug("Creating server data structure...")
 
 	ser := &Server{
 		ServerInfo: serverInfo,
@@ -44,31 +41,26 @@ func NewServer(log *logger.Logger, serverInfo *ServerInfo) (*Server, error) {
 		},
 	}
 
-	log.Info("done")
-
-	log.Info("Adding correct routes to the server...")
+	log.Debug("Adding correct routes to the server...")
 
 	ser.compileRoutes()
 
-	log.Info("done")
-
+	log.Info("New Server instance created successfully", "server", fmt.Sprintf("%+v", ser.ServerInfo))
 	return ser, nil
-
 }
 
 // SendGenericHTTPRequest Method to send a generic data transfer request. It returns both the status code of the response and the error.
 func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageContent interface{}) (int, error) {
 	res, err := s.SendGenericHTTPRequestReturnResponse(nodeTo, pathTo, messageContent)
 	if err != nil {
+		s.logger.Error("Sending HTTP request failed", "to_node", nodeTo, "path", pathTo, "content", fmt.Sprintf("%+v", messageContent), "error", err)
 		return -1, err
 	}
 	return res.StatusCode, nil
 }
 
 func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo string, messageContent interface{}) (*http.Response, error) {
-	// Check if the node to is correctly formatted
-
-	s.logger.Infof("got a generic request %s", pathTo)
+	s.logger.Info("Sending HTTP request", "to_node", nodeTo, "path", pathTo, "content", fmt.Sprintf("%+v", messageContent))
 
 	ok := false
 
@@ -79,48 +71,37 @@ func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo stri
 	}
 
 	if s.ServerInfo.Father != nil && s.ServerInfo.Father.HostName != nodeTo && !ok {
-		s.logger.Infof("request should be sent to %s , which is not a known node.", nodeTo)
-
+		s.logger.WarnfWith("Request should be sent to %s , which is not a known node.", []any{nodeTo}, "server_info", fmt.Sprintf("%+v", s.ServerInfo))
 		return nil, errors.New("node not in the hierarchy, cannot send request")
 	}
 
 	reqUrl := fmt.Sprintf("http://%s%s", nodeTo, pathTo)
 
-	s.logger.Infof("Sending request to node: %s \n", reqUrl)
-
 	jsonBody, err := json.Marshal(messageContent)
-
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when marshalling the body of the request: %s \n", err)
-
+		s.logger.Error("Error when marshalling the body of the request", "to_node", nodeTo, "path", pathTo, "content", fmt.Sprintf("%+v", messageContent), "error", err)
 		return nil, err
 	}
 
 	// Create the request
-
 	req, err := http.NewRequest(http.MethodPost, reqUrl, bytes.NewBuffer(jsonBody))
-
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when creating the http request: %s \n", err)
-
+		s.logger.Error("Error when creating the http request", "to_node", nodeTo, "path", pathTo, "content", fmt.Sprintf("%+v", messageContent), "error", err)
 		return nil, err
 	}
 
 	// Prepare the headers
-
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-ERMES-SECRET", s.ServerInfo.Secret)
 
-	s.logger.Info("Request is ready, now sending it ...")
-
+	s.logger.Debug("Request is ready, now sending it ...")
 	res, err := httpClient.CustomClient.Do(req)
-
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error when contacting the node: %s \n", err)
-
+		s.logger.Error("Error when contacting the node", "to_node", nodeTo, "path", pathTo, "content", fmt.Sprintf("%+v", messageContent), "error", err)
 		return nil, err
 	}
 
+	s.logger.Info("HTTP request sent successfully", "to_node", nodeTo, "path", pathTo, "content", fmt.Sprintf("%+v", messageContent))
 	// If everything went well return the response.
 	return res, nil
 }

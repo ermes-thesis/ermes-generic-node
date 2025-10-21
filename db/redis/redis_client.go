@@ -49,7 +49,15 @@ func NewRedisClient(config config.RedisConfig, ctx context.Context, log *logger.
 		return nil, err
 	}
 	log.Info("Connected to Redis successfully")
-	return &RedisClient{client: rdb, ctx: ctx, log: log}, nil
+
+	client := &RedisClient{client: rdb, ctx: ctx, log: log}
+
+	err = client.CreateIndex()
+	if err != nil && !strings.Contains(err.Error(), "Index already exists") {
+		log.Error("Failed to create Redis index", "configs", fmt.Sprintf("%+v", config), "error", err)
+		return nil, err
+	}
+	return client, nil
 }
 
 func (r *RedisClient) GetRecord(collectionId string, recordName string) (string, error) {

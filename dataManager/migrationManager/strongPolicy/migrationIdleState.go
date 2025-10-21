@@ -16,8 +16,8 @@ func (m *MigrationManagerIdleState) Setup(args ...any) {}
 // methods
 func (m *MigrationManagerIdleState) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
 	//sync
-	m.policy.partialView.Mutex.Lock()
-	defer m.policy.partialView.Mutex.Unlock()
+	//m.policy.partialView.Mutex.Lock()
+	//defer m.policy.partialView.Mutex.Unlock()
 
 	//imp
 	innerAny, ok := m.policy.equilibriumState.Load(collectionId)

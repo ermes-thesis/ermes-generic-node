@@ -7,6 +7,7 @@ import (
 	dataManager "dataManager"
 	"dataManager/messages"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -23,11 +24,14 @@ func TestGetRecordLocally(t *testing.T) {
 	dm.Init(collections, myT1PenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	cd := dm.GetCollectionsDiscoverer()
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Times(2)
+	fmt.Println("Inserting collections")
 
 	//insert a strong collection
 	dm.SetCollectionAndPropagate("strongRepoId", "strongRepoName", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", true)
+	fmt.Println("Inserting collections 1 done")
 	//insert a weak collection
 	dm.SetCollectionAndPropagate("weakRepoId", "strongRepoName", map[string]string{"record1": "value1", "record2": "value2"}, []string{}, "", false)
+	fmt.Println("Inserting collections 2 done")
 
 	//check strong collection
 	bool, _, _ := cd.IsCollectionLocallyPresent("strongRepoId", 0)

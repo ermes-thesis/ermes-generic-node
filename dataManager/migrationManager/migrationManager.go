@@ -78,16 +78,14 @@ func GetMigrationManagerInstance() MigrationManager {
 func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger) {
 	initOnce.Do(func() {
 		//imp
-		if m.collectionsPartialView != nil { //if singleton already initialized
-			return
-		}
-
 		m.serverInfo = serverInfo
 		m.log = logger
 		m.dbInterface = dbInterface
 		m.lruCache = lruCache
 		m.config = config
-		m.collectionsLock = &sync.Mutex{}
+		//m.collectionsLock = &sync.Mutex{}
+		m.collectionsLock = &collections.Mutex
+
 		//prepare server
 		m.sender = sender.NewMigrationManagerSender(m.log, server, serverInfo)
 		server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages().ServeHTTP)
@@ -111,8 +109,8 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 
 func (m *MigrationManagerImp) RemoveCollectionFromLru(collectionId string) {
 	//sync
-	m.collectionsLock.Lock()
-	defer m.collectionsLock.Unlock()
+	//m.collectionsLock.Lock()
+	//defer m.collectionsLock.Unlock()
 
 	m.lruCache.Remove(collectionId)
 }
@@ -176,8 +174,8 @@ func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records 
 
 func (m *MigrationManagerImp) NewCollectionCreated(collectionId string, collectionSize uint64, isStrong bool) error {
 	//sync
-	m.collectionsLock.Lock()
-	defer m.collectionsLock.Unlock()
+	//m.collectionsLock.Lock()
+	//defer m.collectionsLock.Unlock()
 
 	m.log.Info("MIG-MANAGER, new local collection created")
 	collection := m.collectionsPartialView.KnownCollections[collectionId]

@@ -207,10 +207,7 @@ func TestIndex(t *testing.T) {
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
-	err := redisClient.CreateIndex("unused_key")
-	require.NoError(t, err, "Expected no error creating index")
-
-	err = redisClient.SetMetadata("collId", model.Metadata{
+	err := redisClient.SetMetadata("collId", model.Metadata{
 		Name:           "TestMetadata",
 		Owner:          "owner1",
 		Groups:         []string{"group1"},

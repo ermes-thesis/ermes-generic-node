@@ -54,7 +54,15 @@ func NewRedisClient(config config.RedisConfig, ctx context.Context, log *logger.
 
 func (r *RedisClient) GetRecord(collectionId string, recordName string) (string, error) {
 	r.log.Info("GetRecord called", "collection_id", collectionId, "record_name", recordName)
-	return r.client.Get(r.ctx, buildKey(collectionId, recordName)).Result()
+	str, err := r.client.Get(r.ctx, buildKey(collectionId, recordName)).Result()
+	if err != nil {
+		r.log.Error("GetRecord: Failed to get record", "collection_id", collectionId, "record_name", recordName, "error", err)
+		return "", err
+	}
+
+	r.log.Info("GetRecord: Record retrieved successfully", "collection_id", collectionId, "record_name", recordName)
+	r.log.Debug("GetRecord: Record retrieved successfully", "result", str)
+	return str, nil
 }
 
 func (r *RedisClient) SetRecord(collectionId string, recordName string, value string, timestamp string) error {
@@ -107,7 +115,13 @@ func (r *RedisClient) SetRecord(collectionId string, recordName string, value st
 			continue
 		}
 
-		return err
+		if err != nil {
+			r.log.Error("SetRecord: Failed to set record", "collection_id", collectionId, "record_name", recordName, "record_value", value, "timestamp", timestamp, "error", err)
+			return err
+		}
+
+		r.log.Info("SetRecord: Record set successfully", "collection_id", collectionId, "record_name", recordName, "record_value", value, "timestamp", timestamp)
+		return nil
 	}
 
 	r.log.Warn("SetRecord failed due to retries exhaustion. The record has NOT been set", "collection_id", collectionId, "record_name", recordName, "value", value, "timestamp", timestamp)
@@ -116,7 +130,15 @@ func (r *RedisClient) SetRecord(collectionId string, recordName string, value st
 
 func (r *RedisClient) GetRecords(collectionId string, recordNames ...string) ([]any, error) {
 	r.log.Info("GetRecords called", "collection_id", collectionId, "record_names", recordNames)
-	return r.client.MGet(r.ctx, buildKeys(collectionId, recordNames)...).Result()
+	strs, err := r.client.MGet(r.ctx, buildKeys(collectionId, recordNames)...).Result()
+	if err != nil {
+		r.log.Error("GetRecords: Failed to get records", "collection_id", collectionId, "record_names", recordNames, "error", err)
+		return nil, err
+	}
+
+	r.log.Info("GetRecords: Records retrieved successfully", "collection_id", collectionId, "record_names", recordNames)
+	r.log.Debug("GetRecords: Records retrieved successfully", "result", strs)
+	return strs, nil
 }
 
 func (r *RedisClient) SetRecords(collectionId string, recordNames []string, recordValues []string, timestamp string) error {
@@ -186,7 +208,13 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 			continue
 		}
 
-		return err
+		if err != nil {
+			r.log.Error("SetRecords: Failed to set records", "collection_id", collectionId, "record_names", recordNames, "record_values", recordValues, "timestamp", timestamp, "error", err)
+			return err
+		}
+
+		r.log.Info("SetRecords: Records set successfully", "collection_id", collectionId, "record_names", recordNames, "record_values", recordValues, "timestamp", timestamp)
+		return nil
 	}
 
 	r.log.Warn("SetRecords failed due to retries exhaustion. The records have NOT been set", "collection_id", collectionId, "record_names", recordNames, "record_values", recordValues, "timestamp", timestamp)
@@ -197,6 +225,13 @@ func (r *RedisClient) RecordExists(collectionId string, recordName string) (bool
 	r.log.Info("RecordExists called", "collection_id", collectionId, "record_name", recordName)
 
 	res, err := r.client.Exists(r.ctx, buildKey(collectionId, recordName)).Result()
+	if err != nil {
+		r.log.Error("RecordExists: Failed assert record existence", "collection_id", collectionId, "record_name", recordName, "error", err)
+		return false, err
+	}
+
+	r.log.Info("RecordExists: Record existence asserted successfully", "collection_id", collectionId, "record_name", recordName)
+	r.log.Debug("RecordExists: Record existence asserted successfully", "exists", res > 0)
 	return res > 0, err
 }
 
@@ -258,7 +293,13 @@ func (r *RedisClient) DeleteRecords(collectionId string, timestamp string, recor
 			continue
 		}
 
-		return err
+		if err != nil {
+			r.log.Error("DeleteRecords: Failed to delete records", "collection_id", collectionId, "record_names", recordNames, "timestamp", timestamp, "error", err)
+			return err
+		}
+
+		r.log.Info("DeleteRecords: Records deleted successfully", "collection_id", collectionId, "record_names", recordNames, "timestamp", timestamp)
+		return nil
 	}
 
 	r.log.Warn("DeleteRecords failed due to retries exhaustion. The records have NOT been deleted", "collection_id", collectionId, "record_names", recordNames, "timestamp", timestamp)
@@ -329,6 +370,8 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 				result[key] = values[i].(string)
 			}
 
+			r.log.Info("GetCollection: Collection retrieved successfully", "collection_id", collectionId)
+			r.log.Debug("GetCollection: Collection retrieved successfully", "records", fmt.Sprintf("%+v", result), "groups", groups, "owner", owner, "groups_sequence", groupsSequence)
 			return result, groups, owner, groupsSequence, nil
 		}
 
@@ -344,6 +387,7 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 			continue
 		}
 
+		r.log.Error("GetCollection: Failed to get collection", "collection_id", collectionId, "error", err)
 		return nil, nil, "", 0, err
 	}
 
@@ -380,7 +424,13 @@ func (r *RedisClient) SetCollection(collectionId string, records map[string]stri
 		return nil
 	})
 
-	return err
+	if err != nil {
+		r.log.Error("SetCollection: Failed to set collection", "collection_id", collectionId, "records", fmt.Sprintf("%+v", records), "groups", groups, "owner", owner, "groups_sequence", groupsSequence, "error", err)
+		return err
+	}
+
+	r.log.Info("SetCollection: Collection set successfully", "collection_id", collectionId, "records", fmt.Sprintf("%+v", records), "groups", groups, "owner", owner, "groups_sequence", groupsSequence)
+	return nil
 }
 
 func (r *RedisClient) DeleteCollection(collectionId string) error {
@@ -424,7 +474,13 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 			continue
 		}
 
-		return err
+		if err != nil {
+			r.log.Error("DeleteCollection: Failed to delete collection", "collection_id", collectionId, "error", err)
+			return err
+		}
+
+		r.log.Info("DeleteCollection: Collection deleted successfully", "collection_id", collectionId)
+		return nil
 	}
 
 	r.log.Warn("DeleteCollection failed due to retries exhaustion. The collection has NOT been deleted", "collection_id", collectionId)
@@ -436,8 +492,12 @@ func (r *RedisClient) CollectionExists(collectionId string) (bool, error) {
 
 	res, err := r.client.Exists(r.ctx, "info:"+collectionId).Result()
 	if err != nil {
+		r.log.Error("CollectionExists: Failed to check collection existence", "collection_id", collectionId, "error", err)
 		return false, err
 	}
+
+	r.log.Info("CollectionExists: Collection existence asserted successfully", "collection_id", collectionId)
+	r.log.Debug("RecordExists: Collection existence asserted successfully", "exists", res > 0)
 	return res > 0, nil
 }
 
@@ -446,26 +506,51 @@ func (r *RedisClient) GetMetadata(collectionId string) (*model.Metadata, error) 
 
 	res, err := r.client.HGetAll(r.ctx, "meta:"+collectionId).Result()
 	if err != nil {
+		r.log.Error("GetMetadata: Failed to get metadata", "collection_id", collectionId, "error", err)
 		return nil, err
 	}
+
 	if len(res) == 0 {
+		r.log.Warn("GetMetadata: No metadata found for collection", "collection_id", collectionId)
 		return nil, nil
 	}
 	delete(res, "groupsSequence")
-	return model.FromMap(res)
+
+	meta, err := model.FromMap(res)
+	if err != nil {
+		r.log.Error("GetMetadata: Failed to parse metadata", "collection_id", collectionId, "raw_metadata", res, "error", err)
+		return nil, err
+	}
+
+	r.log.Info("GetMetadata: Metadata retrieved successfully", "collection_id", collectionId, "metadata", meta)
+	return meta, nil
 }
 
 func (r *RedisClient) SetMetadata(collectionId string, metadata model.Metadata) error {
 	r.log.Info("SetMetadata called", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", metadata))
 
 	metaList := append(metadata.ToList(), "groupsSequence", 0)
-	return r.client.HSet(r.ctx, "meta:"+collectionId, metaList).Err()
+	err := r.client.HSet(r.ctx, "meta:"+collectionId, metaList).Err()
+	if err != nil {
+		r.log.Error("SetMetadata: Failed to set metadata", "collection_id", collectionId, "metadata", metadata, "error", err)
+		return err
+	}
+
+	r.log.Info("SetMetadata: Metadata set successfully", "collection_id", collectionId, "metadata", metadata)
+	return nil
 }
 
 func (r *RedisClient) MetadataExists(collectionId string) (bool, error) {
 	r.log.Info("MetadataExists called", "collection_id", collectionId)
 
 	res, err := r.client.Exists(r.ctx, "meta:"+collectionId).Result()
+	if err != nil {
+		r.log.Error("MetadataExists: Failed assert metadata existence", "collection_id", collectionId, "error", err)
+		return false, err
+	}
+
+	r.log.Info("MetadataExists: Metadata existence asserted successfully", "collection_id", collectionId)
+	r.log.Debug("RecordExists: Metadata existence asserted successfully", "exists", res > 0)
 	return res > 0, err
 }
 
@@ -507,9 +592,12 @@ func (r *RedisClient) IsUniqueForOwner(collectionName string, owner string) (boo
 		}
 
 		if err != nil {
+			r.log.Error("IsUniqueForOwner: Failed to check uniqueness", "collection_name", collectionName, "owner", owner, "error", err)
 			return false, err
 		}
 
+		r.log.Info("IsUniqueForOwner: Uniqueness checked successfully", "collection_name", collectionName, "owner", owner)
+		r.log.Debug("IsUniqueForOwner: Uniqueness checked successfully", "is_unique", !exists)
 		return !exists, nil
 	}
 
@@ -520,7 +608,14 @@ func (r *RedisClient) IsUniqueForOwner(collectionName string, owner string) (boo
 func (r *RedisClient) DeleteMetadata(collectionId string) error {
 	r.log.Info("DeleteMetadata called", "collection_id", collectionId)
 
-	return r.client.Del(r.ctx, "meta:"+collectionId).Err()
+	err := r.client.Del(r.ctx, "meta:"+collectionId).Err()
+	if err != nil {
+		r.log.Error("DeleteMetadata: Failed to delete metadata", "collection_id", collectionId, "error", err)
+		return err
+	}
+
+	r.log.Info("DeleteMetadata: Metadata deleted successfully", "collection_id", collectionId)
+	return nil
 }
 
 // TODO: Probably not needed anymore
@@ -596,7 +691,14 @@ func (r *RedisClient) AddGroupsToMetadata(collectionId string, groupsToAdd ...st
 			continue
 		}
 
-		return groups, seq, err
+		if err != nil {
+			r.log.Error("AddGroupsToMetadata: Failed to add groups to metadata", "collection_id", collectionId, "groups_to_add", groupsToAdd, "error", err)
+			return nil, 0, err
+		}
+
+		r.log.Info("AddGroupsToMetadata: Groups added to metadata successfully", "collection_id", collectionId, "groups_to_add", groupsToAdd)
+		r.log.Debug("AddGroupsToMetadata: Groups added to metadata successfully", "new_groups", groups, "new_sequence", seq)
+		return groups, seq, nil
 	}
 
 	r.log.Warn("AddGroupsToMetadata failed due to retries exhaustion. The groups has NOT been added to metadata", "collection_id", collectionId, "groups_to_add", groupsToAdd)
@@ -670,8 +772,14 @@ func (r *RedisClient) RemoveGroupsFromMetadata(collectionId string, groupsToRemo
 			continue
 		}
 
-		return groups, seq, err
+		if err != nil {
+			r.log.Error("RemoveGroupsFromMetadata: Failed to remove groups from metadata", "collection_id", collectionId, "groups_to_remove", groupsToRemove, "error", err)
+			return nil, 0, err
+		}
 
+		r.log.Info("RemoveGroupsFromMetadata: Groups removed from metadata successfully", "collection_id", collectionId, "groups_to_remove", groupsToRemove)
+		r.log.Debug("RemoveGroupsFromMetadata: Groups removed from metadata successfully", "new_groups", groups, "new_sequence", seq)
+		return groups, seq, nil
 	}
 
 	r.log.Warn("RemoveGroupsFromMetadata failed due to retries exhaustion. The groups has NOT been removed from metadata", "collection_id", collectionId, "groups_to_remove", groupsToRemove)
@@ -754,7 +862,14 @@ func (r *RedisClient) UpdateGroupsInMetadata(collectionId string, groupsToAdd []
 			continue
 		}
 
-		return groups, seq, err
+		if err != nil {
+			r.log.Error("UpdateGroupsInMetadata: Failed to update groups to metadata", "collection_id", collectionId, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove, "error", err)
+			return nil, 0, err
+		}
+
+		r.log.Info("UpdateGroupsInMetadata: Metadata groups updated successfully", "collection_id", collectionId, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove)
+		r.log.Debug("AddGroupsToMetadata: Metadata groups updated successfully", "new_groups", groups, "new_sequence", seq)
+		return groups, seq, nil
 	}
 
 	r.log.Warn("UpdateGroupsInMetadata failed due to retries exhaustion. The groups has NOT been updated in metadata", "collection_id", collectionId, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove)
@@ -812,7 +927,13 @@ func (r *RedisClient) SetGroupsInMetadata(collectionId string, sequenceGroups ui
 			continue
 		}
 
-		return err
+		if err != nil {
+			r.log.Error("SetGroupsInMetadata: Failed to set groups in metadata", "collection_id", collectionId, "groups_sequence", sequenceGroups, "groups", groups, "error", err)
+			return err
+		}
+
+		r.log.Info("SetGroupsInMetadata: Metadata groups set successfully", "collection_id", collectionId, "groups_sequence", sequenceGroups, "groups", groups)
+		return nil
 	}
 
 	r.log.Warn("SetGroupsInMetadata failed due to retries exhaustion. The groups have NOT been set in metadata", "collection_id", collectionId, "sequence_groups", sequenceGroups, "groups", groups)
@@ -828,6 +949,7 @@ func (r *RedisClient) IsAuthorizedInMetadata(collectionId string, userId string,
 
 	collMetadataAuthorizations, err := r.client.HMGet(r.ctx, "meta:"+collectionId, "owner", "groups").Result()
 	if err != nil {
+		r.log.Error("IsAuthorizedInMetadata: Failed to check user authorization searching in metadata", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups, "error", err)
 		return false, err
 	}
 
@@ -835,26 +957,34 @@ func (r *RedisClient) IsAuthorizedInMetadata(collectionId string, userId string,
 	collGroupsStr := collMetadataAuthorizations[1].(string)
 
 	if collOwner == userId {
+		r.log.Info("IsAuthorizedInMetadata: Authorization check successful. User is the collection's owner", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups)
+		r.log.Debug("IsAuthorizedInMetadata: Authorization check successful. User is the collection's owner", "collection_owner", collOwner, "collection_groups", collGroupsStr)
 		return true, nil
 	}
 
 	if collGroupsStr == "" {
+		r.log.Warn("IsAuthorizedInMetadata: Failed authorization check. User is not collection's owner and the collection does not have any group associated", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups)
+		r.log.Debug("IsAuthorizedInMetadata: Failed authorization check. User is not collection's owner and the collection does not have any group associated", "collection_owner", collOwner, "collection_groups", collGroupsStr)
 		return false, nil
 	}
 
 	collGroups := strings.Split(collGroupsStr, ",")
 
 	if slices.Contains(collGroups, model.PublicGroup) {
+		r.log.Info("IsAuthorizationInMetadata: Authorization check successful. The collection is marked as public", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups)
+		r.log.Debug("IsAuthorizationInMetadata: Authorization check successful. The collection is marked as public", "collection_owner", collOwner, "collection_groups", collGroups)
 		return true, nil
 	}
 
 	for _, group := range userGroups {
 		if slices.Contains(collGroups, group) {
+			r.log.Info("IsAuthorizationInMetadata: Authorization check successful. The user is in a group associated to the collection", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups)
+			r.log.Debug("IsAuthorizationInMetadata: Authorization check successful. The user is in a group associated to the collection", "collection_owner", collOwner, "collection_groups", collGroups)
 			return true, nil
 		}
 	}
 
-	r.log.Warn("IsAuthorizedInMetadata failed due to retries exhaustion. The user has been marked as UNAUTHORIZED, despite potentially having the necessary right accesses", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups)
+	r.log.Warn("IsAuthorizedInMetadata: Authorization failed. The user has no rights to access the collection", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups, "collection_owner", collOwner, "collection_groups", collGroups)
 	return false, nil
 }
 
@@ -911,7 +1041,14 @@ func (r *RedisClient) SetGroups(collectionId string, sequenceGroups uint64, grou
 			}
 			continue
 		}
-		return err
+
+		if err != nil {
+			r.log.Error("SetGroups: Failed to set groups", "collection_id", collectionId, "groups_sequence", sequenceGroups, "groups", groups, "error", err)
+			return err
+		}
+
+		r.log.Info("SetGroups: Groups set successfully", "collection_id", collectionId, "groups_sequence", sequenceGroups, "groups", groups)
+		return nil
 	}
 
 	r.log.Warn("SetGroups failed due to retries exhaustion. The groups has NOT been set", "collection_id", collectionId, "sequence_groups", sequenceGroups, "groups", groups)
@@ -930,10 +1067,19 @@ func (r *RedisClient) IsAuthorized(collectionId string, userId string, userGroup
 
 	storedOwner, err := r.client.Get(r.ctx, ownerKey).Result()
 	if storedOwner == userId {
+		r.log.Info("IsAuthorized: Authorization check successful. User is the collection's owner", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups)
+		r.log.Debug("IsAuthorized: Authorization check successful. User is the collection's owner", "collection_owner", storedOwner)
 		return true, nil
 	}
 
 	res, err := r.client.SMIsMember(r.ctx, "info:"+collectionId+":groups", append(m, model.PublicGroup)...).Result()
+	if err != nil {
+		r.log.Error("IsAuthorized: Authorization check failed", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups, "error", err)
+		return false, err
+	}
+
+	r.log.Info("IsAuthorized: Authorization check successful", "collection_id", collectionId, "user_id", userId, "user_access_groups", userGroups, "collection_owner", storedOwner, "can_access", slices.Contains(res, true))
+	r.log.Debug("IsAuthorized: Authorization check successful", "can_access", slices.Contains(res, true))
 	return slices.Contains(res, true), err
 }
 
@@ -948,7 +1094,7 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 		}
 	}
 
-	return r.client.FTCreate(r.ctx, "metadata_index", &redis.FTCreateOptions{
+	err := r.client.FTCreate(r.ctx, "metadata_index", &redis.FTCreateOptions{
 		OnHash: true,
 		Prefix: []any{1, "meta:"},
 	}, append([]*redis.FieldSchema{{
@@ -964,6 +1110,14 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 		FieldName: "groups",
 		FieldType: redis.SearchFieldTypeTag,
 	}}, fields...)...).Err()
+
+	if err != nil {
+		r.log.Error("CreateIndex: Failed to create index", "custom_metadata_keys", customMetadataKeys, "error", err)
+		return err
+	}
+
+	r.log.Info("CreateIndex: Index created successfully")
+	return nil
 }
 
 func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userId string, userGroups []string) ([]types.CollectionInfo, error) {
@@ -991,6 +1145,7 @@ func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userId string,
 
 	res, err := r.client.FTSearch(r.ctx, "metadata_index", redisQuery).Result()
 	if err != nil {
+		r.log.Error("SearchOnMetadata: Failed to search index", "query", fmt.Sprintf("%+v", query), "user_id", userId, "user_access_groups", userGroups, "query_redis_format", redisQuery, "error", err)
 		return nil, err
 	}
 
@@ -1001,6 +1156,7 @@ func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userId string,
 		delete(doc.Fields, "groupsSequence")
 		metadata, err := model.FromMap(doc.Fields)
 		if err != nil {
+			r.log.Error("SearchOnMetadata: Failed to parse metadata", "query", fmt.Sprintf("%+v", query), "user_id", userId, "user_access_groups", userGroups, "query_redis_format", redisQuery, "redis_response", fmt.Sprintf("%+v", doc), "error", err)
 			return nil, err
 		}
 
@@ -1012,13 +1168,22 @@ func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userId string,
 		result = append(result, collectionInfo)
 	}
 
+	r.log.Info("SearchOnMetadata: Query executed successfully", "query", fmt.Sprintf("%+v", query), "user_id", userId, "user_access_groups", userGroups)
+	r.log.Info("SearchOnMetadata: Query executed successfully", "query_result", fmt.Sprintf("%+v", result))
 	return result, nil
 }
 
 func (r *RedisClient) DropIndex() error {
 	r.log.Info("DropIndex called")
 
-	return r.client.FTDropIndex(r.ctx, "metadata_index").Err()
+	err := r.client.FTDropIndex(r.ctx, "metadata_index").Err()
+	if err != nil {
+		r.log.Error("DropIndex: Failed to drop index", "error", err)
+		return err
+	}
+
+	r.log.Info("DropIndex: Index dropped successfully")
+	return nil
 }
 
 func (r *RedisClient) AlterIndex(customMetadataKeys ...string) error {
@@ -1030,7 +1195,14 @@ func (r *RedisClient) AlterIndex(customMetadataKeys ...string) error {
 		fields[i+1] = "TAG"
 	}
 
-	return r.client.FTAlter(r.ctx, "metadata_index", true, fields).Err()
+	err := r.client.FTAlter(r.ctx, "metadata_index", true, fields).Err()
+	if err != nil {
+		r.log.Error("AlterIndex: Failed to alter index", "custom_metadata_keys", customMetadataKeys, "error", err)
+		return err
+	}
+
+	r.log.Info("AlterIndex: Index altered successfully", "custom_metadata_keys", customMetadataKeys)
+	return nil
 }
 
 func (r *RedisClient) GetMaxMemory() (uint64, error) {
@@ -1038,12 +1210,17 @@ func (r *RedisClient) GetMaxMemory() (uint64, error) {
 
 	stats, err := r.client.ConfigGet(r.ctx, "maxmemory").Result()
 	if err != nil {
+		r.log.Error("GetMaxMemory: Failed to get maxmemory config", "error", err)
 		return 0, err
 	}
 	if val, ok := stats["maxmemory"]; ok {
+		r.log.Info("GetMaxMemory: Maxmemory retrieved successfully")
+		r.log.Debug("GetMaxMemory: Maxmemory retrieved successfully", "maxmemory_value", val)
 		return strToInt(val), nil
 	}
-	return strToInt(stats["maxmemory"]), nil
+
+	r.log.Error("GetMaxMemory: Failed to get maxmemory config", "error", "couldn't find the 'maxmemory' key in the config map")
+	return 0, fmt.Errorf("failed to get maxmemory config")
 }
 
 func (r *RedisClient) GetAvailableMemory() (uint64, error) {
@@ -1051,16 +1228,22 @@ func (r *RedisClient) GetAvailableMemory() (uint64, error) {
 
 	maxMem, err := r.GetMaxMemory()
 	if err != nil {
+		r.log.Error("GetAvailableMemory: Failed to get maxmemory", "error", err)
 		return 0, err
 	}
 	if maxMem == 0 {
+		r.log.Warn("GetAvailableMemory: Maxmemory is unlimited")
 		return ^uint64(0), nil
 	}
 
 	stats, err := r.GetMemoryStats()
 	if err != nil {
+		r.log.Error("GetAvailableMemory: Failed to get current memory statistics", "error", err)
 		return 0, err
 	}
+
+	r.log.Info("GetAvailableMemory: Available memory retrieved successfully")
+	r.log.Debug("GetAvailableMemory: Available memory retrieved successfully", "available_memory", maxMem-stats.CurrentUsedMemory)
 	return maxMem - stats.CurrentUsedMemory, nil
 }
 
@@ -1069,6 +1252,7 @@ func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
 
 	stats, err := r.client.Info(r.ctx, "MEMORY", "KEYSPACE").Result()
 	if err != nil {
+		r.log.Error("GetMemoryStats: Failed to get current memory statistics", "error", err)
 		return nil, err
 	}
 
@@ -1084,6 +1268,11 @@ func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
 	}
 
 	datasetPerc, err := strconv.ParseFloat(statsMap["used_memory_dataset_perc"][:len(statsMap["used_memory_dataset_perc"])-1], 64)
+	if err != nil {
+		r.log.Error("GetMemoryStats: Failed to parse dataset perc", "error", err)
+		return nil, err
+	}
+
 	memStats := db.MemStats{
 		AllocationStats: db.AllocationStats{
 			UsedMemoryPeak:              strToInt(statsMap["used_memory_peak"]),
@@ -1099,6 +1288,8 @@ func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
 		BytesKeysRatio:         bytesKeysRatio,
 	}
 
+	r.log.Info("GetMemoryStats: Memory stats retrieved successfully")
+	r.log.Debug("GetMemoryStats: Memory stats retrieved successfully", "mem_stats", fmt.Sprintf("%+v", memStats))
 	return &memStats, err
 }
 
@@ -1143,9 +1334,12 @@ func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, err
 	}, keysKey, infoKey)
 
 	if err != nil {
+		r.log.Error("GetCollectionMemoryUsage: Failed to retrieve collection memory usage", "collection_id", collectionId, "error", err)
 		return 0, err
 	}
 
+	r.log.Info("GetCollectionMemoryUsage: Collection memory usage retrieved successfully", "collection_id", collectionId)
+	r.log.Debug("GetCollectionMemoryUsage: Collection memory usage retrieved successfully", "collection_id", collectionId, "collection_memory_usage", totalMemory)
 	return totalMemory, nil
 }
 
@@ -1153,6 +1347,13 @@ func (r *RedisClient) GetRecordMemoryUsage(collectionId string, recordName strin
 	r.log.Info("GetRecordMemoryUsage called", "collection_id", collectionId, "record_name", recordName)
 
 	memUsage, err := r.client.MemoryUsage(r.ctx, buildKey(collectionId, recordName)).Result()
+	if err != nil {
+		r.log.Error("GetRecordMemoryUsage: Failed to retrieve record memory usage", "collection_id", collectionId, "record_name", recordName, "error", err)
+		return 0, err
+	}
+
+	r.log.Info("GetRecordMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName)
+	r.log.Debug("GetRecordMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName, "record_memory_usage", memUsage)
 	return uint64(memUsage), err
 }
 

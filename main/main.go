@@ -98,15 +98,15 @@ func run(ctx context.Context, configPath string) error {
 	hostFunctions := scheduler.NewHostFunctions(dataManager, metadataManager, serverInfo, generalLog.Component("host_functions"))
 	switch cfg.Scheduler.WasmRuntime {
 	case config.Wasmedge:
-		wasmedgeExecutorPool := wasm.NewWasmedgeExecutorPool(10)
+		wasmedgeExecutorPool := wasm.NewWasmedgeExecutorPool(10, generalLog.Component("wasmedge_executor_pool"))
 		err = hostFunctions.RegisterWasmedgeHostFns(wasmedgeExecutorPool)
 		wasmExecutorPool = wasmedgeExecutorPool
 	case config.Wasmtime:
-		wasmtimeExecutorPool := wasm.NewWasmtimeExecutorPool(10)
+		wasmtimeExecutorPool := wasm.NewWasmtimeExecutorPool(10, generalLog.Component("wasmtime_executor_pool"))
 		err = hostFunctions.RegisterWasmtimeHostFns(wasmtimeExecutorPool)
 		wasmExecutorPool = wasmtimeExecutorPool
 	case config.Wazero:
-		wazeroExecutorPool := wasm.NewWazeroExecutorPool(10, false, ctx)
+		wazeroExecutorPool := wasm.NewWazeroExecutorPool(10, false, ctx, generalLog.Component("wazero_executor_pool"))
 		err = hostFunctions.RegisterWazeroHostFns(wazeroExecutorPool)
 		wasmExecutorPool = wazeroExecutorPool
 	}
@@ -144,6 +144,7 @@ func run(ctx context.Context, configPath string) error {
 
 	wg.Wait()
 
+	generalLog.Infof("Exiting node gracefully")
 	return nil
 }
 

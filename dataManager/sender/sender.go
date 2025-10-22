@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ermes-thesis/ermes-common/logger"
 	"io"
 	"net/http"
 	"server"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 const (
@@ -54,9 +55,12 @@ func NewMigrationManagerSender(logger *logger.Logger, server server.ServerType, 
 func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]string, groups []string, owner string, groupsSequence uint64, collectionSize uint64) {
 	//imp
 	s.log.Infof("[SENDER] send collection %s to %s", collection.CollectionId(), destination)
-	if destination != s.serverInfo.Father.HostName {
+	if s.serverInfo.Father == nil || destination != s.serverInfo.Father.HostName {
+		s.log.Warn("ADDING HOST TO COLLECTION", "hostname", s.serverInfo.HostName, "destination", destination, "KNWN HOSTS", collection.HostsId())
 		collection.AddHost(destination)
+		s.log.Warn("ADDED HOST TO COLLECTION", "KNWN HOSTS", collection.HostsId())
 	}
+
 	hostToRemove := destination == s.serverInfo.Father.HostName && len(collection.HostsId()) == 0
 
 	msg := gossip.SendCollectionMessage{

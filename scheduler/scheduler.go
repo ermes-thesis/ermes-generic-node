@@ -96,7 +96,7 @@ func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
 	for i := 0; i < retries; i++ {
 		found, collection, err = s.dataManager.GetCollectionsDiscoverer().IsCollectionLocallyPresent(colId, seqNum)
 		if err == nil {
-			s.log.Info("Collection found locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection))
+			s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection))
 			return found, collection, nil
 		}
 		s.log.Debug("Retry collection presence check", "collection_id", colId, "seq_num", seqNum, "current_attempt", i, "error", err)
@@ -667,7 +667,7 @@ func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functio
 	s.log.Debug("Forward request prepared with headers", "headers", fmt.Sprintf("%v", req.Header))
 	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {
-		s.log.Error("Error forwarding request to leader", "fn_name", functionName, "fn_version", functionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", collections), "sequential_coll_seq_num", seqNumber, "cumulative_latency", cumulativeLatency, "error", err)
+		s.log.Error("Error forwarding request", "fn_name", functionName, "fn_version", functionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", collections), "sequential_coll_seq_num", seqNumber, "cumulative_latency", cumulativeLatency, "error", err)
 		return nil, 0, fmt.Errorf("error forwarding request: %v", err)
 	}
 	defer resp.Body.Close()
@@ -685,7 +685,7 @@ func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functio
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		s.log.Error("Error reading response", "fn_name", functionName, "fn_version", functionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", collections), "sequential_coll_seq_num", seqNumber, "cumulative_latency", cumulativeLatency, "error", err)
-		return nil, 0, fmt.Errorf("error reading response from leader: %v", err)
+		return nil, 0, fmt.Errorf("error reading response: %v", err)
 	}
 
 	fnRes := FunctionResult{

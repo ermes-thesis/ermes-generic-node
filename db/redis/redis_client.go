@@ -56,7 +56,7 @@ func (r *RedisClient) GetRecord(collectionId string, recordName string) (string,
 	r.log.Info("GetRecord called", "collection_id", collectionId, "record_name", recordName)
 	str, err := r.client.Get(r.ctx, buildKey(collectionId, recordName)).Result()
 	if err != nil {
-		r.log.Error("GetRecord: Failed to get record", "collection_id", collectionId, "record_name", recordName, "error", err)
+		r.log.Warn("GetRecord: Failed to get record", "collection_id", collectionId, "record_name", recordName, "error", err)
 		return "", err
 	}
 
@@ -132,7 +132,7 @@ func (r *RedisClient) GetRecords(collectionId string, recordNames ...string) ([]
 	r.log.Info("GetRecords called", "collection_id", collectionId, "record_names", recordNames)
 	strs, err := r.client.MGet(r.ctx, buildKeys(collectionId, recordNames)...).Result()
 	if err != nil {
-		r.log.Error("GetRecords: Failed to get records", "collection_id", collectionId, "record_names", recordNames, "error", err)
+		r.log.Warn("GetRecords: Failed to get records", "collection_id", collectionId, "record_names", recordNames, "error", err)
 		return nil, err
 	}
 

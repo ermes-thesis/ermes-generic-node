@@ -526,17 +526,17 @@ func BenchmarkExecutionTime_Wasmedge_WithOptimizations_Lightweight(b *testing.B)
 	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
-	for b.Loop() {
-		executor := pool.Acquire()
+	executor := pool.Acquire()
+	req, ctx := getTestReqAndCtx("userId", 20000)
 
-		req, ctx := getTestReqAndCtx("userId", 20000)
+	for b.Loop() {
 		response := executor.Invoke(lightweightWOpts, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
 			b.Fatalf("invoke function failed: %s", response.Response)
 		}
-		executor.Release()
 	}
+	executor.Release()
 }
 
 func BenchmarkExecutionTime_Wasmedge_AOT_CpuIntensive(b *testing.B) {

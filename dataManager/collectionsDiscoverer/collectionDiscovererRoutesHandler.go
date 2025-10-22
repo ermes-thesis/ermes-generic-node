@@ -182,6 +182,7 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 		}
 		collectionId := msg.CollectionId
 		isStrong := msg.IsStrong
+		senderIp := msg.SenderIp
 
 		//sync
 		c.collectionsPartialView.Mutex.Lock()
@@ -222,7 +223,10 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 		} else {
 			c.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, 0, true) // remote weak collection
 		}
-		c.collectionsPartialView.KnownCollections[collectionId].AddHost(msg.SenderIp)
+
+		c.log.Warn("ADDING HOST TO COLLECTION", "hostname", c.serverInfo.HostName, "msg.SenderIp", senderIp, "KNWN HOSTS", c.collectionsPartialView.KnownCollections[collectionId].HostsId())
+		c.collectionsPartialView.KnownCollections[collectionId].AddHost(senderIp)
+		c.log.Warn("ADDED HOST TO COLLECTION", "KNOWN HOSTS", c.collectionsPartialView.KnownCollections[collectionId].HostsId())
 
 		w.WriteHeader(http.StatusOK)
 	})

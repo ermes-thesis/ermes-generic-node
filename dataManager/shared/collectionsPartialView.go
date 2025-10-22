@@ -2,6 +2,7 @@ package dataManagerShared
 
 import (
 	config "config"
+	"maps"
 	"server"
 	"sync"
 )
@@ -38,7 +39,7 @@ func (l *LocalCollection) Size() uint64 {
 	return l.size
 }
 func (l *LocalCollection) HostsId() map[string]struct{} {
-	return l.hostsId
+	return maps.Clone(l.hostsId)
 }
 
 func (l *LocalCollection) RemoveHost(hostId string) {
@@ -63,7 +64,7 @@ func (l *RemoteCollection) AddHost(hostId string) {
 	l.hostsId[hostId] = struct{}{}
 }
 func (l *RemoteCollection) HostsId() map[string]struct{} {
-	return l.hostsId
+	return maps.Clone(l.hostsId)
 }
 
 func (l *RemoteCollection) RemoveHost(hostId string) {

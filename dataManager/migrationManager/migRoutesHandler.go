@@ -81,6 +81,7 @@ func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 			return
 		}
 
+		//FIXME: this does not work. Need to get the real sender address from headers or so.
 		ip, port, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)

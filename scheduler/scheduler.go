@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/xid"
 	"io"
 	"math"
 	"metadataManager"
@@ -19,6 +18,8 @@ import (
 	"strconv"
 	"time"
 	"tokenDecoder"
+
+	"github.com/rs/xid"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
@@ -587,12 +588,12 @@ func (s *SchedulerImpl) sendUpdateToGTP(groupsCache model.GroupsCache) {
 				continue
 			}
 
+			delete(groupsCache.UsersInGroups, groupName)
 			if statusCode != http.StatusOK {
 				s.log.Warn("Received an unexpected status code as response", "url", url, "method", http.MethodDelete, "received_status_code", statusCode, "expected_status_code", http.StatusOK, "group_name", groupName, "to_create", toCreate, "groups_cache", fmt.Sprintf("%v", groupsCache))
 				continue
 			}
 
-			delete(groupsCache.UsersInGroups, groupName)
 			s.log.Info("Group deleted at GPT", "group_name", groupName, "to_create", toCreate)
 		}
 	}

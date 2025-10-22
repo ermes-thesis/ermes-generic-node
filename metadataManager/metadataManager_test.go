@@ -82,7 +82,8 @@ func TestExecuteQueries(t *testing.T) {
 
 	// Create a new MetadataManager instance
 	metadataLog := createNewLogger(t)
-	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, metadataLog, fnCache)
+	manager, err := metadataManager.NewMetadataManager(redisClient, srvInfo, metadataLog, fnCache)
+	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	// Execute the query
 	result, err := manager.ExecuteQueries(requestedFnName, requestedFnVersion, string(queryParams), []string{"groupC"}, "12345", "boh", "IT/Milan")

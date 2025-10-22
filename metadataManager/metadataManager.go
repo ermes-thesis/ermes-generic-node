@@ -7,13 +7,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/xid"
 	"metadataManager/propagation"
 	"metadataManager/types"
 	"server"
 	"strings"
 	"sync"
 	"tokenDecoder"
+
+	"github.com/rs/xid"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
@@ -41,8 +42,19 @@ type MetadataManagerImpl struct {
 	customMetadataKeys           sync.Map
 }
 
-func NewMetadataManager(redis db.GenericDB, serverInfo *server.ServerInfo, log *logger.Logger, cache caches.FunctionCache) *MetadataManagerImpl {
+func NewMetadataManager(redis db.GenericDB, serverInfo *server.ServerInfo, log *logger.Logger, cache caches.FunctionCache) (*MetadataManagerImpl, error) {
 	log.Info("Initializing MetadataManager", "metadata_domain", serverInfo.MetadataDomain, "has_father", serverInfo.Father != nil)
+
+	err := redis.CreateIndex()
+	if err != nil {
+		if strings.Contains(err.Error(), "Index already exists") {
+			log.Warn("Redis index for metadata already exists")
+		} else {
+			log.Error("Error creating initial Redis index", "metadata_domain", serverInfo.MetadataDomain, "has_father", serverInfo.Father != nil, "error", err)
+			return nil, err
+		}
+	}
+
 	return &MetadataManagerImpl{
 		redis:                        redis,
 		log:                          log,
@@ -53,7 +65,7 @@ func NewMetadataManager(redis db.GenericDB, serverInfo *server.ServerInfo, log *
 		groupUpdateRequestPropagator: propagation.NewGroupUpdateRequestPropagator(serverInfo, log),
 		updateGroupsPropagator:       propagation.NewUpdateGroupsPropagator(serverInfo, log),
 		customMetadataKeys:           sync.Map{},
-	}
+	}, nil
 }
 
 func (m *MetadataManagerImpl) RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder) error {

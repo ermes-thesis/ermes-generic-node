@@ -105,7 +105,8 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather := metadataManager.NewMetadataManager(redisClient1, serverInfoFather, metadataFatherLog, fnCache)
+	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClient1, serverInfoFather, metadataFatherLog, fnCache)
+	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -135,7 +136,8 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
 	metadataChildLog := createNewLogger(t)
-	metadataManagerChild := metadataManager.NewMetadataManager(redisClient2, serverInfoChild, metadataChildLog, fnCache2)
+	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClient2, serverInfoChild, metadataChildLog, fnCache2)
+	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -228,7 +230,8 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
 	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCache)
+	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCache)
+	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -257,7 +260,8 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
 	metadataChildLog := createNewLogger(t)
-	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
+	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
+	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -341,7 +345,8 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
 	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCache)
+	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCache)
+	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -370,7 +375,8 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
 	metadataChildLog := createNewLogger(t)
-	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
+	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
+	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -461,7 +467,8 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
 	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCacheFather)
+	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCacheFather)
+	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -486,7 +493,8 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
 	metadataChildLog := createNewLogger(t)
-	metadataManagerChild := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
+	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
+	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -521,7 +529,8 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	fnCacheLocal := &caches_mock.FunctionCache{}
 
 	metadataLocalLog := createNewLogger(t)
-	metadataManagerLocal := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, metadataLocalLog, fnCacheLocal)
+	metadataManagerLocal, err := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, metadataLocalLog, fnCacheLocal)
+	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	metadata := model.Metadata{
 		Name:           "test",

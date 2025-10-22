@@ -77,7 +77,10 @@ func run(ctx context.Context, configPath string) error {
 	if err != nil {
 		return fmt.Errorf("error creating token decoder: %w", err)
 	}
-	metadataManager := metadataManager.NewMetadataManager(redisClient, serverInfo, generalLog.Component("metadata_manager"), funcCache)
+	metadataManager, err := metadataManager.NewMetadataManager(redisClient, serverInfo, generalLog.Component("metadata_manager"), funcCache)
+	if err != nil {
+		return fmt.Errorf("error creating metadata manager: %w", err)
+	}
 	err = metadataManager.RegisterRoutes(httpServer, tknDecoder)
 	if err != nil {
 		return fmt.Errorf("error registering metadata routes: %w", err)

@@ -31,9 +31,15 @@ type Scheduler interface {
 	Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqHostname string, reqBody []byte, groups []string, userId string, groupToken string, cumulativeLatency int) (*FunctionResult, uint64, error)
 }
 
+type fnResBody []byte
+
+func (f fnResBody) String() string {
+	return string(f)
+}
+
 type FunctionResult struct {
 	StatusCode int
-	Body       []byte
+	Body       fnResBody
 }
 
 type SchedulerImpl struct {
@@ -97,7 +103,11 @@ func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
 	for i := 0; i < retries; i++ {
 		found, collection, err = s.dataManager.GetCollectionsDiscoverer().IsCollectionLocallyPresent(colId, seqNum)
 		if err == nil {
-			s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection))
+			if collection != nil {
+				s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection))
+			} else {
+				s.log.Info("Collection found locally", "collection_id", colId, "seq_num", seqNum, "is_locally_present", found)
+			}
 			return found, collection, nil
 		}
 		s.log.Debug("Retry collection presence check", "collection_id", colId, "seq_num", seqNum, "current_attempt", i, "error", err)
@@ -105,8 +115,8 @@ func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
 			time.Sleep(delay)
 		}
 	}
-	s.log.Info("Collection not found locally after retries", "collection_id", colId, "seq_num", seqNum)
-	return found, collection, fmt.Errorf("after %d retries: %v", retries, err)
+	s.log.Warn("Sequential collection has not been updated within the time/retries limit", "collection_id", colId, "seq_num", seqNum)
+	return found, collection, fmt.Errorf("couldn't access an updated version of the collection after %d retries: %v", retries, err)
 }
 
 func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqHostname string, reqBody []byte, groups []string, userId string, groupToken string, cumulativeLatency int) (*FunctionResult, uint64, error) {

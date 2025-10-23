@@ -96,8 +96,8 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 	return serverInfo, nil
 }
 
-// StringifyInfo returns a pretty-formatted string of the input ServerInfo.
-func (i *ServerInfo) String() string {
+// PrettyString returns a pretty-formatted string of the input ServerInfo.
+func (i *ServerInfo) PrettyString() string {
 	var sb strings.Builder
 
 	sb.WriteString("HostName: " + i.HostName + "\n")

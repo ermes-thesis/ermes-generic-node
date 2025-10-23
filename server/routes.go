@@ -37,6 +37,6 @@ func (s *Server) handleRouteInfo() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		s.logger.Info("Received info request for the current node", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 		fmt.Fprintf(w, "Hello! Since you have requested it I will dump all of my info now\n")
-		fmt.Fprintf(w, "%s", s.ServerInfo)
+		fmt.Fprintf(w, "%s", s.ServerInfo.PrettyString())
 	}
 }

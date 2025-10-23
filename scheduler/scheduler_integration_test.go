@@ -33,7 +33,7 @@ func createNewLogger(t *testing.T) *logger.Logger {
 	log, err := logger.NewLogger(logger.Config{
 		Level:     zerolog.DebugLevel,
 		Format:    "text",
-		AddSource: false,
+		AddSource: true,
 	})
 	require.NoError(t, err)
 	return log

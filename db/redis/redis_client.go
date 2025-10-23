@@ -512,7 +512,7 @@ func (r *RedisClient) GetMetadata(collectionId string) (*model.Metadata, error) 
 
 	if len(res) == 0 {
 		r.log.Warn("GetMetadata: No metadata found for collection", "collection_id", collectionId)
-		return nil, nil
+		return nil, fmt.Errorf("no metadata found for collection %s", collectionId)
 	}
 	delete(res, "groupsSequence")
 
@@ -608,13 +608,54 @@ func (r *RedisClient) IsUniqueForOwner(collectionName string, owner string) (boo
 func (r *RedisClient) DeleteMetadata(collectionId string) error {
 	r.log.Info("DeleteMetadata called", "collection_id", collectionId)
 
-	err := r.client.Del(r.ctx, "meta:"+collectionId).Err()
-	if err != nil {
-		r.log.Error("DeleteMetadata: Failed to delete metadata", "collection_id", collectionId, "error", err)
+	metadataKey := "meta:" + collectionId
+
+	var name, owner string
+	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+		exists, err := tx.Exists(r.ctx, metadataKey).Result()
+		if err != nil {
+			r.log.Error("DeleteMetadata: Failed to check metadata key existence", "collection_id", collectionId, "error", err)
+			return err
+		}
+		if exists == 0 {
+			r.log.Warn("DeleteMetadata: Metadata key does not exist", "collection_id", collectionId)
+			return fmt.Errorf("metadata key does not exist")
+		}
+
+		nameOwner, err := tx.HMGet(r.ctx, metadataKey, "name", "owner").Result()
+		if err != nil {
+			r.log.Error("DeleteMetadata: Failed to get metadata", "collection_id", collectionId, "error", err)
+			return err
+		}
+
+		if slices.Contains(nameOwner, nil) {
+			r.log.Error("DeleteMetadata: Metadata have been alr", "collection_id", collectionId, "owner", owner)
+			return fmt.Errorf("metadata key has been already deleted")
+		}
+		name = nameOwner[0].(string)
+		owner = nameOwner[1].(string)
+
+		existenceKey := "exist:" + owner
+
+		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+			pipe.Del(r.ctx, metadataKey)
+			pipe.SRem(r.ctx, existenceKey, name)
+
+			return nil
+		})
+
+		return err
+	}, metadataKey)
+
+	if errors.Is(err, redis.TxFailedErr) {
+		r.log.Debug("DeleteMetadata: Transaction failed due to high concurrency", "collection_name", name, "owner", owner)
 		return err
 	}
 
-	r.log.Info("DeleteMetadata: Metadata deleted successfully", "collection_id", collectionId)
+	if err != nil {
+		r.log.Error("DeleteMetadata: Failed to check uniqueness", "collection_id", collectionId, "error", err)
+		return err
+	}
 	return nil
 }
 

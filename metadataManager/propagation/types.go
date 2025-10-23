@@ -35,6 +35,7 @@ type GroupMessage struct {
 
 const (
 	EndpointLookup              = "/pvt-lookup"
+	EndpointDeleteMetadata      = "/pvt-delete-metadata"
 	EndpointCreateMetadata      = "/pvt-create-metadata"
 	EndpointRequestUpdateGroups = "/pvt-request-update-groups"
 	EndpointPropagateGroups     = "/pvt-propagate-groups"

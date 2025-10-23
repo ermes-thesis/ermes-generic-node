@@ -25,6 +25,7 @@ type QueryTemplatesParamsMapping[T any] map[string]map[string]T
 
 type MetadataManager interface {
 	CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin propagation.PropagationOrigin) error
+	DeleteMetadata(collectionId string, geolocation string, reqOrigin propagation.PropagationOrigin) error
 	UpdateGroupsInCollection(collectionId string, userGroups []string, userId string, groupsToAdd []string, groupsToRemove []string) (*propagation.UpdateGroupResponse, error)
 	SetCollectionGroups(collectionId string, message propagation.UpdateGroupResponse) error
 	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, userId string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error)
@@ -37,6 +38,7 @@ type MetadataManagerImpl struct {
 	serverInfo                   *server.ServerInfo
 	queryPropagator              propagation.QueryPropagator
 	createMetadataPropagator     propagation.CreateMetadataPropagator
+	deleteMetadataPropagator     propagation.DeleteMetadataPropagator
 	groupUpdateRequestPropagator propagation.GroupUpdateRequestPropagator
 	updateGroupsPropagator       propagation.UpdateGroupsPropagator
 	customMetadataKeys           sync.Map
@@ -61,6 +63,7 @@ func NewMetadataManager(redis db.GenericDB, serverInfo *server.ServerInfo, log *
 		templateCache:                cache,
 		serverInfo:                   serverInfo,
 		createMetadataPropagator:     propagation.NewCreateMetadataPropagator(serverInfo, log),
+		deleteMetadataPropagator:     propagation.NewDeleteMetadataPropagator(serverInfo, log),
 		queryPropagator:              propagation.NewQueryPropagator(serverInfo, log),
 		groupUpdateRequestPropagator: propagation.NewGroupUpdateRequestPropagator(serverInfo, log),
 		updateGroupsPropagator:       propagation.NewUpdateGroupsPropagator(serverInfo, log),
@@ -80,6 +83,11 @@ func (m *MetadataManagerImpl) RegisterRoutes(server server.ServerType, tokenDeco
 	if err != nil {
 		m.log.Error("Failed to register custom routes", "path", "/pvt-create-metadata/{collection_id}", "error", err)
 		return fmt.Errorf("Error while registering /pvt-create-metadata/{collection_id} route: %v\n", err)
+	}
+	err = server.AddCustomRoute("/pvt-delete-metadata/{collection_id}", true, m.handleRouteDeleteMetadata())
+	if err != nil {
+		m.log.Error("Failed to register custom routes", "path", "/pvt-delete-metadata/{collection_id}", "error", err)
+		return fmt.Errorf("Error while registering /pvt-delete-metadata/{collection_id} route: %v\n", err)
 	}
 	err = server.AddCustomRoute("/pvt-request-update-group/{collection_id}", true, m.handleRouteRequestUpdateGroups())
 	if err != nil {
@@ -128,6 +136,28 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model
 	}
 
 	m.log.Info("Metadata propagation completed", "collection_id", collectionId)
+	return nil
+}
+
+func (m *MetadataManagerImpl) DeleteMetadata(collectionId string, geolocation string, reqOrigin propagation.PropagationOrigin) error {
+	m.log.Info("Deleting metadata", "collection_id", collectionId)
+
+	if strings.HasPrefix(geolocation, m.serverInfo.MetadataDomain) {
+		err := m.redis.DeleteMetadata(collectionId)
+		if err != nil {
+			m.log.Error("Error deleting metadata in Redis", "collection_id", collectionId, "geolocation", geolocation, "error", err)
+			return err
+		}
+		m.log.Info("Metadata deleted locally successfully", "collection_id", collectionId)
+	}
+
+	err := m.deleteMetadataPropagator.Propagate(collectionId, geolocation, reqOrigin)
+	if err != nil {
+		m.log.Error("Error propagating metadata deletion", "collection_id", collectionId, "origin", reqOrigin, "metadata_geolocation", geolocation, "error", err)
+		return err
+	}
+
+	m.log.Info("Metadata deletion propagation completed", "collection_id", collectionId)
 	return nil
 }
 

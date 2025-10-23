@@ -135,7 +135,7 @@ func TestMetadata(t *testing.T) {
 	require.NoError(t, err, "Expected no error deleting metadata")
 
 	retrievedMetadata, err = redisClient.GetMetadata(collectionId)
-	require.NoError(t, err, "Expected no error getting all metadata after deletion")
+	require.Error(t, err, "Expected error getting metadata after deletion")
 	require.Nil(t, retrievedMetadata, "Expected no metadata after deletion")
 }
 

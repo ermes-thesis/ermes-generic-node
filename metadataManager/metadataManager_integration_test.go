@@ -918,7 +918,7 @@ func TestMetadataDeletionFromLocalIntegration(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when getting metadata from local")
 	assert.Equal(t, metadata, *metaLocal, "Expected metadata to match")
 
-	err = metadataManagerLocal.DeleteMetadata("12345678", metadata.Geolocation, propagation.FROM_LOCAL)
+	err = metadataManagerLocal.DeleteMetadata("12345678", metadata.Geolocation, propagation.FROM_LOCAL, false)
 	assert.NoError(t, err, "Expected no error when creating metadata from local")
 
 	// Verify that the metadata was deleted in both father and child
@@ -960,7 +960,7 @@ func TestMetadataDeletionFromLocalIntegration(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when getting metadata from local")
 	assert.Equal(t, metadata2, *metaLocal2, "Expected metadata to match")
 
-	err = metadataManagerLocal.DeleteMetadata("test2", metadata2.Geolocation, propagation.FROM_LOCAL)
+	err = metadataManagerLocal.DeleteMetadata("test2", metadata2.Geolocation, propagation.FROM_LOCAL, false)
 	assert.NoError(t, err, "Expected no error when creating metadata from local")
 
 	// Verify that the metadata was deleted in both father and child

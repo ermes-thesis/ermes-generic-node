@@ -12,6 +12,7 @@ func (m *MetadataManagerImpl) handleRouteDeleteMetadata() http.HandlerFunc {
 		defer r.Body.Close()
 		collectionId := r.PathValue("collection_id")
 		reqMetadataDomain := r.Header.Get("X-ERMES-METADATA-DOMAIN")
+		isCollRecreated := r.Header.Get("X-ERMES-COLLECTION-RECREATED") == "true"
 
 		m.log.Info("Received metadata deletion request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "node_geolocation", m.serverInfo.MetadataDomain)
 		m.log.Debug("Received metadata deletion request", "collection_id", collectionId, "previous_node_geolocation", reqMetadataDomain)
@@ -33,7 +34,7 @@ func (m *MetadataManagerImpl) handleRouteDeleteMetadata() http.HandlerFunc {
 
 		m.log.Debug("Request body decoded successfully", "collection_id", collectionId, "metadata_geolocation", geolocation, "request_origin", reqOrigin, "previous_node_geolocation", reqMetadataDomain)
 
-		err = m.DeleteMetadata(collectionId, geolocation, reqOrigin)
+		err = m.DeleteMetadata(collectionId, geolocation, reqOrigin, isCollRecreated)
 		if err != nil {
 			m.log.Error("Failed to delete metadata", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_id", collectionId, "metadata_geolocation", geolocation, "request_origin", reqOrigin, "error", err)
 			http.Error(w, fmt.Sprintf("Internal Server Error: failed to create metadata"), http.StatusInternalServerError)

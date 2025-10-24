@@ -10,8 +10,10 @@ import (
 
 func (h *HostFunctions) RegisterWasmedgeHostFns(pool *wasm.WasmedgeExecutorPool) error {
 	h.logger.Info("Starting registration of Wasmedge host functions")
-	fnOneParamOneReturnType := wasmedge.NewFunctionType(
-		[]*wasmedge.ValType{wasmedge.NewValTypeI32(), wasmedge.NewValTypeI32()},
+	// It's called two params but the 2nd parm is only a single Int32 since it is a boolean value, therefore we
+	// don't need to pass also its length
+	fnTwoParamOneReturnType := wasmedge.NewFunctionType(
+		[]*wasmedge.ValType{wasmedge.NewValTypeI32(), wasmedge.NewValTypeI32(), wasmedge.NewValTypeI32()},
 		[]*wasmedge.ValType{wasmedge.NewValTypeI32()},
 	)
 	fnFourParamOneReturnType := wasmedge.NewFunctionType(
@@ -30,12 +32,12 @@ func (h *HostFunctions) RegisterWasmedgeHostFns(pool *wasm.WasmedgeExecutorPool)
 		"hostMultipleGet": wasmedge.NewFunction(fnFourParamOneReturnType, func(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, wasmedge.Result) {
 			return createWasmedgeResult(h.hostMultipleGet(createWasmedgeAdapter(callframe), params[0].(int32), params[1].(int32), params[2].(int32), params[3].(int32), params[4].(int32), params[5].(int32), params[6].(int32), params[7].(int32)))
 		}, nil, 0),
-		"hostCreateCollection": wasmedge.NewFunction(fnOneParamOneReturnType, func(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, wasmedge.Result) {
-			return createWasmedgeResult(h.hostCreateCollection(createWasmedgeAdapter(callframe), params[0].(int32), params[1].(int32)))
+		"hostCreateCollection": wasmedge.NewFunction(fnTwoParamOneReturnType, func(data any, callframe *wasmedge.CallingFrame, params []any) ([]any, wasmedge.Result) {
+			return createWasmedgeResult(h.hostCreateCollection(createWasmedgeAdapter(callframe), params[0].(int32), params[1].(int32), params[2].(int32)))
 		}, nil, 0),
 	}
 	// If the function object is not added into a module instance object, it should be released.
-	fnOneParamOneReturnType.Release()
+	fnTwoParamOneReturnType.Release()
 	fnFourParamOneReturnType.Release()
 
 	err := pool.RegisterHostFns(fns)

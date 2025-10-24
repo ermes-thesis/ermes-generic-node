@@ -156,7 +156,7 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the deletion operation fails
-	DeleteMetadata(collectionId string) error
+	DeleteMetadata(collectionId string, deleteExistenceRecord bool) error
 
 	// AddGroupsToMetadata add the specified members to a collection's group access list.
 	// Duplicate members are silently ignored. If no members are provided, the operation

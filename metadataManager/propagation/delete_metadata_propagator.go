@@ -6,11 +6,12 @@ import (
 	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"net/http"
 	"server"
+	"strconv"
 	"strings"
 )
 
 type DeleteMetadataPropagator interface {
-	Propagate(collectionId string, geolocation string, reqOrigin PropagationOrigin) error
+	Propagate(collectionId string, geolocation string, reqOrigin PropagationOrigin, isCollRecreated bool) error
 }
 
 type DeleteMetadataPropagatorImpl struct {
@@ -27,7 +28,7 @@ func NewDeleteMetadataPropagator(serverInfo *server.ServerInfo, log *logger.Logg
 	}
 }
 
-func (p *DeleteMetadataPropagatorImpl) Propagate(collectionId string, geolocation string, reqOrigin PropagationOrigin) error {
+func (p *DeleteMetadataPropagatorImpl) Propagate(collectionId string, geolocation string, reqOrigin PropagationOrigin, isCollRecreated bool) error {
 	p.log.Info("Starting propagation of metadata deletion", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain)
 	p.log.Debug("Starting propagation of metadata deletion", "metadata_geolocation", geolocation, "request_origin", reqOrigin)
 
@@ -37,7 +38,7 @@ func (p *DeleteMetadataPropagatorImpl) Propagate(collectionId string, geolocatio
 		for _, child := range p.serverInfo.Children {
 			if strings.HasPrefix(geolocation, child.MetadataDomain) {
 				p.log.Info("Forwarding metadata deletion to child", "collection_id", collectionId, "child_hostname", child.HostName, "child_geolocation", child.MetadataDomain)
-				err := p.sendHttpReqToDest(child.HostName, collectionId, geolocation)
+				err := p.sendHttpReqToDest(child.HostName, collectionId, geolocation, isCollRecreated)
 				if err != nil {
 					p.log.Error("Failed to propagate metadata deletion to child", "collection_id", collectionId, "metadata_geolocation", geolocation, "request_origin", reqOrigin, "node_geolocation", p.serverInfo.MetadataDomain, "child_geolocation", child.MetadataDomain, "child_hostname", child.HostName, "error", err)
 					return err
@@ -49,7 +50,7 @@ func (p *DeleteMetadataPropagatorImpl) Propagate(collectionId string, geolocatio
 		p.log.Debug("Propagation origin: FROM_CHILD", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_father", fmt.Sprintf("%+v", p.serverInfo.Father))
 		if p.serverInfo.Father != nil {
 			p.log.Info("Forwarding metadata deletion to father", "collection_id", collectionId, "father_hostname", p.serverInfo.Father.HostName, "father_geolocation", p.serverInfo.Father.MetadataDomain)
-			err := p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, geolocation)
+			err := p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, geolocation, isCollRecreated)
 			if err != nil {
 				p.log.Error("Failed to propagate metadata deletion to father", "collection_id", collectionId, "metadata_geolocation", geolocation, "request_origin", reqOrigin, "node_geolocation", p.serverInfo.MetadataDomain, "father_geolocation", p.serverInfo.Father.MetadataDomain, "father_hostname", p.serverInfo.Father.HostName, "error", err)
 				return err
@@ -59,7 +60,7 @@ func (p *DeleteMetadataPropagatorImpl) Propagate(collectionId string, geolocatio
 		p.log.Debug("Propagation origin: FROM_LOCAL", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_children", fmt.Sprintf("%+v", p.serverInfo.Children), "node_father", fmt.Sprintf("%+v", p.serverInfo.Father))
 		if p.serverInfo.Father != nil {
 			p.log.Info("Forwarding metadata deletion to father", "collection_id", collectionId, "father_hostname", p.serverInfo.Father.HostName, "father_geolocation", p.serverInfo.Father.MetadataDomain)
-			err := p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, geolocation)
+			err := p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, geolocation, isCollRecreated)
 			if err != nil {
 				p.log.Error("Failed to propagate metadata deletion to father", "collection_id", collectionId, "metadata_geolocation", geolocation, "request_origin", reqOrigin, "node_geolocation", p.serverInfo.MetadataDomain, "father_geolocation", p.serverInfo.Father.MetadataDomain, "father_hostname", p.serverInfo.Father.HostName, "error", err)
 				return err
@@ -69,7 +70,7 @@ func (p *DeleteMetadataPropagatorImpl) Propagate(collectionId string, geolocatio
 		for _, child := range p.serverInfo.Children {
 			if strings.HasPrefix(geolocation, child.MetadataDomain) {
 				p.log.Info("Forwarding metadata deletion to child", "collection_id", collectionId, "child_hostname", child.HostName, "child_geolocation", child.MetadataDomain)
-				err := p.sendHttpReqToDest(child.HostName, collectionId, geolocation)
+				err := p.sendHttpReqToDest(child.HostName, collectionId, geolocation, isCollRecreated)
 				if err != nil {
 					p.log.Error("Failed to propagate metadata deletion to child", "collection_id", collectionId, "metadata_geolocation", geolocation, "request_origin", reqOrigin, "node_geolocation", p.serverInfo.MetadataDomain, "child_geolocation", child.MetadataDomain, "child_hostname", child.HostName, "error", err)
 					return err
@@ -82,7 +83,7 @@ func (p *DeleteMetadataPropagatorImpl) Propagate(collectionId string, geolocatio
 	return nil
 }
 
-func (p *DeleteMetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, geolocation string) error {
+func (p *DeleteMetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, geolocation string, isCollRecreated bool) error {
 	p.log.Debug("Creating HTTP request for metadata deletion propagation", "collection_id", collectionId, "destination", dest, "metadata_geolocation", geolocation)
 
 	req, err := p.httpHelper.CreateBasicPvtHttpRequest(http.MethodDelete, dest, EndpointDeleteMetadata, collectionId, geolocation)
@@ -91,6 +92,7 @@ func (p *DeleteMetadataPropagatorImpl) sendHttpReqToDest(dest string, collection
 		return err
 	}
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", p.serverInfo.MetadataDomain)
+	req.Header.Set("X-ERMES-COLLECTION-RECREATED", strconv.FormatBool(isCollRecreated))
 
 	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {

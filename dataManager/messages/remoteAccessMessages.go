@@ -141,11 +141,12 @@ type CollectionGroupUpdateMessages []CollectionGroupUpdateMessage
 // collection management
 
 type NewCollectionMessage struct {
-	CollectionId    string `json:"collectionId"`
-	CollectionName  string `json:"collectionName"`
-	CollectionOwner string `json:"collectionOwner"`
-	IsStrong        bool   `json:"isStrong"`
-	SenderIp        string `json:"senderIp"`
+	CollectionId        string `json:"collectionId"`
+	CollectionName      string `json:"collectionName"`
+	CollectionOwner     string `json:"collectionOwner"`
+	IsStrong            bool   `json:"isStrong"`
+	SenderIp            string `json:"senderIp"`
+	SkipUniquenessCheck bool   `json:"skipUniquenessCheck"`
 }
 
 type RemoveCollectionMessage struct {

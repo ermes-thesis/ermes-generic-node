@@ -131,7 +131,7 @@ func (h *HostFunctions) hostMultipleGet(wasmComponent adapter.WasmRuntimeAdapter
 	return ret
 }
 
-func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAdapter, metadataPointer int32, metadataLength int32) int32 {
+func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAdapter, metadataPointer, metadataLength, skipUniquenessCheck int32) int32 {
 	h.logger.Debug("HostCreateCollection called")
 
 	var metadata model.Metadata
@@ -140,6 +140,8 @@ func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAd
 		h.logger.Error("Error getting collection's metadata", "metadata_ptr", metadataPointer, "metadata_length", metadataLength, "error", err)
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
+
+	skipUniquenessCheckBool := skipUniquenessCheck != 0
 
 	groups := make([]any, len(metadata.Groups))
 	for i, v := range metadata.Groups {
@@ -152,7 +154,7 @@ func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAd
 
 	h.logger.Debugf("HostCreateCollection generated collectionId=%s", collectionId)
 
-	err = h.dataManager.SetCollectionAndPropagate(collectionId, metadata.Name, make(map[string]string), metadata.Groups, metadata.Owner, metadata.Consistency == model.SequentialConsistent)
+	err = h.dataManager.SetCollectionAndPropagate(collectionId, metadata.Name, make(map[string]string), metadata.Groups, metadata.Owner, metadata.Consistency == model.SequentialConsistent, skipUniquenessCheckBool)
 	if err != nil {
 		h.logger.Debug("HostCreateCollection error creating collection", "metadata", fmt.Sprintf("%+v", metadata), "error", err)
 		return wasmComponent.WriteError(model.RedisError, err)

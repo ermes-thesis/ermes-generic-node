@@ -204,16 +204,18 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 				return
 			}
 		} else {
-			ok, err := c.dbInterface.IsUniqueForOwner(msg.CollectionName, msg.CollectionOwner)
-			if err != nil {
-				c.log.Error("HTTP-REQ: Error checking if collection is unique")
-				http.Error(w, fmt.Sprintf("Error checking if collection is unique: %v", err), http.StatusInternalServerError)
-				return
-			}
-			if !ok {
-				c.log.Error("HTTP-REQ: Error checking if collection is unique")
-				http.Error(w, fmt.Sprintf("Cannot create collection, since another one with the same name already exists: %v", err), http.StatusConflict)
-				return
+			if !msg.SkipUniquenessCheck {
+				ok, err := c.dbInterface.IsUniqueForOwner(msg.CollectionName, msg.CollectionOwner)
+				if err != nil {
+					c.log.Error("HTTP-REQ: Error checking if collection is unique")
+					http.Error(w, fmt.Sprintf("Error checking if collection is unique: %v", err), http.StatusInternalServerError)
+					return
+				}
+				if !ok {
+					c.log.Error("HTTP-REQ: Error checking if collection is unique")
+					http.Error(w, fmt.Sprintf("Cannot create collection, since another one with the same name already exists: %v", err), http.StatusConflict)
+					return
+				}
 			}
 		}
 

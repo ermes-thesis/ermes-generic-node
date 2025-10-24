@@ -605,57 +605,68 @@ func (r *RedisClient) IsUniqueForOwner(collectionName string, owner string) (boo
 	return false, errors.New("transaction retries exhausted")
 }
 
-func (r *RedisClient) DeleteMetadata(collectionId string) error {
-	r.log.Info("DeleteMetadata called", "collection_id", collectionId)
+func (r *RedisClient) DeleteMetadata(collectionId string, deleteExistenceRecord bool) error {
+	r.log.Info("DeleteMetadata called", "collection_id", collectionId, "delete_existence_record", deleteExistenceRecord)
 
 	metadataKey := "meta:" + collectionId
 
 	var name, owner string
-	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
-		exists, err := tx.Exists(r.ctx, metadataKey).Result()
-		if err != nil {
-			r.log.Error("DeleteMetadata: Failed to check metadata key existence", "collection_id", collectionId, "error", err)
+	if deleteExistenceRecord {
+		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
+			exists, err := tx.Exists(r.ctx, metadataKey).Result()
+			if err != nil {
+				r.log.Error("DeleteMetadata: Failed to check metadata key existence", "collection_id", collectionId, "delete_existence_record", deleteExistenceRecord, "error", err)
+				return err
+			}
+			if exists == 0 {
+				r.log.Warn("DeleteMetadata: Metadata key does not exist", "collection_id", collectionId)
+				return fmt.Errorf("metadata key does not exist")
+			}
+
+			nameOwner, err := tx.HMGet(r.ctx, metadataKey, "name", "owner").Result()
+			if err != nil {
+				r.log.Error("DeleteMetadata: Failed to get metadata", "collection_id", collectionId, "delete_existence_record", deleteExistenceRecord, "error", err)
+				return err
+			}
+
+			if slices.Contains(nameOwner, nil) {
+				r.log.Error("DeleteMetadata: Metadata have been already deleted", "collection_id", collectionId, "delete_existence_record", deleteExistenceRecord, "owner", owner)
+				return fmt.Errorf("metadata key has been already deleted")
+			}
+			name = nameOwner[0].(string)
+			owner = nameOwner[1].(string)
+
+			existenceKey := "exist:" + owner
+
+			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+				pipe.Del(r.ctx, metadataKey)
+				pipe.SRem(r.ctx, existenceKey, name)
+
+				return nil
+			})
+
+			return err
+		}, metadataKey)
+
+		if errors.Is(err, redis.TxFailedErr) {
+			r.log.Debug("DeleteMetadata: Transaction failed due to high concurrency", "collection_name", name, "owner", owner)
 			return err
 		}
-		if exists == 0 {
-			r.log.Warn("DeleteMetadata: Metadata key does not exist", "collection_id", collectionId)
-			return fmt.Errorf("metadata key does not exist")
-		}
 
-		nameOwner, err := tx.HMGet(r.ctx, metadataKey, "name", "owner").Result()
 		if err != nil {
-			r.log.Error("DeleteMetadata: Failed to get metadata", "collection_id", collectionId, "error", err)
+			r.log.Error("DeleteMetadata: Failed to check uniqueness", "collection_id", collectionId, "delete_existence_record", deleteExistenceRecord, "error", err)
 			return err
 		}
-
-		if slices.Contains(nameOwner, nil) {
-			r.log.Error("DeleteMetadata: Metadata have been alr", "collection_id", collectionId, "owner", owner)
-			return fmt.Errorf("metadata key has been already deleted")
-		}
-		name = nameOwner[0].(string)
-		owner = nameOwner[1].(string)
-
-		existenceKey := "exist:" + owner
-
-		_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
-			pipe.Del(r.ctx, metadataKey)
-			pipe.SRem(r.ctx, existenceKey, name)
-
-			return nil
-		})
-
-		return err
-	}, metadataKey)
-
-	if errors.Is(err, redis.TxFailedErr) {
-		r.log.Debug("DeleteMetadata: Transaction failed due to high concurrency", "collection_name", name, "owner", owner)
-		return err
+		return nil
 	}
 
+	err := r.client.Del(r.ctx, metadataKey).Err()
 	if err != nil {
-		r.log.Error("DeleteMetadata: Failed to check uniqueness", "collection_id", collectionId, "error", err)
+		r.log.Error("DeleteMetadata: Failed to delete metadata", "collection_id", collectionId, "delete_existence_record", deleteExistenceRecord, "error", err)
 		return err
 	}
+
+	r.log.Info("DeleteMetadata: Metadata deleted successfully", "collection_id", collectionId)
 	return nil
 }
 

@@ -23,7 +23,7 @@ type CollectionsDiscoverer interface {
 
 	UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdateMessage, groups []string, userId string, isInitiator bool, ignoredHostName string) error
 	UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdateMessage, isInitiator bool, ignoredHostName string) error
-	SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]string, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong bool) error
+	SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]string, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong, skipUniquenessCheck bool) error
 	RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, userId string, isInitiator bool, ignoredHostName string) error
 }
 
@@ -314,7 +314,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 	return nil
 }
 
-func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]string, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong bool) error {
+func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]string, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong bool, skipUniquenessCheck bool) error {
 	//sync
 	c.collectionsPartialView.Mutex.Lock()
 	defer c.collectionsPartialView.Mutex.Unlock()
@@ -329,25 +329,28 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 	//propagate update to father
 	if c.serverInfo.Father != nil {
 		newCollectionMessage := messages.NewCollectionMessage{
-			CollectionId:    collectionId,
-			CollectionName:  collectionName,
-			CollectionOwner: userId,
-			IsStrong:        isStrong,
-			SenderIp:        c.serverInfo.HostName,
+			CollectionId:        collectionId,
+			CollectionName:      collectionName,
+			CollectionOwner:     userId,
+			IsStrong:            isStrong,
+			SenderIp:            c.serverInfo.HostName,
+			SkipUniquenessCheck: skipUniquenessCheck,
 		}
 		err := c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, newCollectionMessage)
 		if err != nil {
 			return err
 		}
 	} else {
-		ok, err := c.dbInterface.IsUniqueForOwner(collectionName, userId)
-		if err != nil {
-			c.log.Error("HTTP-REQ: Error checking if collection is unique")
-			return err
-		}
-		if !ok {
-			c.log.Error("HTTP-REQ: Error checking if collection is unique")
-			return errors.New("tried to create collection that already exists")
+		if !skipUniquenessCheck {
+			ok, err := c.dbInterface.IsUniqueForOwner(collectionName, userId)
+			if err != nil {
+				c.log.Error("HTTP-REQ: Error checking if collection is unique")
+				return err
+			}
+			if !ok {
+				c.log.Error("HTTP-REQ: Error checking if collection is unique")
+				return errors.New("tried to create collection that already exists")
+			}
 		}
 	}
 

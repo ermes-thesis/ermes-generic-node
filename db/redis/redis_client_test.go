@@ -131,7 +131,7 @@ func TestMetadata(t *testing.T) {
 	require.Equal(t, metadata.Name, retrievedMetadata.Name, "Expected name to match")
 	require.Equal(t, metadata, *retrievedMetadata, "Expected metadata to match")
 
-	err = redisClient.DeleteMetadata(collectionId)
+	err = redisClient.DeleteMetadata(collectionId, false)
 	require.NoError(t, err, "Expected no error deleting metadata")
 
 	retrievedMetadata, err = redisClient.GetMetadata(collectionId)

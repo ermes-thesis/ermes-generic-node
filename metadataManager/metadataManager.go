@@ -25,7 +25,7 @@ type QueryTemplatesParamsMapping[T any] map[string]map[string]T
 
 type MetadataManager interface {
 	CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin propagation.PropagationOrigin) error
-	DeleteMetadata(collectionId string, geolocation string, reqOrigin propagation.PropagationOrigin) error
+	DeleteMetadata(collectionId string, geolocation string, reqOrigin propagation.PropagationOrigin, isCollRecreated bool) error
 	UpdateGroupsInCollection(collectionId string, userGroups []string, userId string, groupsToAdd []string, groupsToRemove []string) (*propagation.UpdateGroupResponse, error)
 	SetCollectionGroups(collectionId string, message propagation.UpdateGroupResponse) error
 	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, userId string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error)
@@ -139,11 +139,11 @@ func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model
 	return nil
 }
 
-func (m *MetadataManagerImpl) DeleteMetadata(collectionId string, geolocation string, reqOrigin propagation.PropagationOrigin) error {
+func (m *MetadataManagerImpl) DeleteMetadata(collectionId string, geolocation string, reqOrigin propagation.PropagationOrigin, isCollRecreated bool) error {
 	m.log.Info("Deleting metadata", "collection_id", collectionId)
 
 	if strings.HasPrefix(geolocation, m.serverInfo.MetadataDomain) {
-		err := m.redis.DeleteMetadata(collectionId)
+		err := m.redis.DeleteMetadata(collectionId, !isCollRecreated)
 		if err != nil {
 			m.log.Error("Error deleting metadata in Redis", "collection_id", collectionId, "geolocation", geolocation, "error", err)
 			return err
@@ -151,7 +151,7 @@ func (m *MetadataManagerImpl) DeleteMetadata(collectionId string, geolocation st
 		m.log.Info("Metadata deleted locally successfully", "collection_id", collectionId)
 	}
 
-	err := m.deleteMetadataPropagator.Propagate(collectionId, geolocation, reqOrigin)
+	err := m.deleteMetadataPropagator.Propagate(collectionId, geolocation, reqOrigin, isCollRecreated)
 	if err != nil {
 		m.log.Error("Error propagating metadata deletion", "collection_id", collectionId, "origin", reqOrigin, "metadata_geolocation", geolocation, "error", err)
 		return err

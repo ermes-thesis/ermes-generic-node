@@ -19,8 +19,8 @@ func (h *HostFunctions) RegisterWazeroHostFns(pool *wasm.WazeroExecutorPool) err
 		"hostMultipleGet": func(ctx context.Context, m api.Module, collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength, userIdPtr, userIdLength int32) int32 {
 			return h.hostMultipleGet(createWazeroAdapter(m), collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength, userIdPtr, userIdLength)
 		},
-		"hostCreateCollection": func(ctx context.Context, m api.Module, metadataPointer, metadataLength int32) int32 {
-			return h.hostCreateCollection(createWazeroAdapter(m), metadataPointer, metadataLength)
+		"hostCreateCollection": func(ctx context.Context, m api.Module, metadataPointer, metadataLength, skipUniquenessCheck int32) int32 {
+			return h.hostCreateCollection(createWazeroAdapter(m), metadataPointer, metadataLength, skipUniquenessCheck)
 		},
 	}
 

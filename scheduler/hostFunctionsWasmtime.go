@@ -18,8 +18,8 @@ func (h *HostFunctions) RegisterWasmtimeHostFns(pool *wasm.WasmtimeExecutorPool)
 		"hostMultipleGet": func(collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength, userIdPtr, userIdLength int32, caller *wasmtime.Caller) int32 {
 			return h.hostMultipleGet(createWasmtimeAdapter(caller), collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength, userIdPtr, userIdLength)
 		},
-		"hostCreateCollection": func(metadataPointer int32, metadataLength int32, caller *wasmtime.Caller) int32 {
-			return h.hostCreateCollection(createWasmtimeAdapter(caller), metadataPointer, metadataLength)
+		"hostCreateCollection": func(metadataPointer, metadataLength, skipUniquenessCheck int32, caller *wasmtime.Caller) int32 {
+			return h.hostCreateCollection(createWasmtimeAdapter(caller), metadataPointer, metadataLength, skipUniquenessCheck)
 		},
 	}
 

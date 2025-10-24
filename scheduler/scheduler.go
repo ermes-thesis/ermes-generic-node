@@ -12,6 +12,7 @@ import (
 	"io"
 	"math"
 	"metadataManager"
+	"metadataManager/propagation"
 	"metadataManager/types"
 	"net/http"
 	"server"
@@ -361,12 +362,20 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 			}
 
 			if update.Deleted {
-				s.log.Debug("Sequential collection requested deletion in executed function", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
+				// TODO: Capire se è worth farla asincronamente (DeleteMetadata)
+				s.log.Debug("Requested deletion for sequential collection in executed function", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
+				err = s.metadataManager.DeleteMetadata(sequentialCollId, update.Geolocation, propagation.FROM_LOCAL, update.Recreated)
+				if err != nil {
+					s.log.Error("Failed to delete sequential collection metadata", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "request_hostname", reqHostname, "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "is_coll_recreated", update.Recreated, "error", err)
+					return nil, 0, fmt.Errorf("error deleting sequential collection metadata: %v", err)
+				}
+
 				err = s.dataManager.RemoveCollectionAndPropagate(sequentialCollId, groups, userId)
 				if err != nil {
 					s.log.Error("Failed to remove sequential collection", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "request_hostname", reqHostname, "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "error", err)
 					return nil, 0, fmt.Errorf("error removing sequential collection: %v", err)
 				}
+
 			} else {
 				var recordNames []string
 				var recordValues []string
@@ -460,6 +469,14 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 			if update.Deleted {
 				go func(collId string) {
 					routinePrefix := fmt.Sprintf("GO#%s", xid.New().String())
+
+					// TODO: Capire se è worth farla asincronamente (DeleteMetadata)
+					s.log.Debug("Requested deletion for sequential collection in executed function", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
+					err = s.metadataManager.DeleteMetadata(sequentialCollId, update.Geolocation, propagation.FROM_LOCAL, update.Recreated)
+					if err != nil {
+						s.log.Error("Failed to delete sequential collection metadata", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "request_hostname", reqHostname, "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "is_coll_recreated", update.Recreated, "error", err)
+					}
+
 					err := s.dataManager.RemoveCollectionAndPropagate(collId, groups, userId)
 					if err != nil {
 						s.log.ErrorfWith("[%s] Failed to delete or propagate the deletion of collection", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collection_id", collId, "update", fmt.Sprintf("%+v", update), "error", err)

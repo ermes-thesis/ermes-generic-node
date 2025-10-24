@@ -158,28 +158,6 @@ type GenericDB interface {
 	//	- error: non-nil if the deletion operation fails
 	DeleteMetadata(collectionId string, deleteExistenceRecord bool) error
 
-	// AddGroupsToMetadata add the specified members to a collection's group access list.
-	// Duplicate members are silently ignored. If no members are provided, the operation
-	// succeeds with no effect.
-	//
-	// Parameters:
-	//	- collectionId: the unique identifier of the collection
-	//	- groups: variable number of group names to add
-	//
-	// Returns:
-	//	- error: non-nil if the operation fails
-	AddGroupsToMetadata(collectionId string, members ...string) ([]string, uint64, error)
-	// RemoveGroupsFromMetadata removes the specified groups from a collection's group access list.
-	// Non-existent groups are silently ignored. If no members are provided,
-	// the operation succeeds with no effect.
-	//
-	// Parameters:
-	//	- collectionId: the unique identifier of the collection
-	//	- groups: variable number of group names to remove
-	//
-	// Returns:
-	//	- error: non-nil if the operation fails
-	RemoveGroupsFromMetadata(collectionId string, groups ...string) ([]string, uint64, error)
 	UpdateGroupsInMetadata(collectionId string, groupsToAdd []string, groupsToRemove []string) ([]string, uint64, error)
 
 	SetGroupsInMetadata(collectionId string, sequenceGroups uint64, groups ...string) error

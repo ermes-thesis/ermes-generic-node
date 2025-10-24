@@ -161,7 +161,7 @@ func TestGroup(t *testing.T) {
 	})
 	require.NoError(t, err, "Expected no error setting collection")
 
-	groups, groupsSequence, err := redisClient.AddGroupsToMetadata(collectionId, members...)
+	groups, groupsSequence, err := redisClient.UpdateGroupsInMetadata(collectionId, members, []string{})
 	require.NoError(t, err, "Expected no error adding group members")
 	require.Equal(t, members, groups, "Expected group members to match")
 	require.Equal(t, uint64(1), groupsSequence, "Expected group sequence to be 1 after first addition")
@@ -177,7 +177,7 @@ func TestGroup(t *testing.T) {
 	require.NoError(t, err, "Expected no error checking group membership")
 	require.True(t, isInGroup, "Expected member1 to be in group")
 
-	groups, groupsSequence, err = redisClient.RemoveGroupsFromMetadata(collectionId, "member1")
+	groups, groupsSequence, err = redisClient.UpdateGroupsInMetadata(collectionId, []string{}, []string{"member1"})
 	require.NoError(t, err, "Expected no error removing group member")
 	require.Equal(t, []string{"member2"}, groups, "Expected remaining group members to match")
 	require.Equal(t, uint64(2), groupsSequence, "Expected group sequence to be 2 after removal")

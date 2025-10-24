@@ -319,8 +319,6 @@ func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*FunctionB
 			return fetchedBundle, nil
 		}
 
-		// TODO: Check if it's correct to refresh latest version even with err != nil
-		// TODO: Complete the logging
 		// refresh latest cache
 		f.LatestVersions.Set(functionName, cachedVersion)
 		return bundle, err

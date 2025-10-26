@@ -14,6 +14,9 @@ def generate_node_configs(input_file, output_dir):
     # Build a dictionary: domain -> node data
     domain_map = {n["domain"]: n for n in nodes}
 
+    # All domains list
+    all_domains = sorted([n["domain"] for n in nodes])
+
     # Identify the cloud node
     cloud_nodes = [n for n in nodes if n.get("is_cloud", False)]
     if not cloud_nodes:
@@ -71,7 +74,8 @@ def generate_node_configs(input_file, output_dir):
             },
             "hierarchy": {
                 "cloud": cloud,
-                "children": children
+                "children": children,
+                "existingDomains": all_domains
             },
         }
 

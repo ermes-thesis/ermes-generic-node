@@ -77,9 +77,10 @@ type SchedulerConfig struct {
 }
 
 type HierarchyConfig struct {
-	Father   *HierarchyNodeConfig  `yaml:"father,omitempty"`
-	Cloud    *HierarchyNodeConfig  `yaml:"cloud,omitempty"`
-	Children []HierarchyNodeConfig `yaml:"children"`
+	Father          *HierarchyNodeConfig  `yaml:"father,omitempty"`
+	Cloud           *HierarchyNodeConfig  `yaml:"cloud,omitempty"`
+	Children        []HierarchyNodeConfig `yaml:"children"`
+	ExistingDomains []string              `yaml:"existingDomains"`
 }
 
 type HierarchyNodeConfig struct {

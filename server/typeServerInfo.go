@@ -33,6 +33,8 @@ type ServerInfo struct {
 
 	CloudNode *Node
 
+	ExistingDomains map[string]struct{}
+
 	// Address:port of the Group Token Provider
 	GroupTokenProviderHostName string
 }
@@ -80,6 +82,11 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 		}
 	}
 
+	var existingDomains = make(map[string]struct{})
+	for _, d := range config.Hierarchy.ExistingDomains {
+		existingDomains[d] = struct{}{}
+	}
+
 	serverInfo := &ServerInfo{
 		HostName:                   hostname,
 		Address:                    address,
@@ -90,6 +97,7 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 		CloudNode:                  cloudNode,
 		Father:                     father,
 		Children:                   children,
+		ExistingDomains:            existingDomains,
 		GroupTokenProviderHostName: config.Scheduler.GroupTokenProviderAddress + ":" + config.Scheduler.GroupTokenProviderPort,
 	}
 
@@ -125,6 +133,13 @@ func (i *ServerInfo) PrettyString() string {
 		sb.WriteString("CloudNodeDomain: " + i.CloudNode.MetadataDomain + "\n")
 		sb.WriteString("CloudNodeLatency: " + fmt.Sprint(i.CloudNode.Latency) + "\n")
 	}
+
+	sb.WriteString("ExistingDomains: ")
+	for domain := range i.ExistingDomains {
+		sb.WriteString(domain + ", ")
+	}
+	sb.WriteString("\n")
+
 	sb.WriteString("GroupTokenProvider: " + i.GroupTokenProviderHostName + "\n")
 
 	return sb.String()

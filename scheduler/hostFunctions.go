@@ -143,6 +143,12 @@ func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAd
 		return wasmComponent.WriteError(model.WasmRuntimeError, err)
 	}
 
+	if _, ok := h.serverInfo.ExistingDomains[metadata.Geolocation]; !ok {
+		errMsg := fmt.Sprintf("Domain %s not recognized in the system", metadata.Geolocation)
+		h.logger.Error(errMsg, "metadata", fmt.Sprintf("%+v", metadata))
+		return wasmComponent.WriteError(model.NotFound, errors.New(errMsg))
+	}
+
 	skipUniquenessCheckBool := skipUniquenessCheck != 0
 
 	groups := make([]any, len(metadata.Groups))

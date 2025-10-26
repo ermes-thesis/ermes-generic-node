@@ -2,12 +2,14 @@ package wasm_integration_test
 
 import (
 	"context"
+	"db"
 	"fmt"
 	metadataManager2 "metadataManager/propagation"
 	datamanager_mock "mocks/dataManager"
 	metadataManager_mock "mocks/metadataManager"
 	"os"
 	"scheduler"
+	"server"
 	"strconv"
 	"testing"
 	"time"
@@ -110,13 +112,13 @@ func TestWasmPool_Wasmedge(t *testing.T) {
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "userId", "battiti").Return("100", nil)
 	dataManager.EXPECT().GetRecords("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "userId", []string{"testMGET", "testMGET2"}).Return([]any{"mget_test", "mget_test2"}, nil)
 	dataManager.EXPECT().GetRecords(mock.Anything, []string{"test"}, "userId", []string{"cicico"}).Return([]any{"what_cicico_means"}, nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "nuova_collection", map[string]string{}, []string{"test", "pippo"}, "userId", false, false).Return(nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "multiple_get_coll", map[string]string{}, []string{"test", "fake"}, "userId", false, false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "nuova_collection", map[string]db.RecordValue{}, []string{"test", "pippo"}, "userId", false, false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "multiple_get_coll", map[string]db.RecordValue{}, []string{"test", "fake"}, "userId", false, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
-	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, nil, log)
+	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, &server.ServerInfo{ExistingDomains: map[string]struct{}{"IT/Milan": {}, "IT": {}}}, log)
 
 	err := hostFns.RegisterWasmedgeHostFns(pool)
 	require.NoError(t, err)
@@ -146,13 +148,13 @@ func TestWasmPool_Wasmtime(t *testing.T) {
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "userId", "battiti").Return("100", nil)
 	dataManager.EXPECT().GetRecords("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "userId", []string{"testMGET", "testMGET2"}).Return([]any{"mget_test", "mget_test2"}, nil)
 	dataManager.EXPECT().GetRecords(mock.Anything, []string{"test"}, "userId", []string{"cicico"}).Return([]any{"what_cicico_means"}, nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "nuova_collection", map[string]string{}, []string{"test", "pippo"}, "userId", false, false).Return(nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "multiple_get_coll", map[string]string{}, []string{"test", "fake"}, "userId", false, false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "nuova_collection", map[string]db.RecordValue{}, []string{"test", "pippo"}, "userId", false, false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "multiple_get_coll", map[string]db.RecordValue{}, []string{"test", "fake"}, "userId", false, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
-	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, nil, log)
+	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, &server.ServerInfo{ExistingDomains: map[string]struct{}{"IT/Milan": {}, "IT": {}}}, log)
 
 	err := hostFns.RegisterWasmtimeHostFns(pool)
 	require.NoError(t, err)
@@ -182,13 +184,13 @@ func TestWasmPool_Wazero(t *testing.T) {
 	dataManager.EXPECT().GetRecord("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "userId", "battiti").Return("100", nil)
 	dataManager.EXPECT().GetRecords("255ef4af-3a49-4382-a90d-6524bdee5ad1", []string{"test"}, "userId", []string{"testMGET", "testMGET2"}).Return([]any{"mget_test", "mget_test2"}, nil)
 	dataManager.EXPECT().GetRecords(mock.Anything, []string{"test"}, "userId", []string{"cicico"}).Return([]any{"what_cicico_means"}, nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "nuova_collection", map[string]string{}, []string{"test", "pippo"}, "userId", false, false).Return(nil)
-	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "multiple_get_coll", map[string]string{}, []string{"test", "fake"}, "userId", false, false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "nuova_collection", map[string]db.RecordValue{}, []string{"test", "pippo"}, "userId", false, false).Return(nil)
+	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "multiple_get_coll", map[string]db.RecordValue{}, []string{"test", "fake"}, "userId", false, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), metadataManager2.FROM_LOCAL).Return(nil)
 
-	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, nil, log)
+	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, &server.ServerInfo{ExistingDomains: map[string]struct{}{"IT/Milan": {}, "IT": {}}}, log)
 	err := hostFns.RegisterWazeroHostFns(pool)
 	require.NoError(t, err)
 

@@ -92,11 +92,11 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 			c.log.Warn("Outdated strong collection replica", "collection_id", collectionId, "provided_consistency_clock", consistencyClock, "collection", fmt.Sprintf("%+v", collection), "local_consistency_clock", strongCollection.ConsistencyClock)
 			return true, collection, errors.New("outdated data in a strong collection replica")
 		}
+		collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
+		c.log.Debug("LOCK: Locked in READ the sequential collection", "collection_id", collectionId)
 	}
 
 	c.log.Debug("Collection is known by the current node and is locally present", "collection_id", collectionId, "consistency_clock", consistencyClock, "collection", fmt.Sprintf("%+v", collection))
-	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	c.log.Debug("LOCK: Locked in READ the collection", "collection_id", collectionId)
 	return true, collection, nil
 }
 
@@ -159,7 +159,6 @@ func AccessRecords[T any](
 	}
 	if collection.IsLocal() {
 		if !collection.IsStrong() {
-			// TODO: ???
 			collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 			defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
 		}

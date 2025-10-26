@@ -154,10 +154,6 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 				return nil, 0, s.log.ErrorfErr("wrong sequence number for collection: %v, %v", col.Id, err)
 			}
 
-			if found {
-				defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
-			}
-
 			if col.Metadata.Consistency == model.SequentialConsistent {
 				sequentialCollectionNeeded = true
 				if sequentialCollection != nil {
@@ -232,6 +228,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 					sequentialCollection.WriteMutex.Lock()
 					defer sequentialCollection.WriteMutex.Unlock()
 				}
+				defer sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
 				s.log.Info("Executing function locally with sequential collection", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
 				s.log.Debug("Executing function locally with sequential collection", "seq_collection_id", sequentialCollection.CollectionId(), "sequential_seq_num", sequentialSeqNumber, "is_leader", sequentialCollection.IsLeader, "write_access_requested", functionMetadata.StrongCollWriteAccess)
 				return s.executeLocally(functionName, functionVersion, collections, reqHostname, reqBody, groups, userId, sequentialCollection.CollectionId(), functionMetadata.StrongCollWriteAccess, cumulativeLatency)

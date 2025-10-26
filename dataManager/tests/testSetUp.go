@@ -8,6 +8,7 @@ import (
 	"dataManager/lru"
 	shared "dataManager/shared"
 	"db"
+	database "db"
 	"io"
 	mockDb "mocks/db"
 	mockServer "mocks/server"
@@ -95,7 +96,7 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 
 	db := mockDb.NewGenericDB(t)
 	db.On("GetCollectionMemoryUsage", mock.AnythingOfType("string")).Return(uint64(10), nil).Maybe()
-	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Maybe()
+	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]db.RecordValue"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Maybe()
 
 	server := mockServer.NewServerType(t)
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
@@ -143,8 +144,8 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	db.On("GetCollectionMemoryUsage", "repoId4").Return(uint64(5), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", "repoId5").Return(uint64(10), nil).Maybe()
 	db.On("DeleteCollection", mock.AnythingOfType("string")).Return(nil).Maybe()
-	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Maybe()
-	db.On("GetCollection", mock.AnythingOfType("string")).Return(map[string]string{"a": "1", "b": "2"}, []string{"a", "b"}, "", uint64(0), nil).Maybe()
+	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]db.RecordValue"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Maybe()
+	db.On("GetCollection", mock.AnythingOfType("string")).Return(map[string]database.RecordValue{"a": {Value: "1"}, "b": {Value: "2"}}, []string{"a", "b"}, "", uint64(0), nil).Maybe()
 
 	server := mockServer.NewServerType(t)
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()

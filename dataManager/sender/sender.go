@@ -62,9 +62,8 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		s.log.Warn("ADDED HOST TO COLLECTION", "KNWN HOSTS", collection.HostsId())
 	}
 
-	//FIXME: s.serverInfo.Father can ben nil.
 	//FIXME: what if the collection is being replicated?
-	hostToRemove := destination == s.serverInfo.Father.HostName && len(collection.HostsId()) == 0
+	hostToRemove := s.serverInfo.Father != nil && destination == s.serverInfo.Father.HostName && len(collection.HostsId()) == 0
 
 	msg := gossip.SendCollectionMessage{
 		CollectionId:   collection.CollectionId(),

@@ -4,7 +4,6 @@ import (
 	gossip "dataManager/messages"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 )
 
@@ -81,15 +80,14 @@ func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 			return
 		}
 
-		//FIXME: this does not work. Need to get the real sender address from headers or so.
-		ip, port, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
+		hostname := r.Header.Get("X-ERMES-HOSTNAME")
+		if hostname == "" {
+			m.log.Error("HTTP-REQ, Missing X-ERMES-HOSTNAME header")
 			w.WriteHeader(http.StatusBadRequest)
 			return
 		}
-		address := ip + ":" + port //TODO: verify
 
-		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.Owner, collection.GroupsSequence, collection.CollectionSize, collection.HostToRemove, address)
+		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.Owner, collection.GroupsSequence, collection.CollectionSize, collection.HostToRemove, hostname)
 
 		w.WriteHeader(http.StatusOK)
 	})

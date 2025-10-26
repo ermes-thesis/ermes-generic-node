@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ermes-thesis/ermes-common/logger"
-	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"net"
 	"net/http"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 )
 
 type ServerType interface {
@@ -93,6 +94,7 @@ func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo stri
 	// Prepare the headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-ERMES-SECRET", s.ServerInfo.Secret)
+	req.Header.Set("X-ERMES-HOSTNAME", s.ServerInfo.HostName)
 
 	s.logger.Debug("Request is ready, now sending it ...")
 	res, err := httpClient.CustomClient.Do(req)

@@ -154,12 +154,12 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 }
 
 func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64) {
-	memStats, memErr := m.dbInterface.GetMemoryStats()
+	availableMem, memErr := m.dbInterface.GetAvailableMemory()
 	if memErr != nil {
 		m.log.Error("MIG-MANAGER, get memory usage fails")
 		panic(memErr) //TODO
 	}
-	if memStats.CurrentUsedMemory < collectionSize || m.lruCache.GetAvailableSize() < uint(collectionSize) { //if not enoght space in redis or in the lru => free space
+	if availableMem < collectionSize || m.lruCache.GetAvailableSize() < uint(collectionSize) { //if not enoght space in redis or in the lru => free space
 		m.log.Warnf("MIG-MANAGER, not enough space in the LRU to place the collection %s", collectionId)
 		m.freeLru(uint(collectionSize))
 	}

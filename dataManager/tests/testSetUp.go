@@ -95,7 +95,7 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 	}
 
 	db := mockDb.NewGenericDB(t)
-	db.On("GetCollectionMemoryUsage", mock.AnythingOfType("string")).Return(uint64(10), nil).Maybe()
+	db.On("GetAvailableMemory").Return(uint64(10), nil).Maybe()
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]db.RecordValue"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Maybe()
 
 	server := mockServer.NewServerType(t)
@@ -143,6 +143,7 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	db.On("GetCollectionMemoryUsage", "repoId3").Return(uint64(1), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", "repoId4").Return(uint64(5), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", "repoId5").Return(uint64(10), nil).Maybe()
+	db.On("GetAvailableMemory").Return(uint64(100), nil).Maybe()
 	db.On("DeleteCollection", mock.AnythingOfType("string")).Return(nil).Maybe()
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]db.RecordValue"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Maybe()
 	db.On("GetCollection", mock.AnythingOfType("string")).Return(map[string]database.RecordValue{"a": {Value: "1"}, "b": {Value: "2"}}, []string{"a", "b"}, "", uint64(0), nil).Maybe()

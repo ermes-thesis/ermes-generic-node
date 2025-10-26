@@ -1137,7 +1137,7 @@ func (r *RedisClient) GetAvailableMemory() (uint64, error) {
 }
 
 func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
-	r.log.Info("RecordExists called")
+	r.log.Info("GetMemoryStats called")
 
 	stats, err := r.client.Info(r.ctx, "MEMORY", "KEYSPACE").Result()
 	if err != nil {

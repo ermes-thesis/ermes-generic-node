@@ -243,10 +243,7 @@ func (r *RedisClient) DeleteRecords(collectionId string, timestamp string, recor
 
 	backoff := defaultBackoff
 
-	timestampKeys := make([]string, len(recordNames))
-	for i, name := range recordNames {
-		timestampKeys[i] = buildTimestampKey(collectionId, name)
-	}
+	timestampKeys := buildTimestampKeys(collectionId, recordNames)
 
 	for retries := 0; retries < maxRetries; retries++ {
 		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
@@ -306,7 +303,7 @@ func (r *RedisClient) DeleteRecords(collectionId string, timestamp string, recor
 	return errors.New("transaction retries exhausted")
 }
 
-func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []string, string, uint64, error) {
+func (r *RedisClient) GetCollection(collectionId string) (map[string]db.RecordValue, []string, string, uint64, error) {
 	r.log.Info("GetCollection called", "collection_id", collectionId)
 
 	keysKey := "info:" + collectionId + ":keys"
@@ -321,6 +318,7 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 		groups         []string
 		groupsSequence uint64
 		values         []any
+		timestamps     []any
 		owner          string
 	)
 
@@ -347,16 +345,22 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 				return err
 			}
 
-			cmds, err := tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
-				pipe.MGet(r.ctx, buildKeys(collectionId, keys)...)
+			var keysCmd, timestampCmd *redis.SliceCmd
+			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
+				keysCmd = pipe.MGet(r.ctx, buildKeys(collectionId, keys)...)
+				timestampCmd = pipe.MGet(r.ctx, buildTimestampKeys(collectionId, keys)...)
 				return nil
 			})
 			if err != nil {
 				return err
 			}
 
-			mgetCmd := cmds[0].(*redis.SliceCmd)
-			values, err = mgetCmd.Result()
+			values, err = keysCmd.Result()
+			if err != nil {
+				return err
+			}
+
+			timestamps, err = timestampCmd.Result()
 			if err != nil {
 				return err
 			}
@@ -365,9 +369,9 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 		}, keysKey, groupsKey, groupsSequenceKey)
 
 		if err == nil {
-			result := make(map[string]string, len(keys))
+			result := make(map[string]db.RecordValue, len(keys))
 			for i, key := range keys {
-				result[key] = values[i].(string)
+				result[key] = db.RecordValue{Value: values[i].(string), Timestamp: timestamps[i].(string)}
 			}
 
 			r.log.Info("GetCollection: Collection retrieved successfully", "collection_id", collectionId)
@@ -397,8 +401,8 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]string, []s
 
 // Implemented like this, we allow the overwrite of a collection. If we want to avoid to overwrite a collection
 // we would need to add a Watch( ..., infoKey) to check the existence of the collection
-func (r *RedisClient) SetCollection(collectionId string, records map[string]string, groups []string, owner string, groupsSequence uint64) error {
-	r.log.Info("SetCollection called", "collection_id", collectionId, "recors", fmt.Sprintf("%+v", records), "groups", groups, "owner", owner, "groupsSequence", groupsSequence)
+func (r *RedisClient) SetCollection(collectionId string, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64) error {
+	r.log.Info("SetCollection called", "collection_id", collectionId, "records", fmt.Sprintf("%+v", records), "groups", groups, "owner", owner, "groupsSequence", groupsSequence)
 
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
@@ -412,7 +416,7 @@ func (r *RedisClient) SetCollection(collectionId string, records map[string]stri
 		pipe.Set(r.ctx, ownerKey, owner, 0)
 
 		for key, value := range records {
-			pipe.Set(r.ctx, buildKey(collectionId, key), value, 0)
+			pipe.MSet(r.ctx, buildKey(collectionId, key), value.Value, buildTimestampKey(collectionId, key), value.Timestamp)
 			pipe.SAdd(r.ctx, keysKey, key)
 		}
 
@@ -452,7 +456,8 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 			}
 
 			dataKeys := buildKeys(collectionId, keys)
-			allKeysToDelete := append(dataKeys, infoKey, keysKey, groupsKey, groupsSequenceKey, ownerKey)
+			timestampKeys := buildTimestampKeys(collectionId, keys)
+			allKeysToDelete := append(dataKeys, append(timestampKeys, infoKey, keysKey, groupsKey, groupsSequenceKey, ownerKey)...)
 
 			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
 				pipe.Del(r.ctx, allKeysToDelete...)
@@ -1188,38 +1193,39 @@ func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, err
 
 	var totalMemory uint64
 
-	// TODO: Fix this. Watch without TxPipelined does not make sense
-	err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
-		keys, err := tx.SMembers(r.ctx, keysKey).Result()
-		if err != nil {
-			return err
-		}
-
-		totalMemory = 0
-
-		for _, key := range keys {
-			memUsage, err := tx.MemoryUsage(r.ctx, buildKey(collectionId, key)).Result()
-			if err != nil {
-				return err
-			}
-			totalMemory += uint64(memUsage)
-		}
-
-		metaKeys := []string{keysKey, groupsKey, infoKey, groupSequenceKey, ownerKey}
-		for _, metaKey := range metaKeys {
-			memUsage, err := tx.MemoryUsage(r.ctx, metaKey).Result()
-			if err != nil && !errors.Is(err, redis.Nil) {
-				return err
-			}
-			totalMemory += uint64(memUsage)
-		}
-
-		return nil
-	}, keysKey, infoKey)
-
+	// We do not use a transaction here because we don't care about getting a precise value,
+	// as the memory usage may change while we are calculating it.
+	// We just want to get an approximate value of the memory usage of the collection.
+	keys, err := r.client.SMembers(r.ctx, keysKey).Result()
 	if err != nil {
 		r.log.Error("GetCollectionMemoryUsage: Failed to retrieve collection memory usage", "collection_id", collectionId, "error", err)
 		return 0, err
+	}
+
+	totalMemory = 0
+
+	for _, key := range keys {
+		memUsageValue, err := r.client.MemoryUsage(r.ctx, buildKey(collectionId, key)).Result()
+		if err != nil {
+			r.log.Error("GetCollectionMemoryUsage: Failed to retrieve collection memory usage", "collection_id", collectionId, "error", err)
+			return 0, err
+		}
+		memUsageTimestamp, err := r.client.MemoryUsage(r.ctx, buildTimestampKey(collectionId, key)).Result()
+		if err != nil {
+			r.log.Error("GetCollectionMemoryUsage: Failed to retrieve collection memory usage", "collection_id", collectionId, "error", err)
+			return 0, err
+		}
+		totalMemory += uint64(memUsageValue + memUsageTimestamp)
+	}
+
+	metaKeys := []string{keysKey, groupsKey, infoKey, groupSequenceKey, ownerKey}
+	for _, metaKey := range metaKeys {
+		memUsage, err := r.client.MemoryUsage(r.ctx, metaKey).Result()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			r.log.Error("GetCollectionMemoryUsage: Failed to retrieve collection memory usage", "collection_id", collectionId, "error", err)
+			return 0, err
+		}
+		totalMemory += uint64(memUsage)
 	}
 
 	r.log.Info("GetCollectionMemoryUsage: Collection memory usage retrieved successfully", "collection_id", collectionId)
@@ -1230,15 +1236,24 @@ func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, err
 func (r *RedisClient) GetRecordMemoryUsage(collectionId string, recordName string) (uint64, error) {
 	r.log.Info("GetRecordMemoryUsage called", "collection_id", collectionId, "record_name", recordName)
 
-	memUsage, err := r.client.MemoryUsage(r.ctx, buildKey(collectionId, recordName)).Result()
+	// We do not use a transaction here because we don't care about getting a precise value,
+	// as the memory usage may change while we are calculating it.
+	// We just want to get an approximate value of the memory usage of the collection.
+	memUsageValue, err := r.client.MemoryUsage(r.ctx, buildKey(collectionId, recordName)).Result()
 	if err != nil {
 		r.log.Error("GetRecordMemoryUsage: Failed to retrieve record memory usage", "collection_id", collectionId, "record_name", recordName, "error", err)
 		return 0, err
 	}
 
+	memUsageTimestamp, err := r.client.MemoryUsage(r.ctx, buildTimestampKey(collectionId, recordName)).Result()
+	if err != nil {
+		r.log.Error("GetRecordMemoryUsage: Failed to retrieve timestamp memory usage", "collection_id", collectionId, "record_name", recordName, "error", err)
+		return 0, err
+	}
+
 	r.log.Info("GetRecordMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName)
-	r.log.Debug("GetRecordMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName, "record_memory_usage", memUsage)
-	return uint64(memUsage), err
+	r.log.Debug("GetRecordMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName, "record_memory_usage", memUsageValue, "timestamp_memory_usage", memUsageTimestamp)
+	return uint64(memUsageValue + memUsageTimestamp), err
 }
 
 func (r *RedisClient) Close() error {
@@ -1256,6 +1271,14 @@ func buildKeys(collectionId string, recordNames []string) []string {
 	keys := slices.Clone(recordNames)
 	for i, name := range keys {
 		keys[i] = buildKey(collectionId, name)
+	}
+	return keys
+}
+
+func buildTimestampKeys(collectionId string, recordNames []string) []string {
+	keys := slices.Clone(recordNames)
+	for i, name := range keys {
+		keys[i] = buildTimestampKey(collectionId, name)
 	}
 	return keys
 }

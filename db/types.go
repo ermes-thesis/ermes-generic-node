@@ -16,3 +16,8 @@ type AllocationStats struct {
 	UsedMemoryDataset           uint64
 	UsedMemoryDatasetPercentage float64
 }
+
+type RecordValue struct {
+	Value     string
+	Timestamp string
+}

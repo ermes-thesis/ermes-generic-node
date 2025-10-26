@@ -3,6 +3,7 @@ package sender
 import (
 	gossip "dataManager/messages"
 	shared "dataManager/shared"
+	"db"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,7 +31,7 @@ const (
 //###############################################################
 
 type MigrationManagerSender interface {
-	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]string, []string, string, uint64, uint64)
+	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]db.RecordValue, []string, string, uint64, uint64)
 	SendGossipMessages(gossip.GossipMessage, string)
 	SendRequestInfoMessage(gossip.CollectionRequestInfoMessages, string)
 	GossipPath() string
@@ -52,7 +53,7 @@ func NewMigrationManagerSender(logger *logger.Logger, server server.ServerType, 
 	}
 }
 
-func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]string, groups []string, owner string, groupsSequence uint64, collectionSize uint64) {
+func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64) {
 	//imp
 	s.log.Infof("[SENDER] send collection %s to %s", collection.CollectionId(), destination)
 	if s.serverInfo.Father == nil || destination != s.serverInfo.Father.HostName {

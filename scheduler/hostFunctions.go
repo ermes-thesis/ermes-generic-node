@@ -3,16 +3,18 @@ package scheduler
 import (
 	datamanager "dataManager"
 	shared "dataManager/shared"
+	"db"
 	"errors"
 	"fmt"
+	"metadataManager"
+	"metadataManager/propagation"
+	"server"
+
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
-	"metadataManager"
-	"metadataManager/propagation"
-	"server"
 )
 
 type HostFunctions struct {
@@ -154,7 +156,7 @@ func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAd
 
 	h.logger.Debugf("HostCreateCollection generated collectionId=%s", collectionId)
 
-	err = h.dataManager.SetCollectionAndPropagate(collectionId, metadata.Name, make(map[string]string), metadata.Groups, metadata.Owner, metadata.Consistency == model.SequentialConsistent, skipUniquenessCheckBool)
+	err = h.dataManager.SetCollectionAndPropagate(collectionId, metadata.Name, make(map[string]db.RecordValue), metadata.Groups, metadata.Owner, metadata.Consistency == model.SequentialConsistent, skipUniquenessCheckBool)
 	if err != nil {
 		h.logger.Debug("HostCreateCollection error creating collection", "metadata", fmt.Sprintf("%+v", metadata), "error", err)
 		return wasmComponent.WriteError(model.RedisError, err)

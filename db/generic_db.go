@@ -92,7 +92,7 @@ type GenericDB interface {
 	//	- map[string]string: map of record names to values (empty if collection doesn't exist)
 	//	- []string: slice of group names associated with the collection
 	//	- error: non-nil if the operation fails
-	GetCollection(collectionId string) (map[string]string, []string, string, uint64, error)
+	GetCollection(collectionId string) (map[string]RecordValue, []string, string, uint64, error)
 	// SetCollection creates or completely replaces a collection with the provided
 	// records and groups. This operation will overwrite any existing data.
 	//
@@ -103,7 +103,7 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the operation fails
-	SetCollection(collectionId string, records map[string]string, groups []string, owner string, groupsSequence uint64) error
+	SetCollection(collectionId string, records map[string]RecordValue, groups []string, owner string, groupsSequence uint64) error
 	// DeleteCollection removes a collection and all its associated data including
 	// records, and groups. This operation is irreversible.
 	//

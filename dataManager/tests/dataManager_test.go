@@ -8,6 +8,7 @@ import (
 	gossip "dataManager/messages"
 	migrationManager "dataManager/migrationManager"
 	penality "dataManager/migrationManager/penalityFunction"
+	database "db"
 	"fmt"
 	"testing"
 	"time"
@@ -51,7 +52,7 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 		t.Fatal("unexpected non null collection")
 	}
 
-	mig.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, "", 0, 13, false, "host")
+	mig.NewCollectionReceived("repoId", true, false, make(map[string]database.RecordValue), []string{}, "", 0, 13, false, "host")
 	b, c, d = clDiscovererImp.IsCollectionLocallyPresent("repoId", 0)
 	if c == nil || d != nil {
 		t.Fatal("unexpected null collection")
@@ -154,7 +155,7 @@ func TestIterationModule(t *testing.T) {
 	child2Gossip1 := gossip.NewChildStateMessage("2222", 0.10)
 	mig.ManageGossipMessage(child2Gossip1)
 	// decisionState
-	mig.NewCollectionReceived("repoId3", true, false, make(map[string]string), []string{}, "", 0, 1, false, "host")
+	mig.NewCollectionReceived("repoId3", true, false, make(map[string]database.RecordValue), []string{}, "", 0, 1, false, "host")
 
 	// verify first cycle
 	time.Sleep(2 * time.Second)
@@ -219,8 +220,8 @@ func TestIterationModule(t *testing.T) {
 	mig.ManageGossipMessage(child2Gossip1)
 
 	// decisionState
-	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, "", 0, 4, false, "host")
-	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, "", 0, 4, false, "host")
+	mig.NewCollectionReceived("repoId4", true, true, make(map[string]database.RecordValue), []string{}, "", 0, 4, false, "host")
+	mig.NewCollectionReceived("repoId4", true, true, make(map[string]database.RecordValue), []string{}, "", 0, 4, false, "host")
 
 	// verify second cycle
 	time.Sleep(2 * time.Second)
@@ -272,7 +273,7 @@ func TestIterationModule(t *testing.T) {
 	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
 
 	// idle
-	mig.NewCollectionReceived("repoId5", true, true, make(map[string]string), []string{}, "", 0, 10, false, "host")
+	mig.NewCollectionReceived("repoId5", true, true, make(map[string]database.RecordValue), []string{}, "", 0, 10, false, "host")
 
 	// verify fourth cycle p1
 	time.Sleep(2 * time.Second)

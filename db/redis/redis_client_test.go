@@ -78,9 +78,9 @@ func TestCollection(t *testing.T) {
 	defer redisClient.Close()
 
 	collectionId := "collection1"
-	records := map[string]string{
-		"record1": "value1",
-		"record2": "value2",
+	records := map[string]db.RecordValue{
+		"record1": {Value: "value1"},
+		"record2": {Value: "value1"},
 	}
 	groups := []string{"group1", "group2"}
 	owner := "test_owner"
@@ -313,17 +313,17 @@ func TestMemStats(t *testing.T) {
 	})
 	require.NoError(t, err, "Expected no error setting metadata")
 
-	err = redisClient.SetCollection(collectionId, map[string]string{
-		"record1":  "value1",
-		"record2":  "value2",
-		"record3":  "value3",
-		"record4":  "value4",
-		"record5":  "value5",
-		"record6":  "value6",
-		"record7":  "value7",
-		"record8":  "value8",
-		"record9":  "value9",
-		"record10": "value10",
+	err = redisClient.SetCollection(collectionId, map[string]db.RecordValue{
+		"record1":  {Value: "value1"},
+		"record2":  {Value: "value2"},
+		"record3":  {Value: "value3"},
+		"record4":  {Value: "value4"},
+		"record5":  {Value: "value5"},
+		"record6":  {Value: "value6"},
+		"record7":  {Value: "value7"},
+		"record8":  {Value: "value8"},
+		"record9":  {Value: "value9"},
+		"record10": {Value: "value10"},
 	}, groups, "", 0)
 	require.NoError(t, err, "Expected no error setting collection metadata")
 
@@ -334,7 +334,8 @@ func TestMemStats(t *testing.T) {
 	require.NoError(t, err, "Expected no error getting memory stats")
 
 	require.Greater(t, memStats1.UsedMemoryDatasetPercentage, float64(0), "Expected UsedMemoryDatasetPercentage to be greater than 0")
-	require.Equal(t, uint64(11+5), memStats1.KeysCount)
+	// 10 "Normal record" + 10 timestamp records + 1 metadata record + 5 special records
+	require.Equal(t, uint64(1+20+5), memStats1.KeysCount)
 	require.LessOrEqual(t, memStats1.CurrentUsedMemory, memStats1.UsedMemoryPeak)
 	require.Equal(t, memStats1.UsedMemoryDataset/memStats1.KeysCount, memStats1.BytesKeysRatio)
 	require.Equal(t, uint64(0xc0), memStats1.LuaScriptsCacheSize)
@@ -343,12 +344,12 @@ func TestMemStats(t *testing.T) {
 	require.Greater(t, memStats1.UsedMemoryStartup, uint64(0))
 
 	collectionId2 := "collection2"
-	err = redisClient.SetCollection(collectionId2, map[string]string{
-		"record11": "value11",
-		"record12": "value12",
-		"record13": "value13",
-		"record14": "value14",
-		"record15": "value15",
+	err = redisClient.SetCollection(collectionId2, map[string]db.RecordValue{
+		"record11": {Value: "value11"},
+		"record12": {Value: "value12"},
+		"record13": {Value: "value13"},
+		"record14": {Value: "value14"},
+		"record15": {Value: "value15"},
 	}, groups, "", 0)
 	require.NoError(t, err, "Expected no error setting collection metadata")
 
@@ -364,8 +365,8 @@ func TestMemStats(t *testing.T) {
 		return maxMem-memStats2.CurrentUsedMemory == available
 	}, 3*time.Second, 100*time.Millisecond)
 
-	// 15 "Normal record" + 1 metadata record + 5 special records for each collection (that are 2)
-	require.Equal(t, memStats2.KeysCount, uint64(16+5*2))
+	// 15 "Normal record" + 15 timestamp records + 1 metadata record + 5 special records for each collection (that are 2)
+	require.Equal(t, memStats2.KeysCount, uint64(30+1+5*2))
 	require.LessOrEqual(t, memStats2.CurrentUsedMemory, memStats2.UsedMemoryPeak)
 	require.Equal(t, memStats2.BytesKeysRatio, memStats2.UsedMemoryDataset/memStats2.KeysCount)
 	require.Equal(t, memStats2.LuaScriptsCacheSize, uint64(0xc0))

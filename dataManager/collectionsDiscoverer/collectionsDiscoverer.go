@@ -365,13 +365,6 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 			return nil
 		}
 
-		//TODO remove
-		collection, exists := c.collectionsPartialView.KnownCollections[update.CollectionId]
-		if exists && !collection.IsStrong() {
-			return errors.New("unimplemented ")
-		}
-		//TODO end remove
-
 		//write or delete in db
 		hosts, err := UpdateRecord(c, update.CollectionId, dbFn, isInitiator, &update)
 		if err != nil {

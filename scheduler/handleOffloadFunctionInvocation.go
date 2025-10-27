@@ -71,7 +71,7 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 				return
 			}
 		}
-		functionResponse, resSeqNumber, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, hostname, body, groups, userId, groupToken, cumuLatInt)
+		functionResponse, resSeqNumber, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, hostname, r.Method, body, groups, userId, groupToken, cumuLatInt)
 		if err != nil {
 			s.log.Error("Error parsing sequential sequence number", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
 			http.Error(w, fmt.Sprintf("error executing function: %v", err), http.StatusInternalServerError)

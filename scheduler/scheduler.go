@@ -29,7 +29,7 @@ import (
 )
 
 type Scheduler interface {
-	Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqHostname string, reqBody []byte, groups []string, userId string, groupToken string, cumulativeLatency int) (*FunctionResult, uint64, error)
+	Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqHostname string, httpMethod string, reqBody []byte, groups []string, userId string, groupToken string, cumulativeLatency int) (*FunctionResult, uint64, error)
 }
 
 type fnResBody []byte
@@ -120,7 +120,7 @@ func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
 	return found, collection, fmt.Errorf("couldn't access an updated version of the collection after %d retries: %v", retries, err)
 }
 
-func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqHostname string, reqBody []byte, groups []string, userId string, groupToken string, cumulativeLatency int) (*FunctionResult, uint64, error) {
+func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqHostname string, httpMethod string, reqBody []byte, groups []string, userId string, groupToken string, cumulativeLatency int) (*FunctionResult, uint64, error) {
 	s.log.Info("Scheduling function", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
 	s.log.Debug("Scheduling function", "with_collections", fmt.Sprintf("%+v", collections), "with_request_body", string(reqBody), "sequential_seq_num", sequentialSeqNumber, "req_hostname", reqHostname)
 
@@ -203,7 +203,7 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 			}
 			s.log.Info("Sequential collection existence not found. Trying to forward the request to father node",
 				"fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, userId, "forwarded_to", s.serverInfo.Father.HostName)
-			return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, groupToken, sequentialSeqNumber, cumulativeLatency)
+			return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, httpMethod, reqBody, groupToken, sequentialSeqNumber, cumulativeLatency)
 		}
 
 		// Sequential collection present - check if it is requested a write or read access
@@ -237,11 +237,11 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 			s.log.Info("Sequential collection must be accessed in write but the local sequential collection is not the leader. Forwarding request to the host containing the leader sequential collection",
 				"fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "forwarded_to", sequentialCollection.LeaderId)
 			// In all the other cases forward to the leader replica of the sequential collection
-			return s.forwardRequest(sequentialCollection.LeaderId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber, cumulativeLatency)
+			return s.forwardRequest(sequentialCollection.LeaderId, functionName, functionVersion, collections, httpMethod, reqBody, groupToken, sequentialSeqNumber, cumulativeLatency)
 		}
 
 		s.log.Info("Sequential collection found, but we are in a parent node since it is not local. Forwarding to the correct child node.", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
-		return s.forwardRequestWithSequential(functionName, functionVersion, collections, groupToken, sequentialSeqNumber, functionMetadata.StrongCollWriteAccess, sequentialCollection, cumulativeLatency)
+		return s.forwardRequestWithSequential(functionName, functionVersion, collections, httpMethod, reqBody, groupToken, sequentialSeqNumber, functionMetadata.StrongCollWriteAccess, sequentialCollection, cumulativeLatency)
 	}
 
 	// If is not requested a Sequential Collection, and the current node has at least one of the eventual collections
@@ -255,15 +255,15 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 	// We have only Eventual Collection requested, and no one of them is local, we forward the scheduling request
 	// towards the DIRECTION where we have more Eventual Collections
 	s.log.Info("Only eventual collections detected. None is local, forwarding request to host with more eventual collections detected", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "forwarded_to", hostWithMoreEventual)
-	return s.forwardRequest(hostWithMoreEventual, functionName, functionVersion, collections, groupToken, sequentialSeqNumber, cumulativeLatency)
+	return s.forwardRequest(hostWithMoreEventual, functionName, functionVersion, collections, httpMethod, reqBody, groupToken, sequentialSeqNumber, cumulativeLatency)
 }
 
-func (s *SchedulerImpl) forwardRequestWithSequential(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, groupToken string, sequentialSeqNumber uint64, writeAccess bool, sequentialCollection *shared.StrongCollection, cumulativeLatency int) (*FunctionResult, uint64, error) {
+func (s *SchedulerImpl) forwardRequestWithSequential(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, httpMethod string, body []byte, groupToken string, sequentialSeqNumber uint64, writeAccess bool, sequentialCollection *shared.StrongCollection, cumulativeLatency int) (*FunctionResult, uint64, error) {
 	// If the Sequential collection is not locally present, and the function needs to access it in write. Forward towards
 	// the leader.
 	if writeAccess {
 		s.log.Debug("Forwarding function scheduling to the sequential collection leader since we have to access it in write", "fn_name", functionName, "fn_version", functionVersion, "forward_to", sequentialCollection.LeaderId)
-		return s.forwardRequest(sequentialCollection.LeaderId, functionName, functionVersion, collections, groupToken, sequentialSeqNumber, cumulativeLatency)
+		return s.forwardRequest(sequentialCollection.LeaderId, functionName, functionVersion, collections, httpMethod, body, groupToken, sequentialSeqNumber, cumulativeLatency)
 	}
 
 	// If the Sequential collection is not locally present, and the function require only reading it. Forward towards to
@@ -282,7 +282,7 @@ func (s *SchedulerImpl) forwardRequestWithSequential(functionName string, functi
 	s.log.Debug("Replica selection for sequential collection read", "host_with_min_latency", hostWithMinLatency, "min_latency", minLatency)
 	if hostWithMinLatency != "" {
 		s.log.Debug("Forwarding function scheduling to one of the available sequential collection replicas, based on latency, since we have to access it in read", "fn_name", functionName, "fn_version", functionVersion, "forward_to", hostWithMinLatency)
-		return s.forwardRequest(hostWithMinLatency, functionName, functionVersion, collections, groupToken, sequentialSeqNumber, cumulativeLatency)
+		return s.forwardRequest(hostWithMinLatency, functionName, functionVersion, collections, httpMethod, body, groupToken, sequentialSeqNumber, cumulativeLatency)
 	}
 
 	// If "HostId" is empty we fall back to the father (shouldn't happen, since if we are in this branch, it means that
@@ -290,7 +290,7 @@ func (s *SchedulerImpl) forwardRequestWithSequential(functionName string, functi
 	// one of its children, meaning that "HostId" should NOT be empty)
 	if s.serverInfo.Father != nil {
 		s.log.Debug("Forwarding function scheduling to father as fallback", "fn_name", functionName, "fn_version", functionVersion, "forward_to", s.serverInfo.Father.HostName)
-		return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, groupToken, sequentialSeqNumber, cumulativeLatency)
+		return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, httpMethod, body, groupToken, sequentialSeqNumber, cumulativeLatency)
 	}
 
 	s.log.Error("No available host for sequential collection (unexpected)", "fn_name", functionName, "fn_version", functionVersion, "collection_id", sequentialCollection.CollectionId())
@@ -668,11 +668,11 @@ func (s *SchedulerImpl) makeHTTPRequest(method string, url string, body io.Reade
 	return resp.StatusCode, nil
 }
 
-func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functionVersion string, collections map[string][]types.CollectionInfo, groupToken string, seqNumber uint64, cumulativeLatency int) (*FunctionResult, uint64, error) {
+func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functionVersion string, collections map[string][]types.CollectionInfo, httpMethod string, reqBody []byte, groupToken string, seqNumber uint64, cumulativeLatency int) (*FunctionResult, uint64, error) {
 	s.log.Debug("Preparing request to offload scheduling", "fn_name", functionName, "fn_version", functionVersion, "destination", dest, "with_collections", fmt.Sprintf("%+v", collections), "sequential_coll_seq_num", seqNumber, "cumulative_latency", cumulativeLatency)
 
 	url := fmt.Sprintf("http://%s/pvt-offload-function/%s/%s", dest, functionName, functionVersion)
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(httpMethod, url, bytes.NewReader(reqBody))
 	if err != nil {
 		s.log.Error("Error creating offloading request", "fn_name", functionName, "fn_version", functionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", collections), "sequential_coll_seq_num", seqNumber, "cumulative_latency", cumulativeLatency, "error", err)
 		return nil, 0, fmt.Errorf("error creating request: %v", err)

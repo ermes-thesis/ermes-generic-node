@@ -11,6 +11,7 @@ import (
 	shared "dataManager/shared"
 	"db"
 	"errors"
+	"fmt"
 	"server"
 	"sync"
 
@@ -133,14 +134,22 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 			m.log.Warn("MIG-MANAGER, new collection already present locally")
 			return true
 		}
-		m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
+		err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
+		if err != nil {
+			m.log.Warn("MIG-MANAGER, new collection could not be added to redis")
+			return true
+		}
 
 		collection.SetToLocal(collectionSize)
 		m.log.Info("MIG-MANAGER, new collection set to local")
 		m.updateLru(collectionId, uint(collectionSize))
 		return false
 	}
-	m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
+	err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
+	if err != nil {
+		m.log.Warn("MIG-MANAGER, new collection could not be added")
+		return true
+	}
 
 	if isStrong {
 		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false, isLeader)
@@ -153,11 +162,11 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	return false
 }
 
-func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64) {
+func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64) error {
 	availableMem, memErr := m.dbInterface.GetAvailableMemory()
 	if memErr != nil {
 		m.log.Error("MIG-MANAGER, get memory usage fails")
-		panic(memErr) //TODO
+		return memErr // TODO
 	}
 	if availableMem < collectionSize || m.lruCache.GetAvailableSize() < uint(collectionSize) { //if not enoght space in redis or in the lru => free space
 		m.log.Warnf("MIG-MANAGER, not enough space in the LRU to place the collection %s", collectionId)
@@ -168,8 +177,10 @@ func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records 
 	err := m.dbInterface.SetCollection(collectionId, records, groups, owner, groupsSequence) //add collection to redis
 	if err != nil {
 		m.log.Error("MIG-MANAGER, add collection in redis fails")
-		panic(err) //TODO: decide
+		return err // TODO: decide
 	}
+
+	return nil
 }
 
 func (m *MigrationManagerImp) NewCollectionCreated(collectionId string, collectionSize uint64, isStrong bool) error {
@@ -261,12 +272,13 @@ func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionReques
 	}
 }
 
-func (m *MigrationManagerImp) updateLru(collectionId string, collectionSize uint) {
+func (m *MigrationManagerImp) updateLru(collectionId string, collectionSize uint) error {
 	err := m.lruCache.Put(collectionId, m.collectionsPartialView.KnownCollections[collectionId], collectionSize)
 	if err != nil {
 		m.log.Errorf("MIG-MANAGER, not enough space in the LRU to place the collection %s even after free", collectionId)
-		panic(err) //TODO: decide
+		return err //TODO: decide
 	}
+	return nil
 }
 
 func (m *MigrationManagerImp) freeLru(sizeGoal uint) {
@@ -279,7 +291,7 @@ func (m *MigrationManagerImp) freeLru(sizeGoal uint) {
 	}
 }
 
-func (m *MigrationManagerImp) SendCollectionAndRemove(collection shared.Collection) {
+func (m *MigrationManagerImp) SendCollectionAndRemove(collection shared.Collection) error {
 	//sync -> avoid send a collection if used
 	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
 	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
@@ -287,11 +299,13 @@ func (m *MigrationManagerImp) SendCollectionAndRemove(collection shared.Collecti
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.dbInterface.GetCollection(collection.CollectionId())
 	if err != nil {
-		panic(err) //TODO: decide
+		m.log.Error("MIG-MANAGER, could not get collection", "collection", collection, "error", err)
+		return err //TODO: decide
 	}
 	collectionSize, sizeError := m.dbInterface.GetCollectionMemoryUsage(collection.CollectionId())
 	if sizeError != nil {
-		panic(sizeError) //TODO: decide
+		m.log.Error("MIG-MANAGER, failed to get the collection size")
+		return sizeError //TODO: decide
 	}
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	isLeader := false
@@ -310,6 +324,8 @@ func (m *MigrationManagerImp) SendCollectionAndRemove(collection shared.Collecti
 
 	//set the collection as remote only in the node partial view
 	collection.SetToRemote()
+
+	return nil
 }
 
 func (m *MigrationManagerImp) ChangeStrongCollectionPolicy(newPolicy strongPolicy.CurrentPolicy) {
@@ -317,7 +333,8 @@ func (m *MigrationManagerImp) ChangeStrongCollectionPolicy(newPolicy strongPolic
 	case strongPolicy.ErmesPolicy:
 		m.StrongCollectionPolicy = m.ermesPolicy
 	default:
-		panic("unknown policy")
+		m.log.Warn("Given policy does not exists. Old policy kept active", "new_policy", fmt.Sprintf("%+v", newPolicy))
+		// Do nothing
 	}
 }
 
@@ -326,7 +343,8 @@ func (m *MigrationManagerImp) ChangeWeakCollectionPolicy(newPolicy weakpolicy.Cu
 	case weakpolicy.ALWAYSCOPYPOLICY:
 		m.WeakCollectionPolicy = m.alwaysCopyPolicy
 	default:
-		panic("unknown policy")
+		m.log.Warn("Given policy does not exists. Old policy kept active", "new_policy", fmt.Sprintf("%+v", newPolicy))
+		// Do nothing
 	}
 }
 

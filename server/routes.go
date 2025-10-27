@@ -7,11 +7,14 @@ import (
 )
 
 // Method to add pre-defined routes to the server.
-func (s *Server) compileRoutes() {
+func (s *Server) compileRoutes() error {
 	err := s.AddCustomRoute("/info", false, s.handleRouteInfo())
 	if err != nil {
-		panic(err)
+		s.logger.Error("Failed to register custom routes", "path", "/info", "error", err)
+		return fmt.Errorf("Error while registering /info route: %v\n", err)
 	}
+
+	return nil
 }
 
 // AddCustomRoute Method to add a route defined by the user to the server. DO NOT ADD IT AFTER THE SERVER HAS BEEN STARTED PLS (idk what could happen)

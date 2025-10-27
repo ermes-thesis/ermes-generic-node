@@ -44,7 +44,10 @@ func NewServer(log *logger.Logger, serverInfo *ServerInfo) (*Server, error) {
 
 	log.Debug("Adding correct routes to the server...")
 
-	ser.compileRoutes()
+	if err := ser.compileRoutes(); err != nil {
+		log.Error("Failed to compile routes", "server", fmt.Sprintf("%+v", ser.ServerInfo), "error", err)
+		return nil, err
+	}
 
 	log.Info("New Server instance created successfully", "server", fmt.Sprintf("%+v", ser.ServerInfo))
 	return ser, nil

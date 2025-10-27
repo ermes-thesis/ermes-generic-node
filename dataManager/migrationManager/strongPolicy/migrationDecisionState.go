@@ -179,11 +179,13 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.policy.dbInterface.GetCollection(outerKey)
 	if err != nil {
-		panic(err) //TODO: decide
+		m.policy.log.Error("Error getting collection from database", "error", err)
+		return false //TODO: decide
 	}
 	collectionSize, sizeError := m.policy.dbInterface.GetCollectionMemoryUsage(outerKey)
 	if sizeError != nil {
-		panic(sizeError) //TODO: decide
+		m.policy.log.Error("Error getting collection size from database", "error", sizeError)
+		return false //TODO: decide
 	}
 	//s
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
@@ -225,11 +227,13 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.policy.dbInterface.GetCollection(outerKey)
 	if err != nil {
-		panic(err) //TODO: decide
+		m.policy.log.Error("Error getting collection from database", "error", err)
+		return false //TODO: decide
 	}
 	collectionSize, sizeError := m.policy.dbInterface.GetCollectionMemoryUsage(outerKey)
 	if sizeError != nil {
-		panic(sizeError) //TODO: decide
+		m.policy.log.Error("Error getting collection size from database", "error", sizeError)
+		return false //TODO: decide
 	}
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, false, res, groups, owner, groupsSequence, collectionSize)
@@ -267,7 +271,7 @@ func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
 	wg.Wait()
 }
 
-func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection shared.Collection, wg *sync.WaitGroup) {
+func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection shared.Collection, wg *sync.WaitGroup) error {
 	defer wg.Done()
 
 	//sync -> avoid send a collection if used
@@ -277,11 +281,13 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.policy.dbInterface.GetCollection(collection.CollectionId())
 	if err != nil {
-		panic(err) //TODO: decide
+		m.policy.log.Error("Error getting collection from database", "error", err)
+		return err //TODO: decide
 	}
 	collectionSize, sizeError := m.policy.dbInterface.GetCollectionMemoryUsage(collection.CollectionId())
 	if sizeError != nil {
-		panic(sizeError) //TODO: decide
+		m.policy.log.Error("Error getting collection size from database", "error", sizeError)
+		return sizeError //TODO: decide
 	}
 
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
@@ -301,4 +307,6 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 
 	//set the collection as remote only in the node partial view
 	collection.SetToRemote()
+
+	return nil
 }

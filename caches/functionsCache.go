@@ -31,6 +31,22 @@ type FunctionBundle struct {
 	Templates map[string]model.QueryTemplate
 }
 
+func (f FunctionBundle) String() string {
+	displayBytes := f.Binary
+	truncated := false
+	if len(displayBytes) > 30 {
+		displayBytes = displayBytes[:30]
+		truncated = true
+	}
+
+	binStr := fmt.Sprintf("%v", displayBytes)
+	if truncated {
+		binStr = fmt.Sprintf("%s...(truncated, total %d bytes)", binStr, len(f.Binary))
+	}
+
+	return fmt.Sprintf("{Binary:%s Metadata:%+v Templates:%+v}", binStr, f.Metadata, f.Templates)
+}
+
 func NewFunctionCache(config config.FunctionsCacheConfig, fetcher caches.Fetcher[*FunctionBundle], log *logger.Logger) (*FunctionCacheImpl, error) {
 	tmplCache, err := NewTemplatesCache(config.TemplateCache)
 	if err != nil {

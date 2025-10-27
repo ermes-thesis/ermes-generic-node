@@ -178,7 +178,6 @@ func AccessRecords[T any](
 	return remoteFn(child)
 }
 
-// TODO: Complete logging
 func UpdateRecord(
 	c *CollectionsDiscovererImp,
 	collectionId string,
@@ -196,7 +195,7 @@ func UpdateRecord(
 
 		hosts := map[string]struct{}{}
 		if c.serverInfo.Father == nil {
-			c.log.Warn("UpdateRecord: Collection not known locally, no father to query. Collection DOES NOT exists", "collection_id", collectionId)
+			c.log.Warn("UpdateRecord: Collection not known in cloud, no father to query. Collection DOES NOT exists", "collection_id", collectionId)
 			return nil, errors.New("collection not found")
 		}
 		addr := c.serverInfo.Father.HostName
@@ -206,37 +205,48 @@ func UpdateRecord(
 		return hosts, nil
 	}
 	if !collection.IsLocal() {
+		c.log.Debug("Collection to be updated is not local", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 		if collection.IsStrong() && isInitiator { //safety check
-			c.log.Error("AccessRecords: Attempted remote update to strong collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+			c.log.Error("UpdateRecord: Attempted remote update to strong collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 			return nil, errors.New("strong collection can't be updated remotely")
 		}
 
+		c.log.Debug("Computing the list of hosts to which propagate the update", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 		hosts := collection.HostsId()
 		if c.serverInfo.Father == nil {
+			c.log.Debug("Current node is a cloud node. Avoiding to propagate the update to the father", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", hosts)
 			return hosts, nil
 		}
 
 		addr := c.serverInfo.Father.HostName
 		hosts[addr] = struct{}{}
+
+		c.log.Debug("List of hosts to which propagate the update computed successfully", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", fmt.Sprintf("%+v", hosts))
 		return hosts, nil
 	}
 
 	if collection.IsStrong() {
+		c.log.Debug("Collection to be updated is local and sequential consistent", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 		if isInitiator && !collection.(*shared.StrongCollection).IsLeader { //safety check
+			c.log.Error("Trying to update local sequential collection even if it's not the leader", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "is_initiator", isInitiator, "message", fmt.Sprintf("%+v", updateMessage))
 			return nil, errors.New("only leader can update strong collection")
 		}
 
 		_, isCollectionUpdate := updateMessage.(*messages.CollectionUpdateMessage)
 		if isInitiator && isCollectionUpdate {
+			oldClock := collection.(*shared.StrongCollection).ConsistencyClock
 			collection.(*shared.StrongCollection).ConsistencyClock++
 			updateMessage.SetSequence(collection.(*shared.StrongCollection).ConsistencyClock)
+			c.log.Debug("Local collection sequence incremented", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "old_sequence", oldClock, "new_sequence", collection.(*shared.StrongCollection).ConsistencyClock)
 		} else if !isInitiator && isCollectionUpdate && collection.(*shared.StrongCollection).ConsistencyClock > updateMessage.GetSequence() {
+			c.log.Warn("Received an outdated update for the local sequential collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "received_sequence", updateMessage.GetSequence(), "current_sequence", collection.(*shared.StrongCollection).ConsistencyClock, "message", fmt.Sprintf("%+v", updateMessage), "is_initiator", isInitiator)
 			return nil, nil //ignore outdated update
 		}
 
 		isStrong = true
 	}
 
+	c.log.Debug("Preparing list of host to which propagate the update", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 	//always notify to father
 	hosts := collection.HostsId()
 
@@ -247,9 +257,12 @@ func UpdateRecord(
 
 	if !collection.IsStrong() {
 		collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
+		c.log.Debug("LOCK: Eventual consistent collection locked in READ", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 		defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
 	}
 
+	c.log.Debug("List of hosts prepared successfully", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", fmt.Sprintf("%+v", hosts))
+	c.log.Debug("Proceeding to update the collection in the local DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 	return hosts, dbFn(isStrong) // update in local db
 }
 

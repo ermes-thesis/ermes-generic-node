@@ -15,6 +15,17 @@ type WeakCollectionPolicy interface {
 
 type CurrentPolicy int
 
+func (p CurrentPolicy) String() string {
+	switch p {
+	case Pending:
+		return "PENDING"
+	case ALWAYSCOPYPOLICY:
+		return "ALWAYSCOPYPOLICY"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 const (
 	Pending CurrentPolicy = iota
 	ALWAYSCOPYPOLICY

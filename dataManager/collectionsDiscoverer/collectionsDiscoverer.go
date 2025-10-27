@@ -347,7 +347,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 				c.log.Debug("UpdateCollectionsRecordsAndPropagate: skipping ignored host", "collection_id", update.CollectionId, "ignored_host", ignoredHostName)
 				continue
 			}
-			msgs[host] = messages.CollectionUpdateMessages{Groups: groups, Messages: append(msgs[host].Messages, update)}
+			msgs[host] = messages.CollectionUpdateMessages{Groups: groups, UserId: userId, Messages: append(msgs[host].Messages, update)}
 		}
 	}
 	c.collectionsPartialView.Mutex.Unlock() // lock release

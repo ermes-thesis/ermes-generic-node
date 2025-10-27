@@ -1,6 +1,8 @@
 package dataManagerShared
 
-import "sync"
+import (
+	"sync"
+)
 
 // Collection Info
 type Collection interface {

@@ -1,7 +1,8 @@
 package dataManagerShared
 
 import (
-	config "config"
+	"config"
+	"fmt"
 	"maps"
 	"server"
 	"sync"
@@ -21,6 +22,10 @@ type LocalCollection struct {
 	//a collection can be stored locally and on children simultaneously
 	hostsId        map[string]struct{} //map to guarantee univocity
 	CollectionLock sync.RWMutex        //if  lock is taken, a collection can't be moved from this node => wasm functions that use a collection must take the lock
+}
+
+func (l *LocalCollection) String() string {
+	return fmt.Sprintf("{size:%d hostsId:%v local:%t}", l.size, l.hostsId, l.IsLocal())
 }
 
 func NewLocalCollection(size uint64, hostNames map[string]struct{}) CollectionState {
@@ -49,6 +54,10 @@ func (l *LocalCollection) RemoveHost(hostId string) {
 type RemoteCollection struct {
 	hostsId map[string]struct{} //map to guarantee univocity
 	//TODO maybe insert latency with host or maybe not idk
+}
+
+func (l *RemoteCollection) String() string {
+	return fmt.Sprintf("{hostsId:%v local:%t}", l.hostsId, l.IsLocal())
 }
 
 func NewRemoteCollection(hostNames map[string]struct{}) CollectionState {

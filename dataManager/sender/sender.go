@@ -31,7 +31,7 @@ const (
 //###############################################################
 
 type MigrationManagerSender interface {
-	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]db.RecordValue, []string, string, uint64, uint64)
+	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]db.RecordValue, []string, string, uint64, uint64, bool)
 	SendGossipMessages(gossip.GossipMessage, string)
 	SendRequestInfoMessage(gossip.CollectionRequestInfoMessages, string)
 	GossipPath() string
@@ -53,7 +53,7 @@ func NewMigrationManagerSender(logger *logger.Logger, server server.ServerType, 
 	}
 }
 
-func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64) {
+func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool) {
 	//imp
 	s.log.Infof("[SENDER] send collection %s to %s", collection.CollectionId(), destination)
 	if s.serverInfo.Father == nil || destination != s.serverInfo.Father.HostName {
@@ -62,8 +62,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		s.log.Warn("ADDED HOST TO COLLECTION", "KNWN HOSTS", collection.HostsId())
 	}
 
-	//FIXME: what if the collection is being replicated?
-	hostToRemove := s.serverInfo.Father != nil && destination == s.serverInfo.Father.HostName && len(collection.HostsId()) == 0
+	hostToRemove := isMigration && s.serverInfo.Father != nil && destination == s.serverInfo.Father.HostName && len(collection.HostsId()) == 0
 
 	msg := gossip.SendCollectionMessage{
 		CollectionId:   collection.CollectionId(),

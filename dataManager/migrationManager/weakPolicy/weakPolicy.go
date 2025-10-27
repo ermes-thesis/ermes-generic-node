@@ -78,7 +78,7 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	a.log.Infof("WEAK-POLICY, send weak collection%s to node %s", collectionId, childName)
-	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups, owner, groupsSequence, collectionSize)
+	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups, owner, groupsSequence, collectionSize, false)
 
 	return nil
 }

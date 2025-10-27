@@ -269,7 +269,7 @@ func TestIterationModule(t *testing.T) {
 
 	// FOURTH CYCLE
 	fmt.Println("START FOURTH CYCLE")
-	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Once()
+	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Twice()
 	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
 
 	// idle

@@ -189,7 +189,7 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 	}
 	//s
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, true, res, groups, owner, groupsSequence, collectionSize)
+	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, true, res, groups, owner, groupsSequence, collectionSize, true)
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(outerKey)
@@ -235,11 +235,14 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 		m.policy.log.Error("Error getting collection size from database", "error", sizeError)
 		return false //TODO: decide
 	}
-	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, false, res, groups, owner, groupsSequence, collectionSize)
 
 	//if all the interest adjacent node has been satisfied
-	if interestedNodeCounter-len(strongCollection.HostsId()) <= 0 && !strongCollection.IsLeader {
+	isMigration := interestedNodeCounter-len(strongCollection.HostsId()) <= 0 && !strongCollection.IsLeader
+
+	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
+	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, false, res, groups, owner, groupsSequence, collectionSize, isMigration)
+
+	if isMigration {
 		//remove collection from redis instance
 		m.policy.dbInterface.DeleteCollection(outerKey)
 
@@ -300,7 +303,7 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 		//stop keep track of access for a remote collection
 		m.policy.RemoveInfo(collection.CollectionId())
 	}
-	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.HostName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize)
+	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.HostName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(collection.CollectionId())

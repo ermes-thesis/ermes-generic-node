@@ -26,7 +26,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var authFn, fun, fibonacci, fibonacciWOpts, fibonacciAOT, primeNums, primeNumsWOpt, primeNumsAOT, lightweight, lightweightWOpts, lightweightAOT []byte
+const primeNumsInput = 2000000
+const fibonacciInput = 40
+const lightweightInput = 20000
+
+var authFn, fun, fibonacci, fibonacciWOpts, fibonacciAOT, fibonacciWOptsAOT, primeNums, primeNumsWOpts, primeNumsAOT, primeNumsWOptsAOT, lightweight, lightweightWOpts, lightweightAOT, lightweightWOptsAOT, tailFibonacci, tailFibonacciWOpts, tailFibonacciAOT, tailFibonacciWOptsAOT []byte
 var log *logger.Logger
 
 func TestMain(m *testing.M) {
@@ -48,7 +52,11 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	fibonacciAOT, err = os.ReadFile("cpuIntensive/fibonacci/fibonacci_wOpts_AOTwasmedge.wasm")
+	fibonacciAOT, err = os.ReadFile("cpuIntensive/fibonacci/fibonacci_noOpts_AOTwasmedge.wasm")
+	if err != nil {
+		panic(err)
+	}
+	fibonacciWOptsAOT, err = os.ReadFile("cpuIntensive/fibonacci/fibonacci_wOpts_AOTwasmedge.wasm")
 	if err != nil {
 		panic(err)
 	}
@@ -56,11 +64,15 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	primeNumsWOpt, err = os.ReadFile("cpuIntensive/primeNums/fnPrimeNums_wOpts.wasm")
+	primeNumsWOpts, err = os.ReadFile("cpuIntensive/primeNums/fnPrimeNums_wOpts.wasm")
 	if err != nil {
 		panic(err)
 	}
-	primeNumsAOT, err = os.ReadFile("cpuIntensive/primeNums/fnPrimeNums_wOpts_AOTwasmedge.wasm")
+	primeNumsAOT, err = os.ReadFile("cpuIntensive/primeNums/fnPrimeNums_noOpts_AOTwasmedge.wasm")
+	if err != nil {
+		panic(err)
+	}
+	primeNumsWOptsAOT, err = os.ReadFile("cpuIntensive/primeNums/fnPrimeNums_wOpts_AOTwasmedge.wasm")
 	if err != nil {
 		panic(err)
 	}
@@ -72,7 +84,27 @@ func TestMain(m *testing.M) {
 	if err != nil {
 		panic(err)
 	}
-	lightweightAOT, err = os.ReadFile("lightweight/lightweight_wOpts_AOTwasmedge.wasm")
+	lightweightAOT, err = os.ReadFile("lightweight/lightweight_noOpts_AOTwasmedge.wasm")
+	if err != nil {
+		panic(err)
+	}
+	lightweightWOptsAOT, err = os.ReadFile("lightweight/lightweight_wOpts_AOTwasmedge.wasm")
+	if err != nil {
+		panic(err)
+	}
+	tailFibonacci, err = os.ReadFile("cpuIntensive/tailFibonacci/tailFibonacci.wasm")
+	if err != nil {
+		panic(err)
+	}
+	tailFibonacciWOpts, err = os.ReadFile("cpuIntensive/tailFibonacci/tailFibonacci_wOpts.wasm")
+	if err != nil {
+		panic(err)
+	}
+	tailFibonacciAOT, err = os.ReadFile("cpuIntensive/tailFibonacci/tailFibonacci_noOpts_AOTwasmedge.wasm")
+	if err != nil {
+		panic(err)
+	}
+	tailFibonacciWOptsAOT, err = os.ReadFile("cpuIntensive/tailFibonacci/tailFibonacci_wOpts_AOTwasmedge.wasm")
 	if err != nil {
 		panic(err)
 	}
@@ -99,6 +131,7 @@ func createNewLogger(t testing.TB) *logger.Logger {
 		Level:     zerolog.DebugLevel,
 		Format:    "text",
 		AddSource: false,
+		Muted:     true,
 	})
 	require.NoError(t, err)
 	return log
@@ -383,7 +416,7 @@ func TestWasmPool_Wazero(t *testing.T) {
 //	}
 //}
 
-func BenchmarkExecutionTime_Native_CpuIntensive(b *testing.B) {
+func BenchmarkExecutionTime_Native_PrimeNumbers(b *testing.B) {
 	// Compute intensive prime numbers computation function
 	var computePrimes func(n int) int
 	computePrimes = func(n int) int {
@@ -404,11 +437,11 @@ func BenchmarkExecutionTime_Native_CpuIntensive(b *testing.B) {
 	}
 
 	for b.Loop() {
-		computePrimes(2000000)
+		computePrimes(primeNumsInput)
 	}
 }
 
-func BenchmarkExecutionTime_Native_Recursive(b *testing.B) {
+func BenchmarkExecutionTime_Native_Fibonacci(b *testing.B) {
 	// Compute intensive fibonacci function
 	var fibFun func(n int) int
 	fibFun = func(n int) int {
@@ -419,7 +452,7 @@ func BenchmarkExecutionTime_Native_Recursive(b *testing.B) {
 	}
 
 	for b.Loop() {
-		fibFun(40)
+		fibFun(fibonacciInput)
 	}
 }
 
@@ -435,18 +468,33 @@ func BenchmarkExecutionTime_Native_Lightweight(b *testing.B) {
 	}
 
 	for b.Loop() {
-		simpleFun(20000)
+		simpleFun(lightweightInput)
 	}
 }
 
-func BenchmarkExecutionTime_Wasmedge_NoOptimization_CpuIntensive(b *testing.B) {
+func BenchmarkExecutionTime_Native_TailFibonacci(b *testing.B) {
+	// Compute intensive fibonacci function
+	var fibTailFun func(n, a, b int) int
+	fibTailFun = func(n, a, b int) int {
+		if n == 0 {
+			return a
+		}
+		return fibTailFun(n-1, b, a+b)
+	}
+
+	for b.Loop() {
+		fibTailFun(fibonacciInput, 0, 1)
+	}
+}
+
+func BenchmarkExecutionTime_Wasmedge_Interpreter_NoOpts_PrimeNumbers(b *testing.B) {
 	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 2000000)
+		req, ctx := getTestReqAndCtx("userId", primeNumsInput)
 		response := executor.Invoke(primeNums, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -456,14 +504,14 @@ func BenchmarkExecutionTime_Wasmedge_NoOptimization_CpuIntensive(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wasmedge_NoOptimization_Recursive(b *testing.B) {
+func BenchmarkExecutionTime_Wasmedge_Interpreter_NoOpts_Fibonacci(b *testing.B) {
 	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 40)
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
 		response := executor.Invoke(fibonacci, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -473,14 +521,14 @@ func BenchmarkExecutionTime_Wasmedge_NoOptimization_Recursive(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wasmedge_NoOptimization_Lightweight(b *testing.B) {
+func BenchmarkExecutionTime_Wasmedge_Interpreter_NoOpts_Lightweight(b *testing.B) {
 	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 20000)
+		req, ctx := getTestReqAndCtx("userId", lightweightInput)
 		response := executor.Invoke(lightweight, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -490,15 +538,15 @@ func BenchmarkExecutionTime_Wasmedge_NoOptimization_Lightweight(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wasmedge_WithOptimizations_CpuIntensive(b *testing.B) {
+func BenchmarkExecutionTime_Wasmedge_Interpreter_NoOpts_TailFibonacci(b *testing.B) {
 	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 2000000)
-		response := executor.Invoke(primeNumsWOpt, "entry", req, ctx)
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
+		response := executor.Invoke(tailFibonacci, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
 			b.Fatalf("invoke function failed: %s", response.Response)
@@ -507,14 +555,31 @@ func BenchmarkExecutionTime_Wasmedge_WithOptimizations_CpuIntensive(b *testing.B
 	}
 }
 
-func BenchmarkExecutionTime_Wasmedge_WithOptimizations_Recursive(b *testing.B) {
+func BenchmarkExecutionTime_Wasmedge_Interpreter_WithOpts_PrimeNumbers(b *testing.B) {
 	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 40)
+		req, ctx := getTestReqAndCtx("userId", primeNumsInput)
+		response := executor.Invoke(primeNumsWOpts, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wasmedge_Interpreter_WithOpts_Fibonacci(b *testing.B) {
+	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
 		response := executor.Invoke(fibonacciWOpts, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -524,12 +589,12 @@ func BenchmarkExecutionTime_Wasmedge_WithOptimizations_Recursive(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wasmedge_WithOptimizations_Lightweight(b *testing.B) {
+func BenchmarkExecutionTime_Wasmedge_Interpreter_WithOpts_Lightweight(b *testing.B) {
 	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	executor := pool.Acquire()
-	req, ctx := getTestReqAndCtx("userId", 20000)
+	req, ctx := getTestReqAndCtx("userId", lightweightInput)
 
 	for b.Loop() {
 		response := executor.Invoke(lightweightWOpts, "entry", req, ctx)
@@ -541,14 +606,31 @@ func BenchmarkExecutionTime_Wasmedge_WithOptimizations_Lightweight(b *testing.B)
 	executor.Release()
 }
 
-func BenchmarkExecutionTime_Wasmedge_AOT_CpuIntensive(b *testing.B) {
+func BenchmarkExecutionTime_Wasmedge_Interpreter_WithOpts_TailFibonacci(b *testing.B) {
 	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 2000000)
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
+		response := executor.Invoke(tailFibonacciWOpts, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wasmedge_AOT_NoOpts_PrimeNumbers(b *testing.B) {
+	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", primeNumsInput)
 		response := executor.Invoke(primeNumsAOT, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -558,14 +640,14 @@ func BenchmarkExecutionTime_Wasmedge_AOT_CpuIntensive(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wasmedge_AOT_Recursive(b *testing.B) {
+func BenchmarkExecutionTime_Wasmedge_AOT_NoOpts_Fibonacci(b *testing.B) {
 	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 40)
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
 		response := executor.Invoke(fibonacciAOT, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -575,14 +657,14 @@ func BenchmarkExecutionTime_Wasmedge_AOT_Recursive(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wasmedge_AOT_Lightweight(b *testing.B) {
+func BenchmarkExecutionTime_Wasmedge_AOT_NoOpts_Lightweight(b *testing.B) {
 	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 20000)
+		req, ctx := getTestReqAndCtx("userId", lightweightInput)
 		response := executor.Invoke(lightweightAOT, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -592,14 +674,99 @@ func BenchmarkExecutionTime_Wasmedge_AOT_Lightweight(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wasmtime_NoOptimization_CpuIntensive(b *testing.B) {
+func BenchmarkExecutionTime_Wasmedge_AOT_NoOpts_TailFibonacci(b *testing.B) {
+	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
+		response := executor.Invoke(tailFibonacciAOT, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wasmedge_AOT_WithOpts_PrimeNumbers(b *testing.B) {
+	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", primeNumsInput)
+		response := executor.Invoke(primeNumsWOptsAOT, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wasmedge_AOT_WithOpts_Fibonacci(b *testing.B) {
+	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
+		response := executor.Invoke(fibonacciWOptsAOT, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wasmedge_AOT_WithOpts_Lightweight(b *testing.B) {
+	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", lightweightInput)
+		response := executor.Invoke(lightweightWOptsAOT, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wasmedge_AOT_WithOpts_TailFibonacci(b *testing.B) {
+	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
+		response := executor.Invoke(tailFibonacciWOptsAOT, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wasmtime_JIT_NoOpts_PrimeNumbers(b *testing.B) {
 	pool := wasm.NewWasmtimeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 2000000)
+		req, ctx := getTestReqAndCtx("userId", primeNumsInput)
 		response := executor.Invoke(primeNums, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -609,14 +776,14 @@ func BenchmarkExecutionTime_Wasmtime_NoOptimization_CpuIntensive(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wasmtime_NoOptimization_Recursive(b *testing.B) {
+func BenchmarkExecutionTime_Wasmtime_JIT_NoOpts_Fibonacci(b *testing.B) {
 	pool := wasm.NewWasmtimeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 40)
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
 		response := executor.Invoke(fibonacci, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -626,14 +793,14 @@ func BenchmarkExecutionTime_Wasmtime_NoOptimization_Recursive(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wasmtime_NoOptimization_Lightweight(b *testing.B) {
+func BenchmarkExecutionTime_Wasmtime_JIT_NoOpts_Lightweight(b *testing.B) {
 	pool := wasm.NewWasmtimeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 20000)
+		req, ctx := getTestReqAndCtx("userId", lightweightInput)
 		response := executor.Invoke(lightweight, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -643,15 +810,15 @@ func BenchmarkExecutionTime_Wasmtime_NoOptimization_Lightweight(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wasmtime_WithOptimizations_CpuIntensive(b *testing.B) {
+func BenchmarkExecutionTime_Wasmtime_JIT_NoOpts_TailFibonacci(b *testing.B) {
 	pool := wasm.NewWasmtimeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 2000000)
-		response := executor.Invoke(primeNumsWOpt, "entry", req, ctx)
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
+		response := executor.Invoke(tailFibonacci, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
 			b.Fatalf("invoke function failed: %s", response.Response)
@@ -660,14 +827,31 @@ func BenchmarkExecutionTime_Wasmtime_WithOptimizations_CpuIntensive(b *testing.B
 	}
 }
 
-func BenchmarkExecutionTime_Wasmtime_WithOptimizations_Recursive(b *testing.B) {
+func BenchmarkExecutionTime_Wasmtime_JIT_WithOpts_PrimeNumbers(b *testing.B) {
 	pool := wasm.NewWasmtimeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 40)
+		req, ctx := getTestReqAndCtx("userId", primeNumsInput)
+		response := executor.Invoke(primeNumsWOpts, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wasmtime_JIT_WithOpts_Fibonacci(b *testing.B) {
+	pool := wasm.NewWasmtimeExecutorPool(10, createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
 		response := executor.Invoke(fibonacciWOpts, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -677,14 +861,14 @@ func BenchmarkExecutionTime_Wasmtime_WithOptimizations_Recursive(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wasmtime_WithOptimizations_Lightweight(b *testing.B) {
+func BenchmarkExecutionTime_Wasmtime_JIT_WithOpts_Lightweight(b *testing.B) {
 	pool := wasm.NewWasmtimeExecutorPool(10, createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 20000)
+		req, ctx := getTestReqAndCtx("userId", lightweightInput)
 		response := executor.Invoke(lightweightWOpts, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -694,14 +878,31 @@ func BenchmarkExecutionTime_Wasmtime_WithOptimizations_Lightweight(b *testing.B)
 	}
 }
 
-func BenchmarkExecutionTime_Wazero_NoOptimization_CpuIntensive(b *testing.B) {
+func BenchmarkExecutionTime_Wasmtime_JIT_WithOpts_TailFibonacci(b *testing.B) {
+	pool := wasm.NewWasmtimeExecutorPool(10, createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
+		response := executor.Invoke(tailFibonacciWOpts, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wazero_AOT_NoOpts_PrimeNumbers(b *testing.B) {
 	pool := wasm.NewWazeroExecutorPool(10, false, context.Background(), createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 2000000)
+		req, ctx := getTestReqAndCtx("userId", primeNumsInput)
 		response := executor.Invoke(primeNums, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -711,14 +912,14 @@ func BenchmarkExecutionTime_Wazero_NoOptimization_CpuIntensive(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wazero_NoOptimization_Recursive(b *testing.B) {
+func BenchmarkExecutionTime_Wazero_AOT_NoOpts_Fibonacci(b *testing.B) {
 	pool := wasm.NewWazeroExecutorPool(10, false, context.Background(), createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 40)
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
 		response := executor.Invoke(fibonacci, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -728,14 +929,14 @@ func BenchmarkExecutionTime_Wazero_NoOptimization_Recursive(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wazero_NoOptimization_Lightweight(b *testing.B) {
+func BenchmarkExecutionTime_Wazero_AOT_NoOpts_Lightweight(b *testing.B) {
 	pool := wasm.NewWazeroExecutorPool(10, false, context.Background(), createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 20000)
+		req, ctx := getTestReqAndCtx("userId", lightweightInput)
 		response := executor.Invoke(lightweight, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -745,15 +946,15 @@ func BenchmarkExecutionTime_Wazero_NoOptimization_Lightweight(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wazero_WithOptimizations_CpuIntensive(b *testing.B) {
+func BenchmarkExecutionTime_Wazero_AOT_NoOpts_TailFibonacci(b *testing.B) {
 	pool := wasm.NewWazeroExecutorPool(10, false, context.Background(), createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 2000000)
-		response := executor.Invoke(primeNumsWOpt, "entry", req, ctx)
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
+		response := executor.Invoke(tailFibonacci, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
 			b.Fatalf("invoke function failed: %s", response.Response)
@@ -762,14 +963,31 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_CpuIntensive(b *testing.B) 
 	}
 }
 
-func BenchmarkExecutionTime_Wazero_WithOptimizations_Recursive(b *testing.B) {
+func BenchmarkExecutionTime_Wazero_AOT_WithOpts_PrimeNumbers(b *testing.B) {
 	pool := wasm.NewWazeroExecutorPool(10, false, context.Background(), createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 40)
+		req, ctx := getTestReqAndCtx("userId", primeNumsInput)
+		response := executor.Invoke(primeNumsWOpts, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wazero_AOT_WithOpts_Fibonacci(b *testing.B) {
+	pool := wasm.NewWazeroExecutorPool(10, false, context.Background(), createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
 		response := executor.Invoke(fibonacciWOpts, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -779,14 +997,14 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_Recursive(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wazero_WithOptimizations_Lightweight(b *testing.B) {
+func BenchmarkExecutionTime_Wazero_AOT_WithOpts_Lightweight(b *testing.B) {
 	pool := wasm.NewWazeroExecutorPool(10, false, context.Background(), createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 20000)
+		req, ctx := getTestReqAndCtx("userId", lightweightInput)
 		response := executor.Invoke(lightweightWOpts, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -796,20 +1014,15 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_Lightweight(b *testing.B) {
 	}
 }
 
-func BenchmarkExecutionTime_Wazero_WithOptimizations_CpuIntensive_Interpreter(b *testing.B) {
-	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
-		return wazero.NewRuntimeConfigInterpreter()
-	})
-	defer patch.Unpatch()
-
-	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
+func BenchmarkExecutionTime_Wazero_AOT_WithOpts_TailFibonacci(b *testing.B) {
+	pool := wasm.NewWazeroExecutorPool(10, false, context.Background(), createNewLogger(b))
 	defer pool.Close()
 
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 2000000)
-		response := executor.Invoke(primeNumsWOpt, "entry", req, ctx)
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
+		response := executor.Invoke(tailFibonacciWOpts, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
 			b.Fatalf("invoke function failed: %s", response.Response)
@@ -818,7 +1031,7 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_CpuIntensive_Interpreter(b 
 	}
 }
 
-func BenchmarkExecutionTime_Wazero_WithOptimizations_Recursive_Interpreter(b *testing.B) {
+func BenchmarkExecutionTime_Wazero_Interpreter_WithOpts_PrimeNumbers(b *testing.B) {
 	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
 		return wazero.NewRuntimeConfigInterpreter()
 	})
@@ -830,7 +1043,29 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_Recursive_Interpreter(b *te
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 40)
+		req, ctx := getTestReqAndCtx("userId", primeNumsInput)
+		response := executor.Invoke(primeNumsWOpts, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wazero_Interpreter_WithOpts_Fibonacci(b *testing.B) {
+	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
+		return wazero.NewRuntimeConfigInterpreter()
+	})
+	defer patch.Unpatch()
+
+	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
 		response := executor.Invoke(fibonacciWOpts, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
@@ -840,7 +1075,7 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_Recursive_Interpreter(b *te
 	}
 }
 
-func BenchmarkExecutionTime_Wazero_WithOptimizations_Lightweight_Interpreter(b *testing.B) {
+func BenchmarkExecutionTime_Wazero_Interpreter_WithOpts_Lightweight(b *testing.B) {
 	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
 		return wazero.NewRuntimeConfigInterpreter()
 	})
@@ -852,8 +1087,118 @@ func BenchmarkExecutionTime_Wazero_WithOptimizations_Lightweight_Interpreter(b *
 	for b.Loop() {
 		executor := pool.Acquire()
 
-		req, ctx := getTestReqAndCtx("userId", 20000)
+		req, ctx := getTestReqAndCtx("userId", lightweightInput)
 		response := executor.Invoke(lightweightWOpts, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wazero_Interpreter_WithOpts_TailFibonacci(b *testing.B) {
+	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
+		return wazero.NewRuntimeConfigInterpreter()
+	})
+	defer patch.Unpatch()
+
+	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
+		response := executor.Invoke(tailFibonacciWOpts, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wazero_Interpreter_NoOpts_PrimeNumbers(b *testing.B) {
+	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
+		return wazero.NewRuntimeConfigInterpreter()
+	})
+	defer patch.Unpatch()
+
+	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", primeNumsInput)
+		response := executor.Invoke(primeNums, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wazero_Interpreter_NoOpts_Fibonacci(b *testing.B) {
+	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
+		return wazero.NewRuntimeConfigInterpreter()
+	})
+	defer patch.Unpatch()
+
+	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
+		response := executor.Invoke(fibonacci, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wazero_Interpreter_NoOpts_Lightweight(b *testing.B) {
+	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
+		return wazero.NewRuntimeConfigInterpreter()
+	})
+	defer patch.Unpatch()
+
+	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", lightweightInput)
+		response := executor.Invoke(lightweight, "entry", req, ctx)
+
+		if response.HttpCode != 200 {
+			b.Fatalf("invoke function failed: %s", response.Response)
+		}
+		executor.Release()
+	}
+}
+
+func BenchmarkExecutionTime_Wazero_Interpreter_NoOpts_TailFibonacci(b *testing.B) {
+	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
+		return wazero.NewRuntimeConfigInterpreter()
+	})
+	defer patch.Unpatch()
+
+	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
+	defer pool.Close()
+
+	for b.Loop() {
+		executor := pool.Acquire()
+
+		req, ctx := getTestReqAndCtx("userId", fibonacciInput)
+		response := executor.Invoke(tailFibonacci, "entry", req, ctx)
 
 		if response.HttpCode != 200 {
 			b.Fatalf("invoke function failed: %s", response.Response)

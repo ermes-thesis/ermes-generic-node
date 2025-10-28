@@ -1169,7 +1169,7 @@ func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
 			UsedMemoryOverhead:          strToInt(statsMap["used_memory_overhead"]),
 			UsedMemoryStartup:           strToInt(statsMap["used_memory_startup"]),
 			UsedMemoryDataset:           strToInt(statsMap["used_memory_dataset"]),
-			UsedMemoryDatasetPercentage: datasetPerc,
+			UsedMemoryDatasetPercentage: datasetPerc / 100,
 		},
 		ReplicationBacklogSize: strToInt(statsMap["mem_replication_backlog"]),
 		LuaScriptsCacheSize:    strToInt(statsMap["used_memory_scripts"]),

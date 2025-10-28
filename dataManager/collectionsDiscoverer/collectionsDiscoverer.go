@@ -423,6 +423,15 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 		return errors.New("collection already exists")
 	}
 
+	size := uint(len(userId))
+	for _, group := range groups {
+		size += uint(len(group))
+	}
+	if err := migrationManager.FreeSpaceToCreateCollection(size); err != nil {
+		c.log.Error("Failed to free space for the new collection", "collection_id", collectionId, "collection_name", collectionName, "records", fmt.Sprintf("%+v", records), "executing_user", userId, "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck, "error", err)
+		return err
+	}
+
 	//propagate update to father
 	if c.serverInfo.Father != nil {
 		c.log.Debug("Propagating collection creation request to father", "collection_id", collectionId, "collection_name", collectionName, "executing_user", userId)
@@ -461,14 +470,14 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 	}
 
 	//get size of collection in db
-	size, sizeErr := c.dbInterface.GetCollectionMemoryUsage(collectionId)
+	actualSize, sizeErr := c.dbInterface.GetCollectionMemoryUsage(collectionId)
 	if sizeErr != nil {
 		c.log.Error("Failed to retrieve the space occupied in the DB by the collection just persisted", "collection_id", collectionId, "collection_name", collectionName, "executing_user", userId, "records", fmt.Sprintf("%+v", records), "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck, "error", sizeErr)
 		return sizeErr
 	}
 
 	//add collection in local view
-	migrationManagerErr := migrationManager.NewCollectionCreated(collectionId, size, isStrong)
+	migrationManagerErr := migrationManager.NewCollectionCreated(collectionId, actualSize, isStrong)
 	if migrationManagerErr != nil {
 		c.log.Error("Failed to register newly created collection in Migration Manager view", "collection_id", collectionId, "collection_name", collectionName, "executing_user", userId, "records", fmt.Sprintf("%+v", records), "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck, "error", migrationManagerErr)
 		return migrationManagerErr

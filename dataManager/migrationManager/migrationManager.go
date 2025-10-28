@@ -18,6 +18,8 @@ import (
 	"github.com/ermes-thesis/ermes-common/logger"
 )
 
+const emptyCollectionSize uint = 500
+
 type MigrationManager interface {
 	// Init initialize the singleton pattern
 	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger)
@@ -33,6 +35,7 @@ type MigrationManager interface {
 	// NewCollectionCreated used when user create a new collection in the local node (collectionID,size,isStrong)
 	//throw an error if the collection already exists locally
 	NewCollectionCreated(string, uint64, bool) error
+	FreeSpaceToCreateCollection(uint) error
 
 	ChangeStrongCollectionPolicy(strongPolicy.CurrentPolicy)
 	ChangeWeakCollectionPolicy(weakpolicy.CurrentPolicy)
@@ -178,6 +181,26 @@ func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records 
 	if err != nil {
 		m.log.Error("MIG-MANAGER, add collection in redis fails")
 		return err // TODO: decide
+	}
+
+	return nil
+}
+
+func (m *MigrationManagerImp) FreeSpaceToCreateCollection(size uint) error {
+	requiredSpace := emptyCollectionSize + size
+	m.log.Info("MIG-MANAGER, free space to create collection", "size", requiredSpace)
+
+	availableMem, memErr := m.dbInterface.GetAvailableMemory()
+	if memErr != nil {
+		m.log.Error("MIG-MANAGER, get memory usage fails")
+		return memErr
+	}
+
+	availableLruSize := m.lruCache.GetAvailableSize()
+	m.log.Debug("MIG-MANAGER, available memory and lru size", "mem", availableMem, "lru", availableLruSize)
+	if availableMem < uint64(requiredSpace) || availableLruSize < requiredSpace {
+		m.log.Warnf("MIG-MANAGER, not enough space in the LRU to place the new collection")
+		m.freeLru(requiredSpace)
 	}
 
 	return nil

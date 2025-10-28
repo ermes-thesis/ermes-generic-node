@@ -54,6 +54,7 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 	}
 
 	db := mockDb.NewGenericDB(t)
+	db.On("GetAvailableMemory").Return(uint64(10), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", mock.AnythingOfType("string")).Return(uint64(10), nil).Maybe()
 
 	server := mockServer.NewServerType(t)

@@ -73,6 +73,7 @@ func TestIterationModule(t *testing.T) {
 
 	mig := migrationManager.GetMigrationManagerInstance()
 	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	defer mig.StopAsyncDump()
 	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscovererImp.Init(collections, serverinfo, ser, db, log)
 

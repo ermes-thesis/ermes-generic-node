@@ -2,10 +2,13 @@ package dataManagerShared
 
 import (
 	"config"
+	"encoding/json"
 	"fmt"
 	"maps"
+	"os"
 	"server"
 	"sync"
+	"time"
 )
 
 // collection types
@@ -90,6 +93,81 @@ type CollectionPartialView struct {
 	Mutex sync.Mutex
 	//data
 	KnownCollections map[string]Collection //maps collectionID to info related to that collection
+}
+
+type collectionDump struct {
+	Timestamp      string   `json:"timestamp"`
+	CollectionID   string   `json:"collection_id"`
+	IsStrong       bool     `json:"is_strong"`
+	IsLocal        bool     `json:"is_remote"`
+	IsLeader       bool     `json:"is_leader,omitempty"`
+	CollectionSize uint64   `json:"collection_size"`
+	LeaderID       string   `json:"leader_id,omitempty"`
+	HostsID        []string `json:"hosts_id"`
+}
+
+func (c *CollectionPartialView) DumpToJsonFile(path string) error {
+	c.Mutex.Lock()
+	snapshot := maps.Clone(c.KnownCollections)
+	c.Mutex.Unlock()
+
+	dump := make([]collectionDump, 0, len(c.KnownCollections))
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+
+	for id, coll := range snapshot {
+		hosts := make([]string, 0, len(coll.HostsId()))
+		for h := range coll.HostsId() {
+			hosts = append(hosts, h)
+		}
+
+		isLocal := coll.IsLocal()
+		isStrong := coll.IsStrong()
+
+		// Default size = 0 if remote (we can’t measure it)
+		var size uint64 = 0
+		if isLocal {
+			if state, ok := coll.GetCollectionState().(*LocalCollection); ok {
+				size = state.Size()
+			}
+		}
+
+		entry := collectionDump{
+			Timestamp:      timestamp,
+			CollectionID:   id,
+			IsStrong:       isStrong,
+			IsLocal:        isLocal,
+			CollectionSize: size,
+			HostsID:        hosts,
+		}
+
+		// For strong collections, include leader info
+		if s, ok := coll.(*StrongCollection); ok {
+			entry.IsLeader = s.IsLeader
+			entry.LeaderID = s.LeaderId
+		}
+
+		dump = append(dump, entry)
+	}
+
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	encoder := json.NewEncoder(file)
+	for _, d := range dump {
+		err = encoder.Encode(d)
+		if err != nil {
+			return fmt.Errorf("failed to marshal known collections: %w", err)
+		}
+	}
+
+	_, err = file.WriteString("\n")
+	if err != nil {
+		return fmt.Errorf("failed to write known collections: %w", err)
+	}
+	return nil
 }
 
 func (c *CollectionPartialView) RestoreInfoFromSettings(configData []config.CollectionSettingsInfo) error {

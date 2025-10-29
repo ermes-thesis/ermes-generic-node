@@ -138,6 +138,7 @@ func run(ctx context.Context, configPath string) error {
 		defer wg.Done()
 		<-ctx.Done()
 		shutdownCtx, newCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		dataManager.GetMigrationManager().StopAsyncDump()
 		defer newCancel()
 
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {

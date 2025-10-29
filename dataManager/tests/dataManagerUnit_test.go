@@ -24,6 +24,7 @@ func TestGetRecordLocally(t *testing.T) {
 	log := createNewLogger(t)
 	dm.Init(collections, myT1PenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	cd := dm.GetCollectionsDiscoverer()
+	defer dm.GetMigrationManager().StopAsyncDump()
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]db.RecordValue"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Times(2)
 	fmt.Println("Inserting collections")
 
@@ -130,6 +131,7 @@ func TestUpdateCollectionsRecordsAndPropagate(t *testing.T) {
 	log := createNewLogger(t)
 	dm.Init(collections, myT1PenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	cd := dm.GetCollectionsDiscoverer()
+	defer dm.GetMigrationManager().StopAsyncDump()
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]db.RecordValue"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Times(1)
 	ser.EXPECT().SendGenericHTTPRequest(mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
 
@@ -222,6 +224,7 @@ func TestRemoveCollectionAndPropagate(t *testing.T) {
 	log := createNewLogger(t)
 	dm.Init(collections, myT1PenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	cd := dm.GetCollectionsDiscoverer()
+	defer dm.GetMigrationManager().StopAsyncDump()
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]db.RecordValue"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Times(2)
 	ser.EXPECT().SendGenericHTTPRequest(mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
 

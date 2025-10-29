@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"server"
 	"sync"
+	"time"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 )
@@ -42,6 +43,8 @@ type MigrationManager interface {
 	GetCollectionVectorClockValue(collectionId string) (uint64, error)
 
 	RemoveCollectionFromLru(collectionId string)
+
+	StopAsyncDump()
 }
 
 type MigrationManagerImp struct {
@@ -65,6 +68,8 @@ type MigrationManagerImp struct {
 	dbInterface db.GenericDB
 
 	sender sender.MigrationManagerSender
+
+	dumpStopCh chan struct{}
 }
 
 // Singleton pattern
@@ -107,8 +112,41 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		//init data
 		m.collectionsPartialView = collections
 
+		// --- START ASYNC DUMP ---
+		m.dumpStopCh = make(chan struct{})
+		m.startAsyncDump(config.KnownCollectionsDumpPath, config.KnownCollectionsDumpInterval)
 		m.log.Info("MIG-MANAGER, migration manager instance has been initialized")
 	})
+}
+
+func (m *MigrationManagerImp) startAsyncDump(dumpPath string, interval time.Duration) {
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ticker.C:
+				if err := m.collectionsPartialView.DumpToJsonFile(dumpPath); err != nil {
+					m.log.Warn("Failed to dump known collections", "error", err)
+				}
+			case <-m.dumpStopCh:
+				m.log.Info("Async dump goroutine received stop signal. Dump known collection for last time")
+				if err := m.collectionsPartialView.DumpToJsonFile(dumpPath); err != nil {
+					m.log.Warn("Failed to dump known collections", "error", err)
+				}
+				return
+			}
+		}
+	}()
+}
+
+func (m *MigrationManagerImp) StopAsyncDump() {
+	if m.dumpStopCh != nil {
+		close(m.dumpStopCh)
+		m.dumpStopCh = nil
+		m.log.Info("MIG-MANAGER, async dump has been stopped")
+	}
 }
 
 func (m *MigrationManagerImp) RemoveCollectionFromLru(collectionId string) {

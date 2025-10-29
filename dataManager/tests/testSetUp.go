@@ -16,6 +16,7 @@ import (
 	info "server"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 )
@@ -42,11 +43,12 @@ func SetupGetMemoryStatsMock(mockDB *mockDb.GenericDB, server *mockServer.Server
 
 func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
-		IdleTimeoutMs:     1000000000000000000,
-		LeaderThreshold:   0,
-		FollowerThreshold: 1,
-		ViewSize:          3,
-		GravityConstant:   0.981,
+		IdleTimeoutMs:                1000000000000000000,
+		LeaderThreshold:              0,
+		FollowerThreshold:            1,
+		ViewSize:                     3,
+		GravityConstant:              0.981,
+		KnownCollectionsDumpInterval: time.Minute,
 	}
 	lurConfig := config.LruConfig{
 		Size:      100000,
@@ -56,6 +58,7 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 	db := mockDb.NewGenericDB(t)
 	db.On("GetAvailableMemory").Return(uint64(10), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", mock.AnythingOfType("string")).Return(uint64(10), nil).Maybe()
+	db.On("GetRecordsMemoryUsage", mock.AnythingOfType("string"), mock.AnythingOfType("[]string")).Return(uint64(5), nil).Maybe()
 
 	server := mockServer.NewServerType(t)
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
@@ -84,11 +87,12 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 
 func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
-		IdleTimeoutMs:     1000000000000000000,
-		LeaderThreshold:   0,
-		FollowerThreshold: 1,
-		ViewSize:          3,
-		GravityConstant:   0.981,
+		IdleTimeoutMs:                1000000000000000000,
+		LeaderThreshold:              0,
+		FollowerThreshold:            1,
+		ViewSize:                     3,
+		GravityConstant:              0.981,
+		KnownCollectionsDumpInterval: time.Minute,
 	}
 	lurConfig := config.LruConfig{
 		Size:      100000,
@@ -126,11 +130,13 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 
 func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
-		IdleTimeoutMs:     1000000000000000000,
-		LeaderThreshold:   0,
-		FollowerThreshold: 1,
-		ViewSize:          3,
-		GravityConstant:   0.981,
+		IdleTimeoutMs:                1000000000000000000,
+		LeaderThreshold:              0,
+		FollowerThreshold:            1,
+		ViewSize:                     3,
+		GravityConstant:              0.981,
+		KnownCollectionsDumpInterval: time.Second * 3,
+		KnownCollectionsDumpPath:     "temp.ndjson",
 	}
 	lurConfig := config.LruConfig{
 		Size:      10,

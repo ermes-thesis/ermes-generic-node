@@ -25,11 +25,13 @@ type Config struct {
 }
 
 type MigrationManagerConfig struct {
-	LeaderThreshold   int     `yaml:"leaderThreshold"`
-	FollowerThreshold int     `yaml:"followerThreshold"`
-	ViewSize          int     `yaml:"viewSize"`
-	IdleTimeoutMs     int     `yaml:"idleTimeoutMs"`
-	GravityConstant   float64 `yaml:"gravityConstant"`
+	LeaderThreshold              int           `yaml:"leaderThreshold"`
+	FollowerThreshold            int           `yaml:"followerThreshold"`
+	ViewSize                     int           `yaml:"viewSize"`
+	IdleTimeoutMs                int           `yaml:"idleTimeoutMs"`
+	GravityConstant              float64       `yaml:"gravityConstant"`
+	KnownCollectionsDumpPath     string        `yaml:"knownCollectionsDumpPath"`
+	KnownCollectionsDumpInterval time.Duration `yaml:"knownCollectionsDumpInterval"`
 }
 
 type LruConfig struct {

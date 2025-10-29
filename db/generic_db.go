@@ -251,7 +251,7 @@ type GenericDB interface {
 	// Returns:
 	//	- uint64: memory usage of the record in bytes (0 if record doesn't exist)
 	//	- error: non-nil if the memory calculation operation fails
-	GetRecordMemoryUsage(collectionId string, recordName string) (uint64, error)
+	GetRecordsMemoryUsage(collectionId string, recordName ...string) (uint64, error)
 
 	// Close closes the database connection and releases all associated resources.
 	// The GenericDB instance should not be used after calling Close.

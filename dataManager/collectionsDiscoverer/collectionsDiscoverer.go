@@ -181,7 +181,7 @@ func AccessRecords[T any](
 func UpdateRecord(
 	c *CollectionsDiscovererImp,
 	collectionId string,
-	dbFn func(isStrong bool) error,
+	dbFn func(isStrong bool) (int64, error),
 	isInitiator bool,
 	updateMessage messages.UpdateMessage,
 ) (map[string]struct{}, error) {
@@ -261,9 +261,17 @@ func UpdateRecord(
 		defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
 	}
 
+	memUsage, err := dbFn(isStrong) // update in local db
+	if err != nil {
+		c.log.Error("UpdateRecord: Failed to update collection records in DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "error", err)
+		return nil, err
+	}
+
+	collection.GetCollectionState().(*shared.LocalCollection).IncSize(memUsage)
+
 	c.log.Debug("List of hosts prepared successfully", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", fmt.Sprintf("%+v", hosts))
 	c.log.Debug("Proceeding to update the collection in the local DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-	return hosts, dbFn(isStrong) // update in local db
+	return hosts, nil
 }
 
 func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdateMessage, groups []string, userId string, isInitiator bool, ignoredHostName string) error {
@@ -275,63 +283,80 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 
 	//write or delete in db and prepare messages for future propagation on other hosts
 	for _, update := range updates {
-		var dbFn func(isStrong bool) error
+		var dbFn func(isStrong bool) (int64, error)
 		if update.IsDelete {
-			dbFn = func(isStrong bool) error {
+			dbFn = func(isStrong bool) (int64, error) {
 				authorized, err := c.dbInterface.IsAuthorized(update.CollectionId, userId, groups...)
 				if err != nil {
 					c.log.Error("Failed to check user authorization access", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
-					return err
+					return 0, err
 				}
 				if !authorized {
 					c.log.Error("User is not authorized to delete collection records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
-					return &shared.UnauthorizedError{}
+					return 0, &shared.UnauthorizedError{}
 				}
 
 				if isStrong {
 					err = c.dbInterface.DeleteRecords(update.CollectionId, "", update.RecordNames...)
 					if err != nil {
 						c.log.Error("Failed to delete strong collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
-						return err
+						return 0, err
 					}
-					return nil
+					return 0, nil
+				}
+
+				memUsage, err := c.dbInterface.GetRecordsMemoryUsage(update.CollectionId, update.RecordNames...)
+				if err != nil {
+					c.log.Error("Failed to get records memory usage after update", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+					return 0, err
 				}
 
 				err = c.dbInterface.DeleteRecords(update.CollectionId, strconv.FormatInt(update.Time, 10)+update.UpdateHostIp, update.RecordNames...)
 				if err != nil {
 					c.log.Error("Failed to delete eventual collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
-					return err
+					return 0, err
 				}
-				return nil
+				return -int64(memUsage), nil
 			}
 		} else {
-			dbFn = func(isStrong bool) error {
+			dbFn = func(isStrong bool) (int64, error) {
 				authorized, err := c.dbInterface.IsAuthorized(update.CollectionId, userId, groups...)
 				if err != nil {
 					c.log.Error("Failed to check user authorization access", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
-					return err
+					return 0, err
 				}
 				if !authorized {
 					c.log.Error("User is not authorized to update collection records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
-					return &shared.UnauthorizedError{}
+					return 0, &shared.UnauthorizedError{}
 				}
 
-				//TODO: Update LRU to move collection to the most recently used position and update its size
+				memUsage, err := c.dbInterface.GetRecordsMemoryUsage(update.CollectionId, update.RecordNames...)
+				if err != nil {
+					c.log.Error("Failed to get records memory usage after update", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+					return 0, err
+				}
 
 				if isStrong {
 					err = c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues, "")
 					if err != nil {
 						c.log.Error("Failed to update strong collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
-						return err
+						return 0, err
 					}
-					return nil
+				} else {
+					err = c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues, strconv.FormatInt(update.Time, 10)+update.UpdateHostIp)
+					if err != nil {
+						c.log.Error("Failed to update eventual collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						return 0, err
+					}
 				}
-				err = c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues, strconv.FormatInt(update.Time, 10)+update.UpdateHostIp)
+
+				newMemUsage, err := c.dbInterface.GetRecordsMemoryUsage(update.CollectionId, update.RecordNames...)
 				if err != nil {
-					c.log.Error("Failed to update eventual collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
-					return err
+					c.log.Error("Failed to get records memory usage after update", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+					return 0, err
 				}
-				return nil
+
+				return int64(newMemUsage - memUsage), nil
 			}
 		}
 
@@ -371,13 +396,14 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 	c.collectionsPartialView.Mutex.Lock()
 
 	for _, update := range updates {
-		dbFn := func(isStrong bool) error {
+		dbFn := func(isStrong bool) (int64, error) {
 			err := c.dbInterface.SetGroups(update.CollectionId, update.Sequence, update.GroupNames...)
 			if err != nil {
 				c.log.Error("Failed to set collection's groups", "collection_id", update.CollectionId, "update", fmt.Sprintf("%+v", update), "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
-				return err
+				return 0, err
 			}
-			return nil
+			//TODO: compute memory usage difference
+			return 0, nil
 		}
 
 		//write or delete in db

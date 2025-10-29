@@ -1233,27 +1233,30 @@ func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, err
 	return totalMemory, nil
 }
 
-func (r *RedisClient) GetRecordMemoryUsage(collectionId string, recordName string) (uint64, error) {
+func (r *RedisClient) GetRecordsMemoryUsage(collectionId string, recordName ...string) (uint64, error) {
 	r.log.Info("GetRecordMemoryUsage called", "collection_id", collectionId, "record_name", recordName)
+	var memUsage uint64
+	for _, name := range recordName {
+		// We do not use a transaction here because we don't care about getting a precise value,
+		// as the memory usage may change while we are calculating it.
+		// We just want to get an approximate value of the memory usage of the collection.
+		memUsageValue, err := r.client.MemoryUsage(r.ctx, buildKey(collectionId, name)).Result()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			r.log.Error("GetRecordMemoryUsage: Failed to retrieve record memory usage", "collection_id", collectionId, "record_name", recordName, "error", err)
+			return 0, err
+		}
 
-	// We do not use a transaction here because we don't care about getting a precise value,
-	// as the memory usage may change while we are calculating it.
-	// We just want to get an approximate value of the memory usage of the collection.
-	memUsageValue, err := r.client.MemoryUsage(r.ctx, buildKey(collectionId, recordName)).Result()
-	if err != nil {
-		r.log.Error("GetRecordMemoryUsage: Failed to retrieve record memory usage", "collection_id", collectionId, "record_name", recordName, "error", err)
-		return 0, err
-	}
-
-	memUsageTimestamp, err := r.client.MemoryUsage(r.ctx, buildTimestampKey(collectionId, recordName)).Result()
-	if err != nil {
-		r.log.Error("GetRecordMemoryUsage: Failed to retrieve timestamp memory usage", "collection_id", collectionId, "record_name", recordName, "error", err)
-		return 0, err
+		memUsageTimestamp, err := r.client.MemoryUsage(r.ctx, buildTimestampKey(collectionId, name)).Result()
+		if err != nil && !errors.Is(err, redis.Nil) {
+			r.log.Error("GetRecordMemoryUsage: Failed to retrieve timestamp memory usage", "collection_id", collectionId, "record_name", recordName, "error", err)
+			return 0, err
+		}
+		memUsage += uint64(memUsageValue + memUsageTimestamp)
 	}
 
 	r.log.Info("GetRecordMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName)
-	r.log.Debug("GetRecordMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName, "record_memory_usage", memUsageValue, "timestamp_memory_usage", memUsageTimestamp)
-	return uint64(memUsageValue + memUsageTimestamp), err
+	r.log.Debug("GetRecordMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName, "memory_usage", memUsage)
+	return memUsage, nil
 }
 
 func (r *RedisClient) Close() error {

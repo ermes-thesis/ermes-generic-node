@@ -117,6 +117,7 @@ func (m *MigrationManagerImp) RemoveCollectionFromLru(collectionId string) {
 	//defer m.collectionsLock.Unlock()
 
 	m.lruCache.Remove(collectionId)
+	m.log.Info("MIG-MANAGER, collection removed from LRU", "collectionId", collectionId, "lru_size", m.lruCache.GetCurrentSize())
 }
 
 // methods
@@ -231,7 +232,7 @@ func (m *MigrationManagerImp) NewCollectionCreated(collectionId string, collecti
 		//if not enough space in the LRU for the new collection return error
 		return err
 	}
-	m.log.Info("MIG-MANAGER, collection placed on top in the LRU")
+	m.log.Info("MIG-MANAGER, collection placed on top in the LRU", "lru_size", m.lruCache.GetCurrentSize())
 	return nil
 }
 
@@ -297,6 +298,7 @@ func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionReques
 
 func (m *MigrationManagerImp) updateLru(collectionId string, collectionSize uint) error {
 	err := m.lruCache.Put(collectionId, m.collectionsPartialView.KnownCollections[collectionId], collectionSize)
+	m.log.Info("MIG-MANAGER, collection placed on top in the LRU", "lru_size", m.lruCache.GetCurrentSize())
 	if err != nil {
 		m.log.Errorf("MIG-MANAGER, not enough space in the LRU to place the collection %s even after free", collectionId)
 		return err //TODO: decide
@@ -305,8 +307,9 @@ func (m *MigrationManagerImp) updateLru(collectionId string, collectionSize uint
 }
 
 func (m *MigrationManagerImp) freeLru(sizeGoal uint) {
-	m.log.Info("MIG-MANAGER, free space in the lru to achieve size %d", sizeGoal)
+	m.log.InfofWith("DEFAULT-STRONG-POLICY, set lru to safe level %d", []any{sizeGoal}, "lru_size", m.lruCache.GetCurrentSize())
 	collectionList := m.lruCache.FreeToAchieveSize(sizeGoal) //TODO send the collection up to the
+	m.log.Info("DEFAULT-STRONG-POLICY, collections to send to remote nodes to achieve safe level", "num_collections", collectionList.Len(), "collections", collectionList, "new_lru_size", m.lruCache.GetCurrentSize())
 
 	for item := collectionList.Front(); item != nil; item = item.Next() {
 		collection := item.Value.(shared.Collection)

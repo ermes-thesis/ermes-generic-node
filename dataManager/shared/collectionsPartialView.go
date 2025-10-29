@@ -43,6 +43,11 @@ func (l *LocalCollection) IsLocal() bool {
 func (l *LocalCollection) Size() uint64 {
 	return l.size
 }
+
+func (l *LocalCollection) IncSize(size int64) {
+	l.size = uint64(int64(l.size) + size)
+}
+
 func (l *LocalCollection) HostsId() map[string]struct{} {
 	return maps.Clone(l.hostsId)
 }

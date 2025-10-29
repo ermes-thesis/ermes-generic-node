@@ -390,14 +390,14 @@ func TestMemStats(t *testing.T) {
 	require.NoError(t, err, "Expected no error getting collection memory usage")
 	require.Greater(t, collSize2, collSize, "Expected collection memory usage to not be zero")
 
-	recordSize, err := redisClient.GetRecordMemoryUsage(collectionId, "recordTest")
+	recordSize, err := redisClient.GetRecordsMemoryUsage(collectionId, "recordTest")
 	require.NoError(t, err, "Expected no error getting record")
 	require.Greater(t, recordSize, uint64(0), "Expected recordMemoryUsage to not be zero")
 
 	err = redisClient.SetRecord(collectionId, "recordTest", "Record with higher value size", "")
 	require.NoError(t, err, "Expected no error setting record")
 
-	recordSize2, err := redisClient.GetRecordMemoryUsage(collectionId, "recordTest")
+	recordSize2, err := redisClient.GetRecordsMemoryUsage(collectionId, "recordTest")
 	require.NoError(t, err, "Expected no error getting record")
 	require.Greater(t, recordSize2, recordSize, "Expected recordMemoryUsage to not be zero")
 }

@@ -200,6 +200,7 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 
 	//remove the collection from the lru
 	m.policy.lruCache.Remove(outerKey)
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader migrated collection", "collection_id", outerKey, "new_leader", innerKey, "lru_size", m.policy.lruCache.GetCurrentSize())
 
 	//stop keep track of access for a remote collection
 	m.policy.equilibriumState.Delete(outerKey)
@@ -251,6 +252,7 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 
 		//remove the collection from the lru
 		m.policy.lruCache.Remove(outerKey)
+		m.policy.log.Info("DEFAULT-STRONG-POLICY, follower migrated collection", "collection_id", outerKey, "new_host", innerKey, "lru_size", m.policy.lruCache.GetCurrentSize())
 
 		//stop keep track of access for a remote collection
 		m.policy.equilibriumState.Delete(outerKey)
@@ -261,13 +263,15 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 
 func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
 	sizeGoal := uint(float32(m.policy.lruConfig.Size) * (1.0 - m.policy.lruConfig.SafeLevel))
-	m.policy.log.Infof("DEFAULT-STRONG-POLICY, set lru to safe level %d", sizeGoal)
+	m.policy.log.InfofWith("DEFAULT-STRONG-POLICY, set lru to safe level %d", []any{sizeGoal}, "lru_size", m.policy.lruCache.GetCurrentSize())
 	collectionList := m.policy.lruCache.FreeToAchieveSize(sizeGoal)
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, collections to send to remote nodes to achieve safe level", "num_collections", collectionList.Len(), "collections", fmt.Sprintf("%+v", collectionList), "new_lru_size", m.policy.lruCache.GetCurrentSize())
 	var wg sync.WaitGroup
 	wg.Add(collectionList.Len())
 
 	for item := collectionList.Front(); item != nil; item = item.Next() {
 		collection := item.Value.(shared.Collection)
+		m.policy.log.Info("DEFAULT-STRONG-POLICY, sending collection to remote node to achieve safe level", "collection_id", collection.CollectionId())
 		go m.sendCollectionAndRemove(collection, &wg)
 	}
 

@@ -268,8 +268,8 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 			m.log.DebugfWith("Processing query template '%s'", []any{templateName}, "tmpl_parameters", params)
 
 			// Getting from the cache (or remotely) the templates of the function name
-			if query, err := m.templateCache.GetTemplate(functionName, functionVersion, templateName); err == nil {
-				err = query.ReplacePlaceholderFromStrings(params)
+			if template, err := m.templateCache.GetTemplate(functionName, functionVersion, templateName); err == nil {
+				query, err := template.ReplacePlaceholderFromStrings(params)
 				if err != nil {
 					m.log.ErrorfWith("Error replacing placeholders in query template '%s'", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion, "tmpl_param_mapping", templateParamsMapping, "user_access_groups", groups, "user_id", userId, "node_geolocation", m.serverInfo.MetadataDomain, "queries_geolocation", geolocation, "in_cloud", m.serverInfo.Father == nil, "tmpl_parameters", params, "error", err)
 					return nil, err

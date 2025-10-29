@@ -316,6 +316,8 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 					return &shared.UnauthorizedError{}
 				}
 
+				//TODO: Update LRU to move collection to the most recently used position and update its size
+
 				if isStrong {
 					err = c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues, "")
 					if err != nil {

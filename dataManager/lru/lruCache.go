@@ -111,6 +111,17 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 	}
 
 	// Else update and put on top of LRU
+	el := get.Value.(lruCacheType[T])
+	this.current -= el.size
+
+	if this.current+size > this.capacity {
+		return errors.New("not enough space in the list")
+	}
+
+	el.size = size
+	this.current += size
+
+	get.Value = el
 
 	this.linkedlist.MoveToFront(get)
 

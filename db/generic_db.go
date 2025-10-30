@@ -241,7 +241,7 @@ type GenericDB interface {
 	//	- uint64: total memory usage in bytes (0 if collection doesn't exist)
 	//	- error: non-nil if the memory calculation operation fails
 	GetCollectionMemoryUsage(collectionId string) (uint64, error)
-	// GetRecordMemoryUsage calculates the memory usage of a specific record
+	// GetRecordsMemoryUsage calculates the memory usage of a specific record
 	// within a collection.
 	//
 	// Parameters:

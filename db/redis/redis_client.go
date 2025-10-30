@@ -1234,7 +1234,7 @@ func (r *RedisClient) GetCollectionMemoryUsage(collectionId string) (uint64, err
 }
 
 func (r *RedisClient) GetRecordsMemoryUsage(collectionId string, recordName ...string) (uint64, error) {
-	r.log.Info("GetRecordMemoryUsage called", "collection_id", collectionId, "record_name", recordName)
+	r.log.Info("GetRecordsMemoryUsage called", "collection_id", collectionId, "record_name", recordName)
 	var memUsage uint64
 	for _, name := range recordName {
 		// We do not use a transaction here because we don't care about getting a precise value,
@@ -1242,20 +1242,20 @@ func (r *RedisClient) GetRecordsMemoryUsage(collectionId string, recordName ...s
 		// We just want to get an approximate value of the memory usage of the collection.
 		memUsageValue, err := r.client.MemoryUsage(r.ctx, buildKey(collectionId, name)).Result()
 		if err != nil && !errors.Is(err, redis.Nil) {
-			r.log.Error("GetRecordMemoryUsage: Failed to retrieve record memory usage", "collection_id", collectionId, "record_name", recordName, "error", err)
+			r.log.Error("GetRecordsMemoryUsage: Failed to retrieve record memory usage", "collection_id", collectionId, "record_name", recordName, "error", err)
 			return 0, err
 		}
 
 		memUsageTimestamp, err := r.client.MemoryUsage(r.ctx, buildTimestampKey(collectionId, name)).Result()
 		if err != nil && !errors.Is(err, redis.Nil) {
-			r.log.Error("GetRecordMemoryUsage: Failed to retrieve timestamp memory usage", "collection_id", collectionId, "record_name", recordName, "error", err)
+			r.log.Error("GetRecordsMemoryUsage: Failed to retrieve timestamp memory usage", "collection_id", collectionId, "record_name", recordName, "error", err)
 			return 0, err
 		}
 		memUsage += uint64(memUsageValue + memUsageTimestamp)
 	}
 
-	r.log.Info("GetRecordMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName)
-	r.log.Debug("GetRecordMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName, "memory_usage", memUsage)
+	r.log.Info("GetRecordsMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName)
+	r.log.Debug("GetRecordsMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName, "memory_usage", memUsage)
 	return memUsage, nil
 }
 

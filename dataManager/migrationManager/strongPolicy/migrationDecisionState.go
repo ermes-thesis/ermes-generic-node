@@ -262,6 +262,10 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 }
 
 func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
+	//sync
+	m.policy.partialView.Mutex.Lock()
+	defer m.policy.partialView.Mutex.Unlock()
+
 	sizeGoal := uint(float32(m.policy.lruConfig.Size) * (1.0 - m.policy.lruConfig.SafeLevel))
 	m.policy.log.InfofWith("DEFAULT-STRONG-POLICY, set lru to safe level %d", []any{sizeGoal}, "lru_size", m.policy.lruCache.GetCurrentSize())
 	collectionList := m.policy.lruCache.FreeToAchieveSize(sizeGoal)

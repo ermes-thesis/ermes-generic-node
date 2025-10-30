@@ -111,6 +111,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-ERMES-CACHE", string(jsonToCache))
 		w.Header().Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", resSeqNumber))
+		w.Header().Set("X-ERMES-EXECUTION-HOST", functionResponse.Hostname)
 		w.WriteHeader(functionResponse.StatusCode)
 		if _, err = w.Write(functionResponse.Body); err != nil {
 			s.log.Error("Error while writing HTTP response", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)

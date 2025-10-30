@@ -40,6 +40,7 @@ func (f fnResBody) String() string {
 
 type FunctionResult struct {
 	StatusCode int
+	Hostname   string
 	Body       fnResBody
 }
 
@@ -336,6 +337,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 	}
 	result := &FunctionResult{
 		StatusCode: resp.HttpCode,
+		Hostname:   s.serverInfo.HostName,
 		Body:       repBody,
 	}
 
@@ -715,6 +717,7 @@ func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functio
 
 	fnRes := FunctionResult{
 		StatusCode: resp.StatusCode,
+		Hostname:   resp.Header.Get("X-ERMES-EXECUTION-HOST"),
 		Body:       body,
 	}
 	s.log.Debug("Received response from offloaded scheduling", "fn_response", fmt.Sprintf("%+v", fnRes), "new_sequential_number", sequentialSeqNumber, "old_sequential_number", seqNumber)

@@ -80,6 +80,7 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", resSeqNumber))
+		w.Header().Set("X-ERMES-EXECUTION-HOST", functionResponse.Hostname)
 		w.WriteHeader(functionResponse.StatusCode)
 		if _, err = w.Write(functionResponse.Body); err != nil {
 			s.log.Error("Error parsing sequential sequence number", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)

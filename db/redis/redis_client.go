@@ -1254,6 +1254,13 @@ func (r *RedisClient) GetRecordsMemoryUsage(collectionId string, recordName ...s
 		memUsage += uint64(memUsageValue + memUsageTimestamp)
 	}
 
+	memUsageKeys, err := r.client.MemoryUsage(r.ctx, "info:"+collectionId+":keys").Result()
+	if err != nil && !errors.Is(err, redis.Nil) {
+		r.log.Error("GetRecordsMemoryUsage: Failed to retrieve record memory usage", "collection_id", collectionId, "record_name", recordName, "error", err)
+		return 0, err
+	}
+	memUsage += uint64(memUsageKeys)
+
 	r.log.Info("GetRecordsMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName)
 	r.log.Debug("GetRecordsMemoryUsage: Record memory usage retrieved successfully", "collection_id", collectionId, "record_name", recordName, "memory_usage", memUsage)
 	return memUsage, nil

@@ -194,7 +194,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	}
 
 	if isStrong {
-		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false, isLeader)
+		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false, isLeader, m.serverInfo.HostName)
 	} else {
 		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, collectionSize, false)
 	}
@@ -258,7 +258,7 @@ func (m *MigrationManagerImp) NewCollectionCreated(collectionId string, collecti
 	}
 
 	if isStrong {
-		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false, true) //when I create a strong collection I'm the leader
+		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false, true, m.serverInfo.HostName) //when I create a strong collection I'm the leader
 	} else {
 		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, collectionSize, false)
 	}

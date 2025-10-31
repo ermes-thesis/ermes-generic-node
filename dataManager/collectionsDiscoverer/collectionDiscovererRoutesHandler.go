@@ -191,6 +191,7 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 		collectionId := msg.CollectionId
 		isStrong := msg.IsStrong
 		senderIp := msg.SenderIp
+		leaderIp := msg.LeaderIp
 
 		//sync
 		c.collectionsPartialView.Mutex.Lock()
@@ -233,7 +234,7 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 
 		// Process the new collection creation
 		if isStrong {
-			c.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, 0, true, false) // remote strong collection
+			c.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, 0, true, false, leaderIp) // remote strong collection
 		} else {
 			c.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, 0, true) // remote weak collection
 		}

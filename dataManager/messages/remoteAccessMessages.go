@@ -145,6 +145,7 @@ type NewCollectionMessage struct {
 	CollectionName      string `json:"collectionName"`
 	CollectionOwner     string `json:"collectionOwner"`
 	IsStrong            bool   `json:"isStrong"`
+	LeaderIp            string `json:"leaderIp"`
 	SenderIp            string `json:"senderIp"`
 	SkipUniquenessCheck bool   `json:"skipUniquenessCheck"`
 }

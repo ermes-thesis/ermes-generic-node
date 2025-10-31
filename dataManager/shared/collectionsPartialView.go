@@ -170,7 +170,7 @@ func (c *CollectionPartialView) DumpToJsonFile(path string) error {
 	return nil
 }
 
-func (c *CollectionPartialView) RestoreInfoFromSettings(configData []config.CollectionSettingsInfo) error {
+func (c *CollectionPartialView) RestoreInfoFromSettings(configData []config.CollectionSettingsInfo, serverInfo server.ServerInfo) error {
 	//sync
 	c.Mutex.Lock()
 	defer c.Mutex.Unlock()
@@ -179,7 +179,7 @@ func (c *CollectionPartialView) RestoreInfoFromSettings(configData []config.Coll
 	c.KnownCollections = make(map[string]Collection)
 	for _, coll := range configData {
 		if coll.IsStrong {
-			c.restoreStrongCollectionFromSettings(coll)
+			c.restoreStrongCollectionFromSettings(coll, serverInfo)
 		} else {
 			c.restoreWeakCollectionFromSettings(coll)
 		}
@@ -188,13 +188,13 @@ func (c *CollectionPartialView) RestoreInfoFromSettings(configData []config.Coll
 	return nil
 }
 
-func (c *CollectionPartialView) restoreStrongCollectionFromSettings(info config.CollectionSettingsInfo) {
+func (c *CollectionPartialView) restoreStrongCollectionFromSettings(info config.CollectionSettingsInfo, serverInfo server.ServerInfo) {
 	CollectionSize := *info.CollectionSize
 	if info.IsRemote {
 		CollectionSize = 0
 	}
 
-	coll := NewStrongCollection(info.CollectionID, CollectionSize, info.IsRemote, info.IsLeader != nil && *info.IsLeader)
+	coll := NewStrongCollection(info.CollectionID, CollectionSize, info.IsRemote, info.IsLeader != nil && *info.IsLeader, serverInfo.HostName)
 
 	//set leader id
 	if info.LeaderID != nil {

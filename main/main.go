@@ -90,7 +90,7 @@ func run(ctx context.Context, configPath string) error {
 	collections := &dataManagerShared.CollectionPartialView{
 		KnownCollections: make(map[string]dataManagerShared.Collection),
 	}
-	err = collections.RestoreInfoFromSettings(cfg.Collections)
+	err = collections.RestoreInfoFromSettings(cfg.Collections, *serverInfo)
 	if err != nil {
 		return fmt.Errorf("error restoring collections from settings: %w", err)
 	}

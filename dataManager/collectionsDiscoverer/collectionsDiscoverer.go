@@ -471,6 +471,7 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 			IsStrong:            isStrong,
 			SenderIp:            c.serverInfo.HostName,
 			SkipUniquenessCheck: skipUniquenessCheck,
+			LeaderIp:            c.serverInfo.HostName,
 		}
 		err := c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, newCollectionMessage)
 		if err != nil {

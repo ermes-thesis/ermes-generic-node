@@ -7,7 +7,7 @@ import (
 	penality "dataManager/migrationManager/penalityFunction"
 	"dataManager/migrationManager/strongPolicy"
 	weakpolicy "dataManager/migrationManager/weakPolicy"
-	sender "dataManager/sender"
+	"dataManager/sender"
 	shared "dataManager/shared"
 	"db"
 	"errors"

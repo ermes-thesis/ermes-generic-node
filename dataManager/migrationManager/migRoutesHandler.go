@@ -80,14 +80,7 @@ func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 			return
 		}
 
-		hostname := r.Header.Get("X-ERMES-HOSTNAME")
-		if hostname == "" {
-			m.log.Error("HTTP-REQ, Missing X-ERMES-HOSTNAME header")
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.Owner, collection.GroupsSequence, collection.CollectionSize, collection.HostToRemove, hostname)
+		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.Owner, collection.GroupsSequence, collection.CollectionSize, collection.HostToRemove, collection.SenderIp)
 
 		w.WriteHeader(http.StatusOK)
 	})

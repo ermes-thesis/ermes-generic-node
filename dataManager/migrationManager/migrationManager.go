@@ -331,6 +331,8 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 		}
 	}
 
+	m.log.Info("MIG-MANAGER, remote updates to send", "num_messages", len(msgs), "messages", fmt.Sprintf("%+v", msgs))
+
 	//send remote updates
 	for host, message := range msgs {
 		m.sender.SendRequestInfoMessage(message, host)

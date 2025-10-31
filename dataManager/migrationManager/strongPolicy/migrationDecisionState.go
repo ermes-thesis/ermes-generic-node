@@ -119,10 +119,12 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 	if strongCollection.IsLeader {
 		for _, buffer := range innerMap {
 			force, req := m.computeElasticForce(buffer, usage.GetWrite)
+			m.policy.log.Info("DEFAULT-STRONG-POLICY, leader total force computation", "collection_id", outerKey, "force", force, "num_requests", req)
 			totalForce += force
 			totalReqNumber += req
 		}
 		totalForce += m.policy.currentConfig.LeaderThreshold
+		m.policy.log.Info("DEFAULT-STRONG-POLICY, leader total force with threshold", "collection_id", outerKey, "total_force", totalForce, "total_requests", totalReqNumber)
 	}
 
 	for innerKey, buffer := range innerMap {
@@ -136,6 +138,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 
 		if strongCollection.IsLeader {
 			//if the collection has been moved and removed locally
+			m.policy.log.Info("DEFAULT-STRONG-POLICY, leader taking decision for collection", "collection_id", outerKey, "potential_new_leader", innerKey)
 			if m.leaderDecision(outerKey, innerKey, buffer, strongCollection, totalForce, totalReqNumber) {
 				return
 			}
@@ -161,7 +164,8 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 			break
 		}
 	}
-
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader latency retrieval", "collection_id", outerKey, "potential_new_leader", innerKey, "NodeResourceUsage", fmt.Sprintf("%+v", m.NodeResourceUsage))
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader decision computation", "collection_id", outerKey, "elastic_force", feW, "num_requests", req, "latency", latency, "free_memory", m.NodeResourceUsage[innerKey].FreeRedisMemory, "gravity_constant", m.policy.currentConfig.GravityConstant, "total_requests", totalReq, "total_force", totalForce)
 	var driverForce = float64(2*feW) - ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(latency)
 	m.policy.log.Infof("DEFAULT-STRONG-POLICY, leader decision on collection %s result in force %f and resistance %f", outerKey, driverForce, float64(totalForce))
 	//evaluate decision

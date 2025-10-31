@@ -55,6 +55,7 @@ func NewMigrationManagerSender(logger *logger.Logger, server server.ServerType, 
 
 func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool) {
 	//imp
+	s.log.Info("SENDER: Preparing to send collection", "collectionId", collection.CollectionId(), "destination", destination, "isMigration", isMigration, "sendAsLeader", sendAsLeader, "collectionSize", collectionSize)
 	s.log.Infof("[SENDER] send collection %s to %s", collection.CollectionId(), destination)
 	if s.serverInfo.Father == nil || destination != s.serverInfo.Father.HostName {
 		s.log.Warn("ADDING HOST TO COLLECTION", "hostname", s.serverInfo.HostName, "destination", destination, "KNWN HOSTS", collection.HostsId())
@@ -81,6 +82,8 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		msg.IsLeader = false
 	}
 
+	s.log.Info("Sending GossipMessage", "msg", fmt.Sprintf("%+v", msg))
+
 	go s.server.SendGenericHTTPRequest(destination, repoPath, msg)
 }
 
@@ -94,7 +97,7 @@ func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage
 }
 
 func (s *MigrationManagerSenderImpl) SendRequestInfoMessage(msg gossip.CollectionRequestInfoMessages, destination string) {
-	s.log.Infof("SENDER: send collection request info to %s", destination)
+	s.log.InfofWith("SENDER: send collection request info to %s", []any{destination}, "msg", fmt.Sprintf("%+v", msg))
 
 	go s.server.SendGenericHTTPRequest(destination, requestInfoPath, msg)
 }

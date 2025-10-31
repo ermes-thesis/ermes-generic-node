@@ -5,14 +5,14 @@ import (
 	"encoding/json"
 	"io"
 	"metadataManager/types"
-	"mocks/caches"
+	caches_mock "mocks/caches"
 	datamanager_mock "mocks/dataManager"
-	"mocks/dataManager/collectionsDiscoverer"
+	collectionsDiscoverer_mock "mocks/dataManager/collectionsDiscoverer"
 	migrationManager_mock "mocks/dataManager/migrationManager"
 	wasm_mock "mocks/ermes-common/wasm-pool"
 	wasm_executor_mock "mocks/ermes-common/wasm-pool/executor"
-	"mocks/metadataManager"
-	"mocks/tokenDecoder"
+	metadataManager_mock "mocks/metadataManager"
+	tokenDecoder_mock "mocks/tokenDecoder"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -128,7 +128,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345 := shared.NewWeakCollection("12345", 40, false)
 	collChild12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collChild1111 := shared.NewStrongCollection("1111", 40, false, false)
+	collChild1111 := shared.NewStrongCollection("1111", 40, false, false, "")
 	collChild1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
@@ -251,7 +251,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collFather12345 := shared.NewWeakCollection("12345", 40, true)
-	collFather1111 := shared.NewStrongCollection("1111", 40, false, true)
+	collFather1111 := shared.NewStrongCollection("1111", 40, false, true, "")
 	collFather1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(false, collFather12345, nil)
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collFather1111, nil)
@@ -317,7 +317,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345 := shared.NewWeakCollection("12345", 40, false)
 	collChild12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collChild1111 := shared.NewStrongCollection("1111", 40, false, false)
+	collChild1111 := shared.NewStrongCollection("1111", 40, false, false, "")
 	collChild1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 
 	urlFather, err := url.Parse(httpServerFather.URL)
@@ -982,7 +982,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collFather12345 := shared.NewWeakCollection("12345", 40, false)
 	collFather12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collFather1111 := shared.NewStrongCollection("1111", 40, false, false)
+	collFather1111 := shared.NewStrongCollection("1111", 40, false, false, "")
 	collFather1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collFather12345, nil)
@@ -1045,7 +1045,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild1111 := shared.NewStrongCollection("1111", 40, false, true)
+	collChild1111 := shared.NewStrongCollection("1111", 40, false, true, "")
 	collChild1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
@@ -1142,7 +1142,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	}, nil)
 
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collFather1111 := shared.NewStrongCollection("1111", 40, true, false)
+	collFather1111 := shared.NewStrongCollection("1111", 40, true, false, "")
 
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(false, collFather1111, nil)
 
@@ -1194,7 +1194,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
 
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild1111 := shared.NewStrongCollection("1111", 40, true, false)
+	collChild1111 := shared.NewStrongCollection("1111", 40, true, false, "")
 
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(false, collChild1111, nil)
 
@@ -1248,7 +1248,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	wasmExecutorPoolChild2.EXPECT().Acquire().Return(wasmExecutorChild2)
 
 	collectionDiscovererChild2 := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild1111_2 := shared.NewStrongCollection("1111", 40, false, true)
+	collChild1111_2 := shared.NewStrongCollection("1111", 40, false, true, "")
 	collChild1111_2.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 
 	collectionDiscovererChild2.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111_2, nil)

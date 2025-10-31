@@ -28,6 +28,7 @@ type MigrationManager interface {
 	// if the collection is strong used to update forces in real time.
 	// if the request comes from a user => nodeName = "user"
 	UpdatesRequestsInfo(info []messages.CollectionRequestInfo)
+	UpdateCollectionsLatestUsage(collections []string)
 	// ManageGossipMessage used to update non realtime info
 	ManageGossipMessage(messages.GossipMessage)
 	// NewCollectionReceived used when the node receive  a collection from one of the directly connected nodes (collectionID,isStrong,leader)
@@ -278,6 +279,19 @@ func (m *MigrationManagerImp) ManageGossipMessage(msg messages.GossipMessage) {
 	m.log.Info("MIG-MANAGER, gossip message received")
 	m.StrongCollectionPolicy.ManageGossipMessage(msg)
 }
+func (m *MigrationManagerImp) UpdateCollectionsLatestUsage(collections []string) {
+	//sync
+	m.collectionsLock.Lock()
+	defer m.collectionsLock.Unlock()
+
+	for _, c := range collections {
+		collection := m.collectionsPartialView.KnownCollections[c]
+		if collection != nil && collection.IsLocal() {
+			m.updateLru(c, uint(collection.GetCollectionState().(*shared.LocalCollection).Size()))
+		}
+	}
+
+}
 
 // UpdatesRequestsInfo call this when wasm function has completed
 func (m *MigrationManagerImp) UpdatesRequestsInfo(info []messages.CollectionRequestInfo) {
@@ -321,7 +335,6 @@ func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionReques
 	m.log.Info("MIG-MANAGER, new request for a local collection received")
 
 	//place on top in the LRU
-	m.updateLru(i.CollectionId, uint(m.collectionsPartialView.KnownCollections[i.CollectionId].GetCollectionState().(*shared.LocalCollection).Size()))
 	m.log.Info("MIG-MANAGER, collection placed on top in the LRU")
 
 	//if the collection is strong update forces

@@ -25,6 +25,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 
 		var res any
 		var dbErr error
+		var resp gossip.RemoteAccessResponse
 
 		if len(msg.RecordNames) == 0 {
 			c.log.Warn("Remote access request contains no record names", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
@@ -70,6 +71,10 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 				http.Error(w, fmt.Sprintf("Internal Server Error: Failed to access the specified record"), http.StatusInternalServerError)
 				return
 			}
+
+			resp = gossip.RemoteAccessResponse{
+				Records: []any{res},
+			}
 		} else {
 			c.log.Debug("Multi-record remote access", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
 			dbFn := func() (any, error) {
@@ -108,10 +113,10 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 				http.Error(w, fmt.Sprintf("Internal Server Error: Failed to access the specified records"), http.StatusInternalServerError)
 				return
 			}
-		}
 
-		resp := gossip.RemoteAccessResponse{
-			Records: res.([]any),
+			resp = gossip.RemoteAccessResponse{
+				Records: res.([]any),
+			}
 		}
 
 		w.Header().Set("Content-Type", "application/json")

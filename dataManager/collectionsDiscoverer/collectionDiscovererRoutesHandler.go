@@ -215,6 +215,7 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 		if c.serverInfo.Father != nil {
 			c.log.Info("Propagating new collection creation to father node", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg), "father_hostname", c.serverInfo.Father.HostName)
 			msg.SenderIp = c.serverInfo.HostName
+			msg.LeaderIp = c.serverInfo.HostName
 			err := c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, msg)
 			if err != nil {
 				c.log.Error("Failed to propagate new collection creation to father node", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg), "error", err)

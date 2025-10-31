@@ -45,6 +45,7 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 			RequestLatency: 3,
 		},
 	})
+	mig.UpdateCollectionsLatestUsage([]string{"repoId"})
 
 	b, c, d := clDiscovererImp.IsCollectionLocallyPresent("repoId", 0)
 
@@ -139,6 +140,7 @@ func TestIterationModule(t *testing.T) {
 			RequestLatency: 15,
 		},
 	})
+	mig.UpdateCollectionsLatestUsage([]string{"repoId2", "repoId0", "repoId1"})
 
 	leaderGossip1 := gossip.NewLeaderDelegaMessage("1111", 0.90)
 	mig.ManageGossipMessage(leaderGossip1)
@@ -151,6 +153,7 @@ func TestIterationModule(t *testing.T) {
 			RequestLatency: 20,
 		},
 	})
+	mig.UpdateCollectionsLatestUsage([]string{"repoId0"})
 	child1Gossip1 := gossip.NewChildStateMessage("3333", 0.00)
 	mig.ManageGossipMessage(child1Gossip1)
 	child2Gossip1 := gossip.NewChildStateMessage("2222", 0.10)
@@ -211,7 +214,7 @@ func TestIterationModule(t *testing.T) {
 			RequestLatency: 1,
 		},
 	})
-
+	mig.UpdateCollectionsLatestUsage([]string{"repoId0", "repoId3"})
 	child1Gossip1 = gossip.NewChildStateMessage("3333", 0.90)
 	mig.ManageGossipMessage(child1Gossip1)
 	// gossipState
@@ -251,6 +254,7 @@ func TestIterationModule(t *testing.T) {
 			RequestLatency: 20,
 		},
 	})
+	mig.UpdateCollectionsLatestUsage([]string{"repoId3", "repoId4"})
 	child1Gossip1 = gossip.NewChildStateMessage("3333", 0.90)
 	mig.ManageGossipMessage(child1Gossip1)
 	// gossipState

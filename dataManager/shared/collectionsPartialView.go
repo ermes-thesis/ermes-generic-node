@@ -100,7 +100,7 @@ type collectionDump struct {
 	CollectionID   string   `json:"collection_id"`
 	IsStrong       bool     `json:"is_strong"`
 	IsLocal        bool     `json:"is_local"`
-	IsLeader       bool     `json:"is_leader,omitempty"`
+	IsLeader       bool     `json:"is_leader"`
 	CollectionSize uint64   `json:"collection_size"`
 	LeaderID       string   `json:"leader_id,omitempty"`
 	HostsID        []string `json:"hosts_id"`

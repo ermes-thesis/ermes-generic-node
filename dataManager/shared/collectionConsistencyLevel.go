@@ -36,6 +36,7 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 			collectionId:    collectionId,
 			collectionState: NewRemoteCollection(hosts),
 			IsLeader:        false,
+			LeaderId:        leaderId,
 			WriteMutex:      &sync.Mutex{},
 		}
 	}

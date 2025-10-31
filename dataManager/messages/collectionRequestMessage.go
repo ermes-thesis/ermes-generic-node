@@ -2,14 +2,12 @@ package messages
 
 type CollectionRequestInfo struct {
 	CollectionId   string
-	NodeName       string
 	IsWrite        bool
 	RequestLatency int
 }
 
 type CollectionRequestInfoMessage struct {
 	CollectionId   string `json:"collectionId"`
-	NodeName       string `json:"nodeName"`
 	IsWrite        bool   `json:"isWrite"`
 	RequestLatency int    `json:"requestLatency"`
 	Sender         string `json:"sender"`
@@ -24,7 +22,6 @@ func ToCollectionRequestInfoMessages(info []CollectionRequestInfo, sender string
 	for _, i := range info {
 		message := CollectionRequestInfoMessage{
 			CollectionId:   i.CollectionId,
-			NodeName:       i.NodeName,
 			IsWrite:        i.IsWrite,
 			RequestLatency: i.RequestLatency,
 			Sender:         sender,

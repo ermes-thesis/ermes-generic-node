@@ -27,7 +27,7 @@ type MigrationManager interface {
 	// UpdatesRequestsInfo used to update lru in real time (collectionID)
 	// if the collection is strong used to update forces in real time.
 	// if the request comes from a user => nodeName = "user"
-	UpdatesRequestsInfo(info []messages.CollectionRequestInfo)
+	UpdatesRequestsInfo(info []messages.CollectionRequestInfo, sender string)
 	UpdateCollectionsLatestUsage(collections []string)
 	// ManageGossipMessage used to update non realtime info
 	ManageGossipMessage(messages.GossipMessage)
@@ -294,8 +294,8 @@ func (m *MigrationManagerImp) UpdateCollectionsLatestUsage(collections []string)
 }
 
 // UpdatesRequestsInfo call this when wasm function has completed
-func (m *MigrationManagerImp) UpdatesRequestsInfo(info []messages.CollectionRequestInfo) {
-	m.updatesRequestsInfo(messages.ToCollectionRequestInfoMessages(info, m.serverInfo.HostName))
+func (m *MigrationManagerImp) UpdatesRequestsInfo(info []messages.CollectionRequestInfo, sender string) {
+	m.updatesRequestsInfo(messages.ToCollectionRequestInfoMessages(info, sender))
 }
 
 func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionRequestInfoMessages) {
@@ -307,11 +307,13 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 	for _, i := range info.Messages {
 		//if no local info on the collection -> remote update -> save the message to send it later
 		if m.collectionsPartialView.KnownCollections[i.CollectionId] == nil {
-			fatherId := m.serverInfo.Father.HostName
-			if fatherId == "" {
+			if m.serverInfo.Father == nil {
 				m.log.Error("MIG-MANAGER, no info on the collection and no father to send the info")
 				continue
 			}
+
+			fatherId := m.serverInfo.Father.HostName
+			i.Sender = m.serverInfo.HostName
 			msgs[fatherId] = messages.CollectionRequestInfoMessages{Messages: append(msgs[fatherId].Messages, i)}
 		} else if !m.collectionsPartialView.KnownCollections[i.CollectionId].IsStrong() && !m.collectionsPartialView.KnownCollections[i.CollectionId].IsLocal() {
 			hostId := m.collectionsPartialView.GetClosestChild(m.collectionsPartialView.KnownCollections[i.CollectionId].HostsId(), m.serverInfo)
@@ -319,6 +321,7 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 				m.log.Error("MIG-MANAGER, no info on the collection and no child to send the info")
 				continue
 			}
+			i.Sender = m.serverInfo.HostName
 			msgs[hostId] = messages.CollectionRequestInfoMessages{Messages: append(msgs[hostId].Messages, i)}
 		} else { // local update
 			m.localUpdateRequestInfo(i)
@@ -340,10 +343,10 @@ func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionReques
 	//if the collection is strong update forces
 	if m.collectionsPartialView.KnownCollections[i.CollectionId].IsStrong() {
 		m.log.Info("MIG-MANAGER, handle request for a strong collection")
-		m.StrongCollectionPolicy.ManageNewStrongRequest(i.CollectionId, i.NodeName, i.IsWrite, i.RequestLatency)
+		m.StrongCollectionPolicy.ManageNewStrongRequest(i.CollectionId, i.Sender, i.IsWrite, i.RequestLatency)
 	} else {
 		m.log.Info("MIG-MANAGER, handle request for a week collection")
-		m.WeakCollectionPolicy.ManageNewWeakRequest(i.CollectionId, i.NodeName, i.IsWrite, i.RequestLatency)
+		m.WeakCollectionPolicy.ManageNewWeakRequest(i.CollectionId, i.Sender, i.IsWrite, i.RequestLatency)
 	}
 }
 

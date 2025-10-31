@@ -559,7 +559,6 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 			for _, coll := range colls {
 				collRequestInfo = append(collRequestInfo, messages.CollectionRequestInfo{
 					CollectionId:   coll.Id,
-					NodeName:       reqHostname,
 					IsWrite:        writeSeqCollection,
 					RequestLatency: cumulativeLatency,
 				})
@@ -567,7 +566,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		}
 
 		s.log.InfofWith("[%s] Starting to update migration manager request infos for the used collections", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
-		s.dataManager.GetMigrationManager().UpdatesRequestsInfo(collRequestInfo)
+		s.dataManager.GetMigrationManager().UpdatesRequestsInfo(collRequestInfo, reqHostname)
 	}()
 
 	s.log.Info("Local function execution completed successfully. Returning result", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result), "new_sequence_number", seqNumber)

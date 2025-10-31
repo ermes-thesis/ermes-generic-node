@@ -381,6 +381,9 @@ func (m *MigrationManagerImp) SendCollectionAndRemove(collection shared.Collecti
 		//stop keep track of access for a remote collection
 		m.StrongCollectionPolicy.RemoveInfo(collection.CollectionId())
 	}
+	if collection.HostsId() == nil {
+		delete(m.collectionsPartialView.KnownCollections, collection.CollectionId())
+	}
 	m.sender.SendRemoteCollectionTo(m.serverInfo.Father.HostName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
 
 	//remove collection from redis instance

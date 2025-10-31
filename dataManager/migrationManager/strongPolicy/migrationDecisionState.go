@@ -191,7 +191,9 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 		m.policy.log.Error("Error getting collection size from database", "error", sizeError)
 		return false //TODO: decide
 	}
-	//s
+	if strongCollection.HostsId() == nil && innerKey == m.policy.serverInfo.Father.HostName {
+		delete(m.policy.partialView.KnownCollections, strongCollection.CollectionId())
+	}
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, true, res, groups, owner, groupsSequence, collectionSize, true)
 
@@ -246,7 +248,9 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 
 	//if all the interest adjacent node has been satisfied
 	isMigration := interestedNodeCounter-len(strongCollection.HostsId()) <= 0 && !strongCollection.IsLeader
-
+	if strongCollection.HostsId() == nil && innerKey == m.policy.serverInfo.Father.HostName {
+		delete(m.policy.partialView.KnownCollections, strongCollection.CollectionId())
+	}
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, false, res, groups, owner, groupsSequence, collectionSize, isMigration)
 
@@ -321,6 +325,9 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 		}
 		//stop keep track of access for a remote collection
 		m.policy.RemoveInfo(collection.CollectionId())
+	}
+	if collection.HostsId() == nil {
+		delete(m.policy.partialView.KnownCollections, collection.CollectionId())
 	}
 	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.HostName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
 

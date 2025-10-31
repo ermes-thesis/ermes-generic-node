@@ -381,7 +381,7 @@ func (m *MigrationManagerImp) SendCollectionAndRemove(collection shared.Collecti
 		//stop keep track of access for a remote collection
 		m.StrongCollectionPolicy.RemoveInfo(collection.CollectionId())
 	}
-	if collection.HostsId() == nil {
+	if len(collection.HostsId()) == 0 {
 		delete(m.collectionsPartialView.KnownCollections, collection.CollectionId())
 	}
 	m.sender.SendRemoteCollectionTo(m.serverInfo.Father.HostName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)

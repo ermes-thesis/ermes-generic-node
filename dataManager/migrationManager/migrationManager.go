@@ -184,6 +184,9 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		}
 
 		collection.SetToLocal(collectionSize)
+		if isStrong {
+			collection.(*shared.StrongCollection).IsLeader = isLeader
+		}
 		m.log.Info("MIG-MANAGER, new collection set to local")
 		m.updateLru(collectionId, uint(collectionSize))
 		return false

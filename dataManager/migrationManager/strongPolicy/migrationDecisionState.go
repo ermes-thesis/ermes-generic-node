@@ -195,11 +195,13 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 		m.policy.log.Error("Error getting collection size from database", "error", sizeError)
 		return false //TODO: decide
 	}
-	if len(strongCollection.HostsId()) == 0 && innerKey == m.policy.serverInfo.Father.HostName {
-		delete(m.policy.partialView.KnownCollections, strongCollection.CollectionId())
-	}
+
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, true, res, groups, owner, groupsSequence, collectionSize, true)
+
+	if len(strongCollection.HostsId()) == 0 {
+		delete(m.policy.partialView.KnownCollections, strongCollection.CollectionId())
+	}
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(outerKey)
@@ -252,13 +254,15 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 
 	//if all the interest adjacent node has been satisfied
 	isMigration := interestedNodeCounter-len(strongCollection.HostsId()) <= 0 && !strongCollection.IsLeader
-	if len(strongCollection.HostsId()) == 0 && innerKey == m.policy.serverInfo.Father.HostName {
-		delete(m.policy.partialView.KnownCollections, strongCollection.CollectionId())
-	}
+
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, false, res, groups, owner, groupsSequence, collectionSize, isMigration)
 
 	if isMigration {
+		if len(strongCollection.HostsId()) == 0 {
+			delete(m.policy.partialView.KnownCollections, strongCollection.CollectionId())
+		}
+
 		//remove collection from redis instance
 		m.policy.dbInterface.DeleteCollection(outerKey)
 

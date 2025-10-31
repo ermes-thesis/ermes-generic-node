@@ -173,7 +173,11 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 
 	//react to positive decision
 	//sync -> avoid send a collection if used
-	strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+	b := strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock()
+	if !b {
+		return false
+	}
+
 	defer strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 
 	//get collection from redis instance
@@ -222,7 +226,10 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 
 	//react to positive decision
 	//sync -> avoid send a collection if used
-	strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+	b := strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock()
+	if !b {
+		return false
+	}
 	defer strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 
 	//get collection from redis instance
@@ -286,7 +293,11 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 	defer wg.Done()
 
 	//sync -> avoid send a collection if used
-	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+	b := collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock()
+	if !b {
+		return nil
+	}
+
 	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 
 	//get collection from redis instance

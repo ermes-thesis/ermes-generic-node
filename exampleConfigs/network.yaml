@@ -71,3 +71,14 @@ common:
     wasmRuntime: "wasmtime"
 
   groupTokenPublicKeyPath: "./keys/public.pem"
+
+  logger:
+    level: 0
+    output:
+      logDir: logs
+      logFileName: test.log
+    stdoutEnabled: true
+    addSource: true
+    colored: true
+    rolling: false
+    muted: false

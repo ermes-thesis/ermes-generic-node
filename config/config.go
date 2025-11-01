@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ermes-thesis/ermes-common/caches"
+	"github.com/ermes-thesis/ermes-common/logger"
 	"gopkg.in/yaml.v3" //go get gopkg.in/yaml.v3
 )
 
@@ -22,6 +23,7 @@ type Config struct {
 	Scheduler               SchedulerConfig          `yaml:"scheduler"`
 	Collections             []CollectionSettingsInfo `yaml:"collections"`
 	GroupTokenPublicKeyPath string                   `yaml:"groupTokenPublicKeyPath"`
+	Logger                  logger.Config            `yaml:"logger"`
 }
 
 type MigrationManagerConfig struct {

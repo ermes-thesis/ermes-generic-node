@@ -22,8 +22,6 @@ import (
 	"tokenDecoder"
 
 	"github.com/ermes-thesis/ermes-common/logger"
-	"github.com/rs/zerolog"
-
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
 )
 
@@ -31,16 +29,9 @@ func run(ctx context.Context, configPath string) error {
 	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
 	defer cancel()
 
-	logFactory := logger.NewFactory(logger.Config{
-		Level:  zerolog.InfoLevel,
-		Format: "text",
-		Output: &logger.LogFile{
-			LogDir: "genLogs",
-		},
-		StdoutEnabled: true,
-		AddSource:     true,
-		Colored:       true,
-	})
+	cfg := config.LoadConfig(configPath)
+
+	logFactory := logger.NewFactory(cfg.Logger)
 
 	// Create general logger
 	generalLog, err := logFactory.New("general")
@@ -51,7 +42,6 @@ func run(ctx context.Context, configPath string) error {
 
 	generalLog.Info("Starting node...")
 
-	cfg := config.LoadConfig(configPath)
 	lruCache := lru.LRUCacheConstructor[dataManagerShared.Collection](cfg.Lru.Size) //TODO: replace with redis size
 
 	serverInfo, err := server.NewServerInfo(cfg)

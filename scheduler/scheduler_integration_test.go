@@ -135,6 +135,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
@@ -258,6 +259,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 
 	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerFather.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+	migrationManagerFather.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
 
 	dataManagerFather := datamanager_mock.NewDataManager(t)
 	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
@@ -462,8 +464,12 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
 
+	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
 	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
@@ -548,8 +554,12 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	collFather12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collFather12345, nil)
 
+	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerFather.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+
 	dataManagerFather := datamanager_mock.NewDataManager(t)
 	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
+	dataManagerFather.EXPECT().GetMigrationManager().Return(migrationManagerFather)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
@@ -746,8 +756,12 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("54321", uint64(0)).Return(false, collChild54321, nil)
 
+	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "54321"}).Return()
+
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
 	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
@@ -883,8 +897,12 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345Child, nil)
 
+	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
 	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
@@ -1053,6 +1071,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
@@ -1255,6 +1274,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 
 	migrationManagerChild2 := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild2.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+	migrationManagerChild2.EXPECT().UpdateCollectionsLatestUsage([]string{"1111"}).Return()
 
 	dataManagerChild2 := datamanager_mock.NewDataManager(t)
 	dataManagerChild2.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild2)

@@ -300,6 +300,15 @@ func (s *SchedulerImpl) forwardRequestWithSequential(functionName string, functi
 }
 
 func (s *SchedulerImpl) executeLocally(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, reqHostname string, reqBody []byte, groups []string, userId string, sequentialCollId string, writeSeqCollection bool, cumulativeLatency int) (*FunctionResult, uint64, error) {
+	var collIds []string
+	for _, cols := range collections {
+		for _, col := range cols {
+			collIds = append(collIds, col.Id)
+		}
+	}
+	s.log.Info("Updating collections latest usage before function execution", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collections_involved", collIds)
+	s.dataManager.GetMigrationManager().UpdateCollectionsLatestUsage(collIds)
+
 	s.log.Debug("Acquiring wasm executor from pool", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
 	executor := s.wasmExecutorPool.Acquire()
 	defer func() {

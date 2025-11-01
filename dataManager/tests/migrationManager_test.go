@@ -50,11 +50,10 @@ func TestManageNewStrongRequest(t *testing.T) {
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 10,
 		},
-	})
+	}, "childName")
 	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName") == nil {
 		t.Fatal("Expected non-nil entry - 1")
 	}
@@ -62,29 +61,27 @@ func TestManageNewStrongRequest(t *testing.T) {
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 3,
 		},
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        false,
 			RequestLatency: 3,
 		},
+	}, "childName")
+	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName1",
 			IsWrite:        false,
 			RequestLatency: 7,
 		},
 		{
 			CollectionId:   "repoId1",
-			NodeName:       "childName1",
 			IsWrite:        true,
 			RequestLatency: 7,
 		},
-	})
+	}, "childName1")
 
 	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName1") == nil {
 		t.Fatal("Expected non-nil entry - 2")
@@ -127,23 +124,20 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 10,
 		},
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 3,
 		},
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        false,
 			RequestLatency: 3,
 		},
-	})
+	}, "childName")
 	mig := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy)
 
 	if mig.GetBuffer("repoId", "childName").Head().Write.GetElasticForce() != 26 {
@@ -171,40 +165,35 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 10,
 		},
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 3,
 		},
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        false,
 			RequestLatency: 7,
 		},
-	})
+	}, "childName")
 
 	instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName").MoveHead() //skip to next window
 
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 14,
 		},
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        false,
 			RequestLatency: 9,
 		},
-	})
+	}, "childName")
 	//fmt.Println(migrationManager.GetBuffer("repoId", "childName"))
 
 	instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).SetState(instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetDecisionState())

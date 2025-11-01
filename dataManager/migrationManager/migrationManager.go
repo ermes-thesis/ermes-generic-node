@@ -339,11 +339,15 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 	}
 }
 
-func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionRequestInfoMessage) {
+func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionRequestInfoMessage) error {
 	m.log.Info("MIG-MANAGER, new request for a local collection received")
 
-	//place on top in the LRU
-	m.log.Info("MIG-MANAGER, collection placed on top in the LRU")
+	m.log.Info("MIG-MANAGER, update size in the LRU")
+	err := m.lruCache.UpdateSize(i.CollectionId, uint(m.collectionsPartialView.KnownCollections[i.CollectionId].GetCollectionState().(*shared.LocalCollection).Size()))
+	if err != nil {
+		m.log.Errorf("MIG-MANAGER, not enough space in the LRU to update the collection %s size even after free", i.CollectionId)
+		return err
+	}
 
 	//if the collection is strong update forces
 	if m.collectionsPartialView.KnownCollections[i.CollectionId].IsStrong() {
@@ -351,8 +355,13 @@ func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionReques
 		m.StrongCollectionPolicy.ManageNewStrongRequest(i.CollectionId, i.Sender, i.IsWrite, i.RequestLatency)
 	} else {
 		m.log.Info("MIG-MANAGER, handle request for a week collection")
-		m.WeakCollectionPolicy.ManageNewWeakRequest(i.CollectionId, i.Sender, i.IsWrite, i.RequestLatency)
+		err := m.WeakCollectionPolicy.ManageNewWeakRequest(i.CollectionId, i.Sender, i.IsWrite, i.RequestLatency)
+		if err != nil {
+			m.log.Errorf("MIG-MANAGER, weak policy failed to handle the request for collection %s", i.CollectionId)
+			return err
+		}
 	}
+	return nil
 }
 
 func (m *MigrationManagerImp) updateLru(collectionId string, collectionSize uint) error {

@@ -1156,12 +1156,6 @@ func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
 		bytesKeysRatio = strToInt(statsMap["used_memory_dataset"]) / keysCount
 	}
 
-	datasetPerc, err := strconv.ParseFloat(statsMap["used_memory_dataset_perc"][:len(statsMap["used_memory_dataset_perc"])-1], 64)
-	if err != nil {
-		r.log.Error("GetMemoryStats: Failed to parse dataset perc", "error", err)
-		return nil, err
-	}
-
 	memStats := db.MemStats{
 		AllocationStats: db.AllocationStats{
 			UsedMemoryPeak:              strToInt(statsMap["used_memory_peak"]),
@@ -1169,7 +1163,7 @@ func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
 			UsedMemoryOverhead:          strToInt(statsMap["used_memory_overhead"]),
 			UsedMemoryStartup:           strToInt(statsMap["used_memory_startup"]),
 			UsedMemoryDataset:           strToInt(statsMap["used_memory_dataset"]),
-			UsedMemoryDatasetPercentage: datasetPerc / 100,
+			UsedMemoryDatasetPercentage: float64(strToInt(statsMap["used_memory"])) / float64(strToInt(statsMap["maxmemory"])),
 		},
 		ReplicationBacklogSize: strToInt(statsMap["mem_replication_backlog"]),
 		LuaScriptsCacheSize:    strToInt(statsMap["used_memory_scripts"]),

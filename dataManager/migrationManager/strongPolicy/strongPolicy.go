@@ -19,6 +19,17 @@ const (
 	DONOTHINGPOLICY
 )
 
+func GetPolicy(policyName string) CurrentPolicy {
+	switch policyName {
+	case "ERMESPOLICY":
+		return ERMESPOLICY
+	case "DONOTHINGPOLICY":
+		return DONOTHINGPOLICY
+	default:
+		return Pending
+	}
+}
+
 // dumb policy for comparison in evaluation
 type DoNothingPolicy struct{}
 

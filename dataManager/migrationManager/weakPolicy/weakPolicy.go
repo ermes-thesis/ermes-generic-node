@@ -15,22 +15,22 @@ type WeakCollectionPolicy interface {
 
 type CurrentPolicy int
 
-func (p CurrentPolicy) String() string {
-	switch p {
-	case Pending:
-		return "PENDING"
-	case ALWAYSCOPYPOLICY:
-		return "ALWAYSCOPYPOLICY"
-	default:
-		return "UNKNOWN"
-	}
-}
-
 const (
 	Pending CurrentPolicy = iota
 	ALWAYSCOPYPOLICY
 	DONOTHINGPOLICY
 )
+
+func GetPolicy(policyName string) CurrentPolicy {
+	switch policyName {
+	case "ALWAYSCOPYPOLICY":
+		return ALWAYSCOPYPOLICY
+	case "DONOTHINGPOLICY":
+		return DONOTHINGPOLICY
+	default:
+		return Pending
+	}
+}
 
 // default policy
 type AlwaysCopyPolicy struct {

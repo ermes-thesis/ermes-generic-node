@@ -48,16 +48,23 @@ var initOnce sync.Once
 func GetDataManagerInstance() DataManager {
 	once.Do(func() {
 		dataManagerInstance = &DataManagerImp{}
-		dataManagerInstance.setMigrationManager(migrationManager.GetMigrationManagerInstance())
-		dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererInstance())
+
 	})
 	return dataManagerInstance
 }
 
 func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger) {
 	initOnce.Do(func() {
-		m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger)
-		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger)
+		dataManagerInstance.setMigrationManager(migrationManager.GetMigrationManagerInstance())
+
+		if config.Statefull {
+			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererInstance())
+			m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger)
+			m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger)
+		} else {
+			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererCentralizedDBInstance())
+			m.migrationManager.StatelessInit(collections, config, lruConfig, serverInfo, lruCache, logger)
+		}
 
 		m.dbInterface = dbInterface
 		m.serverInfo = serverInfo

@@ -24,6 +24,7 @@ const emptyCollectionSize uint = 500
 type MigrationManager interface {
 	// Init initialize the singleton pattern
 	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger)
+	StatelessInit(collections *shared.CollectionPartialView, config config.MigrationManagerConfig, lruConfig config.LruConfig, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], logger *logger.Logger)
 	// UpdatesRequestsInfo used to update lru in real time (collectionID)
 	// if the collection is strong used to update forces in real time.
 	// if the request comes from a user => nodeName = "user"
@@ -108,16 +109,22 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		server.AddCustomRoute(m.sender.RequestInfoPath(), true, m.handleIncomingRequestInfoMessages().ServeHTTP)
 
 		//policy
+		wp := weakpolicy.GetPolicy(config.WeakPolicy)
+		sp := strongPolicy.GetPolicy(config.StrongPolicy)
 		m.ermesPolicy = strongPolicy.NewDefaultPolicy(config, lruConfig, collections, penalityFunc, dbInterface, serverInfo, m.sender, m.lruCache, m.log)
 		m.strongDoNothingPolicy = strongPolicy.NewDoNothingPolicy()
-		m.StrongCollectionPolicy = m.ermesPolicy
+		m.ChangeStrongCollectionPolicy(sp)
 
 		m.alwaysCopyPolicy = weakpolicy.NewAlwaysCopyPolicy(config, m.sender, m.log, collections, dbInterface)
 		m.doNothingPolicy = weakpolicy.NewDoNothingPolicy()
-		m.WeakCollectionPolicy = m.alwaysCopyPolicy
+		m.ChangeWeakCollectionPolicy(wp)
 
 		//policy update strategy
-		m.policyUpdateStrategy = NewErmesPolicyUpdateStrategy() //TODO construct for stateless
+		if wp == weakpolicy.DONOTHINGPOLICY && sp == strongPolicy.DONOTHINGPOLICY {
+			m.policyUpdateStrategy = NewNoUpdateStrategy()
+		} else {
+			m.policyUpdateStrategy = NewErmesPolicyUpdateStrategy()
+		}
 
 		//init data
 		m.collectionsPartialView = collections
@@ -126,6 +133,32 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.dumpStopCh = make(chan struct{})
 		m.startAsyncDump(config.KnownCollectionsDumpPath, config.KnownCollectionsDumpInterval)
 		m.log.Info("MIG-MANAGER, migration manager instance has been initialized")
+
+	})
+}
+
+func (m *MigrationManagerImp) StatelessInit(collections *shared.CollectionPartialView, config config.MigrationManagerConfig, lruConfig config.LruConfig, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], logger *logger.Logger) {
+	initOnce.Do(func() {
+		//imp
+		m.serverInfo = serverInfo
+		m.log = logger
+		//no db interface
+		m.lruCache = lruCache
+		m.config = config
+
+		m.collectionsLock = &collections.Mutex
+
+		//no sender
+		m.strongDoNothingPolicy = strongPolicy.NewDoNothingPolicy()
+		m.StrongCollectionPolicy = m.strongDoNothingPolicy
+
+		m.doNothingPolicy = weakpolicy.NewDoNothingPolicy()
+		m.WeakCollectionPolicy = m.doNothingPolicy
+
+		//policy update strategy
+		m.policyUpdateStrategy = NewNoUpdateStrategy()
+
+		//Dump ?
 	})
 }
 

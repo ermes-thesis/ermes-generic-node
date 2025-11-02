@@ -177,56 +177,65 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 			m.log.Warn("MIG-MANAGER, new collection already present locally")
 			return true
 		}
-		err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
+		actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
 		if err != nil {
 			m.log.Warn("MIG-MANAGER, new collection could not be added to redis")
 			return true
 		}
 
-		collection.SetToLocal(collectionSize)
+		collection.SetToLocal(actualSize)
 		if isStrong {
 			collection.(*shared.StrongCollection).IsLeader = isLeader
 		}
 		m.log.Info("MIG-MANAGER, new collection set to local")
-		m.updateLru(collectionId, uint(collectionSize))
+		m.updateLru(collectionId, uint(actualSize))
 		return false
 	}
-	err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
+	actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
 	if err != nil {
 		m.log.Warn("MIG-MANAGER, new collection could not be added")
 		return true
 	}
 
 	if isStrong {
-		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false, isLeader, m.serverInfo.HostName)
+		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, actualSize, false, isLeader, m.serverInfo.HostName)
 	} else {
-		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, collectionSize, false)
+		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, actualSize, false)
 	}
 	m.log.Info("MIG-MANAGER, new collection added to known collections")
-	m.updateLru(collectionId, uint(collectionSize))
+	m.updateLru(collectionId, uint(actualSize))
 	m.log.Info("MIG-MANAGER, collection placed on top in the LRU")
 	return false
 }
 
-func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64) error {
+func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64) (uint64, error) {
 	availableMem, memErr := m.dbInterface.GetAvailableMemory()
 	if memErr != nil {
 		m.log.Error("MIG-MANAGER, get memory usage fails")
-		return memErr // TODO
+		return 0, memErr // TODO
 	}
+
+	//check size before set collection
 	if availableMem < collectionSize || m.lruCache.GetAvailableSize() < uint(collectionSize) { //if not enoght space in redis or in the lru => free space
 		m.log.Warnf("MIG-MANAGER, not enough space in the LRU to place the collection %s", collectionId)
 		m.freeLru(uint(collectionSize))
 	}
-	//check size before set collection
 
 	err := m.dbInterface.SetCollection(collectionId, records, groups, owner, groupsSequence) //add collection to redis
 	if err != nil {
 		m.log.Error("MIG-MANAGER, add collection in redis fails")
-		return err // TODO: decide
+		return 0, err // TODO: decide
 	}
 
-	return nil
+	//Get actual size in redis. Sometimes can be different from the size sent by another node
+	colMemUsage, err := m.dbInterface.GetCollectionMemoryUsage(collectionId)
+	if err != nil {
+		m.log.Error("MIG-MANAGER, get collection memory usage fails")
+		return 0, err
+	}
+	m.log.Info("Collection memory usage after adding in redis", "collection_id", collectionId, "collection_memory_usage", colMemUsage)
+
+	return colMemUsage, nil
 }
 
 func (m *MigrationManagerImp) FreeSpaceToCreateCollection(size uint) error {

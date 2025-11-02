@@ -505,6 +505,7 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 		c.log.Error("Failed to retrieve the space occupied in the DB by the collection just persisted", "collection_id", collectionId, "collection_name", collectionName, "executing_user", userId, "records", fmt.Sprintf("%+v", records), "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck, "error", sizeErr)
 		return sizeErr
 	}
+	c.log.Info("Collection persisted in DB successfully", "collection_id", collectionId, "actual_size", actualSize)
 
 	//add collection in local view
 	migrationManagerErr := migrationManager.NewCollectionCreated(collectionId, actualSize, isStrong)

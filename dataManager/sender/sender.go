@@ -155,7 +155,6 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId
 		UserId:       userId,
 	}
 
-	print("SENDER: sending remote access request to ", hostId, " for collection ", collectionId, "\n")
 	res, err := s.server.SendGenericHTTPRequestReturnResponse(hostId, remoteAccessPath, msg)
 	if err != nil {
 		s.log.Error("HTTP-REQ, Error reading response body")

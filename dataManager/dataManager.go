@@ -57,8 +57,8 @@ func GetDataManagerInstance() DataManager {
 
 func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger) {
 	initOnce.Do(func() {
-		m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger)
-		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger)
+		m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger.Component("migration_manager"))
+		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger.Component("collections_discoverer"))
 
 		m.dbInterface = dbInterface
 		m.serverInfo = serverInfo

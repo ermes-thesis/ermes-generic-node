@@ -42,6 +42,9 @@ func TestManageNewStrongRequest(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
 	log := createNewLogger(t)
 
+	db.EXPECT().GetCollectionMemoryUsage("repoId").Return(10, nil)
+	db.EXPECT().GetCollectionMemoryUsage("repoId1").Return(10, nil)
+
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	instance1.NewCollectionReceived("repoId", true, false, make(map[string]database.RecordValue, 13), []string{}, "", 0, 13, false, "host")
@@ -115,6 +118,8 @@ func TestManageNewStrongRequest(t *testing.T) {
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
 	log := createNewLogger(t)
+	db.EXPECT().GetCollectionMemoryUsage("repoId").Return(10, nil)
+	db.EXPECT().GetCollectionMemoryUsage("repoId1").Return(10, nil)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
@@ -156,6 +161,9 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
 	log := createNewLogger(t)
+
+	db.EXPECT().GetCollectionMemoryUsage("repoId").Return(10, nil)
+	db.EXPECT().GetCollectionMemoryUsage("repoId1").Return(10, nil)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)

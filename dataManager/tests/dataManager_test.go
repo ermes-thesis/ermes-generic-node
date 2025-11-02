@@ -33,6 +33,9 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
 
 	log := createNewLogger(t)
+
+	db.EXPECT().GetCollectionMemoryUsage("repoId").Return(10, nil)
+
 	mig := migrationManager.GetMigrationManagerInstance()
 	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
@@ -70,6 +73,10 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 func TestIterationModule(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := CycleTestSetUp(t)
 	log := createNewLogger(t)
+
+	db.EXPECT().GetCollectionMemoryUsage("repoId0").Return(10, nil)
+	db.EXPECT().GetCollectionMemoryUsage("repoId1").Return(10, nil)
+	db.EXPECT().GetCollectionMemoryUsage("repoId2").Return(10, nil)
 
 	mig := migrationManager.GetMigrationManagerInstance()
 	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)

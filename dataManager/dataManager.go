@@ -21,7 +21,6 @@ type DataManager interface {
 
 	//sub components
 	GetMigrationManager() migrationManager.MigrationManager
-
 	GetCollectionsDiscoverer() collectionsDiscoverer.CollectionsDiscoverer
 
 	//methods
@@ -82,10 +81,9 @@ func (m *DataManagerImp) GetCollectionsDiscoverer() collectionsDiscoverer.Collec
 }
 
 func (m *DataManagerImp) GetRecord(collectionId string, groups []string, userId string, recordName string) (string, error) {
-	return collectionsDiscoverer.AccessRecords(
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
+	res, err := m.collectionsDiscoverer.AccessRecords(
 		collectionId,
-		func() (string, error) {
+		func() (any, error) {
 			authorized, err := m.dbInterface.IsAuthorized(collectionId, userId, groups...)
 			if err != nil {
 				return "", err
@@ -96,17 +94,18 @@ func (m *DataManagerImp) GetRecord(collectionId string, groups []string, userId 
 
 			return m.dbInterface.GetRecord(collectionId, recordName)
 		},
-		func(addr string) (string, error) {
+		func(addr string) (any, error) {
 			return m.collectionsDiscoverer.WeakCollectionRemoteRecordAccess(addr, collectionId, groups, userId, recordName)
 		},
 	)
+
+	return res.(string), err
 }
 
 func (m *DataManagerImp) GetRecords(collectionId string, groups []string, userId string, recordNames ...string) ([]any, error) {
-	return collectionsDiscoverer.AccessRecords(
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
+	res, err := m.collectionsDiscoverer.AccessRecords(
 		collectionId,
-		func() ([]any, error) {
+		func() (any, error) {
 			authorized, err := m.dbInterface.IsAuthorized(collectionId, userId, groups...)
 			if err != nil {
 				return nil, err
@@ -117,10 +116,11 @@ func (m *DataManagerImp) GetRecords(collectionId string, groups []string, userId
 
 			return m.dbInterface.GetRecords(collectionId, recordNames...)
 		},
-		func(addr string) ([]any, error) {
+		func(addr string) (any, error) {
 			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsAccess(addr, collectionId, groups, userId, recordNames...)
 		},
 	)
+	return res.([]any), err
 }
 
 func (m *DataManagerImp) UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdate, groups []string, userId string) error {

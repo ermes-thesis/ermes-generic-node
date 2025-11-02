@@ -58,7 +58,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 				c.log.Debug("Accessing the record value remotely through remoteFn", "collection_id", msg.CollectionId, "executing_user", msg.UserId, "user_access_groups", msg.Groups, "towards_to", addr)
 				return c.WeakCollectionRemoteRecordAccess(addr, msg.CollectionId, msg.Groups, msg.UserId, msg.RecordNames[0])
 			}
-			res, dbErr = AccessRecords(c, msg.CollectionId, dbFn, remoteFn)
+			res, dbErr = c.AccessRecords(msg.CollectionId, dbFn, remoteFn)
 			if dbErr != nil {
 				var unAuthErr *shared.UnauthorizedError
 				if errors.As(dbErr, &unAuthErr) {
@@ -100,7 +100,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 				c.log.Debug("Accessing the records values remotely through remoteFn", "collection_id", msg.CollectionId, "executing_user", msg.UserId, "user_access_groups", msg.Groups, "towards_to", addr)
 				return c.WeakCollectionRemoteRecordsAccess(addr, msg.CollectionId, msg.Groups, msg.UserId, msg.RecordNames...)
 			}
-			res, dbErr = AccessRecords(c, msg.CollectionId, dbFn, remoteFn)
+			res, dbErr = c.AccessRecords(msg.CollectionId, dbFn, remoteFn)
 			if dbErr != nil {
 				var unAuthErr *shared.UnauthorizedError
 				if errors.As(dbErr, &unAuthErr) {

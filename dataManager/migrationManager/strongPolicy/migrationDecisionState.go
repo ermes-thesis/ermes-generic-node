@@ -143,6 +143,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 		}
 
 		m.replicaDecision(outerKey, innerKey, buffer, strongCollection, interestedNodeCounter)
+		interestedNodeCounter--
 
 		//after taking all the decision skip to next round for this buffer
 		buffer.MoveHead()
@@ -253,7 +254,8 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 	}
 
 	//if all the interest adjacent node has been satisfied
-	isMigration := interestedNodeCounter-len(strongCollection.HostsId()) <= 0 && !strongCollection.IsLeader
+	isMigration := interestedNodeCounter <= 1 && !strongCollection.IsLeader
+	m.policy.log.Debug("DEFAULT-STRONG-POLICY, follower migration decision", "collection_id", outerKey, "interested_node_counter", interestedNodeCounter, "current_hosts_num", len(strongCollection.HostsId()), "is_migration", isMigration)
 
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, false, res, groups, owner, groupsSequence, collectionSize, isMigration)

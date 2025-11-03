@@ -33,15 +33,16 @@ type MigrationManagerConfig struct {
 	KnownCollectionsDumpPath     string        `yaml:"knownCollectionsDumpPath"`
 	KnownCollectionsDumpInterval time.Duration `yaml:"knownCollectionsDumpInterval"`
 
-	Statefull    bool   `yaml:"statefull"`
-	WeakPolicy   string `yaml:"weakPolicy"`   // ALWAYSCOPYPOLICY  or DONOTHINGPOLICY
-	StrongPolicy string `yaml:"strongPolicy"` // ERMESPOLICY or DONOTHINGPOLICY
+	Statefull        bool   `yaml:"statefull"`
+	IsCentralStorage bool   `yaml:"isCentralStorage"`
+	WeakPolicy       string `yaml:"weakPolicy"`   // ALWAYSCOPYPOLICY  or DONOTHINGPOLICY
+	StrongPolicy     string `yaml:"strongPolicy"` // ERMESPOLICY or DONOTHINGPOLICY
 }
 
-// normal operation mode: Statefull := true; WeakPolicy := ALWAYSCOPYPOLICY; StrongPolicy := ERMESPOLICY
+// normal operation mode: Statefull := true; WeakPolicy := ALWAYSCOPYPOLICY; StrongPolicy := ERMESPOLICY; IsCentralStorage := False
 // centralized storage mode:
-// 		- generic node:  Statefull := false; WeakPolicy := DONOTHINGPOLICY; StrongPolicy := DONOTHINGPOLICY
-//		- storage: Statefull := true; WeakPolicy := DONOTHINGPOLICY; StrongPolicy := DONOTHINGPOLICY
+// 		- generic node:  Statefull := false; WeakPolicy := DONOTHINGPOLICY; StrongPolicy := DONOTHINGPOLICY; IsCentralStorage := False
+//		- storage: Statefull := true; WeakPolicy := DONOTHINGPOLICY; StrongPolicy := DONOTHINGPOLICY; IsCentralStorage := True
 
 type LruConfig struct {
 	Size      uint    `yaml:"size"`

@@ -60,11 +60,12 @@ func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalit
 		if config.Statefull {
 			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererInstance())
 			m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger)
-			m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger)
+
 		} else {
-			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererCentralizedDBInstance())
+			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererStatelessGenericNodeInstance())
 			m.migrationManager.StatelessInit(collections, config, lruConfig, serverInfo, lruCache, logger)
 		}
+		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger)
 
 		m.dbInterface = dbInterface
 		m.serverInfo = serverInfo

@@ -56,7 +56,7 @@ func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalit
 	initOnce.Do(func() {
 		dataManagerInstance.setMigrationManager(migrationManager.GetMigrationManagerInstance())
 
-		if config.Statefull {
+		if config.Stateful {
 			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererInstance())
 			m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger.Component("migration_manager"))
 		} else if config.IsCentralStorage {

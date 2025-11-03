@@ -49,7 +49,7 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 		ViewSize:                     3,
 		GravityConstant:              0.981,
 		KnownCollectionsDumpInterval: time.Minute,
-		Statefull:                    true,
+		Stateful:                     true,
 		StrongPolicy:                 "ERMESPOLICY",
 		WeakPolicy:                   "ALWAYSCOPYPOLICY",
 	}
@@ -96,7 +96,7 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 		ViewSize:                     3,
 		GravityConstant:              0.981,
 		KnownCollectionsDumpInterval: time.Minute,
-		Statefull:                    true,
+		Stateful:                     true,
 		StrongPolicy:                 "ERMESPOLICY",
 		WeakPolicy:                   "ALWAYSCOPYPOLICY",
 	}
@@ -143,7 +143,7 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 		GravityConstant:              0.981,
 		KnownCollectionsDumpInterval: time.Second * 3,
 		KnownCollectionsDumpPath:     "temp.ndjson",
-		Statefull:                    true,
+		Stateful:                     true,
 		StrongPolicy:                 "ERMESPOLICY",
 		WeakPolicy:                   "ALWAYSCOPYPOLICY",
 	}

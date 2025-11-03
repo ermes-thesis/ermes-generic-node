@@ -128,7 +128,6 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 
 		c.log.Info("Remote access request completed successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 		c.log.Debug("Remote access request completed successfully", "response", fmt.Sprintf("%+v", res))
-		w.WriteHeader(http.StatusOK)
 	})
 }
 

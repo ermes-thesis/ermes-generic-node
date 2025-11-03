@@ -574,23 +574,20 @@ func (s *SchedulerImpl) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 		s.log.InfofWith("[%s] Finished propagation of updates on eventual collections", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates")
 	}()
 
-	// Update requests info asynchronously
-	go func() {
-		routinePrefix := fmt.Sprintf("GO#%s", xid.New().String())
-		var collRequestInfo []messages.CollectionRequestInfo
-		for _, colls := range scheduleRequest.Collections {
-			for _, coll := range colls {
-				collRequestInfo = append(collRequestInfo, messages.CollectionRequestInfo{
-					CollectionId:   coll.Id,
-					IsWrite:        writeSeqCollection,
-					RequestLatency: scheduleRequest.CumulativeLatency,
-				})
-			}
+	// Update requests info synchronously
+	var collRequestInfo []messages.CollectionRequestInfo
+	for _, colls := range scheduleRequest.Collections {
+		for _, coll := range colls {
+			collRequestInfo = append(collRequestInfo, messages.CollectionRequestInfo{
+				CollectionId:   coll.Id,
+				IsWrite:        writeSeqCollection,
+				RequestLatency: scheduleRequest.CumulativeLatency,
+			})
 		}
+	}
 
-		s.log.InfofWith("[%s] Starting to update migration manager request infos for the used collections", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
-		s.dataManager.GetMigrationManager().UpdatesRequestsInfo(collRequestInfo, reqHostname)
-	}()
+	s.log.Info("Starting to update migration manager request infos for the used collections", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
+	s.dataManager.GetMigrationManager().UpdatesRequestsInfo(collRequestInfo, reqHostname)
 
 	s.log.Info("Local function execution completed successfully. Returning result", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result), "new_sequence_number", seqNumber)
 	return result, seqNumber, nil

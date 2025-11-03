@@ -34,7 +34,18 @@ type MigrationManagerConfig struct {
 	GravityConstant              float64       `yaml:"gravityConstant"`
 	KnownCollectionsDumpPath     string        `yaml:"knownCollectionsDumpPath"`
 	KnownCollectionsDumpInterval time.Duration `yaml:"knownCollectionsDumpInterval"`
+
+	Statefull         bool   `yaml:"statefull"`
+	IsCentralStorage  bool   `yaml:"isCentralStorage"`
+	WeakPolicy        string `yaml:"weakPolicy"`   // ALWAYSCOPYPOLICY  or DONOTHINGPOLICY
+	StrongPolicy      string `yaml:"strongPolicy"` // ERMESPOLICY or DONOTHINGPOLICY
+	CentralizedDBName string `yaml:"centralizedDBName"`
 }
+
+// normal operation mode: Statefull := true; WeakPolicy := ALWAYSCOPYPOLICY; StrongPolicy := ERMESPOLICY; IsCentralStorage := False
+// centralized storage mode:
+// 		- generic node:  Statefull := false; WeakPolicy := DONOTHINGPOLICY; StrongPolicy := DONOTHINGPOLICY; IsCentralStorage := False
+//		- storage: Statefull := true; WeakPolicy := DONOTHINGPOLICY; StrongPolicy := DONOTHINGPOLICY; IsCentralStorage := True
 
 type LruConfig struct {
 	Size      uint    `yaml:"size"`

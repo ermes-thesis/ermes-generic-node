@@ -19,6 +19,8 @@ type CollectionsDiscoverer interface {
 	IsCollectionLocallyPresent(collectionId string, consistencyClock uint64) (bool, shared.Collection, error)
 	Init(*shared.CollectionPartialView, server.ServerInfo, server.ServerType, db.GenericDB, *logger.Logger)
 
+	AccessRecords(collectionId string, dbFn func() (any, error), remoteFn func(addr string) (any, error)) (any, error)
+
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames string) (string, error)
 	WeakCollectionRemoteRecordsAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error)
 
@@ -65,6 +67,10 @@ func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialVie
 
 		c.log.Info("Collection discoverer component initialized", "server_info", fmt.Sprintf("%+v", c.serverInfo))
 	})
+}
+
+func (c *CollectionsDiscovererImp) getSender() sender.CollectionDiscovererSender {
+	return c.sender
 }
 
 // methods
@@ -132,18 +138,17 @@ func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordsAccess(hostId stri
 }
 
 // use generics to preserve type-safety, unfortunately generics are not supported for methods.
-func AccessRecords[T any](
-	c *CollectionsDiscovererImp,
+func (c *CollectionsDiscovererImp) AccessRecords(
 	collectionId string,
-	dbFn func() (T, error),
-	remoteFn func(addr string) (T, error),
-) (T, error) {
+	dbFn func() (any, error),
+	remoteFn func(addr string) (any, error),
+) (any, error) {
 	//sync
 	c.collectionsPartialView.Mutex.Lock()
 	c.log.Info("AccessRecords called", "collection_id", collectionId)
 	//imp
 
-	var zero T
+	var zero any
 	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
 	if !exists {
 		if c.serverInfo.Father == nil {
@@ -178,8 +183,7 @@ func AccessRecords[T any](
 	return remoteFn(child)
 }
 
-func UpdateRecord(
-	c *CollectionsDiscovererImp,
+func (c *CollectionsDiscovererImp) updateRecord(
 	collectionId string,
 	dbFn func(isStrong bool) (int64, error),
 	isInitiator bool,
@@ -362,7 +366,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 		}
 
 		//write or delete in db
-		hosts, err := UpdateRecord(c, update.CollectionId, dbFn, isInitiator, &update)
+		hosts, err := c.updateRecord(update.CollectionId, dbFn, isInitiator, &update)
 		if err != nil {
 			c.collectionsPartialView.Mutex.Unlock() // lock release
 			c.log.Error("UpdateCollectionsRecordsAndPropagate: update failed", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
@@ -408,7 +412,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 		}
 
 		//write or delete in db
-		hosts, err := UpdateRecord(c, update.CollectionId, dbFn, isInitiator, &update)
+		hosts, err := c.updateRecord(update.CollectionId, dbFn, isInitiator, &update)
 		if err != nil {
 			c.collectionsPartialView.Mutex.Unlock() // lock release
 			c.log.Error("UpdateCollectionsGroupsAndPropagate: groups update failed", "collection_id", update.CollectionId, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)

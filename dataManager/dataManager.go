@@ -21,7 +21,6 @@ type DataManager interface {
 
 	//sub components
 	GetMigrationManager() migrationManager.MigrationManager
-
 	GetCollectionsDiscoverer() collectionsDiscoverer.CollectionsDiscoverer
 
 	//methods
@@ -49,15 +48,25 @@ var initOnce sync.Once
 func GetDataManagerInstance() DataManager {
 	once.Do(func() {
 		dataManagerInstance = &DataManagerImp{}
-		dataManagerInstance.setMigrationManager(migrationManager.GetMigrationManagerInstance())
-		dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererInstance())
 	})
 	return dataManagerInstance
 }
 
 func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger) {
 	initOnce.Do(func() {
-		m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger.Component("migration_manager"))
+		dataManagerInstance.setMigrationManager(migrationManager.GetMigrationManagerInstance())
+
+		if config.Statefull {
+			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererInstance())
+			m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger.Component("migration_manager"))
+		} else if config.IsCentralStorage {
+			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.SetCollectionsDiscovererCentralizedDBInstance(collectionsDiscoverer.GetCollectionsDiscovererInstance().(*collectionsDiscoverer.CollectionsDiscovererImp), m.migrationManager))
+			m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger.Component("migration_manager"))
+		} else {
+			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererStatelessGenericNodeInstance())
+			dataManagerInstance.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererStatelessGenericNode).SetCentralizedDBAddress(config.CentralizedDBName)
+			m.migrationManager.StatelessInit(collections, config, lruConfig, serverInfo, lruCache, logger.Component("migration_manager"))
+		}
 		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger.Component("collections_discoverer"))
 
 		m.dbInterface = dbInterface
@@ -82,10 +91,9 @@ func (m *DataManagerImp) GetCollectionsDiscoverer() collectionsDiscoverer.Collec
 }
 
 func (m *DataManagerImp) GetRecord(collectionId string, groups []string, userId string, recordName string) (string, error) {
-	return collectionsDiscoverer.AccessRecords(
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
+	res, err := m.collectionsDiscoverer.AccessRecords(
 		collectionId,
-		func() (string, error) {
+		func() (any, error) {
 			authorized, err := m.dbInterface.IsAuthorized(collectionId, userId, groups...)
 			if err != nil {
 				return "", err
@@ -96,17 +104,18 @@ func (m *DataManagerImp) GetRecord(collectionId string, groups []string, userId 
 
 			return m.dbInterface.GetRecord(collectionId, recordName)
 		},
-		func(addr string) (string, error) {
+		func(addr string) (any, error) {
 			return m.collectionsDiscoverer.WeakCollectionRemoteRecordAccess(addr, collectionId, groups, userId, recordName)
 		},
 	)
+
+	return res.(string), err
 }
 
 func (m *DataManagerImp) GetRecords(collectionId string, groups []string, userId string, recordNames ...string) ([]any, error) {
-	return collectionsDiscoverer.AccessRecords(
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
+	res, err := m.collectionsDiscoverer.AccessRecords(
 		collectionId,
-		func() ([]any, error) {
+		func() (any, error) {
 			authorized, err := m.dbInterface.IsAuthorized(collectionId, userId, groups...)
 			if err != nil {
 				return nil, err
@@ -117,10 +126,11 @@ func (m *DataManagerImp) GetRecords(collectionId string, groups []string, userId
 
 			return m.dbInterface.GetRecords(collectionId, recordNames...)
 		},
-		func(addr string) ([]any, error) {
+		func(addr string) (any, error) {
 			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsAccess(addr, collectionId, groups, userId, recordNames...)
 		},
 	)
+	return res.([]any), err
 }
 
 func (m *DataManagerImp) UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdate, groups []string, userId string) error {

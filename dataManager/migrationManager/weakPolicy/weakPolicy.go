@@ -15,22 +15,24 @@ type WeakCollectionPolicy interface {
 
 type CurrentPolicy int
 
-func (p CurrentPolicy) String() string {
-	switch p {
-	case Pending:
-		return "PENDING"
-	case ALWAYSCOPYPOLICY:
-		return "ALWAYSCOPYPOLICY"
-	default:
-		return "UNKNOWN"
-	}
-}
-
 const (
 	Pending CurrentPolicy = iota
 	ALWAYSCOPYPOLICY
+	DONOTHINGPOLICY
 )
 
+func GetPolicy(policyName string) CurrentPolicy {
+	switch policyName {
+	case "ALWAYSCOPYPOLICY":
+		return ALWAYSCOPYPOLICY
+	case "DONOTHINGPOLICY":
+		return DONOTHINGPOLICY
+	default:
+		return Pending
+	}
+}
+
+// default policy
 type AlwaysCopyPolicy struct {
 	//config
 	log *logger.Logger
@@ -80,5 +82,18 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 	a.log.Infof("WEAK-POLICY, send weak collection%s to node %s", collectionId, childName)
 	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups, owner, groupsSequence, collectionSize, false)
 
+	return nil
+}
+
+// dumb policy for comparison in evaluation
+type DoNothingPolicy struct{}
+
+func NewDoNothingPolicy() DoNothingPolicy {
+	policy := DoNothingPolicy{}
+
+	return policy
+}
+
+func (d DoNothingPolicy) ManageNewWeakRequest(collectionId string, childName string, isWrite bool, requestLatency int) error {
 	return nil
 }

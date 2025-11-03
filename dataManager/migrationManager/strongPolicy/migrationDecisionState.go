@@ -86,7 +86,6 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 
 	//imp
 	var wg sync.WaitGroup
-	wg.Add(m.policy.equilibriumState.Count())
 
 	m.policy.equilibriumState.Range(func(key, value any) bool {
 		outerKey := key.(string)
@@ -95,10 +94,9 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 		if m.policy.partialView.KnownCollections[outerKey] == nil ||
 			!m.policy.partialView.KnownCollections[outerKey].IsLocal() ||
 			!m.policy.partialView.KnownCollections[outerKey].IsStrong() {
-			wg.Done()
 			return true
 		}
-
+		wg.Add(1)
 		m.policy.log.Infof("DEFAULT-STRONG-POLICY, start taking decisions for collection %s", outerKey)
 		//take decision on a secondary thread
 		go m.innerKeyDecision(outerKey, innerMap, &wg, len(innerMap))
@@ -290,11 +288,11 @@ func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
 	collectionList := m.policy.lruCache.FreeToAchieveSize(sizeGoal)
 	m.policy.log.Info("DEFAULT-STRONG-POLICY, collections to send to remote nodes to achieve safe level", "num_collections", collectionList.Len(), "collections", fmt.Sprintf("%+v", collectionList), "new_lru_size", m.policy.lruCache.GetCurrentSize())
 	var wg sync.WaitGroup
-	wg.Add(collectionList.Len())
 
 	for item := collectionList.Front(); item != nil; item = item.Next() {
 		collection := item.Value.(shared.Collection)
 		m.policy.log.Info("DEFAULT-STRONG-POLICY, sending collection to remote node to achieve safe level", "collection_id", collection.CollectionId())
+		wg.Add(1)
 		go m.sendCollectionAndRemove(collection, &wg)
 	}
 

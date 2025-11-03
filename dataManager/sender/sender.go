@@ -5,7 +5,6 @@ import (
 	shared "dataManager/shared"
 	"db"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -24,6 +23,7 @@ const (
 	updateGroupPropagationPath      = "/pvt-dataGroupUpdatePropagation"
 	createCollectionPropagationPath = "/pvt-newCollection"
 	removeCollectionPropagationPath = "/pvt-removeCollection"
+	remoteCollectionSet             = "/pvt-remoteCollectionSet"
 )
 
 //###############################################################
@@ -119,6 +119,7 @@ func (s *MigrationManagerSenderImpl) RequestInfoPath() string {
 //###############################################################
 
 type CollectionDiscovererSender interface {
+	RemoteSetCollectionAndPropagate(hostId string, collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong, skipUniquenessCheck bool) error
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error)
 	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages)
 	PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages)
@@ -131,6 +132,7 @@ type CollectionDiscovererSender interface {
 	UpdateGroupPropagationPath() string
 	CreateCollectionPropagationPath() string
 	RemoveCollectionPropagationPath() string
+	RemoteCollectionSetPath() string
 }
 
 type CollectionDiscovererSenderImpl struct {
@@ -200,7 +202,7 @@ func (s *CollectionDiscovererSenderImpl) NewCollectionCreated(hostId string, new
 			s.log.Error("SENDER, Error reading response body")
 			return err
 		}
-		return errors.New(fmt.Sprintf("non-200 response from create collection: %v %s", resp.StatusCode, b))
+		return fmt.Errorf("non-200 response from create collection: %v %s", resp.StatusCode, b)
 	}
 	return nil
 }
@@ -216,6 +218,25 @@ func (s *CollectionDiscovererSenderImpl) RemoveCollection(hostId string, collect
 	}
 
 	go s.server.SendGenericHTTPRequest(hostId, removeCollectionPropagationPath, msg)
+}
+
+func (s *CollectionDiscovererSenderImpl) RemoteSetCollectionAndPropagate(hostId string, collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong, skipUniquenessCheck bool) error {
+	msg := gossip.SetCollectionMessage{
+		CollectionId:        collectionId,
+		CollectionName:      collectionName,
+		Records:             records,
+		Groups:              groups,
+		UserId:              userId,
+		IsStrong:            isStrong,
+		SkipUniquenessCheck: skipUniquenessCheck,
+	}
+
+	_, err := s.server.SendGenericHTTPRequest(hostId, remoteCollectionSet, msg)
+	if err != nil {
+		s.log.Errorf("SENDER, Error sending set collection to %s: %v", hostId, err)
+		return err
+	}
+	return nil
 }
 
 func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages) {
@@ -252,4 +273,8 @@ func (s *CollectionDiscovererSenderImpl) CreateCollectionPropagationPath() strin
 
 func (s *CollectionDiscovererSenderImpl) RemoveCollectionPropagationPath() string {
 	return removeCollectionPropagationPath
+}
+
+func (s *CollectionDiscovererSenderImpl) RemoteCollectionSetPath() string {
+	return remoteCollectionSet
 }

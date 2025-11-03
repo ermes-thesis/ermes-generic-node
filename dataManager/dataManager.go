@@ -48,7 +48,6 @@ var initOnce sync.Once
 func GetDataManagerInstance() DataManager {
 	once.Do(func() {
 		dataManagerInstance = &DataManagerImp{}
-
 	})
 	return dataManagerInstance
 }
@@ -60,9 +59,12 @@ func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalit
 		if config.Statefull {
 			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererInstance())
 			m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger)
-
+		} else if config.IsCentralStorage {
+			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.SetCollectionsDiscovererCentralizedDBInstance(collectionsDiscoverer.GetCollectionsDiscovererInstance().(*collectionsDiscoverer.CollectionsDiscovererImp), m.migrationManager))
+			m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger)
 		} else {
 			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererStatelessGenericNodeInstance())
+			dataManagerInstance.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererStatelessGenericNode).SetCentralizedDBAddress(config.CentralizedDBName)
 			m.migrationManager.StatelessInit(collections, config, lruConfig, serverInfo, lruCache, logger)
 		}
 		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger)

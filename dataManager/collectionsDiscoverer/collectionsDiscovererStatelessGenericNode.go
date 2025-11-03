@@ -87,7 +87,7 @@ func (c *CollectionsDiscovererStatelessGenericNode) UpdateCollectionsGroupsAndPr
 }
 
 func (c *CollectionsDiscovererStatelessGenericNode) SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong, skipUniquenessCheck bool) error {
-	return nil //TODO
+	return c.sender.RemoteSetCollectionAndPropagate(c.centralizedDBAddress, collectionId, collectionName, records, groups, userId, isStrong, skipUniquenessCheck)
 }
 
 func (c *CollectionsDiscovererStatelessGenericNode) RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, userId string, isInitiator bool, ignoredHostName string) error {

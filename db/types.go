@@ -18,6 +18,6 @@ type AllocationStats struct {
 }
 
 type RecordValue struct {
-	Value     string
-	Timestamp string
+	Value     string `json:"value"`
+	Timestamp string `json:"timestamp"`
 }

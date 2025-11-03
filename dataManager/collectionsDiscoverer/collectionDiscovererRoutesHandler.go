@@ -18,7 +18,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 		var msg gossip.RemoteAccessRequest
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
 			c.log.Error("Failed to decode request payload", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", err)
-			http.Error(w, fmt.Sprintf("Bad Request: Failed to parse request body"), http.StatusBadRequest)
+			http.Error(w, "Bad Request: Failed to parse request body", http.StatusBadRequest)
 			return
 		}
 		c.log.Debug("Request body read successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
@@ -29,7 +29,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 
 		if len(msg.RecordNames) == 0 {
 			c.log.Warn("Remote access request contains no record names", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
-			http.Error(w, fmt.Sprintf("Bad Request: No record names specified in the body message"), http.StatusBadRequest)
+			http.Error(w, "Bad Request: No record names specified in the body message", http.StatusBadRequest)
 			return
 		}
 
@@ -63,12 +63,12 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 				var unAuthErr *shared.UnauthorizedError
 				if errors.As(dbErr, &unAuthErr) {
 					c.log.Error("User is unauthorized to access the requested record", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", unAuthErr)
-					http.Error(w, fmt.Sprintf("Unauthorized: User is not authorized to access the specified record"), http.StatusUnauthorized)
+					http.Error(w, "Unauthorized: User is not authorized to access the specified record", http.StatusUnauthorized)
 					return
 				}
 
 				c.log.Error("Failed to access the specified record", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", dbErr)
-				http.Error(w, fmt.Sprintf("Internal Server Error: Failed to access the specified record"), http.StatusInternalServerError)
+				http.Error(w, "Internal Server Error: Failed to access the specified record", http.StatusInternalServerError)
 				return
 			}
 
@@ -105,12 +105,12 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 				var unAuthErr *shared.UnauthorizedError
 				if errors.As(dbErr, &unAuthErr) {
 					c.log.Error("User is unauthorized to access the requested records", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", unAuthErr)
-					http.Error(w, fmt.Sprintf("Unauthorized: User is not authorized to access the specified records"), http.StatusUnauthorized)
+					http.Error(w, "Unauthorized: User is not authorized to access the specified records", http.StatusUnauthorized)
 					return
 				}
 
 				c.log.Error("Failed to access the specified records", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", dbErr)
-				http.Error(w, fmt.Sprintf("Internal Server Error: Failed to access the specified records"), http.StatusInternalServerError)
+				http.Error(w, "Internal Server Error: Failed to access the specified records", http.StatusInternalServerError)
 				return
 			}
 
@@ -140,7 +140,7 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation() http.Handle
 		var msg gossip.CollectionUpdateMessages
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
 			c.log.Error("Failed to decode request payload", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", err)
-			http.Error(w, fmt.Sprintf("Bad Request: Failed to parse request body"), http.StatusBadRequest)
+			http.Error(w, "Bad Request: Failed to parse request body", http.StatusBadRequest)
 			return
 		}
 		c.log.Debug("Request body read successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
@@ -149,7 +149,7 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation() http.Handle
 		err := c.UpdateCollectionsRecordsAndPropagate(msg.Messages, msg.Groups, msg.UserId, false, msg.Messages[0].SenderIp)
 		if err != nil {
 			c.log.Error("Failed to propagate collections updates", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", err)
-			http.Error(w, fmt.Sprintf("Internal Server Error: Failed to propagate collections updates"), http.StatusInternalServerError)
+			http.Error(w, "Internal Server Error: Failed to propagate collections updates", http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusOK) //response
@@ -164,7 +164,7 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdateGroupPropagation() http.H
 		var msg gossip.CollectionGroupUpdateMessages
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
 			c.log.Error("Failed to decode request payload", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", err)
-			http.Error(w, fmt.Sprintf("Bad Request: Failed to parse request body"), http.StatusBadRequest)
+			http.Error(w, "Bad Request: Failed to parse request body", http.StatusBadRequest)
 			return
 		}
 		c.log.Debug("Request body read successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
@@ -173,7 +173,7 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdateGroupPropagation() http.H
 		err := c.UpdateCollectionsGroupsAndPropagate(msg, false, msg[0].SenderIp)
 		if err != nil {
 			c.log.Error("Failed to propagate collection groups updates", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", err)
-			http.Error(w, fmt.Sprintf("Internal Server Error: Failed to propagate collection groups updates"), http.StatusInternalServerError)
+			http.Error(w, "Internal Server Error: Failed to propagate collection groups updates", http.StatusInternalServerError)
 			return
 		}
 		w.WriteHeader(http.StatusOK) //response
@@ -188,7 +188,7 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 		var msg gossip.NewCollectionMessage
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
 			c.log.Error("Failed to decode request payload", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", err)
-			http.Error(w, fmt.Sprintf("Bad Request: Failed to parse request body"), http.StatusBadRequest)
+			http.Error(w, "Bad Request: Failed to parse request body", http.StatusBadRequest)
 			return
 		}
 		c.log.Debug("Request body read successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
@@ -207,7 +207,7 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 		_, exists := c.collectionsPartialView.KnownCollections[collectionId]
 		if exists {
 			c.log.Error("Duplicate collection ID detected. A collection with the same UUID already exists", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_id", collectionId, "message", fmt.Sprintf("%+v", msg))
-			http.Error(w, fmt.Sprintf("Duplicate collection ID detected"), http.StatusConflict)
+			http.Error(w, "Duplicate collection ID detected", http.StatusConflict)
 			return
 		}
 
@@ -262,7 +262,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler
 		var msg gossip.RemoveCollectionMessage
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
 			c.log.Error("Failed to decode request payload", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", err)
-			http.Error(w, fmt.Sprintf("Bad Request: Failed to parse request body"), http.StatusBadRequest)
+			http.Error(w, "Bad Request: Failed to parse request body", http.StatusBadRequest)
 			return
 		}
 		c.log.Debug("Request body read successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
@@ -274,11 +274,35 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler
 		dbErr := c.RemoveCollectionAndPropagate(collectionId, migrationManager.GetMigrationManagerInstance(), msg.Groups, msg.UserId, false, senderIp)
 		if dbErr != nil {
 			c.log.Error("Failed collection removal propagation", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg), "error", dbErr)
-			http.Error(w, fmt.Sprintf("Internal Server Error: Failed to propagate collection removal"), http.StatusInternalServerError)
+			http.Error(w, "Internal Server Error: Failed to propagate collection removal", http.StatusInternalServerError)
 			return
 		}
 
 		c.log.Info("Collection removed successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_id", collectionId)
+		w.WriteHeader(http.StatusOK)
+	})
+}
+
+func (c *CollectionsDiscovererImp) handleIncomingRemoteCollectionSet(migrationManager migrationManager.MigrationManager) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer r.Body.Close()
+
+		var msg gossip.SetCollectionMessage
+		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
+			c.log.Error("Failed to decode request payload", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", err)
+			http.Error(w, "Bad Request: Failed to parse request body", http.StatusBadRequest)
+			return
+		}
+
+		//collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong, skipUniquenessCheck bool
+		err := c.SetCollectionAndPropagate(msg.CollectionId, msg.CollectionName, msg.Records, msg.Groups, msg.UserId, migrationManager, msg.IsStrong, msg.SkipUniquenessCheck)
+
+		if err != nil {
+			c.log.Error("Failed collection set", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg), "error", err)
+			http.Error(w, "Internal Server Error: Failed collection set", http.StatusInternalServerError)
+			return
+		}
+
 		w.WriteHeader(http.StatusOK)
 	})
 }

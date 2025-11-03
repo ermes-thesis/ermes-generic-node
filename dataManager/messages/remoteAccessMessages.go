@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"db"
 	"time"
 )
 
@@ -155,4 +156,14 @@ type RemoveCollectionMessage struct {
 	SenderIp     string   `json:"senderIp"`
 	Groups       []string `json:"groups"`
 	UserId       string   `json:"userId"`
+}
+
+type SetCollectionMessage struct {
+	CollectionId        string                    `json:"collectionId"`
+	CollectionName      string                    `json:"collectionName"`
+	Records             map[string]db.RecordValue `json:"records"`
+	Groups              []string                  `json:"groups"`
+	UserId              string                    `json:"userId"`
+	IsStrong            bool                      `json:"isStrong"`
+	SkipUniquenessCheck bool                      `json:"skipUniquenessCheck"`
 }

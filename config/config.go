@@ -33,10 +33,11 @@ type MigrationManagerConfig struct {
 	KnownCollectionsDumpPath     string        `yaml:"knownCollectionsDumpPath"`
 	KnownCollectionsDumpInterval time.Duration `yaml:"knownCollectionsDumpInterval"`
 
-	Statefull        bool   `yaml:"statefull"`
-	IsCentralStorage bool   `yaml:"isCentralStorage"`
-	WeakPolicy       string `yaml:"weakPolicy"`   // ALWAYSCOPYPOLICY  or DONOTHINGPOLICY
-	StrongPolicy     string `yaml:"strongPolicy"` // ERMESPOLICY or DONOTHINGPOLICY
+	Statefull         bool   `yaml:"statefull"`
+	IsCentralStorage  bool   `yaml:"isCentralStorage"`
+	WeakPolicy        string `yaml:"weakPolicy"`   // ALWAYSCOPYPOLICY  or DONOTHINGPOLICY
+	StrongPolicy      string `yaml:"strongPolicy"` // ERMESPOLICY or DONOTHINGPOLICY
+	CentralizedDBName string `yaml:"centralizedDBName"`
 }
 
 // normal operation mode: Statefull := true; WeakPolicy := ALWAYSCOPYPOLICY; StrongPolicy := ERMESPOLICY; IsCentralStorage := False

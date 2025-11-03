@@ -69,6 +69,10 @@ func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialVie
 	})
 }
 
+func (c *CollectionsDiscovererImp) getSender() sender.CollectionDiscovererSender {
+	return c.sender
+}
+
 // methods
 func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId string, consistencyClock uint64) (bool, shared.Collection, error) {
 	//sync

@@ -175,12 +175,13 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 
 	//react to positive decision
 	//sync -> avoid send a collection if used
-	b := strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock()
+	localCollection := strongCollection.GetCollectionState().(*shared.LocalCollection)
+	b := localCollection.CollectionLock.TryLock()
 	if !b {
 		return false
 	}
 
-	defer strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+	defer localCollection.CollectionLock.Unlock()
 
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.policy.dbInterface.GetCollection(outerKey)
@@ -232,11 +233,12 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 
 	//react to positive decision
 	//sync -> avoid send a collection if used
-	b := strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock()
+	localCollection := strongCollection.GetCollectionState().(*shared.LocalCollection)
+	b := localCollection.CollectionLock.TryLock()
 	if !b {
 		return false
 	}
-	defer strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+	defer localCollection.CollectionLock.Unlock()
 
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.policy.dbInterface.GetCollection(outerKey)

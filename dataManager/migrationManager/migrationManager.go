@@ -428,8 +428,14 @@ func (m *MigrationManagerImp) freeLru(sizeGoal uint) {
 
 func (m *MigrationManagerImp) SendCollectionAndRemove(collection shared.Collection) error {
 	//sync -> avoid send a collection if used
-	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
-	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+	localColl := collection.GetCollectionState().(*shared.LocalCollection)
+	if !localColl.CollectionLock.TryLock() {
+		//TODO: capire cosa fare in questo caso
+		m.log.Warn("MIG-MANAGER, collection is currently in use, skip migration", "collection", collection)
+		return nil
+	}
+
+	defer localColl.CollectionLock.Unlock()
 
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.dbInterface.GetCollection(collection.CollectionId())

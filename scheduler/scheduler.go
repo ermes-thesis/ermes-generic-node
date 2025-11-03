@@ -28,8 +28,22 @@ import (
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
 )
 
+type ScheduleRequest struct {
+	FunctionName    string
+	FunctionVersion string
+
+	Collections         map[string][]types.CollectionInfo
+	SequentialSeqNumber uint64
+	GroupToken          string
+
+	HTTPMethod        string
+	Payload           []byte
+	CumulativeLatency int
+	NumRedirects      int
+}
+
 type Scheduler interface {
-	Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqHostname string, httpMethod string, reqBody []byte, groups []string, userId string, groupToken string, cumulativeLatency int) (*FunctionResult, uint64, error)
+	Schedule(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string) (*FunctionResult, uint64, error)
 }
 
 type fnResBody []byte
@@ -121,17 +135,17 @@ func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
 	return found, collection, fmt.Errorf("couldn't access an updated version of the collection after %d retries: %v", retries, err)
 }
 
-func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, sequentialSeqNumber uint64, reqHostname string, httpMethod string, reqBody []byte, groups []string, userId string, groupToken string, cumulativeLatency int) (*FunctionResult, uint64, error) {
-	s.log.Info("Scheduling function", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
-	s.log.Debug("Scheduling function", "with_collections", fmt.Sprintf("%+v", collections), "with_request_body", string(reqBody), "sequential_seq_num", sequentialSeqNumber, "req_hostname", reqHostname)
+func (s *SchedulerImpl) Schedule(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string) (*FunctionResult, uint64, error) {
+	s.log.Info("Scheduling function", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
+	s.log.Debug("Scheduling function", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname)
 
-	if len(collections) == 0 {
-		s.log.Info("No collections specified, executing locally", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
-		s.log.Debug("No collections specified, executing locally", "with_collections", fmt.Sprintf("%+v", collections), "with_request_body", string(reqBody))
-		return s.executeLocally(functionName, functionVersion, collections, reqHostname, reqBody, groups, userId, "", false, cumulativeLatency)
+	if len(scheduleRequest.Collections) == 0 {
+		s.log.Info("No collections specified, executing locally", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
+		s.log.Debug("No collections specified, executing locally", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload))
+		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", false)
 	}
 
-	s.log.Info("Start to analyze collections for scheduling decision", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId)
+	s.log.Info("Start to analyze collections for scheduling decision", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId)
 	// Initializing vars for function returned collections analysis
 	var sequentialCollection *shared.StrongCollection
 	sequentialCollectionNeeded := false
@@ -144,14 +158,14 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 	}
 
 	// Cycling over all the returned collections (they are grouped based on their "AS" defined by the dev)
-	for _, cols := range collections {
+	for _, cols := range scheduleRequest.Collections {
 		// Cycling over all the collections with the same "AS"
 		for _, col := range cols {
 			// Checking if the collection is locally present, the check is retried maximum 10 times, every 500ms if the
 			// collection is a sequential consistent one. (In case of an eventual consistent the seqNumber passed is ignored)
-			found, collection, err := s.retryIsCollectionLocallyPresent(col.Id, sequentialSeqNumber, 10, 500*time.Millisecond)
+			found, collection, err := s.retryIsCollectionLocallyPresent(col.Id, scheduleRequest.SequentialSeqNumber, 10, 500*time.Millisecond)
 			if err != nil {
-				s.log.Error("Failed to verify collection presence", "collection_id", col.Id, "sequential_seq_num", sequentialSeqNumber, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", collections), "with_request_body", reqBody, "req_hostname", reqHostname, "error", err)
+				s.log.Error("Failed to verify collection presence", "collection_id", col.Id, "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", scheduleRequest.Payload, "req_hostname", reqHostname, "error", err)
 				return nil, 0, s.log.ErrorfErr("wrong sequence number for collection: %v, %v", col.Id, err)
 			}
 
@@ -191,26 +205,26 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 		}
 	}
 
-	s.log.Info("Collection analysis completed", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "sequential_coll_needed", sequentialCollectionNeeded, "sequential_collection_found", fmt.Sprintf("%+v", sequentialCollection), "has_eventual_local", hasEventualLocal, "eventual_host_counts", fmt.Sprintf("%+v", eventualHostCounts), "max_eventual_count", maxEventualCount, "host_with_more_eventual", hostWithMoreEventual)
+	s.log.Info("Collection analysis completed", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "sequential_coll_needed", sequentialCollectionNeeded, "sequential_collection_found", fmt.Sprintf("%+v", sequentialCollection), "has_eventual_local", hasEventualLocal, "eventual_host_counts", fmt.Sprintf("%+v", eventualHostCounts), "max_eventual_count", maxEventualCount, "host_with_more_eventual", hostWithMoreEventual)
 	// Route based on collection analysis
 	// Priority: Sequential > Local Eventual > Remote Eventual
 	if sequentialCollectionNeeded {
-		s.log.Debug("Sequential collection requested for execution. Scheduling accordingly", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", collections), "with_request_body", reqBody, "sequential_seq_num", sequentialSeqNumber, "req_hostname", reqHostname)
+		s.log.Debug("Sequential collection requested for execution. Scheduling accordingly", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", scheduleRequest.Payload, "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname)
 
 		if sequentialCollection == nil {
 			if s.serverInfo.Father == nil {
-				s.log.Error("Couldn't find in the architecture the requested sequential collection", "fn_name", functionName, "fn_version", functionVersion, "with_collections", fmt.Sprintf("%+v", collections), "with_request_body", reqBody, "sequential_seq_num", sequentialSeqNumber, "req_hostname", reqHostname)
+				s.log.Error("Couldn't find in the architecture the requested sequential collection", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", scheduleRequest.Payload, "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname)
 				return nil, 0, errors.New("sequential collection requested does not exists")
 			}
 			s.log.Info("Sequential collection existence not found. Trying to forward the request to father node",
-				"fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, userId, "forwarded_to", s.serverInfo.Father.HostName)
-			return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, httpMethod, reqBody, groupToken, sequentialSeqNumber, cumulativeLatency)
+				"fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, userId, "forwarded_to", s.serverInfo.Father.HostName)
+			return s.forwardRequest(s.serverInfo.Father.HostName, scheduleRequest)
 		}
 
 		// Sequential collection present - check if it is requested a write or read access
-		functionMetadata, err := s.cache.GetMetadata(functionName, functionVersion)
+		functionMetadata, err := s.cache.GetMetadata(scheduleRequest.FunctionName, scheduleRequest.FunctionVersion)
 		if err != nil {
-			s.log.Error("Failed to retrieve function metadata", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", collections), "with_request_body", reqBody, "sequential_seq_num", sequentialSeqNumber, "req_hostname", reqHostname, "error", err)
+			s.log.Error("Failed to retrieve function metadata", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", scheduleRequest.Payload, "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname, "error", err)
 			return nil, 0, fmt.Errorf("error retrieving function metadata: %v", err)
 		}
 
@@ -230,41 +244,41 @@ func (s *SchedulerImpl) Schedule(functionName string, functionVersion string, co
 					defer sequentialCollection.WriteMutex.Unlock()
 				}
 				defer sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
-				s.log.Info("Executing function locally with sequential collection", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
-				s.log.Debug("Executing function locally with sequential collection", "seq_collection_id", sequentialCollection.CollectionId(), "sequential_seq_num", sequentialSeqNumber, "is_leader", sequentialCollection.IsLeader, "write_access_requested", functionMetadata.StrongCollWriteAccess)
-				return s.executeLocally(functionName, functionVersion, collections, reqHostname, reqBody, groups, userId, sequentialCollection.CollectionId(), functionMetadata.StrongCollWriteAccess, cumulativeLatency)
+				s.log.Info("Executing function locally with sequential collection", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
+				s.log.Debug("Executing function locally with sequential collection", "seq_collection_id", sequentialCollection.CollectionId(), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "is_leader", sequentialCollection.IsLeader, "write_access_requested", functionMetadata.StrongCollWriteAccess)
+				return s.executeLocally(scheduleRequest, reqHostname, groups, userId, sequentialCollection.CollectionId(), functionMetadata.StrongCollWriteAccess)
 			}
 
 			s.log.Info("Sequential collection must be accessed in write but the local sequential collection is not the leader. Forwarding request to the host containing the leader sequential collection",
-				"fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "forwarded_to", sequentialCollection.LeaderId)
+				"fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "forwarded_to", sequentialCollection.LeaderId)
 			// In all the other cases forward to the leader replica of the sequential collection
-			return s.forwardRequest(sequentialCollection.LeaderId, functionName, functionVersion, collections, httpMethod, reqBody, groupToken, sequentialSeqNumber, cumulativeLatency)
+			return s.forwardRequest(sequentialCollection.LeaderId, scheduleRequest)
 		}
 
-		s.log.Info("Sequential collection found, but we are in a parent node since it is not local. Forwarding to the correct child node.", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
-		return s.forwardRequestWithSequential(functionName, functionVersion, collections, httpMethod, reqBody, groupToken, sequentialSeqNumber, functionMetadata.StrongCollWriteAccess, sequentialCollection, cumulativeLatency)
+		s.log.Info("Sequential collection found, but we are in a parent node since it is not local. Forwarding to the correct child node.", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
+		return s.forwardRequestWithSequential(scheduleRequest, sequentialCollection, functionMetadata.StrongCollWriteAccess)
 	}
 
 	// If is not requested a Sequential Collection, and the current node has at least one of the eventual collections
 	// requested, we execute the function locally
 	if hasEventualLocal {
-		s.log.Info("Executing function locally with eventual", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId)
-		s.log.Debug("Executing function locally with eventual", "with_collections", fmt.Sprintf("%+v", collections), "with_request_body", string(reqBody), "user_access_groups", groups, "request_hostname", reqHostname)
-		return s.executeLocally(functionName, functionVersion, collections, reqHostname, reqBody, groups, userId, "", false, cumulativeLatency)
+		s.log.Info("Executing function locally with eventual", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId)
+		s.log.Debug("Executing function locally with eventual", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "user_access_groups", groups, "request_hostname", reqHostname)
+		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", false)
 	}
 
 	// We have only Eventual Collection requested, and no one of them is local, we forward the scheduling request
 	// towards the DIRECTION where we have more Eventual Collections
-	s.log.Info("Only eventual collections detected. None is local, forwarding request to host with more eventual collections detected", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "forwarded_to", hostWithMoreEventual)
-	return s.forwardRequest(hostWithMoreEventual, functionName, functionVersion, collections, httpMethod, reqBody, groupToken, sequentialSeqNumber, cumulativeLatency)
+	s.log.Info("Only eventual collections detected. None is local, forwarding request to host with more eventual collections detected", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "forwarded_to", hostWithMoreEventual)
+	return s.forwardRequest(hostWithMoreEventual, scheduleRequest)
 }
 
-func (s *SchedulerImpl) forwardRequestWithSequential(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, httpMethod string, body []byte, groupToken string, sequentialSeqNumber uint64, writeAccess bool, sequentialCollection *shared.StrongCollection, cumulativeLatency int) (*FunctionResult, uint64, error) {
+func (s *SchedulerImpl) forwardRequestWithSequential(scheduleRequest ScheduleRequest, sequentialCollection *shared.StrongCollection, writeAccess bool) (*FunctionResult, uint64, error) {
 	// If the Sequential collection is not locally present, and the function needs to access it in write. Forward towards
 	// the leader.
 	if writeAccess {
-		s.log.Debug("Forwarding function scheduling to the sequential collection leader since we have to access it in write", "fn_name", functionName, "fn_version", functionVersion, "forward_to", sequentialCollection.LeaderId)
-		return s.forwardRequest(sequentialCollection.LeaderId, functionName, functionVersion, collections, httpMethod, body, groupToken, sequentialSeqNumber, cumulativeLatency)
+		s.log.Debug("Forwarding function scheduling to the sequential collection leader since we have to access it in write", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "forward_to", sequentialCollection.LeaderId)
+		return s.forwardRequest(sequentialCollection.LeaderId, scheduleRequest)
 	}
 
 	// If the Sequential collection is not locally present, and the function require only reading it. Forward towards to
@@ -282,66 +296,66 @@ func (s *SchedulerImpl) forwardRequestWithSequential(functionName string, functi
 
 	s.log.Debug("Replica selection for sequential collection read", "host_with_min_latency", hostWithMinLatency, "min_latency", minLatency)
 	if hostWithMinLatency != "" {
-		s.log.Debug("Forwarding function scheduling to one of the available sequential collection replicas, based on latency, since we have to access it in read", "fn_name", functionName, "fn_version", functionVersion, "forward_to", hostWithMinLatency)
-		return s.forwardRequest(hostWithMinLatency, functionName, functionVersion, collections, httpMethod, body, groupToken, sequentialSeqNumber, cumulativeLatency)
+		s.log.Debug("Forwarding function scheduling to one of the available sequential collection replicas, based on latency, since we have to access it in read", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "forward_to", hostWithMinLatency)
+		return s.forwardRequest(hostWithMinLatency, scheduleRequest)
 	}
 
 	// If "HostId" is empty we fall back to the father (shouldn't happen, since if we are in this branch, it means that
 	// the node knows the existence of the collection, therefore the collection should be local to the node, or in
 	// one of its children, meaning that "HostId" should NOT be empty)
 	if s.serverInfo.Father != nil {
-		s.log.Debug("Forwarding function scheduling to father as fallback", "fn_name", functionName, "fn_version", functionVersion, "forward_to", s.serverInfo.Father.HostName)
-		return s.forwardRequest(s.serverInfo.Father.HostName, functionName, functionVersion, collections, httpMethod, body, groupToken, sequentialSeqNumber, cumulativeLatency)
+		s.log.Debug("Forwarding function scheduling to father as fallback", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "forward_to", s.serverInfo.Father.HostName)
+		return s.forwardRequest(s.serverInfo.Father.HostName, scheduleRequest)
 	}
 
-	s.log.Error("No available host for sequential collection (unexpected)", "fn_name", functionName, "fn_version", functionVersion, "collection_id", sequentialCollection.CollectionId())
+	s.log.Error("No available host for sequential collection (unexpected)", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "collection_id", sequentialCollection.CollectionId())
 	// If we are here, it means that something wrong has happened in the scheduling process, and we are in the Cloud Node
 	panic("No available host for sequential collection")
 }
 
-func (s *SchedulerImpl) executeLocally(functionName string, functionVersion string, collections map[string][]types.CollectionInfo, reqHostname string, reqBody []byte, groups []string, userId string, sequentialCollId string, writeSeqCollection bool, cumulativeLatency int) (*FunctionResult, uint64, error) {
+func (s *SchedulerImpl) executeLocally(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string, sequentialCollId string, writeSeqCollection bool) (*FunctionResult, uint64, error) {
 	var collIds []string
-	for _, cols := range collections {
+	for _, cols := range scheduleRequest.Collections {
 		for _, col := range cols {
 			collIds = append(collIds, col.Id)
 		}
 	}
-	s.log.Info("Updating collections latest usage before function execution", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collections_involved", collIds)
+	s.log.Info("Updating collections latest usage before function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_involved", collIds)
 	s.dataManager.GetMigrationManager().UpdateCollectionsLatestUsage(collIds)
 
-	s.log.Debug("Acquiring wasm executor from pool", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
+	s.log.Debug("Acquiring wasm executor from pool", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 	executor := s.wasmExecutorPool.Acquire()
 	defer func() {
 		executor.Release()
-		s.log.Debug("Released wasm executor back to pool", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
+		s.log.Debug("Released wasm executor back to pool", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 	}()
 
 	ctx := WasmContext{
 		UserId:      userId,
 		GroupList:   groups,
-		Collections: collections,
+		Collections: scheduleRequest.Collections,
 	}
 	ctxJson, err := json.Marshal(ctx)
 	if err != nil {
-		s.log.Error("Failed to marshal wasm context for function execution", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "request_hostname", reqHostname, "with_sequential_collection", sequentialCollId != "", "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "error", err)
+		s.log.Error("Failed to marshal wasm context for function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "request_hostname", reqHostname, "with_sequential_collection", sequentialCollId != "", "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "error", err)
 		return nil, 0, fmt.Errorf("error marshalling wasm context: %v", err)
 	}
 
-	wasmBinary, err := s.cache.GetBinary(functionName, functionVersion)
+	wasmBinary, err := s.cache.GetBinary(scheduleRequest.FunctionName, scheduleRequest.FunctionVersion)
 	if err != nil {
-		s.log.Error("Failed to retrieve function binary", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "request_hostname", reqHostname, "with_sequential_collection", sequentialCollId != "", "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "error", err)
+		s.log.Error("Failed to retrieve function binary", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "request_hostname", reqHostname, "with_sequential_collection", sequentialCollId != "", "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "error", err)
 		return nil, 0, fmt.Errorf("error retrieving function binary: %v", err)
 	}
 
-	s.log.Info("Invoking function locally", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
+	s.log.Info("Invoking function locally", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 	s.log.Debug("Invoking function locally", "fn_start_time", time.Now().String())
-	resp := executor.Invoke(wasmBinary, "entry", reqBody, ctxJson)
-	s.log.Info("Function executed successfully", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
+	resp := executor.Invoke(wasmBinary, "entry", scheduleRequest.Payload, ctxJson)
+	s.log.Info("Function executed successfully", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 	s.log.Debug("Function executed successfully", "fn_end_time", time.Now().String(), "fn_response", fmt.Sprintf("%+v", resp))
 
 	repBody, err := json.Marshal(resp.Response)
 	if err != nil {
-		s.log.Error("Failed to marshal function response", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "request_hostname", reqHostname, "with_sequential_collection", sequentialCollId != "", "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "error", err)
+		s.log.Error("Failed to marshal function response", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "request_hostname", reqHostname, "with_sequential_collection", sequentialCollId != "", "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "error", err)
 		return nil, 0, fmt.Errorf("error marshalling response body: %v", err)
 	}
 	result := &FunctionResult{
@@ -353,16 +367,16 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 	if resp.CacheUpdates == nil {
 		if sequentialCollId != "" {
 			seqNumber, err := s.dataManager.GetMigrationManager().GetCollectionVectorClockValue(sequentialCollId)
-			s.log.Info("No function cache updates to commit, returning directly the result", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result), "new_sequential_collection_seq_num", seqNumber)
+			s.log.Info("No function cache updates to commit, returning directly the result", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result), "new_sequential_collection_seq_num", seqNumber)
 			return result, seqNumber, err
 		}
-		s.log.Info("No function cache updates to commit, returning directly the result", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result))
+		s.log.Info("No function cache updates to commit, returning directly the result", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result))
 		return result, 0, nil
 	}
 
 	var seqNumber uint64
 	if sequentialCollId != "" {
-		s.log.Debug("Processing sequential collection cache updates", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
+		s.log.Debug("Processing sequential collection cache updates", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 		if update, ok := resp.CacheUpdates.CollectionUpdates[sequentialCollId]; ok {
 			if !writeSeqCollection {
 				s.log.Warn("DEV_ERROR: Function tried to update sequential collection without having write access")
@@ -371,16 +385,16 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 
 			if update.Deleted {
 				// TODO: Capire se è worth farla asincronamente (DeleteMetadata)
-				s.log.Debug("Requested deletion for sequential collection in executed function", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
+				s.log.Debug("Requested deletion for sequential collection in executed function", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 				err = s.metadataManager.DeleteMetadata(sequentialCollId, update.Geolocation, propagation.FROM_LOCAL, update.Recreated)
 				if err != nil {
-					s.log.Error("Failed to delete sequential collection metadata", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "request_hostname", reqHostname, "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "is_coll_recreated", update.Recreated, "error", err)
+					s.log.Error("Failed to delete sequential collection metadata", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "request_hostname", reqHostname, "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "is_coll_recreated", update.Recreated, "error", err)
 					return nil, 0, fmt.Errorf("error deleting sequential collection metadata: %v", err)
 				}
 
 				err = s.dataManager.RemoveCollectionAndPropagate(sequentialCollId, groups, userId)
 				if err != nil {
-					s.log.Error("Failed to remove sequential collection", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "request_hostname", reqHostname, "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "error", err)
+					s.log.Error("Failed to remove sequential collection", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "request_hostname", reqHostname, "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "error", err)
 					return nil, 0, fmt.Errorf("error removing sequential collection: %v", err)
 				}
 
@@ -398,13 +412,13 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 						RecordValues: recordValues,
 						IsDelete:     false,
 					}}
-					s.log.Debug("Sequential collection dirty records commits prepared", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "record_updates", fmt.Sprintf("%+v", updates))
+					s.log.Debug("Sequential collection dirty records commits prepared", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "record_updates", fmt.Sprintf("%+v", updates))
 					err = s.dataManager.UpdateCollectionsRecordsAndPropagate(updates, groups, userId)
 					if err != nil {
-						s.log.Error("Failed to update sequential collection records", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "collection_updates", fmt.Sprintf("%+v", updates), "sequential_collection_write_access", writeSeqCollection, "error", err)
+						s.log.Error("Failed to update sequential collection records", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "collection_updates", fmt.Sprintf("%+v", updates), "sequential_collection_write_access", writeSeqCollection, "error", err)
 						return nil, 0, fmt.Errorf("error updating sequential collection records: %v", err)
 					}
-					s.log.Debug("Sequential collection records updated and propagated", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "record_updates", fmt.Sprintf("%+v", updates))
+					s.log.Debug("Sequential collection records updated and propagated", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "record_updates", fmt.Sprintf("%+v", updates))
 				}
 				if len(update.DeletedRecords) > 0 {
 					updates := []messages.CollectionUpdate{{
@@ -412,13 +426,13 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 						RecordNames:  update.DeletedRecords,
 						IsDelete:     true,
 					}}
-					s.log.Debug("Sequential collection delete records commits prepared", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "records_to_delete", fmt.Sprintf("%+v", updates))
+					s.log.Debug("Sequential collection delete records commits prepared", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "records_to_delete", fmt.Sprintf("%+v", updates))
 					err = s.dataManager.UpdateCollectionsRecordsAndPropagate(updates, groups, userId)
 					if err != nil {
-						s.log.Error("Failed to delete sequential collection records", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "collection_updates", fmt.Sprintf("%+v", updates), "sequential_collection_write_access", writeSeqCollection, "error", err)
+						s.log.Error("Failed to delete sequential collection records", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "collection_updates", fmt.Sprintf("%+v", updates), "sequential_collection_write_access", writeSeqCollection, "error", err)
 						return nil, 0, fmt.Errorf("error deleting sequential collection records: %v", err)
 					}
-					s.log.Debug("Sequential collection delete records deleted and propagated", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "records_to_delete", fmt.Sprintf("%+v", updates))
+					s.log.Debug("Sequential collection delete records deleted and propagated", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "records_to_delete", fmt.Sprintf("%+v", updates))
 				}
 
 				var groupsToAdd []string
@@ -432,22 +446,22 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 				}
 
 				if len(groupsToAdd) > 0 || len(groupsToRemove) > 0 {
-					s.log.Debug("Sequential collection group changes calculated", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove)
+					s.log.Debug("Sequential collection group changes calculated", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove)
 					updateResp, err := s.metadataManager.UpdateGroupsInCollection(sequentialCollId, groups, userId, groupsToAdd, groupsToRemove)
 					if err != nil {
-						s.log.Error("Failed to update sequential collection groups", "fn_name", functionName, "fn_version", functionVersion, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove, "sequential_collection_write_access", writeSeqCollection, "error", err)
+						s.log.Error("Failed to update sequential collection groups", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove, "sequential_collection_write_access", writeSeqCollection, "error", err)
 						return nil, 0, fmt.Errorf("error updating sequential collection groups: %v", err)
 					}
-					s.log.Debug("Metadata groups updated successfully for sequential collection", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "groups_update_response", fmt.Sprintf("%+v", updateResp))
+					s.log.Debug("Metadata groups updated successfully for sequential collection", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "groups_update_response", fmt.Sprintf("%+v", updateResp))
 
-					s.log.Debug("Starting sequential collection groups update and propagation", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "groups_update_response", fmt.Sprintf("%+v", updateResp))
+					s.log.Debug("Starting sequential collection groups update and propagation", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "groups_update_response", fmt.Sprintf("%+v", updateResp))
 					err = s.dataManager.UpdateCollectionsGroupsAndPropagate([]messages.CollectionGroupUpdate{{
 						CollectionId: sequentialCollId,
 						GroupNames:   updateResp.Groups,
 						Sequence:     updateResp.Sequence,
 					}})
 					if err != nil {
-						s.log.Error("Failed to propagate the updates to sequential collection groups", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove, "sequential_collection_write_access", writeSeqCollection, "error", err)
+						s.log.Error("Failed to propagate the updates to sequential collection groups", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove, "sequential_collection_write_access", writeSeqCollection, "error", err)
 						return nil, 0, s.log.ErrorfErr("error propagating sequential collection group updates: %v", err)
 					}
 				}
@@ -458,38 +472,38 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 
 		seqNumber, err = s.dataManager.GetMigrationManager().GetCollectionVectorClockValue(sequentialCollId)
 		if err != nil {
-			s.log.Error("Error getting sequential collection vector clock value", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "request_hostname", reqHostname, "sequential_collection_id", sequentialCollId, "sequential_collection_access_write", writeSeqCollection, "error", err)
+			s.log.Error("Error getting sequential collection vector clock value", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "request_hostname", reqHostname, "sequential_collection_id", sequentialCollId, "sequential_collection_access_write", writeSeqCollection, "error", err)
 			return nil, 0, s.log.ErrorfErr("error getting sequential collection vector clock value: %v", err)
 		}
-		s.log.Debug("Obtained new sequential collection sequence number", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "new_sequence_number", seqNumber)
+		s.log.Debug("Obtained new sequential collection sequence number", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "new_sequence_number", seqNumber)
 	}
 
 	// Process eventual updates asynchronously
 	go func() {
 		routinePrefix := fmt.Sprintf("GO#%s", xid.New().String())
 
-		s.log.InfofWith("[%s] Starting goroutine to propagate eventual collection updates", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups)
+		s.log.InfofWith("[%s] Starting goroutine to propagate eventual collection updates", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 		var updateMessage []messages.CollectionUpdate
 		var groupUpdateMessage []messages.CollectionGroupUpdate
 
 		for collId, update := range resp.CacheUpdates.CollectionUpdates {
-			s.log.DebugfWith("[%s] Processing collection cache update", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", userId, "collection_id", collId, "update", fmt.Sprintf("%+v", update))
+			s.log.DebugfWith("[%s] Processing collection cache update", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", userId, "collection_id", collId, "update", fmt.Sprintf("%+v", update))
 			if update.Deleted {
 				go func(collId string) {
 					routinePrefix := fmt.Sprintf("GO#%s", xid.New().String())
 
 					// TODO: Capire se è worth farla asincronamente (DeleteMetadata)
-					s.log.Debug("Requested deletion for sequential collection in executed function", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
+					s.log.Debug("Requested deletion for sequential collection in executed function", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 					err = s.metadataManager.DeleteMetadata(sequentialCollId, update.Geolocation, propagation.FROM_LOCAL, update.Recreated)
 					if err != nil {
-						s.log.Error("Failed to delete sequential collection metadata", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(reqBody), "request_hostname", reqHostname, "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "is_coll_recreated", update.Recreated, "error", err)
+						s.log.Error("Failed to delete sequential collection metadata", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "request_hostname", reqHostname, "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "is_coll_recreated", update.Recreated, "error", err)
 					}
 
 					err := s.dataManager.RemoveCollectionAndPropagate(collId, groups, userId)
 					if err != nil {
-						s.log.ErrorfWith("[%s] Failed to delete or propagate the deletion of collection", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collection_id", collId, "update", fmt.Sprintf("%+v", update), "error", err)
+						s.log.ErrorfWith("[%s] Failed to delete or propagate the deletion of collection", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_id", collId, "update", fmt.Sprintf("%+v", update), "error", err)
 					}
-					s.log.DebugfWith("[%s] Removed collection asynchronously", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collection_id", collId, "update", fmt.Sprintf("%+v", update))
+					s.log.DebugfWith("[%s] Removed collection asynchronously", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_id", collId, "update", fmt.Sprintf("%+v", update))
 				}(collId)
 				continue
 			}
@@ -530,7 +544,7 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 			if len(groupsToAdd) > 0 || len(groupsToRemove) > 0 {
 				updateResp, err := s.metadataManager.UpdateGroupsInCollection(collId, groups, userId, groupsToAdd, groupsToRemove)
 				if err != nil {
-					s.log.ErrorfWith("[%s] Failed updating groups in eventual collection", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collection_id", collId, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove, "error", err)
+					s.log.ErrorfWith("[%s] Failed updating groups in eventual collection", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_id", collId, "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove, "error", err)
 					continue
 				}
 				groupUpdateMessage = append(groupUpdateMessage, messages.CollectionGroupUpdate{
@@ -542,43 +556,43 @@ func (s *SchedulerImpl) executeLocally(functionName string, functionVersion stri
 		}
 
 		if len(updateMessage) > 0 {
-			s.log.Debug("[%s] Propagating eventual collection updates", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates", fmt.Sprintf("%+v", updateMessage))
+			s.log.Debug("[%s] Propagating eventual collection updates", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates", fmt.Sprintf("%+v", updateMessage))
 			err := s.dataManager.UpdateCollectionsRecordsAndPropagate(updateMessage, groups, userId)
 			if err != nil {
-				s.log.ErrorfWith("[%s] Failed to update or propagate eventual collections' updates", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates", fmt.Sprintf("%+v", updateMessage), "error", err)
+				s.log.ErrorfWith("[%s] Failed to update or propagate eventual collections' updates", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates", fmt.Sprintf("%+v", updateMessage), "error", err)
 			}
 		}
 		if len(groupUpdateMessage) > 0 {
-			s.log.DebugfWith("[%s] Propagating eventual collection group updates", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collection_groups_updates", fmt.Sprintf("%+v", groupUpdateMessage))
+			s.log.DebugfWith("[%s] Propagating eventual collection group updates", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_groups_updates", fmt.Sprintf("%+v", groupUpdateMessage))
 			err = s.dataManager.UpdateCollectionsGroupsAndPropagate(groupUpdateMessage)
 			if err != nil {
-				s.log.ErrorfWith("[%s] Failed to update or propagate eventual collections' groups update", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collection_groups_updates", fmt.Sprintf("%+v", groupUpdateMessage), "error", err)
+				s.log.ErrorfWith("[%s] Failed to update or propagate eventual collections' groups update", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_groups_updates", fmt.Sprintf("%+v", groupUpdateMessage), "error", err)
 			}
 		}
 
 		s.sendUpdateToGTP(resp.CacheUpdates.Groups)
-		s.log.InfofWith("[%s] Finished propagation of updates on eventual collections", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates")
+		s.log.InfofWith("[%s] Finished propagation of updates on eventual collections", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates")
 	}()
 
 	// Update requests info asynchronously
 	go func() {
 		routinePrefix := fmt.Sprintf("GO#%s", xid.New().String())
 		var collRequestInfo []messages.CollectionRequestInfo
-		for _, colls := range collections {
+		for _, colls := range scheduleRequest.Collections {
 			for _, coll := range colls {
 				collRequestInfo = append(collRequestInfo, messages.CollectionRequestInfo{
 					CollectionId:   coll.Id,
 					IsWrite:        writeSeqCollection,
-					RequestLatency: cumulativeLatency,
+					RequestLatency: scheduleRequest.CumulativeLatency,
 				})
 			}
 		}
 
-		s.log.InfofWith("[%s] Starting to update migration manager request infos for the used collections", []any{routinePrefix}, "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
+		s.log.InfofWith("[%s] Starting to update migration manager request infos for the used collections", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
 		s.dataManager.GetMigrationManager().UpdatesRequestsInfo(collRequestInfo, reqHostname)
 	}()
 
-	s.log.Info("Local function execution completed successfully. Returning result", "fn_name", functionName, "fn_version", functionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result), "new_sequence_number", seqNumber)
+	s.log.Info("Local function execution completed successfully. Returning result", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result), "new_sequence_number", seqNumber)
 	return result, seqNumber, nil
 }
 
@@ -678,31 +692,32 @@ func (s *SchedulerImpl) makeHTTPRequest(method string, url string, body io.Reade
 	return resp.StatusCode, nil
 }
 
-func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functionVersion string, collections map[string][]types.CollectionInfo, httpMethod string, reqBody []byte, groupToken string, seqNumber uint64, cumulativeLatency int) (*FunctionResult, uint64, error) {
-	s.log.Debug("Preparing request to offload scheduling", "fn_name", functionName, "fn_version", functionVersion, "destination", dest, "with_collections", fmt.Sprintf("%+v", collections), "sequential_coll_seq_num", seqNumber, "cumulative_latency", cumulativeLatency)
+func (s *SchedulerImpl) forwardRequest(dest string, scheduleRequest ScheduleRequest) (*FunctionResult, uint64, error) {
+	s.log.Debug("Preparing request to offload scheduling", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "destination", dest, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency)
 
-	url := fmt.Sprintf("http://%s/pvt-offload-function/%s/%s", dest, functionName, functionVersion)
-	req, err := http.NewRequest(httpMethod, url, bytes.NewReader(reqBody))
+	url := fmt.Sprintf("http://%s/pvt-offload-function/%s/%s", dest, scheduleRequest.FunctionName, scheduleRequest.FunctionVersion)
+	req, err := http.NewRequest(scheduleRequest.HTTPMethod, url, bytes.NewReader(scheduleRequest.Payload))
 	if err != nil {
-		s.log.Error("Error creating offloading request", "fn_name", functionName, "fn_version", functionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", collections), "sequential_coll_seq_num", seqNumber, "cumulative_latency", cumulativeLatency, "error", err)
+		s.log.Error("Error creating offloading request", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency, "error", err)
 		return nil, 0, fmt.Errorf("error creating request: %v", err)
 	}
-	req.Header.Set("X-ERMES-GROUPS", groupToken)
-	collectionsJson, err := json.Marshal(collections)
+	req.Header.Set("X-ERMES-GROUPS", scheduleRequest.GroupToken)
+	collectionsJson, err := json.Marshal(scheduleRequest.Collections)
 	if err != nil {
-		s.log.Error("Error marshalling collections for offloading request", "fn_name", functionName, "fn_version", functionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", collections), "sequential_coll_seq_num", seqNumber, "cumulative_latency", cumulativeLatency, "error", err)
+		s.log.Error("Error marshalling collections for offloading request", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency, "error", err)
 		return nil, 0, fmt.Errorf("error marshalling collections: %v", err)
 	}
 	req.Header.Set("X-ERMES-COLLECTIONS", string(collectionsJson))
 	req.Header.Set("X-ERMES-SECRET", s.serverInfo.Secret)
-	req.Header.Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", seqNumber))
+	req.Header.Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", scheduleRequest.SequentialSeqNumber))
 	req.Header.Set("X-ERMES-HOSTNAME", s.serverInfo.HostName)
-	req.Header.Set("X-ERMES-LATENCY", strconv.Itoa(cumulativeLatency+s.serverInfo.GetLatencyFor(dest)))
+	req.Header.Set("X-ERMES-LATENCY", strconv.Itoa(scheduleRequest.CumulativeLatency+s.serverInfo.GetLatencyFor(dest)))
+	req.Header.Set("X-ERMES-REDIRECTS", strconv.Itoa(scheduleRequest.NumRedirects+1))
 
 	s.log.Debug("Forward request prepared with headers", "headers", fmt.Sprintf("%v", req.Header))
 	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {
-		s.log.Error("Error forwarding request", "fn_name", functionName, "fn_version", functionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", collections), "sequential_coll_seq_num", seqNumber, "cumulative_latency", cumulativeLatency, "error", err)
+		s.log.Error("Error forwarding request", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency, "error", err)
 		return nil, 0, fmt.Errorf("error forwarding request: %v", err)
 	}
 	defer resp.Body.Close()
@@ -712,14 +727,14 @@ func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functio
 	if sequentialSeqNumberStr != "" {
 		_, err = fmt.Sscanf(sequentialSeqNumberStr, "%d", &sequentialSeqNumber)
 		if err != nil {
-			s.log.Error("Error parsing sequential sequence number", "fn_name", functionName, "fn_version", functionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", collections), "sequential_coll_seq_num", seqNumber, "cumulative_latency", cumulativeLatency, "error", err)
+			s.log.Error("Error parsing sequential sequence number", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency, "error", err)
 			return nil, 0, fmt.Errorf("error parsing sequential sequence number: %v", err)
 		}
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		s.log.Error("Error reading response", "fn_name", functionName, "fn_version", functionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", collections), "sequential_coll_seq_num", seqNumber, "cumulative_latency", cumulativeLatency, "error", err)
+		s.log.Error("Error reading response", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency, "error", err)
 		return nil, 0, fmt.Errorf("error reading response: %v", err)
 	}
 
@@ -728,6 +743,6 @@ func (s *SchedulerImpl) forwardRequest(dest string, functionName string, functio
 		Hostname:   resp.Header.Get("X-ERMES-EXECUTION-HOST"),
 		Body:       body,
 	}
-	s.log.Debug("Received response from offloaded scheduling", "fn_response", fmt.Sprintf("%+v", fnRes), "new_sequential_number", sequentialSeqNumber, "old_sequential_number", seqNumber)
+	s.log.Debug("Received response from offloaded scheduling", "fn_response", fmt.Sprintf("%+v", fnRes), "new_sequential_number", sequentialSeqNumber, "old_sequential_number", scheduleRequest.SequentialSeqNumber)
 	return &fnRes, sequentialSeqNumber, nil
 }

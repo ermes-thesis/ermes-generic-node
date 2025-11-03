@@ -10,6 +10,8 @@ import (
 	"tokenDecoder"
 )
 
+const maxRedirects = 10
+
 func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
@@ -27,11 +29,24 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 		sequentialSeqNumberStr := r.Header.Get("X-ERMES-SEQUENTIAL-NUMBER")
 		hostname := r.Header.Get("X-ERMES-HOSTNAME")
 		cumulativeLatency := r.Header.Get("X-ERMES-LATENCY")
+		redirects := r.Header.Get("X-ERMES-REDIRECTS")
 
 		cumuLatInt, err := strconv.Atoi(cumulativeLatency)
 		if err != nil {
 			s.log.Error("Error converting latency from string to int", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
 			http.Error(w, "Error converting latency from string to int", http.StatusInternalServerError)
+			return
+		}
+
+		redirectsInt, err := strconv.Atoi(redirects)
+		if err != nil {
+			s.log.Error("Error converting redirects from string to int", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
+			http.Error(w, "Error converting redirects from string to int", http.StatusInternalServerError)
+			return
+		}
+		if redirectsInt > maxRedirects {
+			s.log.Error("Max redirects exceeded for offloaded invocation", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "redirects", redirectsInt)
+			http.Error(w, "Max redirects exceeded for offloaded invocation", http.StatusLoopDetected)
 			return
 		}
 
@@ -71,7 +86,17 @@ func (s *SchedulerImpl) handleOffloadFunctionInvocation(tokenDecoder tokenDecode
 				return
 			}
 		}
-		functionResponse, resSeqNumber, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, hostname, r.Method, body, groups, userId, groupToken, cumuLatInt)
+		functionResponse, resSeqNumber, err := s.Schedule(ScheduleRequest{
+			FunctionName:        fnName,
+			FunctionVersion:     fnVersion,
+			Collections:         collections,
+			SequentialSeqNumber: sequentialSeqNumber,
+			GroupToken:          groupToken,
+			HTTPMethod:          r.Method,
+			Payload:             body,
+			CumulativeLatency:   cumuLatInt,
+			NumRedirects:        redirectsInt,
+		}, hostname, groups, userId)
 		if err != nil {
 			s.log.Error("Error parsing sequential sequence number", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
 			http.Error(w, fmt.Sprintf("error executing function: %v", err), http.StatusInternalServerError)

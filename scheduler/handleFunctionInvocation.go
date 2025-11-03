@@ -93,7 +93,15 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			s.log.Info("Parsing sequential sequence number", "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "sequential_sequence_number", sequentialSeqNumber)
 		}
 
-		functionResponse, resSeqNumber, err := s.Schedule(fnName, fnVersion, collections, sequentialSeqNumber, "user", r.Method, body, groups, userId, groupToken, 0)
+		functionResponse, resSeqNumber, err := s.Schedule(ScheduleRequest{
+			FunctionName:        fnName,
+			FunctionVersion:     fnVersion,
+			Collections:         collections,
+			SequentialSeqNumber: sequentialSeqNumber,
+			GroupToken:          groupToken,
+			HTTPMethod:          r.Method,
+			Payload:             body,
+		}, "user", groups, userId)
 		if err != nil {
 			s.log.Error("Error during function scheduling", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)
 			http.Error(w, fmt.Sprintf("error executing function: %v", err), http.StatusInternalServerError)

@@ -275,6 +275,8 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 
 		//stop keep track of access for a remote collection
 		m.policy.equilibriumState.Delete(outerKey)
+	} else {
+		buffer.ResetRead()
 	}
 
 	return true

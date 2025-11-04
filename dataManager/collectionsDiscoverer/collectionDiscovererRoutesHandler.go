@@ -285,6 +285,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler
 func (c *CollectionsDiscovererImp) handleIncomingRemoteCollectionSet(migrationManager migrationManager.MigrationManager) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
+		c.log.Info("Received remote collection set request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
 		var msg gossip.SetCollectionMessage
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {

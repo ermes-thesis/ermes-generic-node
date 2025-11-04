@@ -215,6 +215,10 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 			collection.RemoveHost(hostAddress)
 		}
 
+		if collection.IsLocal() && collection.IsStrong() && isLeader && isStrong {
+			collection.(*shared.StrongCollection).IsLeader = true
+		}
+
 		if collection.IsLocal() {
 			m.log.Warn("MIG-MANAGER, new collection already present locally")
 			return true

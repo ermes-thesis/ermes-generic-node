@@ -40,8 +40,6 @@ type MigrationManager interface {
 	NewCollectionCreated(string, uint64, bool) error
 	FreeSpaceToCreateCollection(uint) error
 
-	ChangeStrongCollectionPolicy(strongPolicy.CurrentPolicy)
-	ChangeWeakCollectionPolicy(weakpolicy.CurrentPolicy)
 	GetCollectionVectorClockValue(collectionId string) (uint64, error)
 
 	RemoveCollectionFromLru(collectionId string)
@@ -56,8 +54,6 @@ type MigrationManagerImp struct {
 	log        *logger.Logger
 
 	//policy
-	ermesPolicy            strongPolicy.StrongCollectionPolicy
-	strongDoNothingPolicy  strongPolicy.DoNothingPolicy
 	StrongCollectionPolicy strongPolicy.StrongCollectionPolicy
 
 	alwaysCopyPolicy     weakpolicy.WeakCollectionPolicy
@@ -111,13 +107,18 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		//policy
 		wp := weakpolicy.GetPolicy(config.WeakPolicy)
 		sp := strongPolicy.GetPolicy(config.StrongPolicy)
-		m.ermesPolicy = strongPolicy.NewDefaultPolicy(config, lruConfig, collections, penalityFunc, dbInterface, serverInfo, m.sender, m.lruCache, m.log)
-		m.strongDoNothingPolicy = strongPolicy.NewDoNothingPolicy()
-		m.ChangeStrongCollectionPolicy(sp)
 
-		m.alwaysCopyPolicy = weakpolicy.NewAlwaysCopyPolicy(config, m.sender, m.log, collections, dbInterface)
-		m.doNothingPolicy = weakpolicy.NewDoNothingPolicy()
-		m.ChangeWeakCollectionPolicy(wp)
+		if strongPolicy.GetPolicy(config.StrongPolicy) == strongPolicy.DONOTHINGPOLICY {
+			m.StrongCollectionPolicy = strongPolicy.NewDoNothingPolicy()
+		} else {
+			m.StrongCollectionPolicy = strongPolicy.NewDefaultPolicy(config, lruConfig, collections, penalityFunc, dbInterface, serverInfo, m.sender, m.lruCache, m.log)
+		}
+
+		if weakpolicy.GetPolicy(config.WeakPolicy) == weakpolicy.DONOTHINGPOLICY {
+			m.doNothingPolicy = weakpolicy.NewDoNothingPolicy()
+		} else {
+			m.WeakCollectionPolicy = weakpolicy.NewAlwaysCopyPolicy(config, m.sender, m.log, collections, dbInterface)
+		}
 
 		//policy update strategy
 		if wp == weakpolicy.DONOTHINGPOLICY && sp == strongPolicy.DONOTHINGPOLICY {
@@ -149,11 +150,8 @@ func (m *MigrationManagerImp) StatelessInit(collections *shared.CollectionPartia
 		m.collectionsLock = &collections.Mutex
 
 		//no sender
-		m.strongDoNothingPolicy = strongPolicy.NewDoNothingPolicy()
-		m.StrongCollectionPolicy = m.strongDoNothingPolicy
-
-		m.doNothingPolicy = weakpolicy.NewDoNothingPolicy()
-		m.WeakCollectionPolicy = m.doNothingPolicy
+		m.StrongCollectionPolicy = strongPolicy.NewDoNothingPolicy()
+		m.WeakCollectionPolicy = weakpolicy.NewDoNothingPolicy()
 
 		//policy update strategy
 		m.policyUpdateStrategy = NewNoUpdateStrategy()
@@ -494,28 +492,4 @@ func (m *MigrationManagerImp) GetCollectionVectorClockValue(collectionId string)
 	}
 
 	return collection.(*shared.StrongCollection).ConsistencyClock, nil
-}
-
-func (m *MigrationManagerImp) ChangeStrongCollectionPolicy(newPolicy strongPolicy.CurrentPolicy) {
-	switch newPolicy {
-	case strongPolicy.ERMESPOLICY:
-		m.StrongCollectionPolicy = m.ermesPolicy
-	case strongPolicy.DONOTHINGPOLICY:
-		m.StrongCollectionPolicy = m.strongDoNothingPolicy
-	default:
-		m.log.Warn("Given policy does not exists. Old policy kept active", "new_policy", fmt.Sprintf("%+v", newPolicy))
-		// Do nothing
-	}
-}
-
-func (m *MigrationManagerImp) ChangeWeakCollectionPolicy(newPolicy weakpolicy.CurrentPolicy) {
-	switch newPolicy {
-	case weakpolicy.ALWAYSCOPYPOLICY:
-		m.WeakCollectionPolicy = m.alwaysCopyPolicy
-	case weakpolicy.DONOTHINGPOLICY:
-		m.WeakCollectionPolicy = m.doNothingPolicy
-	default:
-		m.log.Warn("Given policy does not exists. Old policy kept active", "new_policy", fmt.Sprintf("%+v", newPolicy))
-		// Do nothing
-	}
 }

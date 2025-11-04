@@ -217,6 +217,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 
 		if collection.IsLocal() && collection.IsStrong() && isLeader && isStrong {
 			collection.(*shared.StrongCollection).IsLeader = true
+			collection.(*shared.StrongCollection).LeaderId = m.serverInfo.HostName
 		}
 
 		if collection.IsLocal() {

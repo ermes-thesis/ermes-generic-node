@@ -129,10 +129,6 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 		if innerKey == "user" {
 			continue
 		}
-		//if present on that host
-		if _, ok := m.policy.partialView.KnownCollections[outerKey].HostsId()[innerKey]; ok {
-			continue
-		}
 
 		if strongCollection.IsLeader {
 			//if the collection has been moved and removed locally
@@ -140,6 +136,11 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 			if m.leaderDecision(outerKey, innerKey, buffer, strongCollection, totalForce, totalReqNumber) {
 				return
 			}
+		}
+
+		//if present on that host
+		if _, ok := m.policy.partialView.KnownCollections[outerKey].HostsId()[innerKey]; ok {
+			continue
 		}
 
 		if m.replicaDecision(outerKey, innerKey, buffer, strongCollection, interestedNodeCounter) {

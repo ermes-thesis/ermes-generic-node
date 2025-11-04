@@ -252,7 +252,13 @@ func (s *SchedulerImpl) Schedule(scheduleRequest ScheduleRequest, reqHostname st
 			s.log.Info("Sequential collection must be accessed in write but the local sequential collection is not the leader. Forwarding request to the host containing the leader sequential collection",
 				"fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "forwarded_to", sequentialCollection.LeaderId)
 			// In all the other cases forward to the leader replica of the sequential collection
-			return s.forwardRequest(sequentialCollection.LeaderId, scheduleRequest)
+			dest := sequentialCollection.LeaderId
+			if dest == "" && s.serverInfo.Father != nil {
+				dest = s.serverInfo.Father.HostName
+			} else if dest == "" && s.serverInfo.Father == nil {
+				return nil, 0, fmt.Errorf("sequential collection leader not found for collection %s", sequentialCollection.CollectionId())
+			}
+			return s.forwardRequest(dest, scheduleRequest)
 		}
 
 		s.log.Info("Sequential collection found, but we are in a parent node since it is not local. Forwarding to the correct child node.", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
@@ -278,7 +284,13 @@ func (s *SchedulerImpl) forwardRequestWithSequential(scheduleRequest ScheduleReq
 	// the leader.
 	if writeAccess {
 		s.log.Debug("Forwarding function scheduling to the sequential collection leader since we have to access it in write", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "forward_to", sequentialCollection.LeaderId)
-		return s.forwardRequest(sequentialCollection.LeaderId, scheduleRequest)
+		dest := sequentialCollection.LeaderId
+		if dest == "" && s.serverInfo.Father != nil {
+			dest = s.serverInfo.Father.HostName
+		} else if dest == "" && s.serverInfo.Father == nil {
+			return nil, 0, fmt.Errorf("sequential collection leader not found for collection %s", sequentialCollection.CollectionId())
+		}
+		return s.forwardRequest(dest, scheduleRequest)
 	}
 
 	// If the Sequential collection is not locally present, and the function require only reading it. Forward towards to

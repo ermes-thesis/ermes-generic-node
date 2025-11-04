@@ -66,7 +66,7 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo string, messageContent interface{}) (*http.Response, error) {
 	s.logger.Info("Sending HTTP request", "to_node", nodeTo, "path", pathTo, "content", fmt.Sprintf("%+v", messageContent))
 
-	ok := false
+	ok := !s.ServerInfo.Stateful
 
 	for _, elem := range s.ServerInfo.Children {
 		if elem.HostName == nodeTo {

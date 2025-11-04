@@ -40,6 +40,10 @@ common:
     viewSize: 5
     idleTimeoutMs: 1000
     gravityConstant: 9.81
+    stateful: true
+    isCentralStorage: false
+    weakPolicy: ALWAYSCOPYPOLICY
+    strongPolicy: ERMESPOLICY
 
   lru:
     size: 2000

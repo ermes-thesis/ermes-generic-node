@@ -60,7 +60,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 	if s.serverInfo.Father == nil || destination != s.serverInfo.Father.HostName {
 		s.log.Warn("ADDING HOST TO COLLECTION", "hostname", s.serverInfo.HostName, "destination", destination, "KNWN HOSTS", collection.HostsId())
 		collection.AddHost(destination)
-		s.log.Warn("ADDED HOST TO COLLECTION", "KNWN HOSTS", collection.HostsId())
+		s.log.Warn("ADDED HOST TO COLLECTION", "KNOWN HOSTS", collection.HostsId())
 	}
 
 	hostToRemove := isMigration && s.serverInfo.Father != nil && destination == s.serverInfo.Father.HostName && len(collection.HostsId()) == 0

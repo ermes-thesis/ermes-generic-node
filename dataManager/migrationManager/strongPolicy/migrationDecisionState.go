@@ -142,8 +142,9 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 			}
 		}
 
-		m.replicaDecision(outerKey, innerKey, buffer, strongCollection, interestedNodeCounter)
-		interestedNodeCounter--
+		if m.replicaDecision(outerKey, innerKey, buffer, strongCollection, interestedNodeCounter) {
+			interestedNodeCounter--
+		}
 
 		//after taking all the decision skip to next round for this buffer
 		buffer.MoveHead()

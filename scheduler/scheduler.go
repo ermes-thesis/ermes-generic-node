@@ -387,10 +387,10 @@ func (s *SchedulerImpl) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 	}
 
 	s.log.Info("Invoking function locally", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-	s.log.Debug("Invoking function locally", "fn_start_time", time.Now().String())
+	startTime := time.Now()
 	resp := executor.Invoke(wasmBinary, "entry", scheduleRequest.Payload, ctxJson)
 	s.log.Info("Function executed successfully", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-	s.log.Debug("Function executed successfully", "fn_end_time", time.Now().String(), "fn_response", fmt.Sprintf("%+v", resp))
+	s.log.Debug("Function executed successfully", "fn_duration", time.Since(startTime).Nanoseconds(), "fn_response", fmt.Sprintf("%+v", resp))
 
 	repBody, err := json.Marshal(resp.Response)
 	if err != nil {

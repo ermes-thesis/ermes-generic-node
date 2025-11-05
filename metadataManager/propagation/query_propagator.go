@@ -18,10 +18,10 @@ type QueryPropagator interface {
 type QueryPropagatorImpl struct {
 	serverInfo *server.ServerInfo
 	httpHelper *HTTPHelper
-	log        *logger.Logger
+	log        logger.Logger
 }
 
-func NewQueryPropagator(serverInfo *server.ServerInfo, log *logger.Logger) QueryPropagator {
+func NewQueryPropagator(serverInfo *server.ServerInfo, log logger.Logger) QueryPropagator {
 	return &QueryPropagatorImpl{
 		serverInfo: serverInfo,
 		httpHelper: NewHTTPHelper(serverInfo, log),

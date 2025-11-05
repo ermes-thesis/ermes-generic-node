@@ -21,11 +21,11 @@ type ServerType interface {
 type Server struct {
 	*http.Server
 	ServerInfo *ServerInfo
-	logger     *logger.Logger
+	logger     logger.Logger
 	Handler    *http.ServeMux
 }
 
-func NewServer(log *logger.Logger, serverInfo *ServerInfo) (*Server, error) {
+func NewServer(log logger.Logger, serverInfo *ServerInfo) (*Server, error) {
 	log.Info("Creating a new Server instance...")
 
 	mux := http.NewServeMux()

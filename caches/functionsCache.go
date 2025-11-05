@@ -22,7 +22,7 @@ type FunctionCacheImpl struct {
 	LatestVersions   *caches.BaseCache[string]
 	fetcher          caches.Fetcher[*FunctionBundle]
 	group            singleflight.Group
-	log              *logger.Logger
+	log              logger.Logger
 }
 
 type FunctionBundle struct {
@@ -47,7 +47,7 @@ func (f FunctionBundle) String() string {
 	return fmt.Sprintf("{Binary:%s Metadata:%+v Templates:%+v}", binStr, f.Metadata, f.Templates)
 }
 
-func NewFunctionCache(config config.FunctionsCacheConfig, fetcher caches.Fetcher[*FunctionBundle], log *logger.Logger) (*FunctionCacheImpl, error) {
+func NewFunctionCache(config config.FunctionsCacheConfig, fetcher caches.Fetcher[*FunctionBundle], log logger.Logger) (*FunctionCacheImpl, error) {
 	tmplCache, err := NewTemplatesCache(config.TemplateCache)
 	if err != nil {
 		log.Error("Failed to create template cache", "config", fmt.Sprintf("%+v", config), "fetcher", fmt.Sprintf("%+v", fetcher), "error", err)
@@ -73,7 +73,7 @@ func NewFunctionCache(config config.FunctionsCacheConfig, fetcher caches.Fetcher
 	}, nil
 }
 
-func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret string, log *logger.Logger) (*FunctionCacheImpl, error) {
+func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret string, log logger.Logger) (*FunctionCacheImpl, error) {
 	log.Info("Initializing default FunctionCache with remote bundle fetcher", "function_registry_address", config.FunctionRegistry.Address, "function_registry_port", config.FunctionRegistry.Port)
 
 	tmplCache, err := NewTemplatesCache(config.TemplateCache)

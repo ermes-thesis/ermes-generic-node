@@ -42,10 +42,10 @@ type MigrationManagerSender interface {
 type MigrationManagerSenderImpl struct {
 	serverInfo server.ServerInfo
 	server     server.ServerType
-	log        *logger.Logger
+	log        logger.Logger
 }
 
-func NewMigrationManagerSender(logger *logger.Logger, server server.ServerType, serverInfo server.ServerInfo) MigrationManagerSender {
+func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo) MigrationManagerSender {
 	return &MigrationManagerSenderImpl{
 		server:     server,
 		log:        logger,
@@ -137,10 +137,10 @@ type CollectionDiscovererSender interface {
 
 type CollectionDiscovererSenderImpl struct {
 	server server.ServerType
-	log    *logger.Logger
+	log    logger.Logger
 }
 
-func NewCollectionDiscovererSender(log *logger.Logger, server server.ServerType) CollectionDiscovererSender {
+func NewCollectionDiscovererSender(log logger.Logger, server server.ServerType) CollectionDiscovererSender {
 	return &CollectionDiscovererSenderImpl{
 		server: server,
 		log:    log,

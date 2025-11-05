@@ -3,6 +3,8 @@ package lru
 import (
 	"container/list"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -268,3 +270,17 @@ func (this *LRUCache[T]) GetAvailableSize() uint {
 //  		fmt.Println("%d", i.key)
 // 	}
 // }
+
+func PrettyPrintList(lst *list.List) string {
+	var sb strings.Builder
+	sb.WriteString("[")
+	for e := lst.Front(); e != nil; e = e.Next() {
+		sb.WriteString(fmt.Sprintf("%+v", e.Value))
+		if e.Next() != nil {
+			sb.WriteString(",")
+		}
+	}
+
+	sb.WriteString("]")
+	return sb.String()
+}

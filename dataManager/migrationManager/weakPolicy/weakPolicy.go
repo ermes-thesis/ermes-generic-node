@@ -35,7 +35,7 @@ func GetPolicy(policyName string) CurrentPolicy {
 // default policy
 type AlwaysCopyPolicy struct {
 	//config
-	log *logger.Logger
+	log logger.Logger
 
 	//impl
 	partialView *shared.CollectionPartialView
@@ -44,7 +44,7 @@ type AlwaysCopyPolicy struct {
 	sender      sender.MigrationManagerSender
 }
 
-func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.MigrationManagerSender, logger *logger.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB) WeakCollectionPolicy {
+func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.MigrationManagerSender, logger logger.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB) WeakCollectionPolicy {
 	policy := &AlwaysCopyPolicy{
 		dbInterface: dbInterface,
 		partialView: partialView,

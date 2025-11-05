@@ -66,7 +66,7 @@ var templates = map[string]model.QueryTemplate{
 	},
 }
 
-func createNewLogger(t *testing.T) *logger.Logger {
+func createNewLogger(t *testing.T) logger.Logger {
 	log, err := logger.NewLogger(logger.Config{
 		Level:     zerolog.DebugLevel,
 		Format:    "text",

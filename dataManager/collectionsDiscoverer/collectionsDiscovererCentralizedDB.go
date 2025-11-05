@@ -23,7 +23,7 @@ func SetCollectionsDiscovererCentralizedDBInstance(wrapped *CollectionsDiscovere
 	return c
 }
 
-func (c *CollectionsDiscovererCentralizedDB) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger *logger.Logger) {
+func (c *CollectionsDiscovererCentralizedDB) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger) {
 	logger.Info("Init collections discoverer as centralized DB...")
 	c.wrapped.Init(collections, serverInfo, server, dbInterface, logger)
 	server.AddCustomRoute(c.wrapped.getSender().RemoteCollectionSetPath(), true, c.wrapped.handleIncomingRemoteCollectionSet(c.migrationManager).ServeHTTP)

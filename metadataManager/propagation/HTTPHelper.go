@@ -12,10 +12,10 @@ import (
 
 type HTTPHelper struct {
 	serverInfo *server.ServerInfo
-	log        *logger.Logger
+	log        logger.Logger
 }
 
-func NewHTTPHelper(serverInfo *server.ServerInfo, log *logger.Logger) *HTTPHelper {
+func NewHTTPHelper(serverInfo *server.ServerInfo, log logger.Logger) *HTTPHelper {
 	return &HTTPHelper{serverInfo, log}
 }
 

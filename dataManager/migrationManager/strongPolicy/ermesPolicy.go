@@ -23,7 +23,7 @@ type ErmesStrongCollectionPolicy struct {
 	currentConfig config.MigrationManagerConfig
 	lruConfig     config.LruConfig
 	serverInfo    server.ServerInfo
-	log           *logger.Logger
+	log           logger.Logger
 
 	//state
 	currentState MigrationManagerState
@@ -49,7 +49,7 @@ type ErmesStrongCollectionPolicy struct {
 	penalityFunc penality.PenalityFunc
 }
 
-func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.LruConfig, collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo server.ServerInfo, sender sender.MigrationManagerSender, lruCache *lru.LRUCache[shared.Collection], logger *logger.Logger) StrongCollectionPolicy {
+func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.LruConfig, collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo server.ServerInfo, sender sender.MigrationManagerSender, lruCache *lru.LRUCache[shared.Collection], logger logger.Logger) StrongCollectionPolicy {
 	policy := &ErmesStrongCollectionPolicy{
 		lruCache:         lruCache,
 		lruConfig:        lruConfig,

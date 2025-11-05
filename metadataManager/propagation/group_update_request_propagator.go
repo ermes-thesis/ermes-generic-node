@@ -18,10 +18,10 @@ type GroupUpdateRequestPropagator interface {
 type GroupsUpdateRequestPropagatorImpl struct {
 	serverInfo *server.ServerInfo
 	httpHelper *HTTPHelper
-	log        *logger.Logger
+	log        logger.Logger
 }
 
-func NewGroupUpdateRequestPropagator(serverInfo *server.ServerInfo, log *logger.Logger) *GroupsUpdateRequestPropagatorImpl {
+func NewGroupUpdateRequestPropagator(serverInfo *server.ServerInfo, log logger.Logger) *GroupsUpdateRequestPropagatorImpl {
 	return &GroupsUpdateRequestPropagatorImpl{
 		serverInfo: serverInfo,
 		httpHelper: NewHTTPHelper(serverInfo, log),

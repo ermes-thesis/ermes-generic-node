@@ -17,10 +17,10 @@ type UpdateGroupsPropagator interface {
 type UpdateGroupsPropagatorImpl struct {
 	serverInfo *server.ServerInfo
 	httpHelper *HTTPHelper
-	log        *logger.Logger
+	log        logger.Logger
 }
 
-func NewUpdateGroupsPropagator(serverInfo *server.ServerInfo, log *logger.Logger) *UpdateGroupsPropagatorImpl {
+func NewUpdateGroupsPropagator(serverInfo *server.ServerInfo, log logger.Logger) *UpdateGroupsPropagatorImpl {
 	return &UpdateGroupsPropagatorImpl{
 		serverInfo: serverInfo,
 		httpHelper: NewHTTPHelper(serverInfo, log),

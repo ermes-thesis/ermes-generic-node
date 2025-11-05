@@ -17,10 +17,10 @@ type CreateMetadataPropagator interface {
 type CreateMetadataPropagatorImpl struct {
 	serverInfo *server.ServerInfo
 	httpHelper *HTTPHelper
-	log        *logger.Logger
+	log        logger.Logger
 }
 
-func NewCreateMetadataPropagator(serverInfo *server.ServerInfo, log *logger.Logger) *CreateMetadataPropagatorImpl {
+func NewCreateMetadataPropagator(serverInfo *server.ServerInfo, log logger.Logger) *CreateMetadataPropagatorImpl {
 	return &CreateMetadataPropagatorImpl{
 		serverInfo: serverInfo,
 		log:        log,

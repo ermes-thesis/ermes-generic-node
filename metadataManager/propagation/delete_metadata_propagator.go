@@ -17,10 +17,10 @@ type DeleteMetadataPropagator interface {
 type DeleteMetadataPropagatorImpl struct {
 	serverInfo *server.ServerInfo
 	httpHelper *HTTPHelper
-	log        *logger.Logger
+	log        logger.Logger
 }
 
-func NewDeleteMetadataPropagator(serverInfo *server.ServerInfo, log *logger.Logger) *DeleteMetadataPropagatorImpl {
+func NewDeleteMetadataPropagator(serverInfo *server.ServerInfo, log logger.Logger) *DeleteMetadataPropagatorImpl {
 	return &DeleteMetadataPropagatorImpl{
 		serverInfo: serverInfo,
 		log:        log,

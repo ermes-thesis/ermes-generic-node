@@ -23,8 +23,8 @@ const emptyCollectionSize uint = 500
 
 type MigrationManager interface {
 	// Init initialize the singleton pattern
-	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger)
-	StatelessInit(collections *shared.CollectionPartialView, config config.MigrationManagerConfig, lruConfig config.LruConfig, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], logger *logger.Logger)
+	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger logger.Logger)
+	StatelessInit(collections *shared.CollectionPartialView, config config.MigrationManagerConfig, lruConfig config.LruConfig, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], logger logger.Logger)
 	// UpdatesRequestsInfo used to update lru in real time (collectionID)
 	// if the collection is strong used to update forces in real time.
 	// if the request comes from a user => nodeName = "user"
@@ -51,7 +51,7 @@ type MigrationManagerImp struct {
 	//config
 	config     config.MigrationManagerConfig
 	serverInfo server.ServerInfo
-	log        *logger.Logger
+	log        logger.Logger
 
 	//policy
 	StrongCollectionPolicy strongPolicy.StrongCollectionPolicy
@@ -87,7 +87,7 @@ func GetMigrationManagerInstance() MigrationManager {
 	return migrationManagerInstance
 }
 
-func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger) {
+func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger logger.Logger) {
 	initOnce.Do(func() {
 		//imp
 		m.serverInfo = serverInfo
@@ -138,7 +138,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	})
 }
 
-func (m *MigrationManagerImp) StatelessInit(collections *shared.CollectionPartialView, config config.MigrationManagerConfig, lruConfig config.LruConfig, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], logger *logger.Logger) {
+func (m *MigrationManagerImp) StatelessInit(collections *shared.CollectionPartialView, config config.MigrationManagerConfig, lruConfig config.LruConfig, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], logger logger.Logger) {
 	initOnce.Do(func() {
 		//imp
 		m.serverInfo = serverInfo

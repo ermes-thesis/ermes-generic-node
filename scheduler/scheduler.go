@@ -64,10 +64,10 @@ type SchedulerImpl struct {
 	cache            caches.FunctionCache
 	wasmExecutorPool wasm.ExecutorPool
 	serverInfo       *server.ServerInfo
-	log              *logger.Logger
+	log              logger.Logger
 }
 
-func NewScheduler(dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *server.ServerInfo, logger *logger.Logger) *SchedulerImpl {
+func NewScheduler(dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *server.ServerInfo, logger logger.Logger) *SchedulerImpl {
 	return &SchedulerImpl{
 		dataManager:      dataManager,
 		metadataManager:  metadataManager,

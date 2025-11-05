@@ -22,7 +22,7 @@ import (
 type RedisClient struct {
 	client *redis.Client
 	ctx    context.Context
-	log    *logger.Logger
+	log    logger.Logger
 }
 
 const maxRetries = 10
@@ -36,7 +36,7 @@ func (e *StaleUpdateError) Error() string {
 	return "the update has not been applied since it was completely stale."
 }
 
-func NewRedisClient(config config.RedisConfig, ctx context.Context, log *logger.Logger) (*RedisClient, error) {
+func NewRedisClient(config config.RedisConfig, ctx context.Context, log logger.Logger) (*RedisClient, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     config.Address + ":" + config.Port,
 		Password: config.Password,
@@ -116,7 +116,7 @@ func (r *RedisClient) SetRecord(collectionId string, recordName string, value st
 		}
 
 		if err != nil {
-			r.log.Error("SetRecord: Failed to set record", "collection_id", collectionId, "record_name", recordName, "record_value", value, "timestamp", timestamp, "error", err)
+			r.log.Warn("SetRecord: Failed to set record", "collection_id", collectionId, "record_name", recordName, "record_value", value, "timestamp", timestamp, "error", err)
 			return err
 		}
 
@@ -209,7 +209,7 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 		}
 
 		if err != nil {
-			r.log.Error("SetRecords: Failed to set records", "collection_id", collectionId, "record_names", recordNames, "record_values", recordValues, "timestamp", timestamp, "error", err)
+			r.log.Warn("SetRecords: Failed to set records", "collection_id", collectionId, "record_names", recordNames, "record_values", recordValues, "timestamp", timestamp, "error", err)
 			return err
 		}
 

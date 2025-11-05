@@ -15,7 +15,7 @@ import (
 type CollectionsDiscovererStatelessGenericNode struct {
 	centralizedDBAddress string
 	sender               sender.CollectionDiscovererSender
-	log                  *logger.Logger
+	log                  logger.Logger
 	serverInfo           server.ServerInfo
 }
 
@@ -26,7 +26,7 @@ func GetCollectionsDiscovererStatelessGenericNodeInstance() CollectionsDiscovere
 	return collectionsDiscovererInstance
 }
 
-func (c *CollectionsDiscovererStatelessGenericNode) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger *logger.Logger) {
+func (c *CollectionsDiscovererStatelessGenericNode) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger) {
 	initOnce.Do(func() {
 		c.log = logger
 		c.serverInfo = serverInfo

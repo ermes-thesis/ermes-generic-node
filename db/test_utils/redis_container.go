@@ -49,7 +49,7 @@ import (
 //	return "172.17.0.1"
 //}
 
-func createNewLogger(t *testing.T) *logger.Logger {
+func createNewLogger(t *testing.T) logger.Logger {
 	log, err := logger.NewLogger(logger.Config{
 		Level:     zerolog.DebugLevel,
 		Format:    "text",

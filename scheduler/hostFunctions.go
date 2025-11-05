@@ -21,10 +21,10 @@ type HostFunctions struct {
 	dataManager     datamanager.DataManager
 	metadataManager metadataManager.MetadataManager
 	serverInfo      *server.ServerInfo
-	logger          *logger.Logger
+	logger          logger.Logger
 }
 
-func NewHostFunctions(dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, serverInfo *server.ServerInfo, logger *logger.Logger) *HostFunctions {
+func NewHostFunctions(dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, serverInfo *server.ServerInfo, logger logger.Logger) *HostFunctions {
 	return &HostFunctions{
 		dataManager:     dataManager,
 		metadataManager: metadataManager,

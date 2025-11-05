@@ -33,7 +33,7 @@ type MetadataManager interface {
 
 type MetadataManagerImpl struct {
 	redis                        db.GenericDB
-	log                          *logger.Logger
+	log                          logger.Logger
 	templateCache                caches.FunctionCache
 	serverInfo                   *server.ServerInfo
 	queryPropagator              propagation.QueryPropagator
@@ -44,7 +44,7 @@ type MetadataManagerImpl struct {
 	customMetadataKeys           sync.Map
 }
 
-func NewMetadataManager(redis db.GenericDB, serverInfo *server.ServerInfo, log *logger.Logger, cache caches.FunctionCache) (*MetadataManagerImpl, error) {
+func NewMetadataManager(redis db.GenericDB, serverInfo *server.ServerInfo, log logger.Logger, cache caches.FunctionCache) (*MetadataManagerImpl, error) {
 	log.Info("Initializing MetadataManager", "metadata_domain", serverInfo.MetadataDomain, "has_father", serverInfo.Father != nil)
 
 	err := redis.CreateIndex()

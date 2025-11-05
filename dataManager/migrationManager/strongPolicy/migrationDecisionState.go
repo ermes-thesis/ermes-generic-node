@@ -1,6 +1,7 @@
 package strongPolicy
 
 import (
+	"dataManager/lru"
 	gossip "dataManager/messages"
 	stack "dataManager/migrationManager/callbackStack"
 	usage "dataManager/migrationManager/childUsage"
@@ -294,7 +295,7 @@ func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
 	sizeGoal := uint(float32(m.policy.lruConfig.Size) * (1.0 - m.policy.lruConfig.SafeLevel))
 	m.policy.log.InfofWith("DEFAULT-STRONG-POLICY, set lru to safe level %d", []any{sizeGoal}, "lru_size", m.policy.lruCache.GetCurrentSize())
 	collectionList := m.policy.lruCache.FreeToAchieveSize(sizeGoal)
-	m.policy.log.Info("DEFAULT-STRONG-POLICY, collections to send to remote nodes to achieve safe level", "num_collections", collectionList.Len(), "collections", fmt.Sprintf("%+v", collectionList), "new_lru_size", m.policy.lruCache.GetCurrentSize())
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, collections to send to remote nodes to achieve safe level", "num_collections", collectionList.Len(), "collections", lru.PrettyPrintList(collectionList), "new_lru_size", m.policy.lruCache.GetCurrentSize())
 	var wg sync.WaitGroup
 
 	for item := collectionList.Front(); item != nil; item = item.Next() {

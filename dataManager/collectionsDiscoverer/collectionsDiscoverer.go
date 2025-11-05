@@ -17,7 +17,7 @@ import (
 
 type CollectionsDiscoverer interface {
 	IsCollectionLocallyPresent(collectionId string, consistencyClock uint64) (bool, shared.Collection, error)
-	Init(*shared.CollectionPartialView, server.ServerInfo, server.ServerType, db.GenericDB, *logger.Logger)
+	Init(*shared.CollectionPartialView, server.ServerInfo, server.ServerType, db.GenericDB, logger.Logger)
 
 	AccessRecords(collectionId string, dbFn func() (any, error), remoteFn func(addr string) (any, error)) (any, error)
 
@@ -35,7 +35,7 @@ type CollectionsDiscovererImp struct {
 	collectionsPartialView *shared.CollectionPartialView
 	serverInfo             server.ServerInfo
 	sender                 sender.CollectionDiscovererSender
-	log                    *logger.Logger
+	log                    logger.Logger
 	dbInterface            db.GenericDB
 }
 
@@ -51,7 +51,7 @@ func GetCollectionsDiscovererInstance() CollectionsDiscoverer {
 	return collectionsDiscovererInstance
 }
 
-func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger *logger.Logger) {
+func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger) {
 	initOnce.Do(func() {
 		c.collectionsPartialView = collections
 		c.serverInfo = serverInfo
@@ -344,13 +344,13 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 				if isStrong {
 					err = c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues, "")
 					if err != nil {
-						c.log.Error("Failed to update strong collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						c.log.Warn("Failed to update strong collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
 						return 0, err
 					}
 				} else {
 					err = c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues, strconv.FormatInt(update.Time, 10)+update.UpdateHostIp)
 					if err != nil {
-						c.log.Error("Failed to update eventual collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						c.log.Warn("Failed to update eventual collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
 						return 0, err
 					}
 				}

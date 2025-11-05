@@ -38,7 +38,8 @@ type ServerInfo struct {
 	// Address:port of the Group Token Provider
 	GroupTokenProviderHostName string
 
-	Stateful bool
+	Stateful         bool
+	IsCentralStorage bool
 }
 
 type Node struct {
@@ -101,7 +102,8 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 		Children:                   children,
 		ExistingDomains:            existingDomains,
 		GroupTokenProviderHostName: config.Scheduler.GroupTokenProviderAddress + ":" + config.Scheduler.GroupTokenProviderPort,
-		Stateful:                   config.MigrationManager.Stateful,
+		Stateful:                   config.Node.Stateful,
+		IsCentralStorage:           config.Node.IsCentralStorage,
 	}
 
 	return serverInfo, nil

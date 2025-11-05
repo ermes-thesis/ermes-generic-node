@@ -35,8 +35,6 @@ type MigrationManagerConfig struct {
 	KnownCollectionsDumpPath     string        `yaml:"knownCollectionsDumpPath"`
 	KnownCollectionsDumpInterval time.Duration `yaml:"knownCollectionsDumpInterval"`
 
-	Stateful          bool   `yaml:"stateful"`
-	IsCentralStorage  bool   `yaml:"isCentralStorage"`
 	WeakPolicy        string `yaml:"weakPolicy"`   // ALWAYSCOPYPOLICY  or DONOTHINGPOLICY
 	StrongPolicy      string `yaml:"strongPolicy"` // ERMESPOLICY or DONOTHINGPOLICY
 	CentralizedDBName string `yaml:"centralizedDBName"`
@@ -76,12 +74,14 @@ type TemplatesCacheConfig struct {
 }
 
 type NodeConfig struct {
-	Name         string `yaml:"name"`
-	Domain       string `yaml:"domain"`
-	Address      string `yaml:"address"`
-	Port         string `yaml:"port"`
-	Secret       string `yaml:"secret"`
-	ClientSecret string `yaml:"clientSecret"`
+	Name             string `yaml:"name"`
+	Domain           string `yaml:"domain"`
+	Address          string `yaml:"address"`
+	Port             string `yaml:"port"`
+	Secret           string `yaml:"secret"`
+	ClientSecret     string `yaml:"clientSecret"`
+	Stateful         bool   `yaml:"stateful"`
+	IsCentralStorage bool   `yaml:"isCentralStorage"`
 }
 
 type FunctionRegistryConfig struct {

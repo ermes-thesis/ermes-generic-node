@@ -261,3 +261,10 @@ type GenericDB interface {
 	//	- error: non-nil if the close operation fails
 	Close() error
 }
+
+type StaleUpdateError struct {
+}
+
+func (e *StaleUpdateError) Error() string {
+	return "the update has not been applied since it was completely stale."
+}

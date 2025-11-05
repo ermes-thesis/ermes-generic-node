@@ -269,7 +269,12 @@ func (c *CollectionsDiscovererImp) updateRecord(
 
 	memUsage, err := dbFn(isStrong) // update in local db
 	if err != nil {
-		c.log.Error("UpdateRecord: Failed to update collection records in DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "error", err)
+		var staleErr *db.StaleUpdateError
+		if errors.As(err, &staleErr) {
+			c.log.Warn("UpdateRecord: Stale update detected during collection records update in DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "error", err)
+		} else {
+			c.log.Error("UpdateRecord: Failed to update collection records in DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "error", err)
+		}
 		return nil, err
 	}
 
@@ -346,13 +351,23 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 				if isStrong {
 					err = c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues, "")
 					if err != nil {
-						c.log.Warn("Failed to update strong collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						var staleErr *db.StaleUpdateError
+						if errors.As(err, &staleErr) {
+							c.log.Warn("Failed to update strong collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						} else {
+							c.log.Error("Failed to update strong collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						}
 						return 0, err
 					}
 				} else {
 					err = c.dbInterface.SetRecords(update.CollectionId, update.RecordNames, update.RecordValues, strconv.FormatInt(update.Time, 10)+update.UpdateHostIp)
 					if err != nil {
-						c.log.Warn("Failed to update eventual collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						var staleErr *db.StaleUpdateError
+						if errors.As(err, &staleErr) {
+							c.log.Warn("Failed to update eventual collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						} else {
+							c.log.Error("Failed to update eventual collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						}
 						return 0, err
 					}
 				}
@@ -370,9 +385,13 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 		//write or delete in db
 		hosts, err := c.updateRecord(update.CollectionId, dbFn, isInitiator, &update)
 		if err != nil {
-			c.collectionsPartialView.Mutex.Unlock() // lock release
-			c.log.Error("UpdateCollectionsRecordsAndPropagate: update failed", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
-			return err
+			var staleErr *db.StaleUpdateError
+			if errors.As(err, &staleErr) {
+				c.log.Warn("UpdateCollectionsRecordsAndPropagate: stale update detected", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+			} else {
+				c.log.Error("UpdateCollectionsRecordsAndPropagate: update failed", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+			}
+			continue
 		}
 		update.SenderIp = c.serverInfo.HostName
 

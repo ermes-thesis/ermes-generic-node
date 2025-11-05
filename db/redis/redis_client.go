@@ -26,13 +26,6 @@ type RedisClient struct {
 	log    logger.Logger
 }
 
-type StaleUpdateError struct {
-}
-
-func (e *StaleUpdateError) Error() string {
-	return "the update has not been applied since it was completely stale."
-}
-
 func NewRedisClient(config config.RedisConfig, ctx context.Context, log logger.Logger) (*RedisClient, error) {
 	rdb := redis.NewClient(&redis.Options{
 		Addr:     config.Address + ":" + config.Port,
@@ -88,7 +81,7 @@ func (r *RedisClient) SetRecord(collectionId string, recordName string, value st
 			}
 
 			if timestamp != "" && currentTimestamp >= timestamp {
-				return &StaleUpdateError{}
+				return &db.StaleUpdateError{}
 			}
 
 			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
@@ -180,7 +173,7 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 			}
 
 			if len(anyConvertedNames) == 0 {
-				return &StaleUpdateError{}
+				return &db.StaleUpdateError{}
 			}
 
 			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {

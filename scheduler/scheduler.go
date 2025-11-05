@@ -349,7 +349,7 @@ func (s *SchedulerImpl) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 	executor := s.wasmExecutorPool.Acquire()
 
 	backoff := s.cfg.StartingExecutorsBackoff
-	for i := 0; i < s.cfg.MaxExecutorsRetries; i++ {
+	for i := 0; i < s.cfg.MaxExecutorsRetries && executor == nil; i++ {
 		jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
 		time.Sleep(backoff + jitter)
 		s.log.Debug("Retry acquiring wasm executor from pool", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)

@@ -1,6 +1,7 @@
 package scheduler_test
 
 import (
+	"config"
 	shared "dataManager/shared"
 	"encoding/json"
 	"io"
@@ -94,7 +95,15 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -155,7 +164,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
 	schedulerLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerLog)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -281,7 +290,15 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	wasmExecutorPoolFather.EXPECT().Acquire().Return(wasmExecutorFather)
 
 	schedulerLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -333,7 +350,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -421,7 +438,15 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -472,7 +497,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -577,7 +602,15 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	wasmExecutorPoolFather.EXPECT().Acquire().Return(wasmExecutorFather)
 
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -616,7 +649,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -711,7 +744,15 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -764,7 +805,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -854,7 +895,15 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -905,7 +954,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -1017,7 +1066,15 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -1078,7 +1135,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -1176,7 +1233,15 @@ func TestScheduleThreeNodes(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -1221,7 +1286,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -1281,7 +1346,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	dataManagerChild2.EXPECT().GetMigrationManager().Return(migrationManagerChild2)
 
 	schedulerChild2Log := createNewLogger(t)
-	schedulerChild2 := scheduler.NewScheduler(dataManagerChild2, metadataManager, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, schedulerChild2Log)
+	schedulerChild2 := scheduler.NewScheduler(dataManagerChild2, metadataManager, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, cfg, schedulerChild2Log)
 
 	child2Log := createNewLogger(t)
 	serverChild2, err := server.NewServer(child2Log, serverInfoChild2)

@@ -1,16 +1,9 @@
 package wasm_integration_test
 
 import (
-	"bou.ke/monkey"
 	"context"
 	"db"
 	"fmt"
-	"github.com/ermes-thesis/ermes-common/logger"
-	"github.com/ermes-thesis/ermes-common/wasm-pool"
-	"github.com/rs/zerolog"
-	"github.com/stretchr/testify/mock"
-	"github.com/stretchr/testify/require"
-	"github.com/tetratelabs/wazero"
 	"metadataManager/propagation"
 	datamanager_mock "mocks/dataManager"
 	metadataManager_mock "mocks/metadataManager"
@@ -20,6 +13,14 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/model"
+	"github.com/ermes-thesis/ermes-common/utils"
+	"github.com/ermes-thesis/ermes-common/wasm-pool"
+	"github.com/rs/zerolog"
+	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 )
 
 const primeNumsInput = 2000000
@@ -65,7 +66,16 @@ func TestWasmPool_Wasmedge(t *testing.T) {
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "multiple_get_coll", map[string]db.RecordValue{}, []string{"test", "fake"}, "userId", false, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), propagation.FROM_LOCAL).Return(nil)
+	notify, wait := utils.WaitForCalls(t, 2, 5*time.Second)
+	defer wait()
+
+	metadataManager.
+		EXPECT().
+		CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), propagation.FROM_LOCAL).
+		Return(nil).
+		Run(func(collectionId string, metadata model.Metadata, reqOrigin propagation.PropagationOrigin) {
+			notify()
+		})
 
 	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, &server.ServerInfo{ExistingDomains: map[string]struct{}{"IT/Milan": {}, "IT": {}}}, log)
 
@@ -116,7 +126,16 @@ func TestWasmPool_Wasmtime(t *testing.T) {
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "multiple_get_coll", map[string]db.RecordValue{}, []string{"test", "fake"}, "userId", false, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), propagation.FROM_LOCAL).Return(nil)
+	notify, wait := utils.WaitForCalls(t, 2, 5*time.Second)
+	defer wait()
+
+	metadataManager.
+		EXPECT().
+		CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), propagation.FROM_LOCAL).
+		Return(nil).
+		Run(func(collectionId string, metadata model.Metadata, reqOrigin propagation.PropagationOrigin) {
+			notify()
+		})
 
 	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, &server.ServerInfo{ExistingDomains: map[string]struct{}{"IT/Milan": {}, "IT": {}}}, log)
 
@@ -167,8 +186,16 @@ func TestWasmPool_Wazero(t *testing.T) {
 	dataManager.EXPECT().SetCollectionAndPropagate(mock.Anything, "multiple_get_coll", map[string]db.RecordValue{}, []string{"test", "fake"}, "userId", false, false).Return(nil)
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
-	metadataManager.EXPECT().CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), propagation.FROM_LOCAL).Return(nil)
+	notify, wait := utils.WaitForCalls(t, 2, 5*time.Second)
+	defer wait()
 
+	metadataManager.
+		EXPECT().
+		CreateMetadata(mock.Anything, mock.AnythingOfType("Metadata"), propagation.FROM_LOCAL).
+		Return(nil).
+		Run(func(collectionId string, metadata model.Metadata, reqOrigin propagation.PropagationOrigin) {
+			notify()
+		})
 	hostFns := scheduler.NewHostFunctions(dataManager, metadataManager, &server.ServerInfo{ExistingDomains: map[string]struct{}{"IT/Milan": {}, "IT": {}}}, log)
 	err = hostFns.RegisterWazeroHostFns(pool)
 	require.NoError(t, err)
@@ -1148,10 +1175,6 @@ func BenchmarkExecutionTime_Wazero_Interpreter_WithOpts_PrimeNumbers(b *testing.
 	if err != nil {
 		panic(err)
 	}
-	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
-		return wazero.NewRuntimeConfigInterpreter()
-	})
-	defer patch.Unpatch()
 
 	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
 	defer pool.Close()
@@ -1174,10 +1197,6 @@ func BenchmarkExecutionTime_Wazero_Interpreter_WithOpts_Fibonacci(b *testing.B) 
 	if err != nil {
 		panic(err)
 	}
-	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
-		return wazero.NewRuntimeConfigInterpreter()
-	})
-	defer patch.Unpatch()
 
 	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
 	defer pool.Close()
@@ -1200,10 +1219,6 @@ func BenchmarkExecutionTime_Wazero_Interpreter_WithOpts_Lightweight(b *testing.B
 	if err != nil {
 		panic(err)
 	}
-	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
-		return wazero.NewRuntimeConfigInterpreter()
-	})
-	defer patch.Unpatch()
 
 	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
 	defer pool.Close()
@@ -1226,10 +1241,6 @@ func BenchmarkExecutionTime_Wazero_Interpreter_WithOpts_TailFibonacci(b *testing
 	if err != nil {
 		panic(err)
 	}
-	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
-		return wazero.NewRuntimeConfigInterpreter()
-	})
-	defer patch.Unpatch()
 
 	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
 	defer pool.Close()
@@ -1252,10 +1263,6 @@ func BenchmarkExecutionTime_Wazero_Interpreter_NoOpts_PrimeNumbers(b *testing.B)
 	if err != nil {
 		panic(err)
 	}
-	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
-		return wazero.NewRuntimeConfigInterpreter()
-	})
-	defer patch.Unpatch()
 
 	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
 	defer pool.Close()
@@ -1279,11 +1286,6 @@ func BenchmarkExecutionTime_Wazero_Interpreter_NoOpts_Fibonacci(b *testing.B) {
 		panic(err)
 	}
 
-	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
-		return wazero.NewRuntimeConfigInterpreter()
-	})
-	defer patch.Unpatch()
-
 	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
 	defer pool.Close()
 
@@ -1305,10 +1307,6 @@ func BenchmarkExecutionTime_Wazero_Interpreter_NoOpts_Lightweight(b *testing.B) 
 	if err != nil {
 		panic(err)
 	}
-	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
-		return wazero.NewRuntimeConfigInterpreter()
-	})
-	defer patch.Unpatch()
 
 	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
 	defer pool.Close()
@@ -1331,10 +1329,6 @@ func BenchmarkExecutionTime_Wazero_Interpreter_NoOpts_TailFibonacci(b *testing.B
 	if err != nil {
 		panic(err)
 	}
-	patch := monkey.Patch(wazero.NewRuntimeConfig, func() wazero.RuntimeConfig {
-		return wazero.NewRuntimeConfigInterpreter()
-	})
-	defer patch.Unpatch()
 
 	pool := wasm.NewWazeroExecutorPool(10, true, context.Background(), createNewLogger(b))
 	defer pool.Close()

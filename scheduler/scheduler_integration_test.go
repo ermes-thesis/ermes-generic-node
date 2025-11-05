@@ -103,7 +103,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -143,12 +143,12 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
+	dataManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
@@ -164,7 +164,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
 	schedulerLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerLog)
+	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -267,12 +267,12 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collFather1111, nil)
 
 	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerFather.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 	migrationManagerFather.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
 
 	dataManagerFather := datamanager_mock.NewDataManager(t)
 	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
 	dataManagerFather.EXPECT().GetMigrationManager().Return(migrationManagerFather)
+	dataManagerFather.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
@@ -298,7 +298,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerLog)
+	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -350,7 +350,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -446,7 +446,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -497,7 +497,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -610,7 +610,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -649,7 +649,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -752,7 +752,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -805,7 +805,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -903,7 +903,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -954,7 +954,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -1074,7 +1074,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -1127,15 +1127,15 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(false, nil, nil)
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
+	dataManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -1241,7 +1241,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
@@ -1286,7 +1286,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
@@ -1338,15 +1338,15 @@ func TestScheduleThreeNodes(t *testing.T) {
 	collectionDiscovererChild2.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111_2, nil)
 
 	migrationManagerChild2 := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild2.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 	migrationManagerChild2.EXPECT().UpdateCollectionsLatestUsage([]string{"1111"}).Return()
 
 	dataManagerChild2 := datamanager_mock.NewDataManager(t)
 	dataManagerChild2.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild2)
 	dataManagerChild2.EXPECT().GetMigrationManager().Return(migrationManagerChild2)
+	dataManagerChild2.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
 	schedulerChild2Log := createNewLogger(t)
-	schedulerChild2 := scheduler.NewScheduler(dataManagerChild2, metadataManager, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, cfg, schedulerChild2Log)
+	schedulerChild2 := scheduler.NewSchedulerWrapper(true, dataManagerChild2, metadataManager, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, cfg, schedulerChild2Log)
 
 	child2Log := createNewLogger(t)
 	serverChild2, err := server.NewServer(child2Log, serverInfoChild2)

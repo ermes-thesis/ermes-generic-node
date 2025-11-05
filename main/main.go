@@ -58,23 +58,6 @@ func run(ctx context.Context, configPath string) error {
 	if err != nil {
 		return fmt.Errorf("error creating redis client: %w", err)
 	}
-	// remoteFunctionName must be in the format: "functionName/functionVersion"
-	funcCache, err := caches.NewDefaultFunctionCache(cfg.FunctionsCache, cfg.Node.Secret, generalLog.Component("cache"))
-	if err != nil {
-		return fmt.Errorf("error creating function cache: %w", err)
-	}
-	tknDecoder, err := tokenDecoder.NewTokenDecoder(cfg.GroupTokenPublicKeyPath)
-	if err != nil {
-		return fmt.Errorf("error creating token decoder: %w", err)
-	}
-	metadataManager, err := metadataManager.NewMetadataManager(redisClient, serverInfo, generalLog.Component("metadata_manager"), funcCache)
-	if err != nil {
-		return fmt.Errorf("error creating metadata manager: %w", err)
-	}
-	err = metadataManager.RegisterRoutes(httpServer, tknDecoder)
-	if err != nil {
-		return fmt.Errorf("error registering metadata routes: %w", err)
-	}
 
 	//node set up
 	collections := &dataManagerShared.CollectionPartialView{
@@ -87,30 +70,49 @@ func run(ctx context.Context, configPath string) error {
 	dataManager := datamanager.GetDataManagerInstance()
 	dataManager.Init(collections, penality.LogPenalty(2), cfg.MigrationManager, cfg.Lru, httpServer, *httpServer.ServerInfo, &lruCache, redisClient, generalLog.Component("data_manager"))
 
-	var wasmExecutorPool wasm.ExecutorPool
-	hostFunctions := scheduler.NewHostFunctions(dataManager, metadataManager, serverInfo, generalLog.Component("host_functions"))
-	switch cfg.Scheduler.WasmRuntime {
-	case config.Wasmedge:
-		wasmedgeExecutorPool := wasm.NewWasmedgeExecutorPool(10, generalLog.Component("wasmedge_executor_pool"))
-		err = hostFunctions.RegisterWasmedgeHostFns(wasmedgeExecutorPool)
-		wasmExecutorPool = wasmedgeExecutorPool
-	case config.Wasmtime:
-		wasmtimeExecutorPool := wasm.NewWasmtimeExecutorPool(10, generalLog.Component("wasmtime_executor_pool"))
-		err = hostFunctions.RegisterWasmtimeHostFns(wasmtimeExecutorPool)
-		wasmExecutorPool = wasmtimeExecutorPool
-	case config.Wazero:
-		wazeroExecutorPool := wasm.NewWazeroExecutorPool(10, false, ctx, generalLog.Component("wazero_executor_pool"))
-		err = hostFunctions.RegisterWazeroHostFns(wazeroExecutorPool)
-		wasmExecutorPool = wazeroExecutorPool
-	}
-	if err != nil {
-		return fmt.Errorf("error registering host functions: %w", err)
-	}
+	if !serverInfo.IsCentralStorage {
+		funcCache, err := caches.NewDefaultFunctionCache(cfg.FunctionsCache, cfg.Node.Secret, generalLog.Component("cache"))
+		if err != nil {
+			return fmt.Errorf("error creating function cache: %w", err)
+		}
+		tknDecoder, err := tokenDecoder.NewTokenDecoder(cfg.GroupTokenPublicKeyPath)
+		if err != nil {
+			return fmt.Errorf("error creating token decoder: %w", err)
+		}
+		metadataManager, err := metadataManager.NewMetadataManager(redisClient, serverInfo, generalLog.Component("metadata_manager"), funcCache)
+		if err != nil {
+			return fmt.Errorf("error creating metadata manager: %w", err)
+		}
+		err = metadataManager.RegisterRoutes(httpServer, tknDecoder)
+		if err != nil {
+			return fmt.Errorf("error registering metadata routes: %w", err)
+		}
 
-	sched := scheduler.NewScheduler(dataManager, metadataManager, funcCache, wasmExecutorPool, serverInfo, cfg.Scheduler, generalLog.Component("scheduler"))
-	err = sched.RegisterRoutes(httpServer, tknDecoder, metadataManager)
-	if err != nil {
-		return fmt.Errorf("error registering scheduler routes: %w", err)
+		var wasmExecutorPool wasm.ExecutorPool
+		hostFunctions := scheduler.NewHostFunctions(dataManager, metadataManager, serverInfo, generalLog.Component("host_functions"))
+		switch cfg.Scheduler.WasmRuntime {
+		case config.Wasmedge:
+			wasmedgeExecutorPool := wasm.NewWasmedgeExecutorPool(10, generalLog.Component("wasmedge_executor_pool"))
+			err = hostFunctions.RegisterWasmedgeHostFns(wasmedgeExecutorPool)
+			wasmExecutorPool = wasmedgeExecutorPool
+		case config.Wasmtime:
+			wasmtimeExecutorPool := wasm.NewWasmtimeExecutorPool(10, generalLog.Component("wasmtime_executor_pool"))
+			err = hostFunctions.RegisterWasmtimeHostFns(wasmtimeExecutorPool)
+			wasmExecutorPool = wasmtimeExecutorPool
+		case config.Wazero:
+			wazeroExecutorPool := wasm.NewWazeroExecutorPool(10, false, ctx, generalLog.Component("wazero_executor_pool"))
+			err = hostFunctions.RegisterWazeroHostFns(wazeroExecutorPool)
+			wasmExecutorPool = wazeroExecutorPool
+		}
+		if err != nil {
+			return fmt.Errorf("error registering host functions: %w", err)
+		}
+
+		sched := scheduler.NewSchedulerWrapper(serverInfo.Stateful, dataManager, metadataManager, funcCache, wasmExecutorPool, serverInfo, cfg.Scheduler, generalLog.Component("scheduler"))
+		err = sched.RegisterRoutes(httpServer, tknDecoder, metadataManager)
+		if err != nil {
+			return fmt.Errorf("error registering scheduler routes: %w", err)
+		}
 	}
 
 	go func() {

@@ -10,7 +10,7 @@ import (
 	"tokenDecoder"
 )
 
-func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager) http.HandlerFunc {
+func (s *SchedulerWrapper) handleFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 

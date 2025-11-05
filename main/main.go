@@ -107,7 +107,7 @@ func run(ctx context.Context, configPath string) error {
 		return fmt.Errorf("error registering host functions: %w", err)
 	}
 
-	sched := scheduler.NewScheduler(dataManager, metadataManager, funcCache, wasmExecutorPool, serverInfo, generalLog.Component("scheduler"))
+	sched := scheduler.NewScheduler(dataManager, metadataManager, funcCache, wasmExecutorPool, serverInfo, cfg.Scheduler, generalLog.Component("scheduler"))
 	err = sched.RegisterRoutes(httpServer, tknDecoder, metadataManager)
 	if err != nil {
 		return fmt.Errorf("error registering scheduler routes: %w", err)

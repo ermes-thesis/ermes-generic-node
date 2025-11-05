@@ -53,11 +53,14 @@ type LruConfig struct {
 }
 
 type RedisConfig struct {
-	Address  string `yaml:"address"`
-	Port     string `yaml:"port"`
-	Password string `yaml:"password"`
-	DB       int    `yaml:"db"`
-	Protocol int    `yaml:"protocol"`
+	Address            string        `yaml:"address"`
+	Port               string        `yaml:"port"`
+	Password           string        `yaml:"password"`
+	DB                 int           `yaml:"db"`
+	Protocol           int           `yaml:"protocol"`
+	StartingOpsBackoff time.Duration `yaml:"startingOpsBackoff"`
+	MaxRetries         int           `yaml:"maxRetries"`
+	MaxOpsBackoff      time.Duration `yaml:"maxOpsBackoff"`
 }
 
 type FunctionsCacheConfig struct {
@@ -89,6 +92,14 @@ type SchedulerConfig struct {
 	GroupTokenProviderAddress string            `yaml:"groupTokenProviderAddress"`
 	GroupTokenProviderPort    string            `yaml:"groupTokenProviderPort"`
 	WasmRuntime               ChosenWasmRuntime `yaml:"wasmRuntime"`
+
+	StartingExecutorsBackoff time.Duration `yaml:"startingExecutorsBackoff"`
+	MaxExecutorsRetries      int           `yaml:"maxExecutorsRetries"`
+	MaxExecutorsBackoff      time.Duration `yaml:"maxExecutorsBackoff"`
+
+	StartingOutdatedDataBackoff time.Duration `yaml:"startingOutdatedDataBackoff"`
+	MaxOutdatedDataRetries      int           `yaml:"maxOutdatedDataRetries"`
+	MaxOutdatedDataBackoff      time.Duration `yaml:"maxOutdatedDataBackoff"`
 }
 
 type HierarchyConfig struct {

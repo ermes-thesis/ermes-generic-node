@@ -84,11 +84,12 @@ func StartRedisTestContainer(t *testing.T) (*redis.RedisClient, func()) {
 
 	log := createNewLogger(t)
 	client, err := redis.NewRedisClient(config.RedisConfig{
-		Address:  parsedUrl.Hostname(),
-		Port:     parsedUrl.Port(),
-		Password: "",
-		DB:       0,
-		Protocol: 2,
+		Address:    parsedUrl.Hostname(),
+		Port:       parsedUrl.Port(),
+		Password:   "",
+		DB:         0,
+		Protocol:   2,
+		MaxRetries: 10,
 	}, ctx, log)
 	require.NoError(t, err, "failed to create redis client")
 

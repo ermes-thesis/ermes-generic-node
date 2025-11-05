@@ -22,12 +22,9 @@ import (
 type RedisClient struct {
 	client *redis.Client
 	ctx    context.Context
+	cfg    config.RedisConfig
 	log    logger.Logger
 }
-
-const maxRetries = 10
-const defaultBackoff = time.Millisecond * 10
-const maxBackoff = time.Second * 1
 
 type StaleUpdateError struct {
 }
@@ -49,7 +46,7 @@ func NewRedisClient(config config.RedisConfig, ctx context.Context, log logger.L
 		return nil, err
 	}
 	log.Info("Connected to Redis successfully")
-	return &RedisClient{client: rdb, ctx: ctx, log: log}, nil
+	return &RedisClient{client: rdb, ctx: ctx, cfg: config, log: log}, nil
 }
 
 func (r *RedisClient) GetRecord(collectionId string, recordName string) (string, error) {
@@ -68,14 +65,14 @@ func (r *RedisClient) GetRecord(collectionId string, recordName string) (string,
 func (r *RedisClient) SetRecord(collectionId string, recordName string, value string, timestamp string) error {
 	r.log.Info("SetRecord called", "collection_id", collectionId, "record_name", recordName, "record_value", value, "timestamp", timestamp)
 
-	backoff := defaultBackoff
+	backoff := r.cfg.StartingOpsBackoff
 
 	infoKey := "info:" + collectionId
 	dataKey := buildKey(collectionId, recordName)
 	keysKey := "info:" + collectionId + ":keys"
 	timeKey := "info:" + collectionId + ":" + recordName + ":timestamp"
 
-	for retries := 0; retries < maxRetries; retries++ {
+	for retries := 0; retries < r.cfg.MaxRetries; retries++ {
 		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 			exists, err := tx.Exists(r.ctx, infoKey).Result()
 			if err != nil {
@@ -109,8 +106,8 @@ func (r *RedisClient) SetRecord(collectionId string, recordName string, value st
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
+			if backoff > r.cfg.MaxOpsBackoff {
+				backoff = r.cfg.MaxOpsBackoff
 			}
 			continue
 		}
@@ -148,7 +145,7 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 		return errors.New("recordNames and recordValues must be the same length")
 	}
 
-	backoff := defaultBackoff
+	backoff := r.cfg.StartingOpsBackoff
 
 	infoKey := "info:" + collectionId
 	keysKey := "info:" + collectionId + ":keys"
@@ -158,7 +155,7 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 		timestampKeys[i] = buildTimestampKey(collectionId, name)
 	}
 
-	for retries := 0; retries < maxRetries; retries++ {
+	for retries := 0; retries < r.cfg.MaxRetries; retries++ {
 		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 			exists, err := tx.Exists(r.ctx, infoKey).Result()
 			if err != nil {
@@ -202,8 +199,8 @@ func (r *RedisClient) SetRecords(collectionId string, recordNames []string, reco
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
+			if backoff > r.cfg.MaxOpsBackoff {
+				backoff = r.cfg.MaxOpsBackoff
 			}
 			continue
 		}
@@ -241,11 +238,11 @@ func (r *RedisClient) DeleteRecords(collectionId string, timestamp string, recor
 	keysKey := "info:" + collectionId + ":keys"
 	infoKey := "info:" + collectionId
 
-	backoff := defaultBackoff
+	backoff := r.cfg.StartingOpsBackoff
 
 	timestampKeys := buildTimestampKeys(collectionId, recordNames)
 
-	for retries := 0; retries < maxRetries; retries++ {
+	for retries := 0; retries < r.cfg.MaxRetries; retries++ {
 		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 			exists, err := tx.Exists(r.ctx, infoKey).Result()
 			if err != nil {
@@ -284,8 +281,8 @@ func (r *RedisClient) DeleteRecords(collectionId string, timestamp string, recor
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
+			if backoff > r.cfg.MaxOpsBackoff {
+				backoff = r.cfg.MaxOpsBackoff
 			}
 			continue
 		}
@@ -311,7 +308,7 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]db.RecordVa
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
 	ownerKey := "info:" + collectionId + ":owner"
 
-	backoff := defaultBackoff
+	backoff := r.cfg.StartingOpsBackoff
 
 	var (
 		keys           []string
@@ -322,7 +319,7 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]db.RecordVa
 		owner          string
 	)
 
-	for retries := 0; retries < maxRetries; retries++ {
+	for retries := 0; retries < r.cfg.MaxRetries; retries++ {
 		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 			var err error
 			keys, err = tx.SMembers(r.ctx, keysKey).Result()
@@ -385,8 +382,8 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]db.RecordVa
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
+			if backoff > r.cfg.MaxOpsBackoff {
+				backoff = r.cfg.MaxOpsBackoff
 			}
 			continue
 		}
@@ -446,9 +443,9 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
 	ownerKey := "info:" + collectionId + ":owner"
 
-	backoff := defaultBackoff
+	backoff := r.cfg.StartingOpsBackoff
 
-	for retries := 0; retries < maxRetries; retries++ {
+	for retries := 0; retries < r.cfg.MaxRetries; retries++ {
 		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 			keys, err := tx.SMembers(r.ctx, keysKey).Result()
 			if err != nil {
@@ -473,8 +470,8 @@ func (r *RedisClient) DeleteCollection(collectionId string) error {
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
+			if backoff > r.cfg.MaxOpsBackoff {
+				backoff = r.cfg.MaxOpsBackoff
 			}
 			continue
 		}
@@ -564,11 +561,11 @@ func (r *RedisClient) IsUniqueForOwner(collectionName string, owner string) (boo
 
 	existenceKey := "exist:" + owner
 
-	backoff := defaultBackoff
+	backoff := r.cfg.StartingOpsBackoff
 
 	var exists bool
 	var err error
-	for retries := 0; retries < maxRetries; retries++ {
+	for retries := 0; retries < r.cfg.MaxRetries; retries++ {
 		err = r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 			exists, err = tx.SIsMember(r.ctx, "exist:"+owner, collectionName).Result()
 			if err != nil {
@@ -590,8 +587,8 @@ func (r *RedisClient) IsUniqueForOwner(collectionName string, owner string) (boo
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
+			if backoff > r.cfg.MaxOpsBackoff {
+				backoff = r.cfg.MaxOpsBackoff
 			}
 			continue
 		}
@@ -684,12 +681,12 @@ func (r *RedisClient) UpdateGroupsInMetadata(collectionId string, groupsToAdd []
 
 	metadataKey := "meta:" + collectionId
 
-	backoff := defaultBackoff
+	backoff := r.cfg.StartingOpsBackoff
 
 	var groups []string
 	var seq uint64
 
-	for retries := 0; retries < maxRetries; retries++ {
+	for retries := 0; retries < r.cfg.MaxRetries; retries++ {
 		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 			var seqCmd *redis.IntCmd
 
@@ -745,8 +742,8 @@ func (r *RedisClient) UpdateGroupsInMetadata(collectionId string, groupsToAdd []
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
+			if backoff > r.cfg.MaxOpsBackoff {
+				backoff = r.cfg.MaxOpsBackoff
 			}
 			continue
 		}
@@ -770,9 +767,9 @@ func (r *RedisClient) SetGroupsInMetadata(collectionId string, sequenceGroups ui
 
 	metadataKey := "meta:" + collectionId
 
-	backoff := defaultBackoff
+	backoff := r.cfg.StartingOpsBackoff
 
-	for retries := 0; retries < maxRetries; retries++ {
+	for retries := 0; retries < r.cfg.MaxRetries; retries++ {
 		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 
 			exists, err := tx.Exists(r.ctx, metadataKey).Result()
@@ -810,8 +807,8 @@ func (r *RedisClient) SetGroupsInMetadata(collectionId string, sequenceGroups ui
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
+			if backoff > r.cfg.MaxOpsBackoff {
+				backoff = r.cfg.MaxOpsBackoff
 			}
 			continue
 		}
@@ -884,14 +881,14 @@ func (r *RedisClient) SetGroups(collectionId string, sequenceGroups uint64, grou
 	groupsSequenceKey := "info:" + collectionId + ":groupsSequence"
 	infoKey := "info:" + collectionId
 
-	backoff := defaultBackoff
+	backoff := r.cfg.StartingOpsBackoff
 
 	var toAdd []any
 	for _, member := range groups {
 		toAdd = append(toAdd, member)
 	}
 
-	for retries := 0; retries < maxRetries; retries++ {
+	for retries := 0; retries < r.cfg.MaxRetries; retries++ {
 		err := r.client.Watch(r.ctx, func(tx *redis.Tx) error {
 			exists, err := tx.Exists(r.ctx, infoKey).Result()
 			if err != nil {
@@ -925,8 +922,8 @@ func (r *RedisClient) SetGroups(collectionId string, sequenceGroups uint64, grou
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
-			if backoff > maxBackoff {
-				backoff = maxBackoff
+			if backoff > r.cfg.MaxOpsBackoff {
+				backoff = r.cfg.MaxOpsBackoff
 			}
 			continue
 		}

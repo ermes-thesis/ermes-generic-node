@@ -3,6 +3,7 @@ package scheduler
 import (
 	"bytes"
 	"caches"
+	"config"
 	datamanager "dataManager"
 	"dataManager/messages"
 	shared "dataManager/shared"
@@ -11,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand"
 	"metadataManager"
 	"metadataManager/propagation"
 	"metadataManager/types"
@@ -64,16 +66,18 @@ type SchedulerImpl struct {
 	cache            caches.FunctionCache
 	wasmExecutorPool wasm.ExecutorPool
 	serverInfo       *server.ServerInfo
+	cfg              config.SchedulerConfig
 	log              logger.Logger
 }
 
-func NewScheduler(dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *server.ServerInfo, logger logger.Logger) *SchedulerImpl {
+func NewScheduler(dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *server.ServerInfo, config config.SchedulerConfig, logger logger.Logger) *SchedulerImpl {
 	return &SchedulerImpl{
 		dataManager:      dataManager,
 		metadataManager:  metadataManager,
 		cache:            cache,
 		wasmExecutorPool: wasmExecutorPool,
 		serverInfo:       serverInfo,
+		cfg:              config,
 		log:              logger,
 	}
 }
@@ -107,8 +111,6 @@ func (s *SchedulerImpl) RegisterRoutes(server server.ServerType, tokenDecoder to
 func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
 	colId string,
 	seqNum uint64,
-	retries int,
-	delay time.Duration,
 ) (bool, shared.Collection, error) {
 	var (
 		found      bool
@@ -116,7 +118,9 @@ func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
 		err        error
 	)
 
-	for i := 0; i < retries; i++ {
+	backoff := s.cfg.StartingOutdatedDataBackoff
+
+	for i := 0; i < s.cfg.MaxOutdatedDataRetries; i++ {
 		found, collection, err = s.dataManager.GetCollectionsDiscoverer().IsCollectionLocallyPresent(colId, seqNum)
 		if err == nil {
 			if collection != nil {
@@ -127,12 +131,18 @@ func (s *SchedulerImpl) retryIsCollectionLocallyPresent(
 			return found, collection, nil
 		}
 		s.log.Debug("Retry collection presence check", "collection_id", colId, "seq_num", seqNum, "current_attempt", i, "error", err)
-		if i < retries-1 {
-			time.Sleep(delay)
+		if i < s.cfg.MaxOutdatedDataRetries-1 {
+			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			time.Sleep(backoff + jitter)
+
+			backoff *= 2
+			if backoff > s.cfg.MaxOutdatedDataBackoff {
+				backoff = s.cfg.MaxOutdatedDataBackoff
+			}
 		}
 	}
 	s.log.Warn("Sequential collection has not been updated within the time/retries limit", "collection_id", colId, "seq_num", seqNum)
-	return found, collection, fmt.Errorf("couldn't access an updated version of the collection after %d retries: %v", retries, err)
+	return found, collection, fmt.Errorf("couldn't access an updated version of the collection after %d retries: %v", s.cfg.MaxOutdatedDataRetries, err)
 }
 
 func (s *SchedulerImpl) Schedule(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string) (*FunctionResult, uint64, error) {
@@ -163,7 +173,7 @@ func (s *SchedulerImpl) Schedule(scheduleRequest ScheduleRequest, reqHostname st
 		for _, col := range cols {
 			// Checking if the collection is locally present, the check is retried maximum 10 times, every 500ms if the
 			// collection is a sequential consistent one. (In case of an eventual consistent the seqNumber passed is ignored)
-			found, collection, err := s.retryIsCollectionLocallyPresent(col.Id, scheduleRequest.SequentialSeqNumber, 10, 500*time.Millisecond)
+			found, collection, err := s.retryIsCollectionLocallyPresent(col.Id, scheduleRequest.SequentialSeqNumber)
 			if err != nil {
 				s.log.Error("Failed to verify collection presence", "collection_id", col.Id, "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", scheduleRequest.Payload, "req_hostname", reqHostname, "error", err)
 				return nil, 0, s.log.ErrorfErr("wrong sequence number for collection: %v, %v", col.Id, err)
@@ -337,12 +347,23 @@ func (s *SchedulerImpl) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 
 	s.log.Debug("Acquiring wasm executor from pool", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 	executor := s.wasmExecutorPool.Acquire()
-	for executor == nil {
-		//TODO: implement a better waiting strategy
-		time.Sleep(1 * time.Second)
+
+	backoff := s.cfg.StartingExecutorsBackoff
+	for i := 0; i < s.cfg.MaxExecutorsRetries; i++ {
+		jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+		time.Sleep(backoff + jitter)
 		s.log.Debug("Retry acquiring wasm executor from pool", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
+
+		backoff *= 2
+		if backoff > s.cfg.MaxExecutorsBackoff {
+			backoff = s.cfg.MaxExecutorsBackoff
+		}
 		executor = s.wasmExecutorPool.Acquire()
 	}
+	if executor == nil {
+		return nil, 0, fmt.Errorf("local execution failed. The WASM pool was too busy and there weren't any WASM executor available")
+	}
+
 	defer func() {
 		executor.Release()
 		s.log.Debug("Released wasm executor back to pool", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)

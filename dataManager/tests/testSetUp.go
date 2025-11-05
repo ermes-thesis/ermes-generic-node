@@ -49,7 +49,6 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 		ViewSize:                     3,
 		GravityConstant:              0.981,
 		KnownCollectionsDumpInterval: time.Minute,
-		Stateful:                     true,
 		StrongPolicy:                 "ERMESPOLICY",
 		WeakPolicy:                   "ALWAYSCOPYPOLICY",
 	}
@@ -81,7 +80,8 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 			{HostName: "child1", MetadataDomain: "Domain"},
 			{HostName: "child2", MetadataDomain: "Domain"},
 		},
-		Secret: "ermes-secret",
+		Secret:   "ermes-secret",
+		Stateful: true,
 	}
 
 	SetupGetMemoryStatsMock(db, server)
@@ -96,7 +96,6 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 		ViewSize:                     3,
 		GravityConstant:              0.981,
 		KnownCollectionsDumpInterval: time.Minute,
-		Stateful:                     true,
 		StrongPolicy:                 "ERMESPOLICY",
 		WeakPolicy:                   "ALWAYSCOPYPOLICY",
 	}
@@ -127,7 +126,8 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 			{HostName: "child1", MetadataDomain: "Domain"},
 			{HostName: "child2", MetadataDomain: "Domain"},
 		},
-		Secret: "ermes-secret",
+		Secret:   "ermes-secret",
+		Stateful: true,
 	}
 
 	SetupGetMemoryStatsMock(db, server)
@@ -143,7 +143,6 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 		GravityConstant:              0.981,
 		KnownCollectionsDumpInterval: time.Second * 3,
 		KnownCollectionsDumpPath:     "temp.ndjson",
-		Stateful:                     true,
 		StrongPolicy:                 "ERMESPOLICY",
 		WeakPolicy:                   "ALWAYSCOPYPOLICY",
 	}
@@ -181,7 +180,8 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 			{HostName: "localhost:2222", MetadataDomain: "Domain", Latency: 3},
 			{HostName: "localhost:3333", MetadataDomain: "Domain", Latency: 4},
 		},
-		Secret: "ermes-secret",
+		Secret:   "ermes-secret",
+		Stateful: true,
 	}
 
 	SetupGetMemoryStatsMock(db, server)

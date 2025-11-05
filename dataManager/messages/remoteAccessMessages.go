@@ -78,7 +78,7 @@ func ToCollectionUpdateMessages(
 	senderIp string,
 ) []CollectionUpdateMessage {
 	result := make([]CollectionUpdateMessage, 0, len(updates))
-	time := time.Now().Unix()
+	time := time.Now().UnixMicro()
 
 	for _, u := range updates {
 		msg := CollectionUpdateMessage{

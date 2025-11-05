@@ -437,13 +437,15 @@ func (m *MigrationManagerImp) freeLru(sizeGoal uint) error {
 	for item := collectionList.Front(); item != nil; item = item.Next() {
 		collection := item.Value.(shared.Collection)
 		wg.Add(1)
-		go m.sendCollectionAndRemove(collection)
+		go m.sendCollectionAndRemove(collection, &wg)
 	}
 	wg.Wait()
 	return nil
 }
 
-func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collection) error {
+func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collection, wg *sync.WaitGroup) error {
+	defer wg.Done()
+
 	//sync -> avoid send a collection if used
 	localColl := collection.GetCollectionState().(*shared.LocalCollection)
 	if !localColl.CollectionLock.TryLock() {

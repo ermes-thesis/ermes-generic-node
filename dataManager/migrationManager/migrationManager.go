@@ -263,7 +263,11 @@ func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records 
 	//check size before set collection
 	if availableMem < collectionSize || m.lruCache.GetAvailableSize() < uint(collectionSize) { //if not enoght space in redis or in the lru => free space
 		m.log.Warnf("MIG-MANAGER, not enough space in the LRU to place the collection %s", collectionId)
-		m.freeLru(uint(collectionSize))
+		err := m.freeLru(uint(collectionSize))
+		if err != nil {
+			m.log.Error("MIG-MANAGER, free lru fails", "collection_id", collectionId, "required_size", collectionSize, "available_mem", availableMem, "available_lru", m.lruCache.GetAvailableSize(), "error", err)
+			return 0, err
+		}
 	}
 
 	err := m.dbInterface.SetCollection(collectionId, records, groups, owner, groupsSequence) //add collection to redis
@@ -297,7 +301,7 @@ func (m *MigrationManagerImp) FreeSpaceToCreateCollection(size uint) error {
 	m.log.Debug("MIG-MANAGER, available memory and lru size", "mem", availableMem, "lru", availableLruSize)
 	if availableMem < uint64(requiredSpace) || availableLruSize < requiredSpace {
 		m.log.Warnf("MIG-MANAGER, not enough space in the LRU to place the new collection")
-		m.freeLru(requiredSpace)
+		return m.freeLru(requiredSpace)
 	}
 
 	return nil
@@ -418,18 +422,28 @@ func (m *MigrationManagerImp) updateLru(collectionId string, collectionSize uint
 	return nil
 }
 
-func (m *MigrationManagerImp) freeLru(sizeGoal uint) {
+func (m *MigrationManagerImp) freeLru(sizeGoal uint) error {
 	m.log.InfofWith("DEFAULT-STRONG-POLICY, set lru to safe level %d", []any{sizeGoal}, "lru_size", m.lruCache.GetCurrentSize())
+
+	if m.serverInfo.Father == nil {
+		m.log.Error("DEFAULT-STRONG-POLICY, no father to send collections to free lru space")
+		return errors.New("no father to send collections to free lru space")
+	}
+
 	collectionList := m.lruCache.FreeToAchieveSize(sizeGoal) //TODO send the collection up to the
 	m.log.Info("DEFAULT-STRONG-POLICY, collections to send to remote nodes to achieve safe level", "num_collections", collectionList.Len(), "collections", collectionList, "new_lru_size", m.lruCache.GetCurrentSize())
 
+	var wg sync.WaitGroup
 	for item := collectionList.Front(); item != nil; item = item.Next() {
 		collection := item.Value.(shared.Collection)
-		go m.SendCollectionAndRemove(collection)
+		wg.Add(1)
+		go m.sendCollectionAndRemove(collection)
 	}
+	wg.Wait()
+	return nil
 }
 
-func (m *MigrationManagerImp) SendCollectionAndRemove(collection shared.Collection) error {
+func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collection) error {
 	//sync -> avoid send a collection if used
 	localColl := collection.GetCollectionState().(*shared.LocalCollection)
 	if !localColl.CollectionLock.TryLock() {

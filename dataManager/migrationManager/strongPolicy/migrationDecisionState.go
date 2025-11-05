@@ -288,11 +288,19 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 }
 
 func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
+	sizeGoal := uint(float32(m.policy.lruConfig.Size) * (1.0 - m.policy.lruConfig.SafeLevel))
+
+	if m.policy.serverInfo.Father == nil {
+		if m.policy.lruCache.GetAvailableSize() <= sizeGoal {
+			m.policy.log.Error("DEFAULT-STRONG-POLICY, cannot achieve safe level on lru cache because there is no father node to send collections to", "lru_size", m.policy.lruCache.GetCurrentSize(), "size_goal", sizeGoal)
+		}
+		return
+	}
+
 	//sync
 	m.policy.partialView.Mutex.Lock()
 	defer m.policy.partialView.Mutex.Unlock()
 
-	sizeGoal := uint(float32(m.policy.lruConfig.Size) * (1.0 - m.policy.lruConfig.SafeLevel))
 	m.policy.log.InfofWith("DEFAULT-STRONG-POLICY, set lru to safe level %d", []any{sizeGoal}, "lru_size", m.policy.lruCache.GetCurrentSize())
 	collectionList := m.policy.lruCache.FreeToAchieveSize(sizeGoal)
 	m.policy.log.Info("DEFAULT-STRONG-POLICY, collections to send to remote nodes to achieve safe level", "num_collections", collectionList.Len(), "collections", lru.PrettyPrintList(collectionList), "new_lru_size", m.policy.lruCache.GetCurrentSize())

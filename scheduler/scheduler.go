@@ -405,7 +405,7 @@ func (s *SchedulerImpl) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 
 	if resp.CacheUpdates == nil {
 		if sequentialCollId != "" {
-			seqNumber, err := s.dataManager.GetMigrationManager().GetCollectionVectorClockValue(sequentialCollId)
+			seqNumber, err := s.dataManager.GetCollectionVectorClockValue(sequentialCollId)
 			s.log.Info("No function cache updates to commit, returning directly the result", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result), "new_sequential_collection_seq_num", seqNumber)
 			return result, seqNumber, err
 		}
@@ -509,7 +509,7 @@ func (s *SchedulerImpl) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 			s.log.Debug("Removed sequential collection updates from cache updates map since it has been processed")
 		}
 
-		seqNumber, err = s.dataManager.GetMigrationManager().GetCollectionVectorClockValue(sequentialCollId)
+		seqNumber, err = s.dataManager.GetCollectionVectorClockValue(sequentialCollId)
 		if err != nil {
 			s.log.Error("Error getting sequential collection vector clock value", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "request_hostname", reqHostname, "sequential_collection_id", sequentialCollId, "sequential_collection_access_write", writeSeqCollection, "error", err)
 			return nil, 0, s.log.ErrorfErr("error getting sequential collection vector clock value: %v", err)

@@ -5,6 +5,7 @@ import (
 	"dataManager/migrationManager"
 	shared "dataManager/shared"
 	"db"
+	"errors"
 	"server"
 
 	"github.com/ermes-thesis/ermes-common/logger"
@@ -59,4 +60,8 @@ func (c *CollectionsDiscovererCentralizedDB) SetCollectionAndPropagate(collectio
 
 func (c *CollectionsDiscovererCentralizedDB) RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, userId string, isInitiator bool, ignoredHostName string) error {
 	return c.wrapped.RemoveCollectionAndPropagate(collectionId, migrationManager, groups, userId, isInitiator, ignoredHostName)
+}
+
+func (c *CollectionsDiscovererCentralizedDB) GetCollectionVectorClockValue(collectionId string) (uint64, error) {
+	return 0, errors.New("cannot execute GetCollectionVectorClockValue on centralized DB")
 }

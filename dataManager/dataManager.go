@@ -30,6 +30,7 @@ type DataManager interface {
 	UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdate) error
 	SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong bool, skipUniquenessCheck bool) error
 	RemoveCollectionAndPropagate(collectionId string, groups []string, userId string) error
+	GetCollectionVectorClockValue(collectionId string) (uint64, error)
 }
 
 type DataManagerImp struct {
@@ -56,8 +57,8 @@ func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalit
 	initOnce.Do(func() {
 		dataManagerInstance.setMigrationManager(migrationManager.GetMigrationManagerInstance())
 
-		if config.Stateful {
-			if !config.IsCentralStorage {
+		if serverInfo.Stateful {
+			if !serverInfo.IsCentralStorage {
 				dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererInstance())
 			} else {
 				dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.SetCollectionsDiscovererCentralizedDBInstance(collectionsDiscoverer.GetCollectionsDiscovererInstance().(*collectionsDiscoverer.CollectionsDiscovererImp), m.migrationManager))
@@ -165,4 +166,8 @@ func (m *DataManagerImp) SetCollectionAndPropagate(collectionId string, collecti
 
 func (m *DataManagerImp) RemoveCollectionAndPropagate(collectionId string, groups []string, userId string) error {
 	return m.collectionsDiscoverer.RemoveCollectionAndPropagate(collectionId, m.migrationManager, groups, userId, true, m.serverInfo.HostName)
+}
+
+func (m *DataManagerImp) GetCollectionVectorClockValue(collectionId string) (uint64, error) {
+	return m.collectionsDiscoverer.GetCollectionVectorClockValue(collectionId)
 }

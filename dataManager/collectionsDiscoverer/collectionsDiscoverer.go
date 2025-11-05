@@ -28,6 +28,8 @@ type CollectionsDiscoverer interface {
 	UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdateMessage, isInitiator bool, ignoredHostName string) error
 	SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong, skipUniquenessCheck bool) error
 	RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, userId string, isInitiator bool, ignoredHostName string) error
+
+	GetCollectionVectorClockValue(collectionId string) (uint64, error)
 }
 
 type CollectionsDiscovererImp struct {
@@ -592,4 +594,24 @@ func (c *CollectionsDiscovererImp) propagateRemoveCollection(collection shared.C
 		c.log.Debug("Propagating collection removal to father node", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups, "collection", fmt.Sprintf("%+v", collection), "forward_to", c.serverInfo.Father.HostName)
 		c.sender.RemoveCollection(c.serverInfo.Father.HostName, collectionId, c.serverInfo.HostName, groups, userId)
 	}
+}
+
+func (c *CollectionsDiscovererImp) GetCollectionVectorClockValue(collectionId string) (uint64, error) {
+	//sync
+	c.collectionsPartialView.Mutex.Lock()
+	defer c.collectionsPartialView.Mutex.Unlock()
+
+	//imp
+	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
+	if !exists {
+		return 0, errors.New("collection not found")
+	}
+	if !collection.IsStrong() {
+		return 0, errors.New("collection is not strong")
+	}
+	if !collection.IsLocal() {
+		return 0, errors.New("collection is not local")
+	}
+
+	return collection.(*shared.StrongCollection).ConsistencyClock, nil
 }

@@ -94,3 +94,7 @@ func (c *CollectionsDiscovererStatelessGenericNode) RemoveCollectionAndPropagate
 	c.sender.RemoveCollection(c.centralizedDBAddress, collectionId, c.serverInfo.HostName, groups, userId)
 	return nil
 }
+
+func (c *CollectionsDiscovererStatelessGenericNode) GetCollectionVectorClockValue(collectionId string) (uint64, error) {
+	return 0, nil
+}

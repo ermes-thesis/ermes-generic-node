@@ -40,8 +40,6 @@ type MigrationManager interface {
 	NewCollectionCreated(string, uint64, bool) error
 	FreeSpaceToCreateCollection(uint) error
 
-	GetCollectionVectorClockValue(collectionId string) (uint64, error)
-
 	RemoveCollectionFromLru(collectionId string)
 
 	StopAsyncDump()
@@ -489,24 +487,4 @@ func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collecti
 	collection.SetToRemote()
 
 	return nil
-}
-
-func (m *MigrationManagerImp) GetCollectionVectorClockValue(collectionId string) (uint64, error) {
-	//sync
-	m.collectionsLock.Lock()
-	defer m.collectionsLock.Unlock()
-
-	//imp
-	collection, exists := m.collectionsPartialView.KnownCollections[collectionId]
-	if !exists {
-		return 0, errors.New("collection not found")
-	}
-	if !collection.IsStrong() {
-		return 0, errors.New("collection is not strong")
-	}
-	if !collection.IsLocal() {
-		return 0, errors.New("collection is not local")
-	}
-
-	return collection.(*shared.StrongCollection).ConsistencyClock, nil
 }

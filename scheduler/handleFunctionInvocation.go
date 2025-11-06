@@ -4,13 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"metadataManager"
 	"metadataManager/types"
 	"net/http"
 	"tokenDecoder"
 )
 
-func (s *SchedulerWrapper) handleFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager) http.HandlerFunc {
+func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 
@@ -55,7 +54,7 @@ func (s *SchedulerWrapper) handleFunctionInvocation(tokenDecoder tokenDecoder.To
 		if queryParams != "" {
 			s.log.Info("Executing metadata queries", "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams)
 			s.log.Debug("Executing metadata queries", "user_access_groups", groups, "queries_geolocation", geolocation)
-			res, err := metadataManager.ExecuteQueries(fnName, fnVersion, queryParams, groups, userId, groupToken, geolocation)
+			res, err := s.metadataManager.ExecuteQueries(fnName, fnVersion, queryParams, groups, userId, groupToken, geolocation)
 			if err != nil {
 				s.log.Error("Error when executing metadata queries", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number", sequentialSeqNumberStr, "queries_geolocation", geolocation, "error", err)
 				http.Error(w, fmt.Sprintf("error executing metadata queries: %v", err), http.StatusInternalServerError)

@@ -12,7 +12,7 @@ import (
 
 const maxRedirects = 10
 
-func (s *SchedulerStateful) handleOffloadFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
+func (s *statefulPolicy) handleOffloadFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 

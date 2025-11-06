@@ -126,6 +126,7 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 		executor = s.wasmExecutorPool.Acquire()
 	}
 	if executor == nil {
+		s.log.Error("Local execution failed. The WASM pool was too busy and there weren't any WASM executor available", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 		return nil, 0, fmt.Errorf("local execution failed. The WASM pool was too busy and there weren't any WASM executor available")
 	}
 
@@ -154,8 +155,8 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 	s.log.Info("Invoking function locally", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 	startTime := time.Now()
 	resp := executor.Invoke(wasmBinary, "entry", scheduleRequest.Payload, ctxJson)
-	s.log.Info("Function executed successfully", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-	s.log.Debug("Function executed successfully", "fn_duration", time.Since(startTime).Nanoseconds(), "fn_response", fmt.Sprintf("%+v", resp))
+	s.log.Info("Function executed successfully", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_duration", time.Since(startTime).Nanoseconds())
+	s.log.Debug("Function executed successfully", "fn_response", fmt.Sprintf("%+v", resp))
 
 	repBody, err := json.Marshal(resp.Response)
 	if err != nil {
@@ -360,8 +361,8 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 		}
 
 		if len(updateMessage) > 0 {
-			s.log.Debug("[%s] Propagating eventual collection updates", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates", fmt.Sprintf("%+v", updateMessage))
-			err := s.dataManager.UpdateCollectionsRecordsAndPropagate(updateMessage, groups, userId)
+			s.log.DebugfWith("[%s] Propagating eventual collection updates", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates", fmt.Sprintf("%+v", updateMessage))
+			err = s.dataManager.UpdateCollectionsRecordsAndPropagate(updateMessage, groups, userId)
 			if err != nil {
 				s.log.ErrorfWith("[%s] Failed to update or propagate eventual collections' updates", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates", fmt.Sprintf("%+v", updateMessage), "error", err)
 			}

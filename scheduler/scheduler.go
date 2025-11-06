@@ -52,42 +52,52 @@ type FunctionResult struct {
 }
 
 type Scheduler interface {
-	RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager) error
+	RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder) error
 	Schedule(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string) (*FunctionResult, uint64, error)
 }
 
-type SchedulerWrapper struct {
+type SchedulerImpl struct {
 	Scheduler
-	log logger.Logger
+	*baseScheduler
 }
 
-func NewSchedulerWrapper(stateful bool, dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *server.ServerInfo, config config.SchedulerConfig, logger logger.Logger) Scheduler {
-	var s Scheduler
+func NewScheduler(stateful bool, dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *server.ServerInfo, config config.SchedulerConfig, logger logger.Logger) Scheduler {
+	var policy Scheduler
+
+	sched := &baseScheduler{
+		dataManager:      dataManager,
+		metadataManager:  metadataManager,
+		cache:            cache,
+		wasmExecutorPool: wasmExecutorPool,
+		serverInfo:       serverInfo,
+		cfg:              config,
+		log:              logger,
+	}
 	if stateful {
-		s = NewSchedulerStateful(dataManager, metadataManager, cache, wasmExecutorPool, serverInfo, config, logger)
+		policy = newStatefulPolicy(sched)
 	} else {
-		s = NewSchedulerStateless(dataManager, metadataManager, cache, wasmExecutorPool, serverInfo, config, logger)
+		policy = newStatelessPolicy(sched)
 	}
-	return &SchedulerWrapper{
-		Scheduler: s,
-		log:       logger,
+	return &SchedulerImpl{
+		Scheduler:     policy,
+		baseScheduler: sched,
 	}
 }
 
-func (s *SchedulerWrapper) RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager) error {
-	s.log.Info("Registering custom routes for baseScheduler...")
-	err := server.AddCustomRoute("/invoke-function/{name}/{version}", false, s.handleFunctionInvocation(tokenDecoder, metadataManager))
+func (s *SchedulerImpl) RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder) error {
+	s.log.Info("Registering custom routes for SchedulerImpl...")
+	err := server.AddCustomRoute("/invoke-function/{name}/{version}", false, s.handleFunctionInvocation(tokenDecoder))
 	if err != nil {
 		s.log.Error("Failed to register custom routes", "path", "/invoke-function/{name}/{version}", "error", err)
 		return fmt.Errorf("Error while registering /invoke-function/{name}/{version}: %v\n", err)
 	}
-	err = server.AddCustomRoute("/invoke-function/{name}", false, s.handleFunctionInvocation(tokenDecoder, metadataManager))
+	err = server.AddCustomRoute("/invoke-function/{name}", false, s.handleFunctionInvocation(tokenDecoder))
 	if err != nil {
 		s.log.Error("Failed to register custom routes", "path", "/invoke-function/{name}", "error", err)
 		return fmt.Errorf("Error while registering /invoke-function/{name}: %v\n", err)
 	}
 
-	return s.Scheduler.RegisterRoutes(server, tokenDecoder, metadataManager)
+	return s.Scheduler.RegisterRoutes(server, tokenDecoder)
 }
 
 type baseScheduler struct {

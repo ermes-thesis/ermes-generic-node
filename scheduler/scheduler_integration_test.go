@@ -103,13 +103,13 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -164,13 +164,13 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
 	schedulerLog := createNewLogger(t)
-	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -298,13 +298,13 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerLog)
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -350,13 +350,13 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -446,13 +446,13 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -497,13 +497,13 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -610,13 +610,13 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -649,13 +649,13 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -752,13 +752,13 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -805,13 +805,13 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -903,13 +903,13 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -954,13 +954,13 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -1074,13 +1074,13 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -1135,13 +1135,13 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -1241,13 +1241,13 @@ func TestScheduleThreeNodes(t *testing.T) {
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
 	}
-	schedulerFather := scheduler.NewSchedulerWrapper(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -1286,13 +1286,13 @@ func TestScheduleThreeNodes(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewSchedulerWrapper(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -1346,13 +1346,13 @@ func TestScheduleThreeNodes(t *testing.T) {
 	dataManagerChild2.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
 	schedulerChild2Log := createNewLogger(t)
-	schedulerChild2 := scheduler.NewSchedulerWrapper(true, dataManagerChild2, metadataManager, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, cfg, schedulerChild2Log)
+	schedulerChild2 := scheduler.NewScheduler(true, dataManagerChild2, metadataManager, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, cfg, schedulerChild2Log)
 
 	child2Log := createNewLogger(t)
 	serverChild2, err := server.NewServer(child2Log, serverInfoChild2)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild2.RegisterRoutes(serverChild2, tknDecoderChild2, metadataManager)
+	err = schedulerChild2.RegisterRoutes(serverChild2, tknDecoderChild2)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild2 := httptest.NewServer(serverChild2.Handler)

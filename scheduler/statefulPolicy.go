@@ -2,9 +2,6 @@ package scheduler
 
 import (
 	"bytes"
-	"caches"
-	"config"
-	datamanager "dataManager"
 	shared "dataManager/shared"
 	"encoding/json"
 	"errors"
@@ -12,38 +9,27 @@ import (
 	"io"
 	"math"
 	"math/rand"
-	"metadataManager"
 	"net/http"
 	"server"
 	"strconv"
 	"time"
 	"tokenDecoder"
 
-	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/ermes-thesis/ermes-common/utils/httpClient"
-	"github.com/ermes-thesis/ermes-common/wasm-pool"
 )
 
-type SchedulerStateful struct {
+type statefulPolicy struct {
 	*baseScheduler
 }
 
-func NewSchedulerStateful(dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *server.ServerInfo, config config.SchedulerConfig, logger logger.Logger) Scheduler {
-	return &SchedulerStateful{
-		baseScheduler: &baseScheduler{
-			dataManager:      dataManager,
-			metadataManager:  metadataManager,
-			cache:            cache,
-			wasmExecutorPool: wasmExecutorPool,
-			serverInfo:       serverInfo,
-			cfg:              config,
-			log:              logger,
-		},
+func newStatefulPolicy(sched *baseScheduler) Scheduler {
+	return &statefulPolicy{
+		baseScheduler: sched,
 	}
 }
 
-func (s *SchedulerStateful) RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder, metadataManager metadataManager.MetadataManager) error {
+func (s *statefulPolicy) RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder) error {
 	err := server.AddCustomRoute("/pvt-offload-function/{name}/{version}", true, s.handleOffloadFunctionInvocation(tokenDecoder))
 	if err != nil {
 		s.log.Error("Failed to register custom routes", "path", "/pvt-offload-function/{name}/{version}", "error", err)
@@ -58,10 +44,7 @@ func (s *SchedulerStateful) RegisterRoutes(server server.ServerType, tokenDecode
 	return nil
 }
 
-func (s *SchedulerStateful) retryIsCollectionLocallyPresent(
-	colId string,
-	seqNum uint64,
-) (bool, shared.Collection, error) {
+func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum uint64) (bool, shared.Collection, error) {
 	var (
 		found      bool
 		collection shared.Collection
@@ -95,7 +78,7 @@ func (s *SchedulerStateful) retryIsCollectionLocallyPresent(
 	return found, collection, fmt.Errorf("couldn't access an updated version of the collection after %d retries: %v", s.cfg.MaxOutdatedDataRetries, err)
 }
 
-func (s *SchedulerStateful) Schedule(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string) (*FunctionResult, uint64, error) {
+func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string) (*FunctionResult, uint64, error) {
 	s.log.Info("Scheduling function", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 	s.log.Debug("Scheduling function", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname)
 
@@ -239,7 +222,7 @@ func (s *SchedulerStateful) Schedule(scheduleRequest ScheduleRequest, reqHostnam
 	return s.forwardRequest(hostWithMoreEventual, scheduleRequest)
 }
 
-func (s *SchedulerStateful) forwardRequestWithSequential(scheduleRequest ScheduleRequest, sequentialCollection *shared.StrongCollection, writeAccess bool) (*FunctionResult, uint64, error) {
+func (s *statefulPolicy) forwardRequestWithSequential(scheduleRequest ScheduleRequest, sequentialCollection *shared.StrongCollection, writeAccess bool) (*FunctionResult, uint64, error) {
 	// If the Sequential collection is not locally present, and the function needs to access it in write. Forward towards
 	// the leader.
 	if writeAccess {
@@ -280,12 +263,12 @@ func (s *SchedulerStateful) forwardRequestWithSequential(scheduleRequest Schedul
 		return s.forwardRequest(s.serverInfo.Father.HostName, scheduleRequest)
 	}
 
-	s.log.Error("No available host for sequential collection (unexpected)", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "collection_id", sequentialCollection.CollectionId())
 	// If we are here, it means that something wrong has happened in the scheduling process, and we are in the Cloud Node
-	panic("No available host for sequential collection")
+	s.log.Error("No available host for sequential collection (unexpected)", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "collection_id", sequentialCollection.CollectionId())
+	return nil, 0, errors.New("no available host for sequential collection")
 }
 
-func (s *SchedulerStateful) forwardRequest(dest string, scheduleRequest ScheduleRequest) (*FunctionResult, uint64, error) {
+func (s *statefulPolicy) forwardRequest(dest string, scheduleRequest ScheduleRequest) (*FunctionResult, uint64, error) {
 	s.log.Debug("Preparing request to offload scheduling", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "destination", dest, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency)
 
 	url := fmt.Sprintf("http://%s/pvt-offload-function/%s/%s", dest, scheduleRequest.FunctionName, scheduleRequest.FunctionVersion)

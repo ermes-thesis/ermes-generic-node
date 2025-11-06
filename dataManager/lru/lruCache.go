@@ -3,6 +3,8 @@ package lru
 import (
 	"container/list"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -16,7 +18,7 @@ type lruCacheType[T any] struct {
 
 // We just need to decide what is the key type. For the moment a string should be fine ? Another possibility is to be more generic and use comparable ?
 
-// This data structure is atomic.
+// LRUCache This data structure is atomic.
 type LRUCache[T any] struct {
 	current    uint
 	capacity   uint
@@ -25,7 +27,7 @@ type LRUCache[T any] struct {
 	mux        sync.Mutex
 }
 
-// Method to construct a generic LRU cache with given capacity and element type T.
+// LRUCacheConstructor Method to construct a generic LRU cache with given capacity and element type T.
 func LRUCacheConstructor[T any](capacity uint) LRUCache[T] {
 
 	return LRUCache[T]{
@@ -37,7 +39,7 @@ func LRUCacheConstructor[T any](capacity uint) LRUCache[T] {
 	}
 }
 
-// Return the value of the key if the key exists, otherwise return an error. This operation is atomic
+// Get Return the value of the key if the key exists, otherwise return an error. This operation is atomic
 func (this *LRUCache[T]) Get(key string) (T, error) {
 
 	this.mux.Lock()
@@ -70,7 +72,8 @@ func (this *LRUCache[T]) Get(key string) (T, error) {
 
 }
 
-// Update the value of the key if the key exists. Otherwise, add the key-value pair to the cache.
+// Put update the value of the key if the key exists. Otherwise, add the key-value pair to the cache.
+// The element is marked as most recently used.
 // If the number of keys exceeds the capacity from this operation, return an error (TODO: decide)
 // This operation is thread safe.
 func (this *LRUCache[T]) Put(key string, value T, size uint) error {
@@ -111,13 +114,52 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 	}
 
 	// Else update and put on top of LRU
+	el := get.Value.(lruCacheType[T])
+
+	if this.current-el.size+size > this.capacity {
+		return errors.New("not enough space in the list")
+	}
+
+	this.current -= el.size
+	el.size = size
+	this.current += size
+
+	get.Value = el
 
 	this.linkedlist.MoveToFront(get)
 
 	return nil
 }
 
-// Utility function in order to obtain capacity-current>=sizeGoal.
+// UpdateSize update the size of an element, without changing its position in the LRU.
+// This operation is thread safe.
+func (this *LRUCache[T]) UpdateSize(key string, size uint) error {
+
+	this.mux.Lock()
+
+	defer this.mux.Unlock()
+
+	get := this.cache[key]
+	if get == nil {
+		return errors.New("key not present in the cache")
+	}
+
+	el := get.Value.(lruCacheType[T])
+
+	if this.current-el.size+size > this.capacity {
+		return errors.New("not enough space in the list")
+	}
+
+	this.current -= el.size
+	el.size = size
+	this.current += size
+
+	get.Value = el
+
+	return nil
+}
+
+// FreeToAchieveSize Utility function in order to obtain capacity-current>=sizeGoal.
 // This function returns a list of removed items
 func (this *LRUCache[T]) FreeToAchieveSize(sizeGoal uint) *list.List {
 
@@ -163,7 +205,7 @@ func (this *LRUCache[T]) FreeToAchieveSize(sizeGoal uint) *list.List {
 	return returnList
 }
 
-// Function to remove a value given its key.
+// Remove Function to remove a value given its key.
 // This operation is thread safe and O(1)
 func (this *LRUCache[T]) Remove(key string) error {
 
@@ -228,3 +270,17 @@ func (this *LRUCache[T]) GetAvailableSize() uint {
 //  		fmt.Println("%d", i.key)
 // 	}
 // }
+
+func PrettyPrintList(lst *list.List) string {
+	var sb strings.Builder
+	sb.WriteString("[")
+	for e := lst.Front(); e != nil; e = e.Next() {
+		sb.WriteString(fmt.Sprintf("%+v", e.Value))
+		if e.Next() != nil {
+			sb.WriteString(",")
+		}
+	}
+
+	sb.WriteString("]")
+	return sb.String()
+}

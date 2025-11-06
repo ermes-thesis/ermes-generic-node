@@ -5,9 +5,10 @@ package tests
 
 import (
 	gossip "dataManager/messages"
-	migrationManager "dataManager/migrationManager"
+	"dataManager/migrationManager"
 	penality "dataManager/migrationManager/penalityFunction"
 	policy "dataManager/migrationManager/strongPolicy"
+	database "db"
 	"testing"
 )
 
@@ -20,13 +21,13 @@ func TestSingletonInstance(t *testing.T) {
 	log := createNewLogger(t)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
+	if instance1 == nil {
+		t.Fatal("Expected non-nil instance from GetMigrationManagerInstance")
+	}
+
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	instance2 := migrationManager.GetMigrationManagerInstance()
 	instance2.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
-
-	if instance1 == nil {
-		t.Fatal("Expected non-nil instance from GetMigrationManagerIstance")
-	}
 
 	if instance1 != instance2 {
 		t.Error("Expected the same instance for both calls, but got different ones")
@@ -41,19 +42,21 @@ func TestManageNewStrongRequest(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
 	log := createNewLogger(t)
 
+	db.EXPECT().GetCollectionMemoryUsage("repoId").Return(10, nil)
+	db.EXPECT().GetCollectionMemoryUsage("repoId1").Return(10, nil)
+
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
-	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string, 13), []string{}, 0, 13, false, "host")
-	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string, 14), []string{}, 0, 14, false, "host")
+	instance1.NewCollectionReceived("repoId", true, false, make(map[string]database.RecordValue, 13), []string{}, "", 0, 13, false, "host")
+	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]database.RecordValue, 14), []string{}, "", 0, 14, false, "host")
 
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 10,
 		},
-	})
+	}, "childName")
 	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName") == nil {
 		t.Fatal("Expected non-nil entry - 1")
 	}
@@ -61,29 +64,27 @@ func TestManageNewStrongRequest(t *testing.T) {
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 3,
 		},
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        false,
 			RequestLatency: 3,
 		},
+	}, "childName")
+	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName1",
 			IsWrite:        false,
 			RequestLatency: 7,
 		},
 		{
 			CollectionId:   "repoId1",
-			NodeName:       "childName1",
 			IsWrite:        true,
 			RequestLatency: 7,
 		},
-	})
+	}, "childName1")
 
 	if instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName1") == nil {
 		t.Fatal("Expected non-nil entry - 2")
@@ -117,32 +118,31 @@ func TestManageNewStrongRequest(t *testing.T) {
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
 	log := createNewLogger(t)
+	db.EXPECT().GetCollectionMemoryUsage("repoId").Return(10, nil)
+	db.EXPECT().GetCollectionMemoryUsage("repoId1").Return(10, nil)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
-	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 0, 12, false, "host")
-	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string), []string{}, 0, 13, false, "host")
+	instance1.NewCollectionReceived("repoId", true, false, make(map[string]database.RecordValue), []string{}, "", 0, 12, false, "host")
+	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]database.RecordValue), []string{}, "", 0, 13, false, "host")
 
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 10,
 		},
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 3,
 		},
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        false,
 			RequestLatency: 3,
 		},
-	})
+	}, "childName")
 	mig := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy)
 
 	if mig.GetBuffer("repoId", "childName").Head().Write.GetElasticForce() != 26 {
@@ -162,48 +162,46 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
 	log := createNewLogger(t)
 
+	db.EXPECT().GetCollectionMemoryUsage("repoId").Return(10, nil)
+	db.EXPECT().GetCollectionMemoryUsage("repoId1").Return(10, nil)
+
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
-	instance1.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 0, 13, false, "host")
-	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]string), []string{}, 0, 14, false, "host")
+	instance1.NewCollectionReceived("repoId", true, false, make(map[string]database.RecordValue), []string{}, "", 0, 13, false, "host")
+	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]database.RecordValue), []string{}, "", 0, 14, false, "host")
 
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 10,
 		},
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 3,
 		},
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        false,
 			RequestLatency: 7,
 		},
-	})
+	}, "childName")
 
 	instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName").MoveHead() //skip to next window
 
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 14,
 		},
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        false,
 			RequestLatency: 9,
 		},
-	})
+	}, "childName")
 	//fmt.Println(migrationManager.GetBuffer("repoId", "childName"))
 
 	instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).SetState(instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetDecisionState())

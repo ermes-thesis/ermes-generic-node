@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/ermes-thesis/ermes-common/caches"
+	"github.com/ermes-thesis/ermes-common/logger"
 	"gopkg.in/yaml.v3" //go get gopkg.in/yaml.v3
 )
 
@@ -22,15 +23,27 @@ type Config struct {
 	Scheduler               SchedulerConfig          `yaml:"scheduler"`
 	Collections             []CollectionSettingsInfo `yaml:"collections"`
 	GroupTokenPublicKeyPath string                   `yaml:"groupTokenPublicKeyPath"`
+	Logger                  logger.Config            `yaml:"logger"`
 }
 
 type MigrationManagerConfig struct {
-	LeaderThreshold   int     `yaml:"leaderThreshold"`
-	FollowerThreshold int     `yaml:"followerThreshold"`
-	ViewSize          int     `yaml:"viewSize"`
-	IdleTimeoutMs     int     `yaml:"idleTimeoutMs"`
-	GravityConstant   float64 `yaml:"gravityConstant"`
+	LeaderThreshold              int           `yaml:"leaderThreshold"`
+	FollowerThreshold            int           `yaml:"followerThreshold"`
+	ViewSize                     int           `yaml:"viewSize"`
+	IdleTimeoutMs                int           `yaml:"idleTimeoutMs"`
+	GravityConstant              float64       `yaml:"gravityConstant"`
+	KnownCollectionsDumpPath     string        `yaml:"knownCollectionsDumpPath"`
+	KnownCollectionsDumpInterval time.Duration `yaml:"knownCollectionsDumpInterval"`
+
+	WeakPolicy        string `yaml:"weakPolicy"`   // ALWAYSCOPYPOLICY  or DONOTHINGPOLICY
+	StrongPolicy      string `yaml:"strongPolicy"` // ERMESPOLICY or DONOTHINGPOLICY
+	CentralizedDBName string `yaml:"centralizedDBName"`
 }
+
+// normal operation mode: Stateful := true; WeakPolicy := ALWAYSCOPYPOLICY; StrongPolicy := ERMESPOLICY; IsCentralStorage := False
+// centralized storage mode:
+// 		- generic node:  Stateful := false; WeakPolicy := DONOTHINGPOLICY; StrongPolicy := DONOTHINGPOLICY; IsCentralStorage := False
+//		- storage: Stateful := true; WeakPolicy := DONOTHINGPOLICY; StrongPolicy := DONOTHINGPOLICY; IsCentralStorage := True
 
 type LruConfig struct {
 	Size      uint    `yaml:"size"`
@@ -38,11 +51,14 @@ type LruConfig struct {
 }
 
 type RedisConfig struct {
-	Address  string `yaml:"address"`
-	Port     string `yaml:"port"`
-	Password string `yaml:"password"`
-	DB       int    `yaml:"db"`
-	Protocol int    `yaml:"protocol"`
+	Address            string        `yaml:"address"`
+	Port               string        `yaml:"port"`
+	Password           string        `yaml:"password"`
+	DB                 int           `yaml:"db"`
+	Protocol           int           `yaml:"protocol"`
+	StartingOpsBackoff time.Duration `yaml:"startingOpsBackoff"`
+	MaxRetries         int           `yaml:"maxRetries"`
+	MaxOpsBackoff      time.Duration `yaml:"maxOpsBackoff"`
 }
 
 type FunctionsCacheConfig struct {
@@ -58,12 +74,14 @@ type TemplatesCacheConfig struct {
 }
 
 type NodeConfig struct {
-	Name         string `yaml:"name"`
-	Domain       string `yaml:"domain"`
-	Address      string `yaml:"address"`
-	Port         string `yaml:"port"`
-	Secret       string `yaml:"secret"`
-	ClientSecret string `yaml:"clientSecret"`
+	Name             string `yaml:"name"`
+	Domain           string `yaml:"domain"`
+	Address          string `yaml:"address"`
+	Port             string `yaml:"port"`
+	Secret           string `yaml:"secret"`
+	ClientSecret     string `yaml:"clientSecret"`
+	Stateful         bool   `yaml:"stateful"`
+	IsCentralStorage bool   `yaml:"isCentralStorage"`
 }
 
 type FunctionRegistryConfig struct {
@@ -74,12 +92,21 @@ type SchedulerConfig struct {
 	GroupTokenProviderAddress string            `yaml:"groupTokenProviderAddress"`
 	GroupTokenProviderPort    string            `yaml:"groupTokenProviderPort"`
 	WasmRuntime               ChosenWasmRuntime `yaml:"wasmRuntime"`
+
+	StartingExecutorsBackoff time.Duration `yaml:"startingExecutorsBackoff"`
+	MaxExecutorsRetries      int           `yaml:"maxExecutorsRetries"`
+	MaxExecutorsBackoff      time.Duration `yaml:"maxExecutorsBackoff"`
+
+	StartingOutdatedDataBackoff time.Duration `yaml:"startingOutdatedDataBackoff"`
+	MaxOutdatedDataRetries      int           `yaml:"maxOutdatedDataRetries"`
+	MaxOutdatedDataBackoff      time.Duration `yaml:"maxOutdatedDataBackoff"`
 }
 
 type HierarchyConfig struct {
-	Father   *HierarchyNodeConfig  `yaml:"father,omitempty"`
-	Cloud    *HierarchyNodeConfig  `yaml:"cloud,omitempty"`
-	Children []HierarchyNodeConfig `yaml:"children"`
+	Father          *HierarchyNodeConfig  `yaml:"father,omitempty"`
+	Cloud           *HierarchyNodeConfig  `yaml:"cloud,omitempty"`
+	Children        []HierarchyNodeConfig `yaml:"children"`
+	ExistingDomains []string              `yaml:"existingDomains"`
 }
 
 type HierarchyNodeConfig struct {

@@ -9,22 +9,26 @@ import (
 )
 
 func (h *HostFunctions) RegisterWasmtimeHostFns(pool *wasm.WasmtimeExecutorPool) error {
+	h.logger.Info("Starting registration of Wasmtime host functions")
+
 	fns := map[string]any{
-		"hostGet": func(collIdPtr int32, collIdLength int32, recordNamePtr int32, recordNameLength int32, groupsPtr int32, groupsLength int32, caller *wasmtime.Caller) int32 {
-			return h.hostGet(createWasmtimeAdapter(caller), collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength)
+		"hostGet": func(collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength, userIdPtr, userIdLength int32, caller *wasmtime.Caller) int32 {
+			return h.hostGet(createWasmtimeAdapter(caller), collIdPtr, collIdLength, recordNamePtr, recordNameLength, groupsPtr, groupsLength, userIdPtr, userIdLength)
 		},
-		"hostMultipleGet": func(collIdPtr int32, collIdLength int32, recordNamesPtr int32, recordNamesLength int32, groupsPtr int32, groupsLength int32, caller *wasmtime.Caller) int32 {
-			return h.hostMultipleGet(createWasmtimeAdapter(caller), collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength)
+		"hostMultipleGet": func(collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength, userIdPtr, userIdLength int32, caller *wasmtime.Caller) int32 {
+			return h.hostMultipleGet(createWasmtimeAdapter(caller), collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength, userIdPtr, userIdLength)
 		},
-		"hostCreateCollection": func(metadataPointer int32, metadataLength int32, caller *wasmtime.Caller) int32 {
-			return h.hostCreateCollection(createWasmtimeAdapter(caller), metadataPointer, metadataLength)
+		"hostCreateCollection": func(metadataPointer, metadataLength, skipUniquenessCheck int32, caller *wasmtime.Caller) int32 {
+			return h.hostCreateCollection(createWasmtimeAdapter(caller), metadataPointer, metadataLength, skipUniquenessCheck)
 		},
 	}
 
 	err := pool.RegisterHostFns(fns)
 	if err != nil {
+		h.logger.Error("Error registering Wasmtime host functions", "host_functions_map", fmt.Sprintf("%+v", fns), "error", err)
 		return fmt.Errorf("failed to register module: %v", err)
 	}
+	h.logger.Info("Registration of Wasmtime host functions completed successfully")
 	return nil
 }
 

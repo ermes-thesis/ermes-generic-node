@@ -4,7 +4,6 @@ import (
 	gossip "dataManager/messages"
 	"encoding/json"
 	"io"
-	"net"
 	"net/http"
 )
 
@@ -81,14 +80,7 @@ func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 			return
 		}
 
-		ip, port, err := net.SplitHostPort(r.RemoteAddr)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-		address := ip + ":" + port //TODO: verify
-
-		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.GroupsSequence, collection.CollectionSize, collection.HostToRemove, address)
+		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.Owner, collection.GroupsSequence, collection.CollectionSize, collection.HostToRemove, collection.SenderIp)
 
 		w.WriteHeader(http.StatusOK)
 	})

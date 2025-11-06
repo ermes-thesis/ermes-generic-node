@@ -27,7 +27,7 @@ func (m *MetadataManagerImpl) handleRouteRequestUpdateGroups() http.HandlerFunc 
 
 		m.log.Debug("Decoded group update message", "collection_id", collectionId, "user_access_groups", message.UserGroups, "groups_to_add", message.GroupsToAdd, "groups_to_remove", message.GroupsToRemove)
 
-		resp, err := m.UpdateGroupsInCollection(collectionId, message.UserGroups, message.GroupsToAdd, message.GroupsToRemove)
+		resp, err := m.UpdateGroupsInCollection(collectionId, message.UserGroups, message.UserId, message.GroupsToAdd, message.GroupsToRemove)
 		if err != nil {
 			var unAuthErr *dataManagerShared.UnauthorizedError
 			if errors.As(err, &unAuthErr) {

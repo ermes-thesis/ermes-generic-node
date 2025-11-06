@@ -1,6 +1,8 @@
 package dataManagerShared
 
-import "sync"
+import (
+	"sync"
+)
 
 // Collection Info
 type Collection interface {
@@ -27,22 +29,27 @@ type StrongCollection struct {
 	ConsistencyClock uint64
 }
 
-func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLeader bool) Collection {
+func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLeader bool, leaderId string) Collection {
 	hosts := make(map[string]struct{})
 	if isRemote {
 		return &StrongCollection{
 			collectionId:    collectionId,
 			collectionState: NewRemoteCollection(hosts),
 			IsLeader:        false,
+			LeaderId:        leaderId,
 			WriteMutex:      &sync.Mutex{},
 		}
 	}
-	return &StrongCollection{
+	c := &StrongCollection{
 		collectionId:    collectionId,
 		collectionState: NewLocalCollection(size, hosts),
 		IsLeader:        isLeader,
 		WriteMutex:      &sync.Mutex{},
 	}
+	if isLeader {
+		c.LeaderId = leaderId
+	}
+	return c
 }
 
 func (s *StrongCollection) GetCollectionState() CollectionState {

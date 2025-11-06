@@ -10,7 +10,7 @@ import (
 )
 
 type WeakCollectionPolicy interface {
-	ManageNewWeakRequest(collectionId string, childName string, isWrite bool, requestLatency int)
+	ManageNewWeakRequest(collectionId string, childName string, isWrite bool, requestLatency int) error
 }
 
 type CurrentPolicy int
@@ -18,11 +18,24 @@ type CurrentPolicy int
 const (
 	Pending CurrentPolicy = iota
 	ALWAYSCOPYPOLICY
+	DONOTHINGPOLICY
 )
 
+func GetPolicy(policyName string) CurrentPolicy {
+	switch policyName {
+	case "ALWAYSCOPYPOLICY":
+		return ALWAYSCOPYPOLICY
+	case "DONOTHINGPOLICY":
+		return DONOTHINGPOLICY
+	default:
+		return Pending
+	}
+}
+
+// default policy
 type AlwaysCopyPolicy struct {
 	//config
-	log *logger.Logger
+	log logger.Logger
 
 	//impl
 	partialView *shared.CollectionPartialView
@@ -31,7 +44,7 @@ type AlwaysCopyPolicy struct {
 	sender      sender.MigrationManagerSender
 }
 
-func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.MigrationManagerSender, logger *logger.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB) WeakCollectionPolicy {
+func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.MigrationManagerSender, logger logger.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB) WeakCollectionPolicy {
 	policy := &AlwaysCopyPolicy{
 		dbInterface: dbInterface,
 		partialView: partialView,
@@ -43,9 +56,9 @@ func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.Mig
 }
 
 // impl
-func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
+func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName string, isWrite bool, requestLatency int) error {
 	if childName == "user" {
-		return
+		return nil
 	}
 
 	a.log.Info("WEAK-POLICY, handle request for a weak collection")
@@ -54,17 +67,33 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 	weakCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
 	defer weakCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 
-	res, groups, groupsSequence, err := a.dbInterface.GetCollection(collectionId)
+	res, groups, owner, groupsSequence, err := a.dbInterface.GetCollection(collectionId)
 	if err != nil {
 		a.log.Error("WEAK-POLICY, got an error getting the collection from redis")
-		panic(err) //TODO: decide
+		return err
 	}
 	collectionSize, sizeError := a.dbInterface.GetCollectionMemoryUsage(collectionId)
 	if sizeError != nil {
-		panic(sizeError) //TODO: decide
+		a.log.Error("WEAK-POLICY, got an error getting the collection size")
+		return sizeError
 	}
 
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	a.log.Infof("WEAK-POLICY, send weak collection%s to node %s", collectionId, childName)
-	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups, groupsSequence, collectionSize)
+	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups, owner, groupsSequence, collectionSize, false)
+
+	return nil
+}
+
+// dumb policy for comparison in evaluation
+type DoNothingPolicy struct{}
+
+func NewDoNothingPolicy() DoNothingPolicy {
+	policy := DoNothingPolicy{}
+
+	return policy
+}
+
+func (d DoNothingPolicy) ManageNewWeakRequest(collectionId string, childName string, isWrite bool, requestLatency int) error {
+	return nil
 }

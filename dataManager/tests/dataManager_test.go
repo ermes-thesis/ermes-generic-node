@@ -8,6 +8,7 @@ import (
 	gossip "dataManager/messages"
 	migrationManager "dataManager/migrationManager"
 	penality "dataManager/migrationManager/penalityFunction"
+	database "db"
 	"fmt"
 	"testing"
 	"time"
@@ -19,7 +20,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-func createNewLogger(t *testing.T) *logger.Logger {
+func createNewLogger(t *testing.T) logger.Logger {
 	log, err := logger.NewLogger(logger.Config{
 		Level:  zerolog.WarnLevel,
 		Format: "text",
@@ -32,6 +33,9 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
 
 	log := createNewLogger(t)
+
+	db.EXPECT().GetCollectionMemoryUsage("repoId").Return(10, nil)
+
 	mig := migrationManager.GetMigrationManagerInstance()
 	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
 	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
@@ -39,11 +43,11 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
-			NodeName:       "childName",
 			IsWrite:        true,
 			RequestLatency: 3,
 		},
-	})
+	}, "childName")
+	mig.UpdateCollectionsLatestUsage([]string{"repoId"})
 
 	b, c, d := clDiscovererImp.IsCollectionLocallyPresent("repoId", 0)
 
@@ -51,7 +55,7 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 		t.Fatal("unexpected non null collection")
 	}
 
-	mig.NewCollectionReceived("repoId", true, false, make(map[string]string), []string{}, 0, 13, false, "host")
+	mig.NewCollectionReceived("repoId", true, false, make(map[string]database.RecordValue), []string{}, "", 0, 13, false, "host")
 	b, c, d = clDiscovererImp.IsCollectionLocallyPresent("repoId", 0)
 	if c == nil || d != nil {
 		t.Fatal("unexpected null collection")
@@ -67,11 +71,19 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 }
 
 func TestIterationModule(t *testing.T) {
+	red := "\033[31m"
+	reset := "\033[0m"
+
 	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := CycleTestSetUp(t)
 	log := createNewLogger(t)
 
+	db.EXPECT().GetCollectionMemoryUsage("repoId0").Return(10, nil)
+	db.EXPECT().GetCollectionMemoryUsage("repoId1").Return(10, nil)
+	db.EXPECT().GetCollectionMemoryUsage("repoId2").Return(10, nil)
+
 	mig := migrationManager.GetMigrationManagerInstance()
 	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	defer mig.StopAsyncDump()
 	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
 	clDiscovererImp.Init(collections, serverinfo, ser, db, log)
 
@@ -88,7 +100,7 @@ func TestIterationModule(t *testing.T) {
 	}
 
 	// FIRST CYCLE
-	fmt.Println("START FIRST CYCLE")
+	fmt.Println(string(red), "START FIRST CYCLE", string(reset))
 	ser.On("SendGenericHTTPRequest", "2222", "/pvt-repo", mock.Anything).Return(200, nil).Once()
 	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Once()
 	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
@@ -96,65 +108,62 @@ func TestIterationModule(t *testing.T) {
 	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId2",
-			NodeName:       "user",
 			IsWrite:        true,
 			RequestLatency: 10,
 		},
 		{
 			CollectionId:   "repoId0",
-			NodeName:       "2222",
-			IsWrite:        true,
-			RequestLatency: 20,
-		},
-		{
-			CollectionId:   "repoId0",
-			NodeName:       "1111",
-			IsWrite:        true,
-			RequestLatency: 20,
-		},
-		{
-			CollectionId:   "repoId0",
-			NodeName:       "user",
 			IsWrite:        false,
 			RequestLatency: 1,
 		},
+	}, "user")
+	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId0",
-			NodeName:       "1111",
-			IsWrite:        false,
-			RequestLatency: 6,
+			IsWrite:        true,
+			RequestLatency: 20,
 		},
 		{
 			CollectionId:   "repoId0",
-			NodeName:       "2222",
+			IsWrite:        false,
+			RequestLatency: 6,
+		},
+	}, "1111")
+	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
+		{
+			CollectionId:   "repoId0",
+			IsWrite:        true,
+			RequestLatency: 20,
+		},
+		{
+			CollectionId:   "repoId0",
 			IsWrite:        false,
 			RequestLatency: 1,
 		},
 		{
 			CollectionId:   "repoId1",
-			NodeName:       "2222",
 			IsWrite:        true,
 			RequestLatency: 15,
 		},
-	})
-
+	}, "2222")
+	mig.UpdateCollectionsLatestUsage([]string{"repoId2", "repoId0", "repoId1"})
 	leaderGossip1 := gossip.NewLeaderDelegaMessage("1111", 0.90)
 	mig.ManageGossipMessage(leaderGossip1)
 	// gossipState
 	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId0",
-			NodeName:       "3333",
 			IsWrite:        true,
 			RequestLatency: 20,
 		},
-	})
+	}, "3333")
+	mig.UpdateCollectionsLatestUsage([]string{"repoId0"})
 	child1Gossip1 := gossip.NewChildStateMessage("3333", 0.00)
 	mig.ManageGossipMessage(child1Gossip1)
 	child2Gossip1 := gossip.NewChildStateMessage("2222", 0.10)
 	mig.ManageGossipMessage(child2Gossip1)
 	// decisionState
-	mig.NewCollectionReceived("repoId3", true, false, make(map[string]string), []string{}, 0, 1, false, "host")
+	mig.NewCollectionReceived("repoId3", true, false, make(map[string]database.RecordValue), []string{}, "", 0, 1, false, "host")
 
 	// verify first cycle
 	time.Sleep(2 * time.Second)
@@ -165,7 +174,7 @@ func TestIterationModule(t *testing.T) {
 	}
 
 	// SECOND CYCLE
-	fmt.Println("START SECOND CYCLE")
+	fmt.Println(string(red), "START SECOND CYCLE", string(reset))
 	ser.On("SendGenericHTTPRequest", "2222", "/pvt-repo", mock.Anything).Return(200, nil).Once()
 	ser.On("SendGenericHTTPRequest", "3333", "/pvt-repo", mock.Anything).Return(200, nil).Times(2)
 	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Times(2)
@@ -174,42 +183,38 @@ func TestIterationModule(t *testing.T) {
 	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId0",
-			NodeName:       "2222",
 			IsWrite:        false,
 			RequestLatency: 10,
 		},
 		{
 			CollectionId:   "repoId0",
-			NodeName:       "2222",
 			IsWrite:        false,
 			RequestLatency: 10,
 		},
 		{
+			CollectionId:   "repoId3",
+			IsWrite:        false,
+			RequestLatency: 1,
+		},
+	}, "2222")
+	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
+		{
 			CollectionId:   "repoId0",
-			NodeName:       "3333",
 			IsWrite:        false,
 			RequestLatency: 5,
 		},
 		{
 			CollectionId:   "repoId0",
-			NodeName:       "3333",
 			IsWrite:        false,
 			RequestLatency: 15,
 		},
 		{
 			CollectionId:   "repoId3",
-			NodeName:       "3333",
 			IsWrite:        false,
 			RequestLatency: 5,
 		},
-		{
-			CollectionId:   "repoId3",
-			NodeName:       "2222",
-			IsWrite:        false,
-			RequestLatency: 1,
-		},
-	})
-
+	}, "3333")
+	mig.UpdateCollectionsLatestUsage([]string{"repoId0", "repoId3"})
 	child1Gossip1 = gossip.NewChildStateMessage("3333", 0.90)
 	mig.ManageGossipMessage(child1Gossip1)
 	// gossipState
@@ -219,18 +224,19 @@ func TestIterationModule(t *testing.T) {
 	mig.ManageGossipMessage(child2Gossip1)
 
 	// decisionState
-	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 0, 4, false, "host")
-	mig.NewCollectionReceived("repoId4", true, true, make(map[string]string), []string{}, 0, 4, false, "host")
+	mig.NewCollectionReceived("repoId4", true, true, make(map[string]database.RecordValue), []string{}, "", 0, 4, false, "host")
+	mig.NewCollectionReceived("repoId4", true, true, make(map[string]database.RecordValue), []string{}, "", 0, 4, false, "host")
 
 	// verify second cycle
 	time.Sleep(2 * time.Second)
 	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
+	fmt.Println(lru)
 	if !lru.CheckOrder([]string{"repoId4", "repoId3", "repoId0"}) {
 		t.Fatal("fail in second cycle")
 	}
 
 	// THIRD CYCLE
-	fmt.Println("START THIRD CYCLE")
+	fmt.Println(string(red), "START THIRD CYCLE", string(reset))
 	ser.On("SendGenericHTTPRequest", "2222", "/pvt-repo", mock.Anything).Return(200, nil).Once()
 	ser.On("SendGenericHTTPRequest", "3333", "/pvt-repo", mock.Anything).Return(200, nil).Once()
 	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
@@ -238,17 +244,18 @@ func TestIterationModule(t *testing.T) {
 	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId3",
-			NodeName:       "2222",
 			IsWrite:        false,
 			RequestLatency: 20,
 		},
+	}, "2222")
+	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId4",
-			NodeName:       "3333",
 			IsWrite:        true,
 			RequestLatency: 20,
 		},
-	})
+	}, "3333")
+	mig.UpdateCollectionsLatestUsage([]string{"repoId3", "repoId4"})
 	child1Gossip1 = gossip.NewChildStateMessage("3333", 0.90)
 	mig.ManageGossipMessage(child1Gossip1)
 	// gossipState
@@ -267,12 +274,12 @@ func TestIterationModule(t *testing.T) {
 	}
 
 	// FOURTH CYCLE
-	fmt.Println("START FOURTH CYCLE")
-	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Once()
+	fmt.Println(string(red), "START FOURTH CYCLE", string(reset))
+	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Twice()
 	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
 
 	// idle
-	mig.NewCollectionReceived("repoId5", true, true, make(map[string]string), []string{}, 0, 10, false, "host")
+	mig.NewCollectionReceived("repoId5", true, true, make(map[string]database.RecordValue), []string{}, "", 0, 10, false, "host")
 
 	// verify fourth cycle p1
 	time.Sleep(2 * time.Second)

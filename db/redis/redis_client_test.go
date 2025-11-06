@@ -24,7 +24,7 @@ func TestRecord(t *testing.T) {
 	err = redisClient.SetRecord("collection1", "record1", "value1", "")
 	require.EqualError(t, err, "collection does not exist")
 
-	err = redisClient.SetCollection("collection1", nil, nil, 0)
+	err = redisClient.SetCollection("collection1", nil, nil, "", 0)
 	require.NoError(t, err, "Expected no error setting collection")
 
 	err = redisClient.SetRecord("collection1", "record1", "value1", "")
@@ -78,20 +78,22 @@ func TestCollection(t *testing.T) {
 	defer redisClient.Close()
 
 	collectionId := "collection1"
-	records := map[string]string{
-		"record1": "value1",
-		"record2": "value2",
+	records := map[string]db.RecordValue{
+		"record1": {Value: "value1"},
+		"record2": {Value: "value1"},
 	}
 	groups := []string{"group1", "group2"}
+	owner := "test_owner"
 
-	err := redisClient.SetCollection(collectionId, records, groups, 0)
+	err := redisClient.SetCollection(collectionId, records, groups, owner, 0)
 	require.NoError(t, err, "Expected no error setting collection")
 
-	colRecords, colGroups, groupSequence, err := redisClient.GetCollection(collectionId)
+	colRecords, colGroups, colOwner, groupSequence, err := redisClient.GetCollection(collectionId)
 	require.NoError(t, err, "Expected no error getting collection")
 	require.Equal(t, records, colRecords, "Expected collection records to match")
 	require.Equal(t, uint64(0), groupSequence, "Expected group sequence to be 0")
 	require.ElementsMatch(t, groups, colGroups, "Expected collection groups to match")
+	require.Equal(t, owner, colOwner, "Expected collection owners to match")
 
 	exists, err := redisClient.CollectionExists(collectionId)
 	require.NoError(t, err, "Expected no error checking collection existence")
@@ -129,11 +131,11 @@ func TestMetadata(t *testing.T) {
 	require.Equal(t, metadata.Name, retrievedMetadata.Name, "Expected name to match")
 	require.Equal(t, metadata, *retrievedMetadata, "Expected metadata to match")
 
-	err = redisClient.DeleteMetadata(collectionId)
+	err = redisClient.DeleteMetadata(collectionId, false)
 	require.NoError(t, err, "Expected no error deleting metadata")
 
 	retrievedMetadata, err = redisClient.GetMetadata(collectionId)
-	require.NoError(t, err, "Expected no error getting all metadata after deletion")
+	require.Error(t, err, "Expected error getting metadata after deletion")
 	require.Nil(t, retrievedMetadata, "Expected no metadata after deletion")
 }
 
@@ -145,7 +147,7 @@ func TestGroup(t *testing.T) {
 	collectionId := "collection1"
 	members := []string{"member1", "member2"}
 
-	err := redisClient.SetCollection(collectionId, nil, nil, 0)
+	err := redisClient.SetCollection(collectionId, nil, nil, "coll_owner", 0)
 	require.NoError(t, err, "Expected no error setting collection")
 
 	err = redisClient.SetMetadata(collectionId, model.Metadata{
@@ -159,43 +161,43 @@ func TestGroup(t *testing.T) {
 	})
 	require.NoError(t, err, "Expected no error setting collection")
 
-	groups, groupsSequence, err := redisClient.AddGroupsToMetadata(collectionId, members...)
+	groups, groupsSequence, err := redisClient.UpdateGroupsInMetadata(collectionId, members, []string{})
 	require.NoError(t, err, "Expected no error adding group members")
 	require.Equal(t, members, groups, "Expected group members to match")
 	require.Equal(t, uint64(1), groupsSequence, "Expected group sequence to be 1 after first addition")
 
-	isInGroup, err := redisClient.IsInMetadataGroups(collectionId, "member1", "member3")
+	isInGroup, err := redisClient.IsAuthorizedInMetadata(collectionId, "", "member1", "member3")
 	require.NoError(t, err, "Expected no error checking group membership")
 	require.True(t, isInGroup, "Expected member1 to be in group")
 
 	err = redisClient.SetGroups(collectionId, groupsSequence, groups...)
 	require.NoError(t, err, "Expected no error setting groups with correct sequence")
 
-	isInGroup, err = redisClient.IsInGroups(collectionId, "member1", "member3")
+	isInGroup, err = redisClient.IsAuthorized(collectionId, "", "member1", "member3")
 	require.NoError(t, err, "Expected no error checking group membership")
 	require.True(t, isInGroup, "Expected member1 to be in group")
 
-	groups, groupsSequence, err = redisClient.RemoveGroupsFromMetadata(collectionId, "member1")
+	groups, groupsSequence, err = redisClient.UpdateGroupsInMetadata(collectionId, []string{}, []string{"member1"})
 	require.NoError(t, err, "Expected no error removing group member")
 	require.Equal(t, []string{"member2"}, groups, "Expected remaining group members to match")
 	require.Equal(t, uint64(2), groupsSequence, "Expected group sequence to be 2 after removal")
 
-	isInGroup, err = redisClient.IsInMetadataGroups(collectionId, "member1")
+	isInGroup, err = redisClient.IsAuthorizedInMetadata(collectionId, "", "member1")
 	require.NoError(t, err, "Expected no error checking group membership after removal")
 	require.False(t, isInGroup, "Expected member1 to not be in group after removal")
 
-	isInGroup, err = redisClient.IsInMetadataGroups(collectionId, "member2")
+	isInGroup, err = redisClient.IsAuthorizedInMetadata(collectionId, "", "member2")
 	require.NoError(t, err, "Expected no error checking group membership after removal")
 	require.True(t, isInGroup, "Expected member2 to still be in group after removing member1")
 
 	err = redisClient.SetGroups(collectionId, groupsSequence, groups...)
 	require.NoError(t, err, "Expected no error setting groups with correct sequence")
 
-	isInGroup, err = redisClient.IsInGroups(collectionId, "member1")
+	isInGroup, err = redisClient.IsAuthorized(collectionId, "", "member1")
 	require.NoError(t, err, "Expected no error checking group membership after removal")
 	require.False(t, isInGroup, "Expected member1 to not be in group after removal")
 
-	isInGroup, err = redisClient.IsInGroups(collectionId, "member2")
+	isInGroup, err = redisClient.IsAuthorized(collectionId, "", "member2")
 	require.NoError(t, err, "Expected no error checking group membership after removal")
 	require.True(t, isInGroup, "Expected member2 to still be in group after removing member1")
 }
@@ -207,6 +209,14 @@ func TestIndex(t *testing.T) {
 
 	err := redisClient.CreateIndex("unused_key")
 	require.NoError(t, err, "Expected no error creating index")
+
+	err = redisClient.SetMetadata("collId", model.Metadata{
+		Name:           "TestMetadata",
+		Owner:          "owner1",
+		Groups:         []string{"group1"},
+		CustomMetadata: map[string]string{"unused_key": "value_unused"},
+	})
+	require.NoError(t, err, "Expected no error setting metadata")
 
 	err = redisClient.AlterIndex("custom_key")
 	require.NoError(t, err, "Expected no error altering index")
@@ -233,8 +243,19 @@ func TestIndex(t *testing.T) {
 			},
 		},
 	}
+	query2 := model.QueryTemplate{
+		Select: "ALL",
+		As:     "test2",
+		Where: &model.ConditionWrapper{
+			Condition: &model.EqCondition{
+				Field: "unused_key",
+				Value: "value_unused",
+			},
+		},
+	}
+
 	groups := []string{"group1"}
-	results, err := redisClient.SearchOnMetadata(query, groups)
+	results, err := redisClient.SearchOnMetadata(query, "", groups)
 	require.NoError(t, err, "Expected no error searching on metadata")
 	require.Len(t, results, 1, "Expected one result from search")
 	require.Equal(t, collectionId, results[0].Id, "Expected result ID to match collection ID")
@@ -242,6 +263,25 @@ func TestIndex(t *testing.T) {
 	require.Equal(t, metadata.Name, results[0].Metadata.Name, "Expected result name to match metadata name")
 	require.ElementsMatch(t, metadata.Groups, results[0].Metadata.Groups, "Expected result groups to match metadata groups")
 	require.Equal(t, metadata.CustomMetadata, results[0].Metadata.CustomMetadata, "Expected result custom metadata to match")
+
+	// Check if collection is retrieved also with only the owner
+	results, err = redisClient.SearchOnMetadata(query, "owner1", nil)
+	require.NoError(t, err, "Expected no error searching on metadata")
+	require.Len(t, results, 1, "Expected one result from search")
+	require.Equal(t, collectionId, results[0].Id, "Expected result ID to match collection ID")
+	require.Equal(t, metadata.Owner, results[0].Metadata.Owner, "Expected result owner to match metadata owner")
+	require.Equal(t, metadata.Name, results[0].Metadata.Name, "Expected result name to match metadata name")
+	require.ElementsMatch(t, metadata.Groups, results[0].Metadata.Groups, "Expected result groups to match metadata groups")
+	require.Equal(t, metadata.CustomMetadata, results[0].Metadata.CustomMetadata, "Expected result custom metadata to match")
+
+	results, err = redisClient.SearchOnMetadata(query2, "owner1", groups)
+	require.NoError(t, err, "Expected no error searching on metadata")
+	require.Len(t, results, 1, "Expected one result from search")
+	require.Equal(t, "collId", results[0].Id, "Expected result ID to match collection ID")
+	require.Equal(t, "owner1", results[0].Metadata.Owner, "Expected result owner to match metadata owner")
+	require.Equal(t, "TestMetadata", results[0].Metadata.Name, "Expected result name to match metadata name")
+	require.ElementsMatch(t, []string{"group1"}, results[0].Metadata.Groups, "Expected result groups to match metadata groups")
+	require.Equal(t, map[string]string{"unused_key": "value_unused"}, results[0].Metadata.CustomMetadata, "Expected result custom metadata to match")
 
 	err = redisClient.DropIndex()
 	require.NoError(t, err, "Expected no error dropping index")
@@ -273,18 +313,18 @@ func TestMemStats(t *testing.T) {
 	})
 	require.NoError(t, err, "Expected no error setting metadata")
 
-	err = redisClient.SetCollection(collectionId, map[string]string{
-		"record1":  "value1",
-		"record2":  "value2",
-		"record3":  "value3",
-		"record4":  "value4",
-		"record5":  "value5",
-		"record6":  "value6",
-		"record7":  "value7",
-		"record8":  "value8",
-		"record9":  "value9",
-		"record10": "value10",
-	}, groups, 0)
+	err = redisClient.SetCollection(collectionId, map[string]db.RecordValue{
+		"record1":  {Value: "value1"},
+		"record2":  {Value: "value2"},
+		"record3":  {Value: "value3"},
+		"record4":  {Value: "value4"},
+		"record5":  {Value: "value5"},
+		"record6":  {Value: "value6"},
+		"record7":  {Value: "value7"},
+		"record8":  {Value: "value8"},
+		"record9":  {Value: "value9"},
+		"record10": {Value: "value10"},
+	}, groups, "", 0)
 	require.NoError(t, err, "Expected no error setting collection metadata")
 
 	// Wait a second to ensure Redis has updated its memory stats
@@ -294,22 +334,23 @@ func TestMemStats(t *testing.T) {
 	require.NoError(t, err, "Expected no error getting memory stats")
 
 	require.Greater(t, memStats1.UsedMemoryDatasetPercentage, float64(0), "Expected UsedMemoryDatasetPercentage to be greater than 0")
-	require.Equal(t, memStats1.KeysCount, uint64(11+4))
+	// 10 "Normal record" + 10 timestamp records + 1 metadata record + 5 special records
+	require.Equal(t, uint64(1+20+5), memStats1.KeysCount)
 	require.LessOrEqual(t, memStats1.CurrentUsedMemory, memStats1.UsedMemoryPeak)
-	require.Equal(t, memStats1.BytesKeysRatio, memStats1.UsedMemoryDataset/memStats1.KeysCount)
-	require.Equal(t, memStats1.LuaScriptsCacheSize, uint64(0xc0))
-	require.Equal(t, memStats1.ReplicationBacklogSize, uint64(0))
+	require.Equal(t, memStats1.UsedMemoryDataset/memStats1.KeysCount, memStats1.BytesKeysRatio)
+	require.Equal(t, uint64(0xc0), memStats1.LuaScriptsCacheSize)
+	require.Equal(t, uint64(0), memStats1.ReplicationBacklogSize)
 	require.Greater(t, memStats1.UsedMemoryOverhead, uint64(0))
 	require.Greater(t, memStats1.UsedMemoryStartup, uint64(0))
 
 	collectionId2 := "collection2"
-	err = redisClient.SetCollection(collectionId2, map[string]string{
-		"record11": "value11",
-		"record12": "value12",
-		"record13": "value13",
-		"record14": "value14",
-		"record15": "value15",
-	}, groups, 0)
+	err = redisClient.SetCollection(collectionId2, map[string]db.RecordValue{
+		"record11": {Value: "value11"},
+		"record12": {Value: "value12"},
+		"record13": {Value: "value13"},
+		"record14": {Value: "value14"},
+		"record15": {Value: "value15"},
+	}, groups, "", 0)
 	require.NoError(t, err, "Expected no error setting collection metadata")
 
 	// Wait a second to ensure Redis has updated its memory stats
@@ -324,8 +365,8 @@ func TestMemStats(t *testing.T) {
 		return maxMem-memStats2.CurrentUsedMemory == available
 	}, 3*time.Second, 100*time.Millisecond)
 
-	// 15 "Normal record" + 1 metadata record + 3 special records for each collection (that are 2)
-	require.Equal(t, memStats2.KeysCount, uint64(16+4*2))
+	// 15 "Normal record" + 15 timestamp records + 1 metadata record + 5 special records for each collection (that are 2)
+	require.Equal(t, memStats2.KeysCount, uint64(30+1+5*2))
 	require.LessOrEqual(t, memStats2.CurrentUsedMemory, memStats2.UsedMemoryPeak)
 	require.Equal(t, memStats2.BytesKeysRatio, memStats2.UsedMemoryDataset/memStats2.KeysCount)
 	require.Equal(t, memStats2.LuaScriptsCacheSize, uint64(0xc0))
@@ -349,14 +390,14 @@ func TestMemStats(t *testing.T) {
 	require.NoError(t, err, "Expected no error getting collection memory usage")
 	require.Greater(t, collSize2, collSize, "Expected collection memory usage to not be zero")
 
-	recordSize, err := redisClient.GetRecordMemoryUsage(collectionId, "recordTest")
+	recordSize, err := redisClient.GetRecordsMemoryUsage(collectionId, "recordTest")
 	require.NoError(t, err, "Expected no error getting record")
 	require.Greater(t, recordSize, uint64(0), "Expected recordMemoryUsage to not be zero")
 
 	err = redisClient.SetRecord(collectionId, "recordTest", "Record with higher value size", "")
 	require.NoError(t, err, "Expected no error setting record")
 
-	recordSize2, err := redisClient.GetRecordMemoryUsage(collectionId, "recordTest")
+	recordSize2, err := redisClient.GetRecordsMemoryUsage(collectionId, "recordTest")
 	require.NoError(t, err, "Expected no error getting record")
 	require.Greater(t, recordSize2, recordSize, "Expected recordMemoryUsage to not be zero")
 }
@@ -366,7 +407,7 @@ func TestMemoryStress(t *testing.T) {
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
-	err := redisClient.SetCollection("collection1", nil, nil, 0)
+	err := redisClient.SetCollection("collection1", nil, nil, "", 0)
 	fmt.Println("Starting...")
 	for i := 0; i < 1000; i++ {
 		names := make([]string, 1000)
@@ -385,5 +426,5 @@ func TestMemoryStress(t *testing.T) {
 	res, err := redisClient.GetMemoryStats()
 	fmt.Printf("Mem stats: %+v\n", res)
 	require.NoError(t, err, "Expected no error getting memory stats")
-	require.Exactly(t, uint64(2_000_003), res.KeysCount, "Expected 2000003 keys in memory stats")
+	require.Exactly(t, uint64(2_000_004), res.KeysCount, "Expected 2000003 keys in memory stats")
 }

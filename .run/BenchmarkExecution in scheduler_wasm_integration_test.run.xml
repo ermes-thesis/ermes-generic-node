@@ -4,6 +4,7 @@
     <module name="ermes-generic-node" />
     <target name="WSL - Ubuntu" />
     <working_directory value="$PROJECT_DIR$/scheduler/wasm_integration_test" />
+    <go_parameters value="-gcflags=&quot;all=-N -l&quot;" />
     <parameters value="-test.benchtime=10s -test.benchmem" />
     <root_directory value="$PROJECT_DIR$/scheduler" />
     <kind value="PACKAGE" />

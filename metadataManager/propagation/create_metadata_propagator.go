@@ -6,7 +6,7 @@ import (
 	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"net/http"
-	"server/info"
+	"server"
 	"strings"
 )
 
@@ -15,12 +15,12 @@ type CreateMetadataPropagator interface {
 }
 
 type CreateMetadataPropagatorImpl struct {
-	serverInfo *info.ServerInfo
+	serverInfo *server.ServerInfo
 	httpHelper *HTTPHelper
-	log        *logger.Logger
+	log        logger.Logger
 }
 
-func NewCreateMetadataPropagator(serverInfo *info.ServerInfo, log *logger.Logger) *CreateMetadataPropagatorImpl {
+func NewCreateMetadataPropagator(serverInfo *server.ServerInfo, log logger.Logger) *CreateMetadataPropagatorImpl {
 	return &CreateMetadataPropagatorImpl{
 		serverInfo: serverInfo,
 		log:        log,
@@ -102,7 +102,7 @@ func (p *CreateMetadataPropagatorImpl) sendHttpReqToDest(dest string, collection
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusCreated {
-		p.log.ErrorfWith("Unexpected status code received while contacting '%s' path", []any{EndpointCreateMetadata}, "collection_id", collectionId, "destination", dest, "metadata", fmt.Sprintf("%+v", metadata), "received_status_code", resp.Status, "expected_status_code", http.StatusCreated, "error", err)
+		p.log.ErrorfWith("Unexpected status code received while contacting '%s' path", []any{EndpointCreateMetadata}, "collection_id", collectionId, "destination", dest, "metadata", fmt.Sprintf("%+v", metadata), "received_status_code", resp.Status, "expected_status_code", http.StatusCreated)
 		return fmt.Errorf("unexpected status code %d from %s", resp.StatusCode, dest)
 	}
 

@@ -1,14 +1,12 @@
 package propagation
 
 import (
-	"bytes"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"net/http"
-	"server/info"
+	"server"
 	"strings"
 )
 
@@ -17,55 +15,57 @@ type UpdateGroupsPropagator interface {
 }
 
 type UpdateGroupsPropagatorImpl struct {
-	serverInfo *info.ServerInfo
-	log        *logger.Logger
+	serverInfo *server.ServerInfo
+	httpHelper *HTTPHelper
+	log        logger.Logger
 }
 
-func NewUpdateGroupsPropagator(serverInfo *info.ServerInfo, log *logger.Logger) *UpdateGroupsPropagatorImpl {
+func NewUpdateGroupsPropagator(serverInfo *server.ServerInfo, log logger.Logger) *UpdateGroupsPropagatorImpl {
 	return &UpdateGroupsPropagatorImpl{
 		serverInfo: serverInfo,
+		httpHelper: NewHTTPHelper(serverInfo, log),
 		log:        log,
 	}
 }
 
 func (p *UpdateGroupsPropagatorImpl) Propagate(collectionId string, message UpdateGroupResponse, geolocation string) error {
-	p.log.Info("Starting to propagating groups update...")
+	p.log.Info("Starting new group set propagation", "collection_id", collectionId)
+	p.log.Debug("Starting new group set propagation", "new_groups_set", message.Groups, "new_groups_sequence_num", message.Sequence)
 
 	for _, child := range p.serverInfo.Children {
 		if strings.HasPrefix(geolocation, child.MetadataDomain) {
-			p.log.Infof("Forwarding to child node %s for the request.\n", child.HostName)
+			p.log.Info("Forwarding group set update to child node", "collection_id", collectionId, "metadata_geolocation", geolocation, "child_hostname", child.HostName, "child_geolocation", child.MetadataDomain)
 			return p.sendHttpReqToDest(child.HostName, collectionId, message)
 		}
 	}
 
+	p.log.Warn("No matching child node found for geolocation. Ok if we've reached an Edge Node, or a node with with a domain equal to the 'metadata_geolocation'.", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "metadata_geolocation", geolocation)
 	return errors.New("domain not found among children nodes")
 }
 
 func (p *UpdateGroupsPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, message UpdateGroupResponse) error {
-	body, err := json.Marshal(message)
+	req, err := p.httpHelper.CreateBasicPvtHttpRequest(http.MethodPost, dest, EndpointPropagateGroups, collectionId, message)
 	if err != nil {
-		p.log.Infof("Error marshalling metadata: %v", err)
+		p.log.ErrorfWith("Failed to create basic HTTP request for '%s' path", []any{EndpointPropagateGroups}, "collection_id", collectionId, "destination", dest, "message", fmt.Sprintf("%+v", message), "error", err)
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/%s/%s", dest, EndpointPropagateGroups, collectionId), bytes.NewReader(body))
-	if err != nil {
-		p.log.Errorf("Error creating request: %v", err)
-		return err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-ERMES-SECRET", p.serverInfo.Secret)
+	p.log.Debug("Sending HTTP request to destination node", "url", req.URL, "headers", fmt.Sprintf("%+v", req.Header))
 
 	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {
-		p.log.Errorf("[%s] Error sending request: %v\n", p.serverInfo.MetadataDomain, err)
+		p.log.ErrorfWith("Failed to send HTTP request for '%s' path", []any{EndpointPropagateGroups}, "collection_id", collectionId, "destination", dest, "message", fmt.Sprintf("%+v", message), "request_headers", fmt.Sprintf("%+v", req.Header), "error", err)
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("error when contacting the node: %s", resp.Status)
+		p.log.ErrorfWith("Unexpected status code received while contacting '%s' path", []any{EndpointPropagateGroups}, "collection_id", collectionId, "destination", dest, "message", fmt.Sprintf("%+v", message), "received_status_code", resp.Status, "expected_status_code", http.StatusOK)
+		return fmt.Errorf("unexpected status code %d from %s", resp.StatusCode, dest)
 	}
+
+	p.log.Info("Group update successfully propagated", "collection_id", collectionId)
+	p.log.Debug("Group update successfully propagated", "destination", dest, "message", fmt.Sprintf("%+v", message))
 
 	return nil
 }

@@ -28,7 +28,7 @@ func (m *MetadataManagerImpl) handleRouteLookup(tokenDecoder tokenDecoder.TokenD
 
 		m.log.Debug("Decoded group token successfully", "user_access_groups", groups, "applicant_user_id", userId)
 
-		queryResults, err := m.ExecuteQueries(fnName, fnVersion, queryParams, groups, groupToken, geolocation)
+		queryResults, err := m.ExecuteQueries(fnName, fnVersion, queryParams, groups, userId, groupToken, geolocation)
 		if err != nil {
 			m.log.Error("Error executing queries", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "templates_parameters", queryParams, "user_access_groups", groups, "node_geolocation", m.serverInfo.MetadataDomain, "templates_geolocation", geolocation, "error", err)
 			http.Error(w, fmt.Sprintf("Internal Server Error: error while executing queries: %v", err), http.StatusInternalServerError)

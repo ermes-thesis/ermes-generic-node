@@ -7,7 +7,7 @@ import (
 	"metadataManager/types"
 	"mocks/caches"
 	"mocks/metadataManager/propagation"
-	"server/info"
+	"server"
 	"testing"
 	"time"
 
@@ -22,7 +22,7 @@ func TestExecuteQueries(t *testing.T) {
 	defer shutdownFun()
 	defer redisClient.Close()
 
-	srvInfo := &info.ServerInfo{
+	srvInfo := &server.ServerInfo{
 		MetadataDomain: "IT",
 	}
 
@@ -82,10 +82,11 @@ func TestExecuteQueries(t *testing.T) {
 
 	// Create a new MetadataManager instance
 	metadataLog := createNewLogger(t)
-	manager := metadataManager.NewMetadataManager(redisClient, srvInfo, metadataLog, fnCache)
+	manager, err := metadataManager.NewMetadataManager(redisClient, srvInfo, metadataLog, fnCache)
+	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	// Execute the query
-	result, err := manager.ExecuteQueries(requestedFnName, requestedFnVersion, string(queryParams), []string{"groupC"}, "boh", "IT/Milan")
+	result, err := manager.ExecuteQueries(requestedFnName, requestedFnVersion, string(queryParams), []string{"groupC"}, "12345", "boh", "IT/Milan")
 	assert.NoError(t, err, "Expected no error when executing queries")
 
 	assert.Len(t, result, 1, "Expected result to be non-empty")
@@ -109,7 +110,7 @@ func TestCreateMetadata(t *testing.T) {
 	defer shutdownFun()
 	defer redisClient.Close()
 
-	srvInfo := &info.ServerInfo{
+	srvInfo := &server.ServerInfo{
 		MetadataDomain: "IT",
 	}
 

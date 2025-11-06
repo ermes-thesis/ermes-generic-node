@@ -5,11 +5,11 @@ type PropagationOrigin int
 func (p PropagationOrigin) String() string {
 	switch p {
 	case FROM_FATHER:
-		return "FATHER"
+		return "FROM_FATHER"
 	case FROM_CHILD:
-		return "CHILD"
+		return "FROM_CHILD"
 	case FROM_LOCAL:
-		return "LOCAL"
+		return "FROM_LOCAL"
 	default:
 		return "UNKNOWN"
 	}
@@ -21,13 +21,6 @@ const (
 	FROM_LOCAL
 )
 
-type MetadataAction int
-
-const (
-	Add = iota
-	Remove
-)
-
 type UpdateGroupResponse struct {
 	Groups   []string `json:"groups"`
 	Sequence uint64   `json:"sequence"`
@@ -35,12 +28,14 @@ type UpdateGroupResponse struct {
 
 type GroupMessage struct {
 	UserGroups     []string `json:"userGroups"`
+	UserId         string   `json:"userId"`
 	GroupsToAdd    []string `json:"groupsToAdd,omitempty"`
 	GroupsToRemove []string `json:"groupsToRemove,omitempty"`
 }
 
 const (
 	EndpointLookup              = "/pvt-lookup"
+	EndpointDeleteMetadata      = "/pvt-delete-metadata"
 	EndpointCreateMetadata      = "/pvt-create-metadata"
 	EndpointRequestUpdateGroups = "/pvt-request-update-groups"
 	EndpointPropagateGroups     = "/pvt-propagate-groups"

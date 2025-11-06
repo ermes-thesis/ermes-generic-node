@@ -1,6 +1,7 @@
 package messages
 
 import (
+	"db"
 	"time"
 )
 
@@ -10,6 +11,7 @@ type RemoteAccessRequest struct {
 	CollectionId string   `json:"collectionId"`
 	RecordNames  []string `json:"recordNames"`
 	Groups       []string `json:"groups"`
+	UserId       string   `json:"userId"`
 }
 
 type RemoteAccessResponse struct {
@@ -21,6 +23,7 @@ type RemoteUpdateRequest struct {
 	RecordNames  []string `json:"recordNames"`
 	Record       []string `json:"records"`
 	Groups       []string `json:"groups"`
+	UserId       string   `json:"userId"`
 	SenderIp     string   `json:"senderIp"`
 	IsDelete     bool     `json:"isDelete"`
 }
@@ -66,6 +69,7 @@ func (c *CollectionUpdateMessage) IncrementSequence() {
 type CollectionUpdateMessages struct {
 	Messages []CollectionUpdateMessage
 	Groups   []string
+	UserId   string
 }
 
 func ToCollectionUpdateMessages(
@@ -74,7 +78,7 @@ func ToCollectionUpdateMessages(
 	senderIp string,
 ) []CollectionUpdateMessage {
 	result := make([]CollectionUpdateMessage, 0, len(updates))
-	time := time.Now().Unix()
+	time := time.Now().UnixMicro()
 
 	for _, u := range updates {
 		msg := CollectionUpdateMessage{
@@ -138,13 +142,28 @@ type CollectionGroupUpdateMessages []CollectionGroupUpdateMessage
 // collection management
 
 type NewCollectionMessage struct {
-	CollectionId string `json:"collectionId"`
-	IsStrong     bool   `json:"isStrong"`
-	SenderIp     string `json:"senderIp"`
+	CollectionId        string `json:"collectionId"`
+	CollectionName      string `json:"collectionName"`
+	CollectionOwner     string `json:"collectionOwner"`
+	IsStrong            bool   `json:"isStrong"`
+	LeaderIp            string `json:"leaderIp"`
+	SenderIp            string `json:"senderIp"`
+	SkipUniquenessCheck bool   `json:"skipUniquenessCheck"`
 }
 
 type RemoveCollectionMessage struct {
 	CollectionId string   `json:"collectionId"`
 	SenderIp     string   `json:"senderIp"`
 	Groups       []string `json:"groups"`
+	UserId       string   `json:"userId"`
+}
+
+type SetCollectionMessage struct {
+	CollectionId        string                    `json:"collectionId"`
+	CollectionName      string                    `json:"collectionName"`
+	Records             map[string]db.RecordValue `json:"records"`
+	Groups              []string                  `json:"groups"`
+	UserId              string                    `json:"userId"`
+	IsStrong            bool                      `json:"isStrong"`
+	SkipUniquenessCheck bool                      `json:"skipUniquenessCheck"`
 }

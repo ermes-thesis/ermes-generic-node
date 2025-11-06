@@ -1,6 +1,6 @@
 // Package info contains the main information stored by each node.
 // This info is readonly and is defined only when launching the application.
-package info
+package server
 
 import (
 	"config"
@@ -33,8 +33,13 @@ type ServerInfo struct {
 
 	CloudNode *Node
 
+	ExistingDomains map[string]struct{}
+
 	// Address:port of the Group Token Provider
 	GroupTokenProviderHostName string
+
+	Stateful         bool
+	IsCentralStorage bool
 }
 
 type Node struct {
@@ -80,6 +85,11 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 		}
 	}
 
+	var existingDomains = make(map[string]struct{})
+	for _, d := range config.Hierarchy.ExistingDomains {
+		existingDomains[d] = struct{}{}
+	}
+
 	serverInfo := &ServerInfo{
 		HostName:                   hostname,
 		Address:                    address,
@@ -90,26 +100,30 @@ func NewServerInfo(config config.Config) (*ServerInfo, error) {
 		CloudNode:                  cloudNode,
 		Father:                     father,
 		Children:                   children,
+		ExistingDomains:            existingDomains,
 		GroupTokenProviderHostName: config.Scheduler.GroupTokenProviderAddress + ":" + config.Scheduler.GroupTokenProviderPort,
+		Stateful:                   config.Node.Stateful,
+		IsCentralStorage:           config.Node.IsCentralStorage,
 	}
 
 	return serverInfo, nil
 }
 
-// StringifyInfo returns a pretty-formatted string of the input ServerInfo.
-func StringifyInfo(infoptr *ServerInfo) string {
+// PrettyString returns a pretty-formatted string of the input ServerInfo.
+func (i *ServerInfo) PrettyString() string {
 	var sb strings.Builder
 
-	sb.WriteString("HostName: " + infoptr.HostName + "\n")
-	sb.WriteString("Domain: " + infoptr.MetadataDomain + "\n")
-	if infoptr.Father != nil {
-		sb.WriteString("Father: " + infoptr.Father.HostName + "\n")
-		sb.WriteString("FatherDomain: " + infoptr.Father.MetadataDomain + "\n")
-		sb.WriteString("FatherLatency: " + fmt.Sprint(infoptr.Father.Latency) + "\n")
+	sb.WriteString("HostName: " + i.HostName + "\n")
+	sb.WriteString("Domain: " + i.MetadataDomain + "\n")
+	if i.Father != nil {
+		sb.WriteString("Father: " + i.Father.HostName + "\n")
+		sb.WriteString("FatherDomain: " + i.Father.MetadataDomain + "\n")
+		sb.WriteString("FatherLatency: " + fmt.Sprint(i.Father.Latency) + "\n")
 	}
+
 	sb.WriteString("Children: ")
 
-	for _, str := range infoptr.Children {
+	for _, str := range i.Children {
 		sb.WriteString(str.HostName)
 		sb.WriteString(" ")
 		sb.WriteString(str.MetadataDomain)
@@ -119,15 +133,29 @@ func StringifyInfo(infoptr *ServerInfo) string {
 	}
 	sb.WriteString("\n")
 
+	if i.CloudNode != nil {
+		sb.WriteString("CloudNode: " + i.CloudNode.HostName + "\n")
+		sb.WriteString("CloudNodeDomain: " + i.CloudNode.MetadataDomain + "\n")
+		sb.WriteString("CloudNodeLatency: " + fmt.Sprint(i.CloudNode.Latency) + "\n")
+	}
+
+	sb.WriteString("ExistingDomains: ")
+	for domain := range i.ExistingDomains {
+		sb.WriteString(domain + ", ")
+	}
+	sb.WriteString("\n")
+
+	sb.WriteString("GroupTokenProvider: " + i.GroupTokenProviderHostName + "\n")
+
 	return sb.String()
 }
 
-func (s *ServerInfo) GetLatencyFor(hostname string) int {
-	if s.Father != nil && s.Father.HostName == hostname {
-		return s.Father.Latency
+func (i *ServerInfo) GetLatencyFor(hostname string) int {
+	if i.Father != nil && i.Father.HostName == hostname {
+		return i.Father.Latency
 	}
 
-	for _, child := range s.Children {
+	for _, child := range i.Children {
 		if child.HostName == hostname {
 			return child.Latency
 		}

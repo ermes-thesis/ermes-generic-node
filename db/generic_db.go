@@ -92,7 +92,7 @@ type GenericDB interface {
 	//	- map[string]string: map of record names to values (empty if collection doesn't exist)
 	//	- []string: slice of group names associated with the collection
 	//	- error: non-nil if the operation fails
-	GetCollection(collectionId string) (map[string]string, []string, uint64, error)
+	GetCollection(collectionId string) (map[string]RecordValue, []string, string, uint64, error)
 	// SetCollection creates or completely replaces a collection with the provided
 	// records and groups. This operation will overwrite any existing data.
 	//
@@ -103,7 +103,7 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the operation fails
-	SetCollection(collectionId string, records map[string]string, groups []string, groupsSequence uint64) error
+	SetCollection(collectionId string, records map[string]RecordValue, groups []string, owner string, groupsSequence uint64) error
 	// DeleteCollection removes a collection and all its associated data including
 	// records, and groups. This operation is irreversible.
 	//
@@ -142,7 +142,11 @@ type GenericDB interface {
 	// Returns:
 	//	- error: non-nil if the operation fails
 	SetMetadata(collectionId string, metadata model.Metadata) error
+
 	MetadataExists(collectionId string) (bool, error)
+
+	IsUniqueForOwner(collectionName string, owner string) (bool, error)
+
 	// DeleteMetadata removes all metadata associated with a collection.
 	// The collection itself and its records remain unchanged. They must
 	// be explicitly deleted using the DeleteCollection method.
@@ -152,37 +156,15 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the deletion operation fails
-	DeleteMetadata(collectionId string) error
+	DeleteMetadata(collectionId string, deleteExistenceRecord bool) error
 
-	// AddGroupsToMetadata add the specified members to a collection's group access list.
-	// Duplicate members are silently ignored. If no members are provided, the operation
-	// succeeds with no effect.
-	//
-	// Parameters:
-	//	- collectionId: the unique identifier of the collection
-	//	- groups: variable number of group names to add
-	//
-	// Returns:
-	//	- error: non-nil if the operation fails
-	AddGroupsToMetadata(collectionId string, members ...string) ([]string, uint64, error)
-	// RemoveGroupsFromMetadata removes the specified groups from a collection's group access list.
-	// Non-existent groups are silently ignored. If no members are provided,
-	// the operation succeeds with no effect.
-	//
-	// Parameters:
-	//	- collectionId: the unique identifier of the collection
-	//	- groups: variable number of group names to remove
-	//
-	// Returns:
-	//	- error: non-nil if the operation fails
-	RemoveGroupsFromMetadata(collectionId string, groups ...string) ([]string, uint64, error)
 	UpdateGroupsInMetadata(collectionId string, groupsToAdd []string, groupsToRemove []string) ([]string, uint64, error)
 
 	SetGroupsInMetadata(collectionId string, sequenceGroups uint64, groups ...string) error
-	IsInMetadataGroups(collectionId string, groups ...string) (bool, error)
+	IsAuthorizedInMetadata(collectionId string, owner string, groups ...string) (bool, error)
 
 	SetGroups(collectionId string, sequenceGroups uint64, groups ...string) error
-	// IsInGroups checks if any of the specified members belong to the collection's
+	// IsAuthorized checks if any of the specified members belong to the collection's
 	// groups. Returns true if al least one member is found.
 	//
 	// Parameters:
@@ -193,7 +175,7 @@ type GenericDB interface {
 	//	- bool: true if at least one group is found, false if no groups are
 	//			provided or none are found in the collection's groups
 	//	- error: non-nil if the check operation fails
-	IsInGroups(collectionId string, groups ...string) (bool, error)
+	IsAuthorized(collectionId string, owner string, groups ...string) (bool, error)
 
 	// CreateIndex creates a search index on collection metadata fields.
 	// The index automatically includes standard fields (name, owner, created_at,
@@ -217,7 +199,7 @@ type GenericDB interface {
 	// Returns:
 	//	- []db.CollectionInfo: slice of matching collection information (empty if no matches)
 	//	- error: non-nil if the search operation fails
-	SearchOnMetadata(query model.QueryTemplate, groups []string) ([]types.CollectionInfo, error)
+	SearchOnMetadata(query model.QueryTemplate, owner string, groups []string) ([]types.CollectionInfo, error)
 	// DropIndex removes the metadata search index, disabling search functionality.
 	// This operation is irreversible and will require CreateIndex to be called
 	// again to restore search capabilities.
@@ -259,7 +241,7 @@ type GenericDB interface {
 	//	- uint64: total memory usage in bytes (0 if collection doesn't exist)
 	//	- error: non-nil if the memory calculation operation fails
 	GetCollectionMemoryUsage(collectionId string) (uint64, error)
-	// GetRecordMemoryUsage calculates the memory usage of a specific record
+	// GetRecordsMemoryUsage calculates the memory usage of a specific record
 	// within a collection.
 	//
 	// Parameters:
@@ -269,7 +251,7 @@ type GenericDB interface {
 	// Returns:
 	//	- uint64: memory usage of the record in bytes (0 if record doesn't exist)
 	//	- error: non-nil if the memory calculation operation fails
-	GetRecordMemoryUsage(collectionId string, recordName string) (uint64, error)
+	GetRecordsMemoryUsage(collectionId string, recordName ...string) (uint64, error)
 
 	// Close closes the database connection and releases all associated resources.
 	// The GenericDB instance should not be used after calling Close.
@@ -278,4 +260,11 @@ type GenericDB interface {
 	// Returns:
 	//	- error: non-nil if the close operation fails
 	Close() error
+}
+
+type StaleUpdateError struct {
+}
+
+func (e *StaleUpdateError) Error() string {
+	return "the update has not been applied since it was completely stale."
 }

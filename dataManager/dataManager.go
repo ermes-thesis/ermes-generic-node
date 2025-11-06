@@ -10,7 +10,6 @@ import (
 	shared "dataManager/shared"
 	"db"
 	"server"
-	"server/info"
 	"sync"
 
 	"github.com/ermes-thesis/ermes-common/logger"
@@ -18,20 +17,20 @@ import (
 
 type DataManager interface {
 	// Init initialize the singleton pattern
-	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger)
+	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger logger.Logger)
 
 	//sub components
 	GetMigrationManager() migrationManager.MigrationManager
-
 	GetCollectionsDiscoverer() collectionsDiscoverer.CollectionsDiscoverer
 
 	//methods
-	GetRecord(collectionId string, groups []string, recordName string) (string, error)
-	GetRecords(collectionId string, groups []string, recordNames ...string) ([]any, error)
-	UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdate, groups []string) error
+	GetRecord(collectionId string, groups []string, userId string, recordName string) (string, error)
+	GetRecords(collectionId string, groups []string, userId string, recordNames ...string) ([]any, error)
+	UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdate, groups []string, userId string) error
 	UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdate) error
-	SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, isStrong bool) error
-	RemoveCollectionAndPropagate(collectionId string, groups []string) error
+	SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong bool, skipUniquenessCheck bool) error
+	RemoveCollectionAndPropagate(collectionId string, groups []string, userId string) error
+	GetCollectionVectorClockValue(collectionId string) (uint64, error)
 }
 
 type DataManagerImp struct {
@@ -39,7 +38,7 @@ type DataManagerImp struct {
 	collectionsDiscoverer collectionsDiscoverer.CollectionsDiscoverer
 
 	dbInterface db.GenericDB
-	serverInfo  info.ServerInfo
+	serverInfo  server.ServerInfo
 }
 
 // Singleton pattern
@@ -50,16 +49,27 @@ var initOnce sync.Once
 func GetDataManagerInstance() DataManager {
 	once.Do(func() {
 		dataManagerInstance = &DataManagerImp{}
-		dataManagerInstance.setMigrationManager(migrationManager.GetMigrationManagerInstance())
-		dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererInstance())
 	})
 	return dataManagerInstance
 }
 
-func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo info.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger *logger.Logger) {
+func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger logger.Logger) {
 	initOnce.Do(func() {
-		m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger)
-		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger)
+		dataManagerInstance.setMigrationManager(migrationManager.GetMigrationManagerInstance())
+
+		if serverInfo.Stateful {
+			if !serverInfo.IsCentralStorage {
+				dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererInstance())
+			} else {
+				dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.SetCollectionsDiscovererCentralizedDBInstance(collectionsDiscoverer.GetCollectionsDiscovererInstance().(*collectionsDiscoverer.CollectionsDiscovererImp), m.migrationManager))
+			}
+			m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger.Component("migration_manager"))
+		} else {
+			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererStatelessGenericNodeInstance())
+			dataManagerInstance.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererStatelessGenericNode).SetCentralizedDBAddress(config.CentralizedDBName)
+			m.migrationManager.StatelessInit(collections, config, lruConfig, serverInfo, lruCache, logger.Component("migration_manager"))
+		}
+		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger.Component("collections_discoverer"))
 
 		m.dbInterface = dbInterface
 		m.serverInfo = serverInfo
@@ -82,12 +92,11 @@ func (m *DataManagerImp) GetCollectionsDiscoverer() collectionsDiscoverer.Collec
 	return m.collectionsDiscoverer
 }
 
-func (m *DataManagerImp) GetRecord(collectionId string, groups []string, recordName string) (string, error) {
-	return collectionsDiscoverer.AccessRecords(
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
+func (m *DataManagerImp) GetRecord(collectionId string, groups []string, userId string, recordName string) (string, error) {
+	res, err := m.collectionsDiscoverer.AccessRecords(
 		collectionId,
-		func() (string, error) {
-			authorized, err := m.dbInterface.IsInGroups(collectionId, groups...)
+		func() (any, error) {
+			authorized, err := m.dbInterface.IsAuthorized(collectionId, userId, groups...)
 			if err != nil {
 				return "", err
 			}
@@ -97,18 +106,19 @@ func (m *DataManagerImp) GetRecord(collectionId string, groups []string, recordN
 
 			return m.dbInterface.GetRecord(collectionId, recordName)
 		},
-		func(addr string) (string, error) {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordAccess(addr, collectionId, groups, recordName)
+		func(addr string) (any, error) {
+			return m.collectionsDiscoverer.WeakCollectionRemoteRecordAccess(addr, collectionId, groups, userId, recordName)
 		},
 	)
+
+	return res.(string), err
 }
 
-func (m *DataManagerImp) GetRecords(collectionId string, groups []string, recordNames ...string) ([]any, error) {
-	return collectionsDiscoverer.AccessRecords(
-		m.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererImp),
+func (m *DataManagerImp) GetRecords(collectionId string, groups []string, userId string, recordNames ...string) ([]any, error) {
+	res, err := m.collectionsDiscoverer.AccessRecords(
 		collectionId,
-		func() ([]any, error) {
-			authorized, err := m.dbInterface.IsInGroups(collectionId, groups...)
+		func() (any, error) {
+			authorized, err := m.dbInterface.IsAuthorized(collectionId, userId, groups...)
 			if err != nil {
 				return nil, err
 			}
@@ -118,18 +128,19 @@ func (m *DataManagerImp) GetRecords(collectionId string, groups []string, record
 
 			return m.dbInterface.GetRecords(collectionId, recordNames...)
 		},
-		func(addr string) ([]any, error) {
-			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsAccess(addr, collectionId, groups, recordNames...)
+		func(addr string) (any, error) {
+			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsAccess(addr, collectionId, groups, userId, recordNames...)
 		},
 	)
+	return res.([]any), err
 }
 
-func (m *DataManagerImp) UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdate, groups []string) error {
+func (m *DataManagerImp) UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdate, groups []string, userId string) error {
 	return m.collectionsDiscoverer.UpdateCollectionsRecordsAndPropagate(messages.ToCollectionUpdateMessages(
 		updates,
 		m.serverInfo.HostName,
 		m.serverInfo.HostName,
-	), groups, true, m.serverInfo.HostName,
+	), groups, userId, true, m.serverInfo.HostName,
 	)
 }
 
@@ -140,16 +151,23 @@ func (m *DataManagerImp) UpdateCollectionsGroupsAndPropagate(updates []messages.
 	), true, m.serverInfo.HostName)
 }
 
-func (m *DataManagerImp) SetCollectionAndPropagate(collectionId string, records map[string]string, groups []string, isStrong bool) error {
+func (m *DataManagerImp) SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong bool, skipUniquenessCheck bool) error {
 	return m.collectionsDiscoverer.SetCollectionAndPropagate(
 		collectionId,
+		collectionName,
 		records,
 		groups,
+		userId,
 		m.migrationManager,
 		isStrong,
+		skipUniquenessCheck,
 	)
 }
 
-func (m *DataManagerImp) RemoveCollectionAndPropagate(collectionId string, groups []string) error {
-	return m.collectionsDiscoverer.RemoveCollectionAndPropagate(collectionId, m.migrationManager, groups, true, m.serverInfo.HostName)
+func (m *DataManagerImp) RemoveCollectionAndPropagate(collectionId string, groups []string, userId string) error {
+	return m.collectionsDiscoverer.RemoveCollectionAndPropagate(collectionId, m.migrationManager, groups, userId, true, m.serverInfo.HostName)
+}
+
+func (m *DataManagerImp) GetCollectionVectorClockValue(collectionId string) (uint64, error) {
+	return m.collectionsDiscoverer.GetCollectionVectorClockValue(collectionId)
 }

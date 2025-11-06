@@ -1,24 +1,24 @@
 package scheduler_test
 
 import (
+	"config"
 	shared "dataManager/shared"
 	"encoding/json"
 	"io"
 	"metadataManager/types"
-	"mocks/caches"
+	caches_mock "mocks/caches"
 	datamanager_mock "mocks/dataManager"
-	"mocks/dataManager/collectionsDiscoverer"
+	collectionsDiscoverer_mock "mocks/dataManager/collectionsDiscoverer"
 	migrationManager_mock "mocks/dataManager/migrationManager"
 	wasm_mock "mocks/ermes-common/wasm-pool"
 	wasm_executor_mock "mocks/ermes-common/wasm-pool/executor"
-	"mocks/metadataManager"
-	"mocks/tokenDecoder"
+	metadataManager_mock "mocks/metadataManager"
+	tokenDecoder_mock "mocks/tokenDecoder"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"scheduler"
 	"server"
-	"server/info"
 	"strings"
 	"testing"
 	"time"
@@ -30,18 +30,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func createNewLogger(t *testing.T) *logger.Logger {
+func createNewLogger(t *testing.T) logger.Logger {
 	log, err := logger.NewLogger(logger.Config{
 		Level:     zerolog.DebugLevel,
 		Format:    "text",
-		AddSource: false,
+		AddSource: true,
 	})
 	require.NoError(t, err)
 	return log
 }
 
 func TestScheduleOnChild_ReadStrong(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -95,23 +95,31 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -129,17 +137,18 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345 := shared.NewWeakCollection("12345", 40, false)
 	collChild12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collChild1111 := shared.NewStrongCollection("1111", 40, false, false)
+	collChild1111 := shared.NewStrongCollection("1111", 40, false, false, "")
 	collChild1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
+	dataManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
@@ -155,19 +164,19 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
 	schedulerLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName: httpServerChild.URL,
 		},
@@ -196,7 +205,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 }
 
 func TestScheduleOnFather_WriteStrong(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -252,17 +261,18 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collFather12345 := shared.NewWeakCollection("12345", 40, true)
-	collFather1111 := shared.NewStrongCollection("1111", 40, false, true)
+	collFather1111 := shared.NewStrongCollection("1111", 40, false, true, "")
 	collFather1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(false, collFather12345, nil)
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collFather1111, nil)
 
 	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerFather.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+	migrationManagerFather.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
 
 	dataManagerFather := datamanager_mock.NewDataManager(t)
 	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
 	dataManagerFather.EXPECT().GetMigrationManager().Return(migrationManagerFather)
+	dataManagerFather.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
@@ -280,23 +290,31 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	wasmExecutorPoolFather.EXPECT().Acquire().Return(wasmExecutorFather)
 
 	schedulerLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -318,7 +336,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345 := shared.NewWeakCollection("12345", 40, false)
 	collChild12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collChild1111 := shared.NewStrongCollection("1111", 40, false, false)
+	collChild1111 := shared.NewStrongCollection("1111", 40, false, false, "")
 	collChild1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 
 	urlFather, err := url.Parse(httpServerFather.URL)
@@ -332,13 +350,13 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -348,7 +366,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	assert.NoError(t, err, "Expected no error when parsing url")
 	collFather12345.AddHost(urlChild.Host)
 	collFather1111.AddHost(urlChild.Host)
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
@@ -376,7 +394,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 }
 
 func TestScheduleOnChild_WeakReplicated(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -420,23 +438,31 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -463,23 +489,27 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
 
+	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
@@ -507,7 +537,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 }
 
 func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -549,8 +579,12 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	collFather12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collFather12345, nil)
 
+	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerFather.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+
 	dataManagerFather := datamanager_mock.NewDataManager(t)
 	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
+	dataManagerFather.EXPECT().GetMigrationManager().Return(migrationManagerFather)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
@@ -568,13 +602,21 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	wasmExecutorPoolFather.EXPECT().Acquire().Return(wasmExecutorFather)
 
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -583,11 +625,11 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	urlFather, err := url.Parse(httpServerFather.URL)
 	assert.NoError(t, err, "Expected no error when parsing url")
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: urlFather.Host,
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -607,19 +649,19 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
@@ -647,7 +689,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 }
 
 func TestScheduleOnChild_DoubleWeak(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -702,23 +744,31 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -747,23 +797,27 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("54321", uint64(0)).Return(false, collChild54321, nil)
 
+	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "54321"}).Return()
+
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
-	serverInfoFather.Children = []info.Node{
+	serverInfoFather.Children = []server.Node{
 		{
 			HostName: strings.Split(httpServerChild.URL, ":")[2],
 		},
@@ -791,7 +845,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 }
 
 func TestScheduleOnChild_EmptyFather(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -841,23 +895,31 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -884,17 +946,21 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345Child, nil)
 
+	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -927,7 +993,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 }
 
 func TestScheduleOnChild_WriteStrong(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -983,7 +1049,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collFather12345 := shared.NewWeakCollection("12345", 40, false)
 	collFather12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collFather1111 := shared.NewStrongCollection("1111", 40, false, false)
+	collFather1111 := shared.NewStrongCollection("1111", 40, false, false, "")
 	collFather1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collFather12345, nil)
@@ -1000,23 +1066,31 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -1046,27 +1120,28 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild1111 := shared.NewStrongCollection("1111", 40, false, true)
+	collChild1111 := shared.NewStrongCollection("1111", 40, false, true, "")
 	collChild1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(false, nil, nil)
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
+	dataManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -1100,7 +1175,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 }
 
 func TestScheduleThreeNodes(t *testing.T) {
-	serverInfoFather := &info.ServerInfo{
+	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
 		CloudNode:      nil,
 		MetadataDomain: "IT",
@@ -1143,7 +1218,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	}, nil)
 
 	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collFather1111 := shared.NewStrongCollection("1111", 40, true, false)
+	collFather1111 := shared.NewStrongCollection("1111", 40, true, false, "")
 
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(false, collFather1111, nil)
 
@@ -1158,23 +1233,31 @@ func TestScheduleThreeNodes(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 
 	schedulerFatherLog := createNewLogger(t)
-	schedulerFather := scheduler.NewScheduler(dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, schedulerFatherLog)
+	cfg := config.SchedulerConfig{
+		StartingExecutorsBackoff:    time.Second,
+		MaxExecutorsRetries:         10,
+		MaxExecutorsBackoff:         time.Second * 5,
+		StartingOutdatedDataBackoff: time.Second,
+		MaxOutdatedDataRetries:      10,
+		MaxOutdatedDataBackoff:      time.Second * 5,
+	}
+	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
 
 	fatherLog := createNewLogger(t)
 	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather, metadataManager)
+	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
 	defer httpServerFather.Close()
 
-	serverInfoChild := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -1195,7 +1278,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
 
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild1111 := shared.NewStrongCollection("1111", 40, true, false)
+	collChild1111 := shared.NewStrongCollection("1111", 40, true, false, "")
 
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(false, collChild1111, nil)
 
@@ -1203,23 +1286,23 @@ func TestScheduleThreeNodes(t *testing.T) {
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
 
 	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, schedulerChildLog)
+	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
 
 	childLog := createNewLogger(t)
 	serverChild, err := server.NewServer(childLog, serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild, metadataManager)
+	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
 	defer httpServerChild.Close()
 
-	serverInfoChild2 := &info.ServerInfo{
-		Father: &info.Node{
+	serverInfoChild2 := &server.ServerInfo{
+		Father: &server.Node{
 			HostName: strings.Split(httpServerFather.URL, ":")[2],
 		},
-		Children:       []info.Node{},
+		Children:       []server.Node{},
 		MetadataDomain: "IT/Milan",
 		Secret:         "secret",
 		ClientSecret:   "client-secret",
@@ -1249,26 +1332,27 @@ func TestScheduleThreeNodes(t *testing.T) {
 	wasmExecutorPoolChild2.EXPECT().Acquire().Return(wasmExecutorChild2)
 
 	collectionDiscovererChild2 := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild1111_2 := shared.NewStrongCollection("1111", 40, false, true)
+	collChild1111_2 := shared.NewStrongCollection("1111", 40, false, true, "")
 	collChild1111_2.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 
 	collectionDiscovererChild2.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111_2, nil)
 
 	migrationManagerChild2 := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild2.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+	migrationManagerChild2.EXPECT().UpdateCollectionsLatestUsage([]string{"1111"}).Return()
 
 	dataManagerChild2 := datamanager_mock.NewDataManager(t)
 	dataManagerChild2.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild2)
 	dataManagerChild2.EXPECT().GetMigrationManager().Return(migrationManagerChild2)
+	dataManagerChild2.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
 	schedulerChild2Log := createNewLogger(t)
-	schedulerChild2 := scheduler.NewScheduler(dataManagerChild2, metadataManager, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, schedulerChild2Log)
+	schedulerChild2 := scheduler.NewScheduler(true, dataManagerChild2, metadataManager, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, cfg, schedulerChild2Log)
 
 	child2Log := createNewLogger(t)
 	serverChild2, err := server.NewServer(child2Log, serverInfoChild2)
 	assert.NoError(t, err, "Expected no error when creating server")
 
-	err = schedulerChild2.RegisterRoutes(serverChild2, tknDecoderChild2, metadataManager)
+	err = schedulerChild2.RegisterRoutes(serverChild2, tknDecoderChild2)
 	assert.NoError(t, err, "Expected no error when registering routes")
 
 	httpServerChild2 := httptest.NewServer(serverChild2.Handler)

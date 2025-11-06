@@ -3,12 +3,12 @@ package sender
 import (
 	gossip "dataManager/messages"
 	shared "dataManager/shared"
+	"db"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"server"
-	info "server/info"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 )
@@ -23,6 +23,7 @@ const (
 	updateGroupPropagationPath      = "/pvt-dataGroupUpdatePropagation"
 	createCollectionPropagationPath = "/pvt-newCollection"
 	removeCollectionPropagationPath = "/pvt-removeCollection"
+	remoteCollectionSet             = "/pvt-remoteCollectionSet"
 )
 
 //###############################################################
@@ -30,7 +31,7 @@ const (
 //###############################################################
 
 type MigrationManagerSender interface {
-	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]string, []string, uint64, uint64)
+	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]db.RecordValue, []string, string, uint64, uint64, bool)
 	SendGossipMessages(gossip.GossipMessage, string)
 	SendRequestInfoMessage(gossip.CollectionRequestInfoMessages, string)
 	GossipPath() string
@@ -39,12 +40,12 @@ type MigrationManagerSender interface {
 }
 
 type MigrationManagerSenderImpl struct {
-	serverInfo info.ServerInfo
+	serverInfo server.ServerInfo
 	server     server.ServerType
-	log        *logger.Logger
+	log        logger.Logger
 }
 
-func NewMigrationManagerSender(logger *logger.Logger, server server.ServerType, serverInfo info.ServerInfo) MigrationManagerSender {
+func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo) MigrationManagerSender {
 	return &MigrationManagerSenderImpl{
 		server:     server,
 		log:        logger,
@@ -52,18 +53,23 @@ func NewMigrationManagerSender(logger *logger.Logger, server server.ServerType, 
 	}
 }
 
-func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]string, groups []string, groupsSequence uint64, collectionSize uint64) {
+func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool) {
 	//imp
+	s.log.Info("SENDER: Preparing to send collection", "collectionId", collection.CollectionId(), "destination", destination, "isMigration", isMigration, "sendAsLeader", sendAsLeader, "collectionSize", collectionSize)
 	s.log.Infof("[SENDER] send collection %s to %s", collection.CollectionId(), destination)
-	if destination != s.serverInfo.Father.HostName {
+	if s.serverInfo.Father == nil || destination != s.serverInfo.Father.HostName {
+		s.log.Warn("ADDING HOST TO COLLECTION", "hostname", s.serverInfo.HostName, "destination", destination, "KNWN HOSTS", collection.HostsId())
 		collection.AddHost(destination)
+		s.log.Warn("ADDED HOST TO COLLECTION", "KNOWN HOSTS", collection.HostsId())
 	}
-	hostToRemove := destination == s.serverInfo.Father.HostName && len(collection.HostsId()) == 0
+
+	hostToRemove := isMigration && s.serverInfo.Father != nil && destination == s.serverInfo.Father.HostName && len(collection.HostsId()) == 0
 
 	msg := gossip.SendCollectionMessage{
 		CollectionId:   collection.CollectionId(),
 		Records:        res,
 		Groups:         groups,
+		Owner:          owner,
 		GroupsSequence: groupsSequence,
 		IsStrong:       collection.IsStrong(),
 		CollectionSize: collectionSize,
@@ -75,6 +81,8 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 	} else {
 		msg.IsLeader = false
 	}
+
+	s.log.Info("Sending GossipMessage", "msg", fmt.Sprintf("%+v", msg))
 
 	go s.server.SendGenericHTTPRequest(destination, repoPath, msg)
 }
@@ -89,7 +97,7 @@ func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage
 }
 
 func (s *MigrationManagerSenderImpl) SendRequestInfoMessage(msg gossip.CollectionRequestInfoMessages, destination string) {
-	s.log.Infof("SENDER: send collection request info to %s", destination)
+	s.log.InfofWith("SENDER: send collection request info to %s", []any{destination}, "msg", fmt.Sprintf("%+v", msg))
 
 	go s.server.SendGenericHTTPRequest(destination, requestInfoPath, msg)
 }
@@ -111,11 +119,12 @@ func (s *MigrationManagerSenderImpl) RequestInfoPath() string {
 //###############################################################
 
 type CollectionDiscovererSender interface {
-	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, recordNames ...string) ([]any, error)
+	RemoteSetCollectionAndPropagate(hostId string, collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong, skipUniquenessCheck bool) error
+	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error)
 	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages)
 	PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages)
-	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage)
-	RemoveCollection(hostId string, collectionId string, senderIp string, groups []string)
+	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage) error
+	RemoveCollection(hostId string, collectionId string, senderIp string, groups []string, userId string)
 
 	RemoteAccessPath() string
 	RemoteUpdatePath() string
@@ -123,30 +132,31 @@ type CollectionDiscovererSender interface {
 	UpdateGroupPropagationPath() string
 	CreateCollectionPropagationPath() string
 	RemoveCollectionPropagationPath() string
+	RemoteCollectionSetPath() string
 }
 
 type CollectionDiscovererSenderImpl struct {
 	server server.ServerType
-	log    *logger.Logger
+	log    logger.Logger
 }
 
-func NewCollectionDiscovererSender(log *logger.Logger, server server.ServerType) CollectionDiscovererSender {
+func NewCollectionDiscovererSender(log logger.Logger, server server.ServerType) CollectionDiscovererSender {
 	return &CollectionDiscovererSenderImpl{
 		server: server,
 		log:    log,
 	}
 }
 
-func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, recordNames ...string) ([]any, error) {
+func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error) {
 	s.log.Infof("[SENDER] request collection %s access to %s", collectionId, hostId)
 
 	msg := gossip.RemoteAccessRequest{
 		CollectionId: collectionId,
 		RecordNames:  recordNames,
 		Groups:       groups,
+		UserId:       userId,
 	}
 
-	print("SENDER: sending remote access request to ", hostId, " for collection ", collectionId, "\n")
 	res, err := s.server.SendGenericHTTPRequestReturnResponse(hostId, remoteAccessPath, msg)
 	if err != nil {
 		s.log.Error("HTTP-REQ, Error reading response body")
@@ -178,22 +188,55 @@ func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId
 	return resp.Records, err
 }
 
-func (s *CollectionDiscovererSenderImpl) NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage) {
+func (s *CollectionDiscovererSenderImpl) NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage) error {
 	s.log.Infof("SENDER: notify new collection %s to %s", newCollection.CollectionId, hostId)
 
-	go s.server.SendGenericHTTPRequest(hostId, createCollectionPropagationPath, newCollection)
+	resp, err := s.server.SendGenericHTTPRequestReturnResponse(hostId, createCollectionPropagationPath, newCollection)
+	if err != nil {
+		s.log.Errorf("SENDER, Error sending create collection to %s: %v", hostId, err)
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			s.log.Error("SENDER, Error reading response body")
+			return err
+		}
+		return fmt.Errorf("non-200 response from create collection: %v %s", resp.StatusCode, b)
+	}
+	return nil
 }
 
-func (s *CollectionDiscovererSenderImpl) RemoveCollection(hostId string, collectionId string, senderIp string, groups []string) {
+func (s *CollectionDiscovererSenderImpl) RemoveCollection(hostId string, collectionId string, senderIp string, groups []string, userId string) {
 	s.log.Infof("SENDER: request collection %s removal to %s", collectionId, hostId)
 
 	msg := gossip.RemoveCollectionMessage{
 		CollectionId: collectionId,
 		SenderIp:     senderIp,
 		Groups:       groups,
+		UserId:       userId,
 	}
 
 	go s.server.SendGenericHTTPRequest(hostId, removeCollectionPropagationPath, msg)
+}
+
+func (s *CollectionDiscovererSenderImpl) RemoteSetCollectionAndPropagate(hostId string, collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong, skipUniquenessCheck bool) error {
+	msg := gossip.SetCollectionMessage{
+		CollectionId:        collectionId,
+		CollectionName:      collectionName,
+		Records:             records,
+		Groups:              groups,
+		UserId:              userId,
+		IsStrong:            isStrong,
+		SkipUniquenessCheck: skipUniquenessCheck,
+	}
+
+	_, err := s.server.SendGenericHTTPRequest(hostId, remoteCollectionSet, msg)
+	if err != nil {
+		s.log.Errorf("SENDER, Error sending set collection to %s: %v", hostId, err)
+		return err
+	}
+	return nil
 }
 
 func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages) {
@@ -230,4 +273,8 @@ func (s *CollectionDiscovererSenderImpl) CreateCollectionPropagationPath() strin
 
 func (s *CollectionDiscovererSenderImpl) RemoveCollectionPropagationPath() string {
 	return removeCollectionPropagationPath
+}
+
+func (s *CollectionDiscovererSenderImpl) RemoteCollectionSetPath() string {
+	return remoteCollectionSet
 }

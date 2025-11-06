@@ -34,3 +34,11 @@ func (cb *CircularBuffer) Get(i int) *ChildResourceUsage {
 func (cb *CircularBuffer) Capacity() int {
 	return len(cb.data)
 }
+
+func (cb *CircularBuffer) ResetRead() {
+	for _, d := range cb.data {
+		if d != nil {
+			d.Read = ResourceUsage{}
+		}
+	}
+}

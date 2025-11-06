@@ -7,6 +7,7 @@ require (
 	github.com/ermes-thesis/ermes-common/model v0.0.0-00010101000000-000000000000
 	github.com/ermes-thesis/ermes-common/utils v0.0.0-00010101000000-000000000000
 	github.com/mitchellh/hashstructure/v2 v2.0.2
+	github.com/rs/xid v1.6.0
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.11.1
 )

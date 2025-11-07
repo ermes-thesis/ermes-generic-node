@@ -3,7 +3,6 @@ module scheduler
 go 1.24.4
 
 require (
-	bou.ke/monkey v1.0.2
 	github.com/bytecodealliance/wasmtime-go/v37 v37.0.0
 	github.com/ermes-thesis/ermes-common/logger v0.0.0-00010101000000-000000000000
 	github.com/ermes-thesis/ermes-common/model v0.0.0-00010101000000-000000000000
@@ -33,6 +32,7 @@ require (
 	github.com/kr/text v0.2.0 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	golang.org/x/sys v0.37.0 // indirect

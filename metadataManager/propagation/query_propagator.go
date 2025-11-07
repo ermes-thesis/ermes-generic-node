@@ -3,16 +3,17 @@ package propagation
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ermes-thesis/ermes-common/logger"
-	"github.com/ermes-thesis/ermes-common/utils/httpClient"
-	"metadataManager/types"
 	"net/http"
 	"server"
 	"strings"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/model"
+	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 )
 
 type QueryPropagator interface {
-	Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error)
+	Propagate(functionName string, functionVersion string, templateParamsMappings string, groupToken string, geolocation string) (map[uint64]model.QueryResult, error)
 }
 
 type QueryPropagatorImpl struct {
@@ -29,7 +30,7 @@ func NewQueryPropagator(serverInfo *server.ServerInfo, log logger.Logger) QueryP
 	}
 }
 
-func (p *QueryPropagatorImpl) Propagate(functionName, functionVersion, templateParamsMappings, groupToken, geolocation string) (map[uint64]types.QueryResult, error) {
+func (p *QueryPropagatorImpl) Propagate(functionName, functionVersion, templateParamsMappings, groupToken, geolocation string) (map[uint64]model.QueryResult, error) {
 	p.log.Info("Starting query propagation", "fn_name", functionName, "fn_version", functionVersion, "node_geolocation", p.serverInfo.MetadataDomain, "query_geolocation", geolocation)
 
 	var sendTo string
@@ -44,7 +45,7 @@ func (p *QueryPropagatorImpl) Propagate(functionName, functionVersion, templateP
 	return p.sendHttpReqToDest(sendTo, functionName, functionVersion, templateParamsMappings, groupToken, geolocation)
 }
 
-func (p *QueryPropagatorImpl) sendHttpReqToDest(dest, functionName, functionVersion, templateParamsMappings, groupToken, geolocation string) (map[uint64]types.QueryResult, error) {
+func (p *QueryPropagatorImpl) sendHttpReqToDest(dest, functionName, functionVersion, templateParamsMappings, groupToken, geolocation string) (map[uint64]model.QueryResult, error) {
 	url := fmt.Sprintf("http://%s%s", dest, EndpointLookup)
 
 	p.log.Debug("Creating HTTP request for query propagation", "fn_name", functionName, "fn_version", functionVersion, "destination", dest, "template_parameters_mappings", templateParamsMappings, "query_geolocation", geolocation)
@@ -74,7 +75,7 @@ func (p *QueryPropagatorImpl) sendHttpReqToDest(dest, functionName, functionVers
 		return nil, fmt.Errorf("unexpected status code %d from %s", res.StatusCode, dest)
 	}
 
-	var result map[uint64]types.QueryResult
+	var result map[uint64]model.QueryResult
 	if err = json.NewDecoder(res.Body).Decode(&result); err != nil {
 		p.log.Error("Failed to decode response from query propagation", "fn_name", functionName, "fn_version", functionVersion, "destination", dest, "template_parameters_mapping", templateParamsMappings, "query_geolocation", geolocation, "error", err)
 		return nil, err

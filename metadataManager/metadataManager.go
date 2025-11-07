@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"metadataManager/propagation"
-	"metadataManager/types"
 	"server"
 	"strings"
 	"sync"
@@ -28,7 +27,7 @@ type MetadataManager interface {
 	DeleteMetadata(collectionId string, geolocation string, reqOrigin propagation.PropagationOrigin, isCollRecreated bool) error
 	UpdateGroupsInCollection(collectionId string, userGroups []string, userId string, groupsToAdd []string, groupsToRemove []string) (*propagation.UpdateGroupResponse, error)
 	SetCollectionGroups(collectionId string, message propagation.UpdateGroupResponse) error
-	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, userId string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error)
+	ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, userId string, groupToken string, geolocation string) (map[uint64]model.QueryResult, error)
 }
 
 type MetadataManagerImpl struct {
@@ -245,7 +244,7 @@ func (m *MetadataManagerImpl) SetCollectionGroups(collectionId string, message p
 	return m.updateGroupsPropagator.Propagate(collectionId, message, metadata.Geolocation)
 }
 
-func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, userId string, groupToken string, geolocation string) (map[uint64]types.QueryResult, error) {
+func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersion string, templateParamsMapping string, groups []string, userId string, groupToken string, geolocation string) (map[uint64]model.QueryResult, error) {
 	m.log.Info("Trying to execute queries", "fn_name", functionName, "fn_version", functionVersion, "user_id", userId)
 	m.log.Debug("Trying to execute queries", "tmpl_param_mapping", templateParamsMapping, "user_access_groups", groups, "node_geolocation", m.serverInfo.MetadataDomain, "queries_geolocation", geolocation, "in_cloud", m.serverInfo.Father == nil)
 
@@ -253,7 +252,7 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 	//Otherwise, propagate the query to the cloud node or the father node.
 	if strings.HasPrefix(geolocation, m.serverInfo.MetadataDomain) || m.serverInfo.Father == nil {
 		m.log.Info("Executing queries locally", "fn_name", functionName, "fn_version", functionVersion)
-		result := make(map[uint64]types.QueryResult)
+		result := make(map[uint64]model.QueryResult)
 
 		var queryMap QueryTemplatesParamsMapping[string]
 		err := json.Unmarshal([]byte(templateParamsMapping), &queryMap)
@@ -290,8 +289,8 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 				m.log.DebugfWith("Query template '%s' executed successfully", []any{templateName}, "query_AS", query.As, "retrieved_collections", fmt.Sprintf("%+v", collInfo))
 
 				if len(collInfo) > 0 {
-					hash := types.NewQueryIdentifier(templateName, params).Hash()
-					result[hash] = types.QueryResult{
+					hash := model.NewQueryIdentifier(templateName, params).Hash()
+					result[hash] = model.QueryResult{
 						As:          query.As,
 						Collections: collInfo,
 					}

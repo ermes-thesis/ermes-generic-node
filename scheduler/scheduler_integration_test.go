@@ -5,7 +5,6 @@ import (
 	shared "dataManager/shared"
 	"encoding/json"
 	"io"
-	"metadataManager/types"
 	caches_mock "mocks/caches"
 	datamanager_mock "mocks/dataManager"
 	collectionsDiscoverer_mock "mocks/dataManager/collectionsDiscoverer"
@@ -53,7 +52,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]types.CollectionInfo{
+		Collections: map[string][]model.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -217,7 +216,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]types.CollectionInfo{
+		Collections: map[string][]model.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -406,7 +405,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]types.CollectionInfo{
+		Collections: map[string][]model.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -549,7 +548,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]types.CollectionInfo{
+		Collections: map[string][]model.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -701,7 +700,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]types.CollectionInfo{
+		Collections: map[string][]model.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -857,7 +856,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]types.CollectionInfo{
+		Collections: map[string][]model.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -1005,7 +1004,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]types.CollectionInfo{
+		Collections: map[string][]model.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "12345",
@@ -1187,7 +1186,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	wasmContext := scheduler.WasmContext{
 		UserId:    "userId",
 		GroupList: []string{"groupC"},
-		Collections: map[string][]types.CollectionInfo{
+		Collections: map[string][]model.CollectionInfo{
 			"private_data_query": {
 				{
 					Id: "1111",

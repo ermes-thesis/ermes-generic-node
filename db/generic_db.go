@@ -1,8 +1,6 @@
 package db
 
 import (
-	"metadataManager/types"
-
 	"github.com/ermes-thesis/ermes-common/model"
 )
 
@@ -197,9 +195,9 @@ type GenericDB interface {
 	//	- groups: slice of group names for access control filtering
 	//
 	// Returns:
-	//	- []db.CollectionInfo: slice of matching collection information (empty if no matches)
+	//	- []model.CollectionInfo: slice of matching collection information (empty if no matches)
 	//	- error: non-nil if the search operation fails
-	SearchOnMetadata(query model.QueryTemplate, owner string, groups []string) ([]types.CollectionInfo, error)
+	SearchOnMetadata(query model.QueryTemplate, owner string, groups []string) ([]model.CollectionInfo, error)
 	// DropIndex removes the metadata search index, disabling search functionality.
 	// This operation is irreversible and will require CreateIndex to be called
 	// again to restore search capabilities.

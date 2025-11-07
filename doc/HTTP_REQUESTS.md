@@ -221,30 +221,67 @@ Mirror of `retrieve-function/<name>/<version>`.
 
 ----------
 
-* ``:
+* `invoke-function/<function_name>`:
+* `invoke-function/<function_name>/<function_version>`:
+
+If the version is not specified, the latest version is invoked.
+Any HTTP method can be used (GET, POST, PUT, DELETE, ...), chosen by the user.
+
+**Request**
 
 *Headers*:
+* `X-ERMES-QUERY`: map[string]map[string]string (template name -> (placeholder name -> placeholder value))
+* `X-ERMES-CACHED-QUERY`: map[string][]types.CollectionInfo (query `AS` field -> array of collection info objects)
+* `X-ERMES-SEQUENTIAL-NUMBER`: uint64 (sequence number of the sequential collection)
+* `X-ERMES-POSITION`: string (geolocation for metadata lookup)
+* `X-ERMES-GROUPS`: string (group token)
+* `X-CLIENT-SECRET`: string (secret of the client library)
 
 *Body*:
+* `map[string]string` that is the input parameters for the function
 
-*Return*:
+**Response**
+
+*Status code*: returned by the function.
+
+*Headers*:
+* `X-ERMES-SEQUENTIAL-NUMBER`: uint64 (updated sequence number of the sequential collection)
+* `X-ERMES-CACHE`: map[uint64]QueryResult (query identifier -> query result object) - contains the results of the queries executed during the function invocation that can be cached for future invocations
+* `X-ERMES-EXECUTION-HOST`
+
+*Body*:
+* `any` that is the output of the function
+
+The Client library should persist the cached queries and the sequential number between invocations.
+Specifically, when invoking a function that uses a sequential collection, the client library should always provide the latest sequential number received in the response headers of the previous invocation.
+
+The `X-ERMES-CACHE` response header should be merged with the existing cached queries in the client library.
+The key of the map is the query identifier, which is computed as the hash of the query template name and the placeholder values used in the invocation.
+When invoking a function, the client library should compute the QueryIdentifier for each query requested by the user.
+If it is present in the cached queries, it adds the corresponding query result to the `X-ERMES-CACHED-QUERY` request header (please note that the value of this header is a map from the query `AS` field, to the array of collection info objects).
+Otherwise, the `X-ERMES-QUERY` header will contain the query template with the placeholder values to be executed by Ermes.
+
+All the types CollectionInfo, QueryResult and QueryIdentifier are defined in the `model` package of the Ermes Common repository.
 
 ### ERMES CENTRAL REPO
 
 ----------
 
-* `token`:
+* `GET token`:
 
 *Headers*:
-* `X-MIDDLEWARE-SECRET` : string
-* `Authorization` : string
+* `X-CLIENT-SECRET` : string (secret of the client library)
+* `Authorization` : string (contains the authentication header required by the authentication function)
 
 *Body*:
 
 *Return*:
-*OK* (200) if all went well, *NoAuthHeaderErr* or *InvalidAuthHeaderErr* if the header is not present or badly formatted, *AuthFailedErr* if the authentication function failed to execute, *InternalServerError* (500) if the groups for the user could not be retrieved or the group token failed to generate or the response was not encoded correctly.
+*OK* (200) if all went well,
+*BadRequest* (400) if the header is not present or badly formatted,
+*Unauthorized* (401) if the authentication function failed to execute,
+*InternalServerError* (500) if the groups for the user could not be retrieved or the group token failed to generate or the response was not encoded correctly.
 
-If the request was succesful in the body a `map[string]string` is returned, containing for the key `group_token` the corresponding token.
+If the request was successful in the body a `map[string]string` is returned, containing for the key `group_token` the corresponding token.
 
 ----------
 

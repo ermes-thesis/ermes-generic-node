@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"metadataManager/types"
 	"net/http"
 	"strconv"
 	"tokenDecoder"
+
+	"github.com/ermes-thesis/ermes-common/model"
 )
 
 const maxRedirects = 10
@@ -59,7 +60,7 @@ func (s *statefulPolicy) handleOffloadFunctionInvocation(tokenDecoder tokenDecod
 		}
 		s.log.Debug("Received offloaded function invocation request", "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt)
 
-		var collections map[string][]types.CollectionInfo
+		var collections map[string][]model.CollectionInfo
 		err = json.Unmarshal([]byte(collectionJson), &collections)
 		if err != nil {
 			s.log.Error("Error unmarshalling collections JSON from header", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)

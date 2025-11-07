@@ -9,7 +9,6 @@ import (
 	"io"
 	"metadataManager"
 	"metadataManager/propagation"
-	"metadataManager/types"
 	"mocks/caches"
 	"mocks/tokenDecoder"
 	"net/http"
@@ -185,13 +184,13 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	fmt.Println("Response: " + string(bodyResp))
 
 	assert.NoError(t, err, "Expected no error when reading response body")
-	var response map[uint64]types.QueryResult
+	var response map[uint64]model.QueryResult
 	err = json.Unmarshal(bodyResp, &response)
 	assert.NoError(t, err, "Expected valid JSON response, got error: %v", err)
 
 	assert.Len(t, response, 1, "Expected one collection in response")
 
-	hash := types.NewQueryIdentifier("private_data_query", map[string]string{
+	hash := model.NewQueryIdentifier("private_data_query", map[string]string{
 		"name": "collectionNameFather",
 	}).Hash()
 	assert.Contains(t, response, hash, "Expected result to contain 'private_data' key")

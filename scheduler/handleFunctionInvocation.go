@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"metadataManager/types"
 	"net/http"
 	"tokenDecoder"
+
+	"github.com/ermes-thesis/ermes-common/model"
 )
 
 func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
@@ -36,12 +37,12 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 		}
 		s.log.Debug("Received function invocation request", "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number", sequentialSeqNumberStr, "queries_geolocation", geolocation)
 
-		var collections map[string][]types.CollectionInfo
-		var toCache map[uint64]types.QueryResult
+		var collections map[string][]model.CollectionInfo
+		var toCache map[uint64]model.QueryResult
 
 		if cachedQuery != "" {
 			s.log.Info("Unmarshalling cached collections", "fn_name", fnName, "fn_version", fnVersion, "cached_collections", cachedQuery)
-			var cachedQueries map[string][]types.CollectionInfo
+			var cachedQueries map[string][]model.CollectionInfo
 			err := json.Unmarshal([]byte(cachedQuery), &cachedQueries)
 			if err != nil {
 				s.log.Error("Error unmarshalling cached query", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number", sequentialSeqNumberStr, "queries_geolocation", geolocation, "error", err)
@@ -64,7 +65,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			s.log.Debug("Metadata queries executed successfully", "queries_results", fmt.Sprintf("%+v", res))
 
 			if collections == nil {
-				collections = make(map[string][]types.CollectionInfo)
+				collections = make(map[string][]model.CollectionInfo)
 			}
 			for _, v := range res {
 				collections[v.As] = append(collections[v.As], v.Collections...)

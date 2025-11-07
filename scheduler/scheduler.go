@@ -12,7 +12,6 @@ import (
 	"math/rand"
 	"metadataManager"
 	"metadataManager/propagation"
-	"metadataManager/types"
 	"net/http"
 	"server"
 	"time"
@@ -29,7 +28,7 @@ type ScheduleRequest struct {
 	FunctionName    string
 	FunctionVersion string
 
-	Collections         map[string][]types.CollectionInfo
+	Collections         map[string][]model.CollectionInfo
 	SequentialSeqNumber uint64
 	GroupToken          string
 

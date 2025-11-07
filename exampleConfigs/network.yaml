@@ -1,0 +1,94 @@
+nodes:
+  - name: "Milan"
+    domain: "Milan"
+    address: 192.168.1.1
+    is_cloud: true
+    latency_up: 0
+  - name: "POLIMI"
+    domain: "Milan/POLIMI"
+    address: 192.168.1.2
+    is_cloud: false
+    latency_up: 10
+  - name: "DEIB"
+    domain: "Milan/POLIMI/DEIB"
+    address: 192.168.1.3
+    is_cloud: false
+    latency_up: 2
+  - name: "DICA"
+    domain: "Milan/POLIMI/DICA"
+    address: 192.168.1.4
+    is_cloud: false
+    latency_up: 3
+  - name: "UNIMI"
+    domain: "Milan/UNIMI"
+    address: 192.168.1.5
+    is_cloud: false
+    latency_up: 7
+  - name: "inf"
+    domain: "Milan/UNIMI/inf"
+    address: 192.168.1.6
+    is_cloud: false
+    latency_up: 1
+
+common:
+  port: 12345
+  secret: "ermes-secret"
+
+  migrationManager:
+    leaderThreshold: 5
+    followerThreshold: 5
+    viewSize: 5
+    idleTimeoutMs: 1000
+    gravityConstant: 9.81
+    stateful: true
+    isCentralStorage: false
+    weakPolicy: ALWAYSCOPYPOLICY
+    strongPolicy: ERMESPOLICY
+
+  lru:
+    size: 2000
+    safeLevel: 0.8
+
+  redis:
+    address: "localhost"
+    port: 6379
+    db: 0
+    password: eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+    protocol: 2
+
+  functionsCache:
+    binaryCache:
+      size: 100
+      ttl: 3600s
+      binDir: "./functionCache"
+    templateCache:
+      size: 100
+      ttl: 3600s
+    functionRegistry:
+      address: "localhost"
+      port: 8080
+    latestCacheTtl: 3600s
+
+  scheduler:
+    groupTokenProviderAddress: "localhost"
+    groupTokenProviderPort: 8081
+    wasmRuntime: "wasmtime"
+    startingExecutorsBackoff: 1s
+    maxExecutorsRetries: 10
+    maxExecutorsBackoff: 5s
+    startingOutdatedDataBackoff: 500ms
+    maxOutdatedDataRetries: 10
+    maxOutdatedDataBackoff: 5s
+
+  groupTokenPublicKeyPath: "./keys/public.pem"
+
+  logger:
+    level: 0
+    output:
+      logDir: logs
+      logFileName: test.log
+    stdoutEnabled: true
+    addSource: true
+    colored: true
+    rolling: false
+    muted: false

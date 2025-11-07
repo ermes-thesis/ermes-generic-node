@@ -1,11 +1,16 @@
 package dataManagerShared
 
+import (
+	"sync"
+)
+
 // Collection Info
 type Collection interface {
 	CollectionId() string //duplicated?
 	IsLocal() bool
 	IsStrong() bool
 	AddHost(hostId string)
+	RemoveHost(hostId string)
 	HostsId() map[string]struct{}
 	SetToLocal(uint64)
 	SetToRemote()
@@ -20,23 +25,31 @@ type StrongCollection struct {
 	collectionState  CollectionState
 	IsLeader         bool
 	LeaderId         string
-	ConsistencyClock uint
+	WriteMutex       *sync.Mutex
+	ConsistencyClock uint64
 }
 
-func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLeader bool) Collection {
+func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLeader bool, leaderId string) Collection {
 	hosts := make(map[string]struct{})
 	if isRemote {
 		return &StrongCollection{
 			collectionId:    collectionId,
 			collectionState: NewRemoteCollection(hosts),
 			IsLeader:        false,
+			LeaderId:        leaderId,
+			WriteMutex:      &sync.Mutex{},
 		}
 	}
-	return &StrongCollection{
+	c := &StrongCollection{
 		collectionId:    collectionId,
 		collectionState: NewLocalCollection(size, hosts),
 		IsLeader:        isLeader,
+		WriteMutex:      &sync.Mutex{},
 	}
+	if isLeader {
+		c.LeaderId = leaderId
+	}
+	return c
 }
 
 func (s *StrongCollection) GetCollectionState() CollectionState {
@@ -74,6 +87,10 @@ func (s *StrongCollection) IsStrong() bool {
 }
 func (s *StrongCollection) HostsId() map[string]struct{} {
 	return s.collectionState.HostsId()
+}
+
+func (s *StrongCollection) RemoveHost(hostId string) {
+	s.collectionState.RemoveHost(hostId)
 }
 
 // WeakCollection weak collection
@@ -130,4 +147,8 @@ func (w *WeakCollection) IsStrong() bool {
 }
 func (w *WeakCollection) HostsId() map[string]struct{} {
 	return w.collectionState.HostsId()
+}
+
+func (w *WeakCollection) RemoveHost(hostId string) {
+	w.collectionState.RemoveHost(hostId)
 }

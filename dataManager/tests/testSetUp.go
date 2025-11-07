@@ -5,13 +5,18 @@ package tests
 
 import (
 	"config"
-	lru "dataManager/lru"
+	"dataManager/lru"
 	shared "dataManager/shared"
 	"db"
-	mockDb "db/mocks"
-	"server/info"
-	mockServer "server/mocks"
+	database "db"
+	"io"
+	mockDb "mocks/db"
+	mockServer "mocks/server"
+	"net/http"
+	info "server"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 )
@@ -36,13 +41,16 @@ func SetupGetMemoryStatsMock(mockDB *mockDb.GenericDB, server *mockServer.Server
 
 }
 
-func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
+func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
-		IdleTimeoutMs:     1000000000000000000,
-		LeaderThreshold:   0,
-		FollowerThreshold: 1,
-		ViewSize:          3,
-		GravityConstant:   0.981,
+		IdleTimeoutMs:                1000000000000000000,
+		LeaderThreshold:              0,
+		FollowerThreshold:            1,
+		ViewSize:                     3,
+		GravityConstant:              0.981,
+		KnownCollectionsDumpInterval: time.Minute,
+		StrongPolicy:                 "ERMESPOLICY",
+		WeakPolicy:                   "ALWAYSCOPYPOLICY",
 	}
 	lurConfig := config.LruConfig{
 		Size:      100000,
@@ -50,8 +58,55 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 	}
 
 	db := mockDb.NewGenericDB(t)
+	db.On("GetAvailableMemory").Return(uint64(10), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", mock.AnythingOfType("string")).Return(uint64(10), nil).Maybe()
-	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string")).Return(nil).Maybe()
+	db.On("GetRecordsMemoryUsage", mock.AnythingOfType("string"), mock.AnythingOfType("[]string")).Return(uint64(5), nil).Maybe()
+
+	server := mockServer.NewServerType(t)
+	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
+	server.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-newCollection", mock.Anything).Return(&http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("response"))}, nil).Maybe()
+
+	collections := &shared.CollectionPartialView{
+		KnownCollections: make(map[string]shared.Collection),
+	}
+	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
+	serverInfo := info.ServerInfo{
+		HostName:       "localhost:0000",
+		MetadataDomain: "domain",
+		Address:        "localhost",
+		Port:           "0000",
+		Father:         &info.Node{HostName: "fName", MetadataDomain: "fDomain"},
+		Children: []info.Node{
+			{HostName: "child1", MetadataDomain: "Domain"},
+			{HostName: "child2", MetadataDomain: "Domain"},
+		},
+		Secret:   "ermes-secret",
+		Stateful: true,
+	}
+
+	SetupGetMemoryStatsMock(db, server)
+	return migrationManagerConfig, lurConfig, collections, serverInfo, &lruCache, db, server
+}
+
+func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
+	migrationManagerConfig := config.MigrationManagerConfig{
+		IdleTimeoutMs:                1000000000000000000,
+		LeaderThreshold:              0,
+		FollowerThreshold:            1,
+		ViewSize:                     3,
+		GravityConstant:              0.981,
+		KnownCollectionsDumpInterval: time.Minute,
+		StrongPolicy:                 "ERMESPOLICY",
+		WeakPolicy:                   "ALWAYSCOPYPOLICY",
+	}
+	lurConfig := config.LruConfig{
+		Size:      100000,
+		SafeLevel: 0.8,
+	}
+
+	db := mockDb.NewGenericDB(t)
+	db.On("GetAvailableMemory").Return(uint64(10), nil).Maybe()
+	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]db.RecordValue"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Maybe()
 
 	server := mockServer.NewServerType(t)
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
@@ -62,13 +117,17 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 	}
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{
-		Node:   info.Node{Address: "Name", MetadataDomain: "Domain"},
-		Father: &info.Node{Address: "fName", MetadataDomain: "fDomain"},
+		HostName:       "localhost:0000",
+		MetadataDomain: "domain",
+		Address:        "localhost",
+		Port:           "0000",
+		Father:         &info.Node{HostName: "fName", MetadataDomain: "fDomain"},
 		Children: []info.Node{
-			{Address: "child1", MetadataDomain: "Domain"},
-			{Address: "child2", MetadataDomain: "Domain"},
+			{HostName: "child1", MetadataDomain: "Domain"},
+			{HostName: "child2", MetadataDomain: "Domain"},
 		},
-		Secret: "ermes-secret",
+		Secret:   "ermes-secret",
+		Stateful: true,
 	}
 
 	SetupGetMemoryStatsMock(db, server)
@@ -77,11 +136,15 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 
 func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
-		IdleTimeoutMs:     1000000000000000000,
-		LeaderThreshold:   0,
-		FollowerThreshold: 1,
-		ViewSize:          3,
-		GravityConstant:   0.981,
+		IdleTimeoutMs:                1000000000000000000,
+		LeaderThreshold:              0,
+		FollowerThreshold:            1,
+		ViewSize:                     3,
+		GravityConstant:              0.981,
+		KnownCollectionsDumpInterval: time.Second * 3,
+		KnownCollectionsDumpPath:     "temp.ndjson",
+		StrongPolicy:                 "ERMESPOLICY",
+		WeakPolicy:                   "ALWAYSCOPYPOLICY",
 	}
 	lurConfig := config.LruConfig{
 		Size:      10,
@@ -95,9 +158,10 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	db.On("GetCollectionMemoryUsage", "repoId3").Return(uint64(1), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", "repoId4").Return(uint64(5), nil).Maybe()
 	db.On("GetCollectionMemoryUsage", "repoId5").Return(uint64(10), nil).Maybe()
+	db.On("GetAvailableMemory").Return(uint64(100), nil).Maybe()
 	db.On("DeleteCollection", mock.AnythingOfType("string")).Return(nil).Maybe()
-	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]string"), mock.AnythingOfType("[]string")).Return(nil).Maybe()
-	db.On("GetCollection", mock.AnythingOfType("string")).Return(map[string]string{"a": "1", "b": "2"}, []string{"a", "b"}, nil).Maybe()
+	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]db.RecordValue"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Maybe()
+	db.On("GetCollection", mock.AnythingOfType("string")).Return(map[string]database.RecordValue{"a": {Value: "1"}, "b": {Value: "2"}}, []string{"a", "b"}, "", uint64(0), nil).Maybe()
 
 	server := mockServer.NewServerType(t)
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
@@ -107,13 +171,17 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	}
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{
-		Node:   info.Node{Address: "0000", MetadataDomain: "Domain"},
-		Father: &info.Node{Address: "1111", MetadataDomain: "fDomain", Latency: 5},
+		HostName:       "localhost:0000",
+		MetadataDomain: "domain",
+		Address:        "localhost",
+		Port:           "0000",
+		Father:         &info.Node{HostName: "1111", MetadataDomain: "fDomain", Latency: 5},
 		Children: []info.Node{
-			{Address: "2222", MetadataDomain: "Domain", Latency: 3},
-			{Address: "3333", MetadataDomain: "Domain", Latency: 4},
+			{HostName: "localhost:2222", MetadataDomain: "Domain", Latency: 3},
+			{HostName: "localhost:3333", MetadataDomain: "Domain", Latency: 4},
 		},
-		Secret: "ermes-secret",
+		Secret:   "ermes-secret",
+		Stateful: true,
 	}
 
 	SetupGetMemoryStatsMock(db, server)

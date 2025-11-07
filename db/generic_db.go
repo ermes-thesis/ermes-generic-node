@@ -1,10 +1,7 @@
 package db
 
 import (
-	"config"
-	"context"
-	"github.com/redis/go-redis/v9"
-	"metadataManager/utils"
+	"github.com/ermes-thesis/ermes-common/model"
 )
 
 // GenericDB provides a generic database abstraction for managing collections of record
@@ -16,7 +13,7 @@ import (
 // collections, collections can have associated metadata and group memberships, and
 // the system provides full search capabilities across this metadata
 //
-// TODO: All operations are designed to be atomic and thread-safe.
+// All operations are designed to be atomic and thread-safe.
 type GenericDB interface {
 	// GetRecord retrieves a single record from the specified collection.
 	//
@@ -38,7 +35,7 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the operation fails or if the collection does not exist
-	SetRecord(collectionId string, recordName string, value string) error
+	SetRecord(collectionId string, recordName string, value string, timestamp string) error
 	// GetRecords retrieves multiple records from a collection in a single operation.
 	//
 	// Parameters:
@@ -61,7 +58,7 @@ type GenericDB interface {
 	// Returns:
 	//	- error: non-nil if the operation fails or if recordNames and recordValues
 	//			 have different lengths or if the collection does not exist
-	SetRecords(collectionId string, recordNames []string, recordValues []string) error
+	SetRecords(collectionId string, recordNames []string, recordValues []string, timestamp string) error
 	// RecordExists checks whether a specific record exists in the given collection.
 	//
 	// Parameters:
@@ -82,7 +79,7 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if any deletion operation fails
-	DeleteRecords(collectionId string, recordNames ...string) error
+	DeleteRecords(collectionId string, timestamp string, recordNames ...string) error
 
 	// GetCollection retrieves all records and associated groups for a collection.
 	//
@@ -93,7 +90,7 @@ type GenericDB interface {
 	//	- map[string]string: map of record names to values (empty if collection doesn't exist)
 	//	- []string: slice of group names associated with the collection
 	//	- error: non-nil if the operation fails
-	GetCollection(collectionId string) (map[string]string, []string, error)
+	GetCollection(collectionId string) (map[string]RecordValue, []string, string, uint64, error)
 	// SetCollection creates or completely replaces a collection with the provided
 	// records and groups. This operation will overwrite any existing data.
 	//
@@ -104,7 +101,7 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the operation fails
-	SetCollection(collectionId string, records map[string]string, groups []string) error
+	SetCollection(collectionId string, records map[string]RecordValue, groups []string, owner string, groupsSequence uint64) error
 	// DeleteCollection removes a collection and all its associated data including
 	// records, and groups. This operation is irreversible.
 	//
@@ -132,7 +129,7 @@ type GenericDB interface {
 	// Returns:
 	//	- *Metadata: pointer to the metadata object, nil if no metadata exists
 	//	- error: non-nil if the retrieval operation fails
-	GetMetadata(collectionId string) (*Metadata, error)
+	GetMetadata(collectionId string) (*model.Metadata, error)
 	// SetMetadata associates metadata with a collection for search purposes.
 	// Existing metadata will be completely replaced.
 	//
@@ -142,7 +139,12 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the operation fails
-	SetMetadata(collectionId string, metadata Metadata) error
+	SetMetadata(collectionId string, metadata model.Metadata) error
+
+	MetadataExists(collectionId string) (bool, error)
+
+	IsUniqueForOwner(collectionName string, owner string) (bool, error)
+
 	// DeleteMetadata removes all metadata associated with a collection.
 	// The collection itself and its records remain unchanged. They must
 	// be explicitly deleted using the DeleteCollection method.
@@ -152,20 +154,15 @@ type GenericDB interface {
 	//
 	// Returns:
 	//	- error: non-nil if the deletion operation fails
-	DeleteMetadata(collectionId string) error
+	DeleteMetadata(collectionId string, deleteExistenceRecord bool) error
 
-	// AddGroups add the specified members to a collection's group access list.
-	// Duplicate members are silently ignored. If no members are provided, the operation
-	// succeeds with no effect.
-	//
-	// Parameters:
-	//	- collectionId: the unique identifier of the collection
-	//	- groups: variable number of group names to add
-	//
-	// Returns:
-	//	- error: non-nil if the operation fails
-	AddGroups(collectionId string, groups ...string) error
-	// IsInGroups checks if anu of the specified members belong to the collection's
+	UpdateGroupsInMetadata(collectionId string, groupsToAdd []string, groupsToRemove []string) ([]string, uint64, error)
+
+	SetGroupsInMetadata(collectionId string, sequenceGroups uint64, groups ...string) error
+	IsAuthorizedInMetadata(collectionId string, owner string, groups ...string) (bool, error)
+
+	SetGroups(collectionId string, sequenceGroups uint64, groups ...string) error
+	// IsAuthorized checks if any of the specified members belong to the collection's
 	// groups. Returns true if al least one member is found.
 	//
 	// Parameters:
@@ -176,18 +173,7 @@ type GenericDB interface {
 	//	- bool: true if at least one group is found, false if no groups are
 	//			provided or none are found in the collection's groups
 	//	- error: non-nil if the check operation fails
-	IsInGroups(collectionId string, groups ...string) (bool, error)
-	// RemoveGroups removes the specified groups from a collection's group access list.
-	// Non-existent groups are silently ignored. If no members are provided,
-	// the operation succeeds with no effect.
-	//
-	// Parameters:
-	//	- collectionId: the unique identifier of the collection
-	//	- groups: variable number of group names to remove
-	//
-	// Returns:
-	//	- error: non-nil if the operation fails
-	RemoveGroups(collectionId string, groups ...string) error
+	IsAuthorized(collectionId string, owner string, groups ...string) (bool, error)
 
 	// CreateIndex creates a search index on collection metadata fields.
 	// The index automatically includes standard fields (name, owner, created_at,
@@ -205,13 +191,13 @@ type GenericDB interface {
 	// belongs to at least one of the specified groups.
 	//
 	// Parameters:
-	//	- query: the utils.Query object containing search criteria
+	//	- query: the model.QueryTemplate object containing search criteria
 	//	- groups: slice of group names for access control filtering
 	//
 	// Returns:
-	//	- []db.CollectionInfo: slice of matching collection information (empty if no matches)
+	//	- []model.CollectionInfo: slice of matching collection information (empty if no matches)
 	//	- error: non-nil if the search operation fails
-	SearchOnMetadata(query utils.Query, groups []string) ([]CollectionInfo, error)
+	SearchOnMetadata(query model.QueryTemplate, owner string, groups []string) ([]model.CollectionInfo, error)
 	// DropIndex removes the metadata search index, disabling search functionality.
 	// This operation is irreversible and will require CreateIndex to be called
 	// again to restore search capabilities.
@@ -223,7 +209,18 @@ type GenericDB interface {
 	// The index must exist before calling this method.
 	// Existing indexed fields remain unchanged.
 	AlterIndex(customMetadataKeys ...string) error
-
+	// GetMaxMemory retrieves the maximum memory limit set for the database.
+	//
+	// Returns:
+	//	- uint64: maximum memory limit in bytes (0 if no limit is set)
+	//	- error: non-nil if the memory limit retrieval fails
+	GetMaxMemory() (uint64, error)
+	// GetAvailableMemory retrieves the currently available memory for the database.
+	//
+	// Returns:
+	//	- uint64: available memory in bytes (math.MaxUint64 if no limit is set or if the retrieval fails)
+	//	- error: non-nil if the memory retrieval operation fails
+	GetAvailableMemory() (uint64, error)
 	// GetMemoryStats retrieves detailed memory usage statistics from the underlying
 	// database system. The exact statistics returned depend on the implementation.
 	//
@@ -242,7 +239,7 @@ type GenericDB interface {
 	//	- uint64: total memory usage in bytes (0 if collection doesn't exist)
 	//	- error: non-nil if the memory calculation operation fails
 	GetCollectionMemoryUsage(collectionId string) (uint64, error)
-	// GetRecordMemoryUsage calculates the memory usage of a specific record
+	// GetRecordsMemoryUsage calculates the memory usage of a specific record
 	// within a collection.
 	//
 	// Parameters:
@@ -252,7 +249,7 @@ type GenericDB interface {
 	// Returns:
 	//	- uint64: memory usage of the record in bytes (0 if record doesn't exist)
 	//	- error: non-nil if the memory calculation operation fails
-	GetRecordMemoryUsage(collectionId string, recordName string) (uint64, error)
+	GetRecordsMemoryUsage(collectionId string, recordName ...string) (uint64, error)
 
 	// Close closes the database connection and releases all associated resources.
 	// The GenericDB instance should not be used after calling Close.
@@ -263,12 +260,9 @@ type GenericDB interface {
 	Close() error
 }
 
-func NewRedisClient(config config.RedisConfig, ctx context.Context) GenericDB {
-	rdb := redis.NewClient(&redis.Options{
-		Addr:     config.Address + ":" + config.Port,
-		Password: config.Password,
-		DB:       config.DB,
-		Protocol: config.Protocol,
-	})
-	return &RedisClient{client: rdb, ctx: ctx}
+type StaleUpdateError struct {
+}
+
+func (e *StaleUpdateError) Error() string {
+	return "the update has not been applied since it was completely stale."
 }

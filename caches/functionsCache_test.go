@@ -1,0 +1,157 @@
+package caches
+
+import (
+	"config"
+	"fmt"
+	common_caches "mocks/ermes-common/caches"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/ermes-thesis/ermes-common/caches"
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/model"
+	"github.com/rs/zerolog"
+
+	"github.com/stretchr/testify/require"
+)
+
+func createNewLogger(t *testing.T) logger.Logger {
+	log, err := logger.NewLogger(logger.Config{
+		Level:     zerolog.DebugLevel,
+		AddSource: false,
+	})
+	require.NoError(t, err)
+	return log
+}
+
+func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
+	log := createNewLogger(t)
+	tmpDir := t.TempDir()
+
+	fn := "func1"
+	fnVer := "1.0.0"
+
+	fetcher := &common_caches.Fetcher[*FunctionBundle]{}
+	query := model.QueryTemplate{
+		Select: "ALL",
+		As:     "test",
+		Where: &model.ConditionWrapper{Condition: &model.EqCondition{
+			Field: "name",
+			Value: "test",
+		},
+		},
+	}
+	fetcher.EXPECT().Fetch(fn, fnVer).Return(&FunctionBundle{
+		Binary: []byte("binary-" + fn),
+		Templates: map[string]model.QueryTemplate{
+			"tmpl" + fn: query,
+		},
+		Metadata: model.FunctionMetadata{
+			Name:                  fn,
+			Version:               fnVer,
+			TemplateNames:         []string{"tmpl" + fn},
+			DeployedOn:            nil,
+			StrongCollWriteAccess: false,
+		},
+	}, nil)
+
+	cfg := config.FunctionsCacheConfig{
+		TemplateCache: config.TemplatesCacheConfig{
+			Size: 10,
+			Ttl:  30 * time.Second,
+		},
+		BinaryCache: caches.MetadataBinaryCacheConfig{
+			Size:   10,
+			Ttl:    30 * time.Second,
+			BinDir: tmpDir,
+		},
+		LatestCache: caches.LatestCacheConfig{
+			Size: 10,
+			Ttl:  30 * time.Second,
+		},
+	}
+
+	cache, err := NewFunctionCache(cfg, fetcher, log)
+	require.NoError(t, err)
+
+	// Initially cache is empty, so fetcher should be called
+	q, err := cache.GetTemplate(fn, fnVer, "tmpl"+fn)
+	require.NoError(t, err)
+	require.Equal(t, query, *q)
+	fetcher.AssertNumberOfCalls(t, "Fetch", 1)
+
+	// Requesting binary for the same fn. Fetcher SHOULD NOT BE CALLED
+	bin, err := cache.GetBinary(fn, fnVer)
+	require.NoError(t, err)
+	require.Equal(t, []byte("binary-"+fn), bin)
+	fetcher.AssertNumberOfCalls(t, "Fetch", 1)
+
+	// Second calls should hit cache, fetcher not called again
+	q2, err := cache.GetTemplate(fn, fnVer, "tmpl"+fn)
+	require.NoError(t, err)
+	bin2, err := cache.GetBinary(fn, fnVer)
+	require.NoError(t, err)
+	fetcher.AssertNumberOfCalls(t, "Fetch", 1)
+
+	require.Equal(t, *q, *q2)
+	require.Equal(t, bin, bin2)
+
+	// Check that binary file exists on disk
+	binPath := filepath.Join(tmpDir, fn+"@"+fnVer+".wasm")
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		require.Fail(t, fmt.Sprintf("%s does not exist", binPath))
+	}
+}
+
+func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
+	log := createNewLogger(t)
+	tmpDir := t.TempDir()
+
+	fnName := "func1"
+	fnVer := "1.0.0"
+	fetcher := &common_caches.Fetcher[*FunctionBundle]{}
+	// Return invalid bundle (empty binary)
+	query := model.QueryTemplate{
+		Select: "ALL",
+		As:     "test",
+		Where: &model.ConditionWrapper{Condition: &model.EqCondition{
+			Field: "name",
+			Value: "test",
+		},
+		},
+	}
+	fetcher.EXPECT().Fetch(fnName, fnVer).Return(&FunctionBundle{
+		Binary: []byte{},
+		Templates: map[string]model.QueryTemplate{
+			"tmpl" + fnName: query,
+		},
+	}, nil)
+
+	cfg := config.FunctionsCacheConfig{
+		TemplateCache: config.TemplatesCacheConfig{
+			Size: 10,
+			Ttl:  1 * time.Second,
+		},
+		BinaryCache: caches.MetadataBinaryCacheConfig{
+			Size:   10,
+			Ttl:    1 * time.Second,
+			BinDir: tmpDir,
+		},
+		LatestCache: caches.LatestCacheConfig{
+			Size: 10,
+			Ttl:  30 * time.Second,
+		},
+	}
+
+	cache, err := NewFunctionCache(cfg, fetcher, log)
+	require.NoError(t, err)
+
+	_, err = cache.GetBinary(fnName, fnVer)
+	require.Error(t, err)
+	fetcher.AssertNumberOfCalls(t, "Fetch", 1)
+	_, err = cache.GetTemplate(fnName, fnVer, "tmpl")
+	require.Error(t, err)
+	fetcher.AssertNumberOfCalls(t, "Fetch", 2)
+}

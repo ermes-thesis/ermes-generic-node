@@ -15,5 +15,32 @@ type CurrentPolicy int
 
 const (
 	Pending CurrentPolicy = iota
-	ErmesPolicy
+	ERMESPOLICY
+	DONOTHINGPOLICY
 )
+
+func GetPolicy(policyName string) CurrentPolicy {
+	switch policyName {
+	case "ERMESPOLICY":
+		return ERMESPOLICY
+	case "DONOTHINGPOLICY":
+		return DONOTHINGPOLICY
+	default:
+		return Pending
+	}
+}
+
+// dumb policy for comparison in evaluation
+type DoNothingPolicy struct{}
+
+func NewDoNothingPolicy() DoNothingPolicy {
+	policy := DoNothingPolicy{}
+
+	return policy
+}
+
+func (d DoNothingPolicy) ManageGossipMessage(msg gossip.GossipMessage) {}
+func (d DoNothingPolicy) RemoveInfo(collectionId string)               {}
+func (d DoNothingPolicy) ManageNewStrongRequest(collectionId string, childName string, isWrite bool, requestLatency int) {
+}
+func (d DoNothingPolicy) SetDefaultState() {}

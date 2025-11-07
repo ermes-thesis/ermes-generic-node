@@ -1,19 +1,53 @@
-# ermes-generic-node
-Repository which contains the code to run an ermes node
-dependencies:
+# Ermes Node
+Repository which contains the code to run an ermes node.
+
+## Requirements
+- [Go](https://go.dev/dl/) 1.24.4 or higher
+- [WasmEdge](https://wasmedge.org/)
+
+To install WasmEdge run
 
 ```bash
-$ cd main
-$ go get gopkg.in/yaml.v3
+curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | sudo bash -s -- -p /usr/local
 ```
-To compile:
+
+In alternative, you can use the provided DevContainer, which already has all the dependencies installed.
+
+## How to build and run
 
 ```bash
 $ cd main
 $ go build main
 ```
 
-To test:
+## How to test
+
+This project uses [mockery](https://vektra.github.io/mockery/latest/) to generate mocks for testing purposes.
+To install mockery run
+
+```bash
+go install github.com/vektra/mockery/v3@v3.5.5
+```
+
+To generate the mocks open a terminal in the root folder of the project and run
+
+```bash
+$ mockery
+```
+
+You can run tests of each module with
+
+```bash
+$ go test {moduleName}
+```
+
+To run tests of the entire project run
+
+```bash
+$ go list -f '{{.Dir}}' -m | xargs -I {} go test {}/... --tags test 
+```
+
+## Outdated stuff
 
 An example architecture structured like:
 

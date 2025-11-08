@@ -231,7 +231,7 @@ Any HTTP method can be used (GET, POST, PUT, DELETE, ...), chosen by the user.
 
 *Headers*:
 * `X-ERMES-QUERY`: map[string]map[string]string (template name -> (placeholder name -> placeholder value))
-* `X-ERMES-CACHED-QUERY`: map[string][]types.CollectionInfo (query `AS` field -> array of collection info objects)
+* `X-ERMES-CACHED-QUERY`: map[string][]model.CollectionInfo (query `AS` field -> array of collection info objects)
 * `X-ERMES-SEQUENTIAL-NUMBER`: uint64 (sequence number of the sequential collection)
 * `X-ERMES-POSITION`: string (geolocation for metadata lookup)
 * `X-ERMES-GROUPS`: string (group token)
@@ -246,8 +246,8 @@ Any HTTP method can be used (GET, POST, PUT, DELETE, ...), chosen by the user.
 
 *Headers*:
 * `X-ERMES-SEQUENTIAL-NUMBER`: uint64 (updated sequence number of the sequential collection)
-* `X-ERMES-CACHE`: map[uint64]QueryResult (query identifier -> query result object) - contains the results of the queries executed during the function invocation that can be cached for future invocations
-* `X-ERMES-EXECUTION-HOST`
+* `X-ERMES-CACHE`: map[uint64]model.QueryResult (query identifier -> query result object) - contains the results of the queries executed during the function invocation that can be cached for future invocations
+* `X-ERMES-EXECUTION-HOST`: string (hostname of the Ermes node that executed the function)
 
 *Body*:
 * `any` that is the output of the function

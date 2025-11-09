@@ -218,15 +218,16 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 
 func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, interestedNodeCounter int, decisions []Decision, strongCollection *shared.StrongCollection, leaderDecisionTaken bool) error {
 	isMigration := interestedNodeCounter == 0 && (!strongCollection.IsLeader || leaderDecisionTaken)
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, apply taken decisions", "collection_id", outerKey, "num_decisions", len(decisions), "is_migration", isMigration, "leader_decision_taken", leaderDecisionTaken, "strong_collection_is_leader", strongCollection.IsLeader, "interested_node_counter", interestedNodeCounter)
 
 	//sync -> avoid send a collection if used
 	localCollection := strongCollection.GetCollectionState().(*shared.LocalCollection)
 	b := localCollection.CollectionLock.TryLock()
 	if !b {
+		m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot apply taken decisions because collection is in use", "collection_id", outerKey)
 		return nil
 	}
 	defer localCollection.CollectionLock.Unlock()
-	strongCollection.IsLeader = !leaderDecisionTaken
 
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.policy.dbInterface.GetCollection(outerKey)
@@ -242,18 +243,19 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, int
 
 	//send collection to the remote nodes that has positive decision
 	for _, decision := range decisions {
-		m.policy.log.Info("send collection", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
+		m.policy.log.Info("send collection", "collectionId", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
 		if leaderDecisionTaken && decision.SendAsLeader {
 			strongCollection.LeaderId = decision.Destination
 		}
 		m.policy.sender.SendRemoteCollectionTo(decision.Destination, strongCollection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
 	}
+	strongCollection.IsLeader = strongCollection.IsLeader && !leaderDecisionTaken
 
 	if !isMigration {
 		return nil
 	}
 
-	//if collection not present in sub tree
+	//if collection not present in subtree
 	if len(strongCollection.HostsId()) == 0 {
 		//remove collection from partial view
 		delete(m.policy.partialView.KnownCollections, strongCollection.CollectionId())

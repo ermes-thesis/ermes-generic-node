@@ -115,7 +115,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		if weakpolicy.GetPolicy(config.WeakPolicy) == weakpolicy.DONOTHINGPOLICY {
 			m.doNothingPolicy = weakpolicy.NewDoNothingPolicy()
 		} else {
-			m.WeakCollectionPolicy = weakpolicy.NewAlwaysCopyPolicy(config, m.sender, m.log, collections, dbInterface)
+			m.WeakCollectionPolicy = weakpolicy.NewAlwaysCopyPolicy(config, m.sender, m.log, collections, dbInterface, serverInfo)
 		}
 
 		//policy update strategy
@@ -132,7 +132,6 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.dumpStopCh = make(chan struct{})
 		m.startAsyncDump(config.KnownCollectionsDumpPath, config.KnownCollectionsDumpInterval)
 		m.log.Info("MIG-MANAGER, migration manager instance has been initialized")
-
 	})
 }
 

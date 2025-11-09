@@ -5,6 +5,7 @@ import (
 	sender "dataManager/sender"
 	shared "dataManager/shared"
 	"db"
+	"server"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 )
@@ -42,13 +43,15 @@ type AlwaysCopyPolicy struct {
 
 	dbInterface db.GenericDB
 	sender      sender.MigrationManagerSender
+	serverInfo  server.ServerInfo
 }
 
-func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.MigrationManagerSender, logger logger.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB) WeakCollectionPolicy {
+func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.MigrationManagerSender, logger logger.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB, serverInfo server.ServerInfo) WeakCollectionPolicy {
 	policy := &AlwaysCopyPolicy{
 		dbInterface: dbInterface,
 		partialView: partialView,
 		sender:      sender,
+		serverInfo:  serverInfo,
 		log:         logger,
 	}
 
@@ -80,6 +83,7 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	a.log.Infof("WEAK-POLICY, send weak collection%s to node %s", collectionId, childName)
+
 	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups, owner, groupsSequence, collectionSize, false)
 
 	return nil

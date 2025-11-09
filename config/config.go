@@ -91,6 +91,7 @@ type FunctionRegistryConfig struct {
 type SchedulerConfig struct {
 	GroupTokenProviderAddress string            `yaml:"groupTokenProviderAddress"`
 	GroupTokenProviderPort    string            `yaml:"groupTokenProviderPort"`
+	WasmPoolSize              int               `yaml:"wasmPoolSize"`
 	WasmRuntime               ChosenWasmRuntime `yaml:"wasmRuntime"`
 
 	StartingExecutorsBackoff time.Duration `yaml:"startingExecutorsBackoff"`

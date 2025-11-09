@@ -1,9 +1,9 @@
 package scheduler
 
-import "metadataManager/types"
+import "github.com/ermes-thesis/ermes-common/model"
 
 type WasmContext struct {
 	UserId      string
 	GroupList   []string
-	Collections map[string][]types.CollectionInfo
+	Collections map[string][]model.CollectionInfo
 }

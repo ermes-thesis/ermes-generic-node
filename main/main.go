@@ -96,7 +96,7 @@ func run(ctx context.Context, configPath string) error {
 			err = hostFunctions.RegisterWasmedgeHostFns(wasmedgeExecutorPool)
 			wasmExecutorPool = wasmedgeExecutorPool
 		case config.Wasmtime:
-			wasmtimeExecutorPool := wasm.NewWasmtimeExecutorPool(cfg.Scheduler.WasmPoolSize, true, generalLog.Component("wasmtime_executor_pool"))
+			wasmtimeExecutorPool := wasm.NewWasmtimeExecutorPool(cfg.Scheduler.WasmPoolSize, true, false, generalLog.Component("wasmtime_executor_pool"))
 			err = hostFunctions.RegisterWasmtimeHostFns(wasmtimeExecutorPool)
 			wasmExecutorPool = wasmtimeExecutorPool
 		case config.Wazero:

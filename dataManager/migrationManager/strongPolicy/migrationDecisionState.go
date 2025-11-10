@@ -140,7 +140,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 		if strongCollection.IsLeader && !leaderDecisionTaken {
 			//if the collection has been moved and removed locally
 			m.policy.log.Info("DEFAULT-STRONG-POLICY, leader taking decision for collection", "collection_id", outerKey, "potential_new_leader", innerKey)
-			if m.leaderDecision(outerKey, innerKey, buffer, strongCollection, totalForce, totalReqNumber) {
+			if m.leaderDecision(outerKey, innerKey, buffer, totalForce, totalReqNumber) {
 				leaderDecisionTaken = true
 				interestedNodeCounter--
 				decisions = append(decisions, Decision{
@@ -157,7 +157,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 			continue
 		}
 
-		if m.replicaDecision(outerKey, innerKey, buffer, strongCollection) {
+		if m.replicaDecision(outerKey, innerKey, buffer) {
 			interestedNodeCounter--
 			decisions = append(decisions, Decision{
 				Destination:  innerKey,
@@ -174,17 +174,12 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 }
 
 // return true if the leader has been moved (only 1 direction can return true)
-func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, strongCollection *shared.StrongCollection, totalForce int, totalReq int) bool {
+func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, totalForce int, totalReq int) bool {
 	//compute decision
 	feW, req := m.computeElasticForce(buffer, usage.GetWrite)
 
-	var latency int
-	for _, child := range m.policy.serverInfo.Children {
-		if child.HostName == innerKey {
-			latency = child.Latency
-			break
-		}
-	}
+	latency := m.policy.serverInfo.GetLatencyFor(innerKey)
+
 	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader latency retrieval", "collection_id", outerKey, "potential_new_leader", innerKey, "NodeResourceUsage", fmt.Sprintf("%+v", m.NodeResourceUsage))
 	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader decision computation", "collection_id", outerKey, "elastic_force", feW, "num_requests", req, "latency", latency, "free_memory", m.NodeResourceUsage[innerKey].FreeRedisMemory, "gravity_constant", m.policy.currentConfig.GravityConstant, "total_requests", totalReq, "total_force", totalForce)
 	var driverForce = float64(2*feW) - ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(latency)
@@ -199,7 +194,7 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 	return true
 }
 
-func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, strongCollection *shared.StrongCollection) bool {
+func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer) bool {
 	//compute decision
 	feR, _ := m.computeElasticForce(buffer, usage.GetRead)
 	resistance := ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) + float64(m.policy.currentConfig.FollowerThreshold)

@@ -16,8 +16,8 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/second-state/WasmEdge-go v0.14.0 // indirect
-	github.com/tetratelabs/wazero v1.9.0 // indirect
-	golang.org/x/sys v0.37.0 // indirect
+	github.com/tetratelabs/wazero v1.10.0 // indirect
+	golang.org/x/sys v0.38.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 )
 

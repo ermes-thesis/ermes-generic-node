@@ -217,12 +217,22 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, int
 
 	//sync -> avoid send a collection if used
 	localCollection := strongCollection.GetCollectionState().(*shared.LocalCollection)
-	b := localCollection.CollectionLock.TryLock()
-	if !b {
-		m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot apply taken decisions because collection is in use", "collection_id", outerKey)
-		return nil
+	lockAcquired := true
+
+	if isMigration || leaderDecisionTaken {
+		b := localCollection.CollectionLock.TryLock()
+		if !b {
+			m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot apply taken decisions because collection is in use", "collection_id", outerKey)
+			lockAcquired = false
+		} else {
+			defer localCollection.CollectionLock.Unlock()
+		}
+
+		if isMigration && !lockAcquired {
+			m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot migrate collection because collection is in use", "collection_id", outerKey)
+			return nil
+		}
 	}
-	defer localCollection.CollectionLock.Unlock()
 
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.policy.dbInterface.GetCollection(outerKey)
@@ -238,6 +248,10 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, int
 
 	//send collection to the remote nodes that has positive decision
 	for _, decision := range decisions {
+		if leaderDecisionTaken && decision.SendAsLeader && !lockAcquired {
+			m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot send collection as leader because collection is in use", "collection_id", outerKey, "destination", decision.Destination)
+			continue
+		}
 		m.policy.log.Info("send collection", "collectionId", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
 		if leaderDecisionTaken && decision.SendAsLeader {
 			strongCollection.LeaderId = decision.Destination

@@ -62,7 +62,7 @@ func (m *MigrationManagerImp) handleIncomingGossipMessages() http.Handler {
 
 func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m.log.Info("HTTP-REQ, New collection received through HTTP request")
+		m.log.Info("HTTP-REQ, New collection received through HTTP request", "sender_ip", r.RemoteAddr)
 
 		defer r.Body.Close()
 

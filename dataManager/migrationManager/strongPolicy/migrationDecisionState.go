@@ -182,10 +182,10 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 
 	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader latency retrieval", "collection_id", outerKey, "potential_new_leader", innerKey, "NodeResourceUsage", fmt.Sprintf("%+v", m.NodeResourceUsage))
 	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader decision computation", "collection_id", outerKey, "elastic_force", feW, "num_requests", req, "latency", latency, "free_memory", m.NodeResourceUsage[innerKey].FreeRedisMemory, "gravity_constant", m.policy.currentConfig.GravityConstant, "total_requests", totalReq, "total_force", totalForce)
-	var driverForce = float64(2*feW) - ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(latency)
+	var driverForce = float64(2*feW) - ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(latency) - float64(totalForce)
 	m.policy.log.Infof("DEFAULT-STRONG-POLICY, leader decision on collection %s result in force %f and resistance %f", outerKey, driverForce, float64(totalForce))
 	//evaluate decision
-	if driverForce <= float64(totalForce) {
+	if driverForce < 0 {
 		m.policy.log.Infof("DEFAULT-STRONG-POLICY, leader decision on collection %s has negative reseult for node %s", outerKey, innerKey)
 		return false
 	}
@@ -250,6 +250,7 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, int
 	for _, decision := range decisions {
 		if leaderDecisionTaken && decision.SendAsLeader && !lockAcquired {
 			m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot send collection as leader because collection is in use", "collection_id", outerKey, "destination", decision.Destination)
+			leaderDecisionTaken = false
 			continue
 		}
 		m.policy.log.Info("send collection", "collectionId", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)

@@ -126,7 +126,7 @@ In the body a json containing `records` : any[] which is an array of redis objec
 *Return*:
 *OK* (200) if all good, else *BadRequest* (400) if the body is badly formatted or if there was an issue accessing the internal db.
 
-### ERMES CENTRAL REPO
+### GROUP TOKEN PROVIDER
 
 ----------
 
@@ -263,7 +263,7 @@ Otherwise, the `X-ERMES-QUERY` header will contain the query template with the p
 
 All the types CollectionInfo, QueryResult and QueryIdentifier are defined in the `model` package of the Ermes Common repository.
 
-### ERMES CENTRAL REPO
+### GROUP TOKEN PROVIDER
 
 ----------
 

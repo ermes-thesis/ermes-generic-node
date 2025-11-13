@@ -77,7 +77,7 @@ func (m *MigrationManagerDecisionState) computeElasticForce(cb *usage.CircularBu
 			break
 		}
 		resourceUsage := data(el)
-		reqT += resourceUsage.TotalRequests //TODO: penality anche per questo?
+		reqT += m.policy.penalityFunc(i, resourceUsage.TotalRequests)
 		fe += m.policy.penalityFunc(i, resourceUsage.GetElasticForce())
 	}
 

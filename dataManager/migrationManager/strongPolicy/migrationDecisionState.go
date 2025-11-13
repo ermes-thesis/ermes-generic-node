@@ -220,7 +220,7 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, int
 	lockAcquired := true
 
 	if isMigration || leaderDecisionTaken {
-		lockAcquired := localCollection.CollectionLock.TryLock()
+		lockAcquired = localCollection.CollectionLock.TryLock()
 		if !lockAcquired {
 			m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot apply taken decisions because collection is in use", "collection_id", outerKey)
 		} else {
@@ -246,7 +246,7 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, int
 			m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot send collection as leader because collection is in use", "collection_id", outerKey, "destination", decision.Destination)
 			//postpone the send as leader behaviour to when the lock will be released
 			strongCollection.AddPostponedDecisionBehaviour(func() {
-				m.policy.log.Info("DEFAULT-STRONG-POLICY, apply posponed leader decision for collection", "collectionId", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
+				m.policy.log.Info("DEFAULT-STRONG-POLICY, apply postponed leader decision for collection", "collectionId", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
 				strongCollection.IsLeader = !strongCollection.IsLeader
 				m.policy.sender.SendRemoteCollectionTo(decision.Destination, strongCollection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
 			})

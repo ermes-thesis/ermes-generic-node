@@ -24,5 +24,5 @@ func (s *statelessPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname 
 	s.log.Info("Scheduling function", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 	s.log.Debug("Scheduling function", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname)
 
-	return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", false)
+	return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false)
 }

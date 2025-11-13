@@ -353,8 +353,11 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 	defer m.collectionsLock.Unlock()
 
 	for _, i := range info.Messages {
+
+		collection := m.collectionsPartialView.KnownCollections[i.CollectionId]
+
 		//if no local info on the collection -> remote update -> save the message to send it later
-		if m.collectionsPartialView.KnownCollections[i.CollectionId] == nil {
+		if collection == nil {
 			if m.serverInfo.Father == nil {
 				m.log.Error("MIG-MANAGER, no info on the collection and no father to send the info")
 				continue
@@ -363,8 +366,8 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 			fatherId := m.serverInfo.Father.HostName
 			i.Sender = m.serverInfo.HostName
 			msgs[fatherId] = messages.CollectionRequestInfoMessages{Messages: append(msgs[fatherId].Messages, i)}
-		} else if !m.collectionsPartialView.KnownCollections[i.CollectionId].IsStrong() && !m.collectionsPartialView.KnownCollections[i.CollectionId].IsLocal() {
-			hostId := m.collectionsPartialView.GetClosestChild(m.collectionsPartialView.KnownCollections[i.CollectionId].HostsId(), m.serverInfo)
+		} else if !collection.IsStrong() && !collection.IsLocal() {
+			hostId := m.collectionsPartialView.GetClosestChild(collection.HostsId(), m.serverInfo)
 			if hostId == "" {
 				m.log.Error("MIG-MANAGER, no info on the collection and no child to send the info")
 				continue
@@ -373,7 +376,13 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 			msgs[hostId] = messages.CollectionRequestInfoMessages{Messages: append(msgs[hostId].Messages, i)}
 		} else { // local update
 			m.localUpdateRequestInfo(i)
+			//execute postponed migration behaviours if any and if possible
+			if collection.IsLocal() && collection.IsStrong() && collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
+				collection.(*shared.StrongCollection).ExecutePostponedDecisionBehaviour()
+				collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+			}
 		}
+
 	}
 
 	m.log.Info("MIG-MANAGER, remote updates to send", "num_messages", len(msgs), "messages", fmt.Sprintf("%+v", msgs))

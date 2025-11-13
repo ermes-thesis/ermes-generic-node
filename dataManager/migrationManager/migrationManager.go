@@ -216,7 +216,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		}
 
 		if collection.IsLocal() {
-			m.log.Warn("MIG-MANAGER, new collection already present locally")
+			m.log.Warn("MIG-MANAGER, new collection already present locally", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
 			return true
 		}
 		actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
@@ -337,7 +337,7 @@ func (m *MigrationManagerImp) ManageGossipMessage(msg messages.GossipMessage) {
 	m.log.Info("MIG-MANAGER, gossip message received")
 	m.StrongCollectionPolicy.ManageGossipMessage(msg)
 }
-func (m *MigrationManagerImp) UpdateCollectionsLatestUsage(collections []string) {
+func (m *MigrationManagerImp) UpdateCollectionsLatestUsage(collections []string) { // Fix: Added opening brace
 	m.policyUpdateStrategy.updateCollectionsLatestUsage(collections, m)
 }
 

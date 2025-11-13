@@ -6,6 +6,7 @@ package tests
 import (
 	dataManager "dataManager"
 	"dataManager/messages"
+	shared "dataManager/shared"
 	database "db"
 	"encoding/json"
 	"fmt"
@@ -264,4 +265,34 @@ func TestRemoveCollectionAndPropagate(t *testing.T) {
 	t.Cleanup(func() {
 		dataManager.ResetSingleton()
 	})
+}
+
+func TestPostponedDecisionBehaviour(t *testing.T) {
+	strongCollection := shared.NewStrongCollection("collectionId", 10, false, true, "leaderId").(*shared.StrongCollection)
+	strongCollection.ConsistencyClock = 5
+
+	strongCollection.AddPostponedDecisionBehaviour(func() {
+		strongCollection.ConsistencyClock += 10
+		print(" First behaviour executed. ", strongCollection.ConsistencyClock, "\n")
+	})
+	strongCollection.AddPostponedDecisionBehaviour(func() {
+		strongCollection.ConsistencyClock *= 2
+		print(" Second behaviour executed. ", strongCollection.ConsistencyClock, "\n")
+	})
+
+	if strongCollection.ConsistencyClock != 5 {
+		t.Error("Expected ConsistencyClock to be 5 before executing postponed behaviours, got", strongCollection.ConsistencyClock)
+	}
+
+	strongCollection.ExecutePostponedDecisionBehaviour()
+
+	if strongCollection.ConsistencyClock != 30 {
+		t.Error("Expected ConsistencyClock to be 30 after executing postponed behaviours, got", strongCollection.ConsistencyClock)
+	}
+
+	strongCollection.ExecutePostponedDecisionBehaviour() //should do nothing
+
+	if strongCollection.ConsistencyClock != 30 {
+		t.Error("Expected ConsistencyClock to remain 30 after executing postponed behaviours again, got", strongCollection.ConsistencyClock)
+	}
 }

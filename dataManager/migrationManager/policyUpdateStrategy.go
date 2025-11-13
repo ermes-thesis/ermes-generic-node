@@ -39,6 +39,12 @@ func (e ermesPolicyUpdateStrategy) updateCollectionsLatestUsage(collections []st
 		collection := m.collectionsPartialView.KnownCollections[c]
 		if collection != nil && collection.IsLocal() {
 			m.updateLru(c, uint(collection.GetCollectionState().(*shared.LocalCollection).Size()))
+
+			//execute postponed migration behaviours if any and if possible
+			if collection.IsStrong() && collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
+				collection.(*shared.StrongCollection).ExecutePostponedDecisionBehaviour()
+				collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+			}
 		}
 	}
 }

@@ -74,6 +74,10 @@ func (s *StrongCollection) ExecutePostponedDecisionBehaviour() {
 	}
 }
 
+func (s *StrongCollection) HasPostponedDecisionBehaviour() bool {
+	return s.postponedDecisionBehaviour != nil
+}
+
 func (s *StrongCollection) GetCollectionState() CollectionState {
 	return s.collectionState
 }

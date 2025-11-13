@@ -14,6 +14,7 @@ import (
 	"metadataManager/propagation"
 	"net/http"
 	"server"
+	"sync"
 	"time"
 	"tokenDecoder"
 
@@ -109,7 +110,7 @@ type baseScheduler struct {
 	cfg              config.SchedulerConfig
 }
 
-func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string, sequentialCollId string, writeSeqCollection bool) (*FunctionResult, uint64, error) {
+func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string, sequentialCollId string, seqColLock *sync.RWMutex, writeSeqCollection bool) (*FunctionResult, uint64, error) {
 	var collIds []string
 	for _, cols := range scheduleRequest.Collections {
 		for _, col := range cols {
@@ -398,6 +399,10 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 				RequestLatency: scheduleRequest.CumulativeLatency,
 			})
 		}
+	}
+
+	if seqColLock != nil {
+		seqColLock.Unlock()
 	}
 
 	s.log.Info("Starting to update migration manager request infos for the used collections", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))

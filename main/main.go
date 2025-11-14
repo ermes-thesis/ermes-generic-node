@@ -91,16 +91,16 @@ func run(ctx context.Context, configPath string) error {
 		var wasmExecutorPool wasm.ExecutorPool
 		hostFunctions := scheduler.NewHostFunctions(dataManager, metadataManager, serverInfo, generalLog.Component("host_functions"))
 		switch cfg.Scheduler.WasmRuntime {
-		case config.Wasmedge:
-			wasmedgeExecutorPool := wasm.NewWasmedgeExecutorPool(cfg.Scheduler.WasmPoolSize, generalLog.Component("wasmedge_executor_pool"))
+		case wasm.Wasmedge:
+			wasmedgeExecutorPool := wasm.NewWasmedgeExecutorPool(cfg.Scheduler.WasmPoolConfig, generalLog.Component("wasmedge_executor_pool"))
 			err = hostFunctions.RegisterWasmedgeHostFns(wasmedgeExecutorPool)
 			wasmExecutorPool = wasmedgeExecutorPool
-		case config.Wasmtime:
-			wasmtimeExecutorPool := wasm.NewWasmtimeExecutorPool(cfg.Scheduler.WasmPoolSize, true, false, generalLog.Component("wasmtime_executor_pool"))
+		case wasm.Wasmtime:
+			wasmtimeExecutorPool := wasm.NewWasmtimeExecutorPool(cfg.Scheduler.WasmPoolConfig, generalLog.Component("wasmtime_executor_pool"))
 			err = hostFunctions.RegisterWasmtimeHostFns(wasmtimeExecutorPool)
 			wasmExecutorPool = wasmtimeExecutorPool
-		case config.Wazero:
-			wazeroExecutorPool := wasm.NewWazeroExecutorPool(cfg.Scheduler.WasmPoolSize, false, false, ctx, generalLog.Component("wazero_executor_pool"))
+		case wasm.Wazero:
+			wazeroExecutorPool := wasm.NewWazeroExecutorPool(cfg.Scheduler.WasmPoolConfig, ctx, generalLog.Component("wazero_executor_pool"))
 			err = hostFunctions.RegisterWazeroHostFns(wazeroExecutorPool)
 			wasmExecutorPool = wazeroExecutorPool
 		}

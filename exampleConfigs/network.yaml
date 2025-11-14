@@ -73,10 +73,11 @@ common:
     groupTokenProviderAddress: "localhost"
     groupTokenProviderPort: 8081
     wasmRuntime: "wasmtime"
-    wasmPoolSize: 10
-    startingExecutorsBackoff: 1s
-    maxExecutorsRetries: 10
-    maxExecutorsBackoff: 5s
+    wasmPoolConfig:
+      poolSize: 10
+      timeout: 5s
+      withCache: true
+      isAot: false
     startingOutdatedDataBackoff: 500ms
     maxOutdatedDataRetries: 10
     maxOutdatedDataBackoff: 5s

@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"metadataManager"
 	"metadataManager/propagation"
 	"net/http"
@@ -121,29 +120,6 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 	s.dataManager.GetMigrationManager().UpdateCollectionsLatestUsage(collIds)
 
 	s.log.Debug("Acquiring wasm executor from pool", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-	executor := s.wasmExecutorPool.Acquire()
-
-	backoff := s.cfg.StartingExecutorsBackoff
-	for i := 0; i < s.cfg.MaxExecutorsRetries && executor == nil; i++ {
-		jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
-		time.Sleep(backoff + jitter)
-		s.log.Debug("Retry acquiring wasm executor from pool", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-
-		backoff *= 2
-		if backoff > s.cfg.MaxExecutorsBackoff {
-			backoff = s.cfg.MaxExecutorsBackoff
-		}
-		executor = s.wasmExecutorPool.Acquire()
-	}
-	if executor == nil {
-		s.log.Error("Local execution failed. The WASM pool was too busy and there weren't any WASM executor available", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-		return nil, 0, fmt.Errorf("local execution failed. The WASM pool was too busy and there weren't any WASM executor available")
-	}
-
-	defer func() {
-		executor.Release()
-		s.log.Debug("Released wasm executor back to pool", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-	}()
 
 	ctx := WasmContext{
 		UserId:      userId,
@@ -164,7 +140,7 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 
 	s.log.Info("Invoking function locally", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 	startTime := time.Now()
-	resp := executor.Invoke(wasmBinary, "entry", scheduleRequest.Payload, ctxJson)
+	resp := s.wasmExecutorPool.Invoke(wasmBinary, "entry", scheduleRequest.Payload, ctxJson)
 	s.log.Info("Function executed successfully", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_duration", time.Since(startTime).Nanoseconds())
 	s.log.Debug("Function executed successfully", "fn_response", fmt.Sprintf("%+v", resp))
 

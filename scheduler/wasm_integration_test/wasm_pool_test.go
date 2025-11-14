@@ -50,7 +50,12 @@ func TestWasmPool_Wasmedge(t *testing.T) {
 	require.NoError(t, err)
 	fun, err := os.ReadFile("genericFunc/fun.wasm")
 	require.NoError(t, err)
-	pool := wasm.NewWasmedgeExecutorPool(10, createNewLogger(t))
+	pool := wasm.NewWasmedgeExecutorPool(wasm.Config{
+		PoolSize:  10,
+		Timeout:   5 * time.Second,
+		WithCache: false,
+		IsAot:     false,
+	}, createNewLogger(t))
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(t)
@@ -77,16 +82,13 @@ func TestWasmPool_Wasmedge(t *testing.T) {
 	err = hostFns.RegisterWasmedgeHostFns(pool)
 	require.NoError(t, err)
 
-	executor := pool.Acquire()
-	defer executor.Release()
-
-	resp := executor.Invoke(authFn, "authEntry", []byte("token"))
+	resp := pool.Invoke(authFn, "authEntry", []byte("token"))
 
 	fmt.Println("Auth function:", resp.HttpCode, resp.Response)
 
 	req, ctx := getTestReqAndCtx(resp.Response.(string), 0)
 
-	response := executor.Invoke(fun, "entry", req, ctx)
+	response := pool.Invoke(fun, "entry", req, ctx)
 	fmt.Println("Invoke function:", response.Response, response.HttpCode)
 
 	if response.HttpCode != 200 {
@@ -110,7 +112,12 @@ func TestWasmPool_Wasmtime(t *testing.T) {
 	require.NoError(t, err)
 	fun, err := os.ReadFile("genericFunc/fun.wasm")
 	require.NoError(t, err)
-	pool := wasm.NewWasmtimeExecutorPool(10, false, false, createNewLogger(t))
+	pool := wasm.NewWasmtimeExecutorPool(wasm.Config{
+		PoolSize:  10,
+		Timeout:   5 * time.Second,
+		WithCache: false,
+		IsAot:     false,
+	}, createNewLogger(t))
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(t)
@@ -137,16 +144,13 @@ func TestWasmPool_Wasmtime(t *testing.T) {
 	err = hostFns.RegisterWasmtimeHostFns(pool)
 	require.NoError(t, err)
 
-	executor := pool.Acquire()
-	defer executor.Release()
-
-	resp := executor.Invoke(authFn, "authEntry", []byte("token"))
+	resp := pool.Invoke(authFn, "authEntry", []byte("token"))
 
 	fmt.Println("Auth function:", resp.HttpCode, resp.Response)
 
 	req, ctx := getTestReqAndCtx(resp.Response.(string), 0)
 
-	response := executor.Invoke(fun, "entry", req, ctx)
+	response := pool.Invoke(fun, "entry", req, ctx)
 	fmt.Println("Invoke function:", response.Response, response.HttpCode)
 
 	if response.HttpCode != 200 {
@@ -170,7 +174,12 @@ func TestWasmPool_Wazero(t *testing.T) {
 	require.NoError(t, err)
 	fun, err := os.ReadFile("genericFunc/fun.wasm")
 	require.NoError(t, err)
-	pool := wasm.NewWazeroExecutorPool(10, false, false, context.Background(), createNewLogger(t))
+	pool := wasm.NewWazeroExecutorPool(wasm.Config{
+		PoolSize:  10,
+		Timeout:   5 * time.Second,
+		WithCache: false,
+		IsAot:     false,
+	}, context.Background(), createNewLogger(t))
 	defer pool.Close()
 
 	dataManager := datamanager_mock.NewDataManager(t)
@@ -195,16 +204,13 @@ func TestWasmPool_Wazero(t *testing.T) {
 	err = hostFns.RegisterWazeroHostFns(pool)
 	require.NoError(t, err)
 
-	executor := pool.Acquire()
-	defer executor.Release()
-
-	resp := executor.Invoke(authFn, "authEntry", []byte("token"))
+	resp := pool.Invoke(authFn, "authEntry", []byte("token"))
 
 	fmt.Println("Auth function:", resp.HttpCode, resp.Response)
 
 	req, ctx := getTestReqAndCtx(resp.Response.(string), 0)
 
-	response := executor.Invoke(fun, "entry", req, ctx)
+	response := pool.Invoke(fun, "entry", req, ctx)
 	fmt.Println("Invoke function:", response.Response, response.HttpCode)
 
 	if response.HttpCode != 200 {

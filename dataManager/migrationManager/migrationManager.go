@@ -2,6 +2,7 @@ package migrationManager
 
 import (
 	"config"
+	"context"
 	"dataManager/lru"
 	"dataManager/messages"
 	penality "dataManager/migrationManager/penalityFunction"
@@ -70,7 +71,8 @@ type MigrationManagerImp struct {
 
 	sender sender.MigrationManagerSender
 
-	dumpStopCh chan struct{}
+	dumpCtx    context.Context
+	dumpCancel context.CancelFunc
 }
 
 // Singleton pattern
@@ -129,8 +131,8 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.collectionsPartialView = collections
 
 		// --- START ASYNC DUMP ---
-		m.dumpStopCh = make(chan struct{})
-		m.startAsyncDump(config.KnownCollectionsDumpPath, config.KnownCollectionsDumpInterval)
+		m.dumpCtx, m.dumpCancel = context.WithCancel(context.Background())
+		m.startAsyncDump(m.dumpCtx, config.KnownCollectionsDumpPath, config.KnownCollectionsDumpInterval)
 		m.log.Info("MIG-MANAGER, migration manager instance has been initialized")
 	})
 }
@@ -157,7 +159,7 @@ func (m *MigrationManagerImp) StatelessInit(collections *shared.CollectionPartia
 	})
 }
 
-func (m *MigrationManagerImp) startAsyncDump(dumpPath string, interval time.Duration) {
+func (m *MigrationManagerImp) startAsyncDump(ctx context.Context, dumpPath string, interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -168,7 +170,7 @@ func (m *MigrationManagerImp) startAsyncDump(dumpPath string, interval time.Dura
 				if err := m.collectionsPartialView.DumpToJsonFile(dumpPath); err != nil {
 					m.log.Warn("Failed to dump known collections", "error", err)
 				}
-			case <-m.dumpStopCh:
+			case <-ctx.Done():
 				m.log.Info("Async dump goroutine received stop signal. Dump known collection for last time")
 				if err := m.collectionsPartialView.DumpToJsonFile(dumpPath); err != nil {
 					m.log.Warn("Failed to dump known collections", "error", err)
@@ -180,9 +182,8 @@ func (m *MigrationManagerImp) startAsyncDump(dumpPath string, interval time.Dura
 }
 
 func (m *MigrationManagerImp) StopAsyncDump() {
-	if m.dumpStopCh != nil {
-		close(m.dumpStopCh)
-		m.dumpStopCh = nil
+	if m.dumpCancel != nil {
+		m.dumpCancel()
 		m.log.Info("MIG-MANAGER, async dump has been stopped")
 	}
 }

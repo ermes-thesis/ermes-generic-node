@@ -171,6 +171,12 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 		buffer.MoveHead()
 	}
 
+	if leaderDecisionTaken {
+		for _, buffer := range innerMap {
+			buffer.ResetWrite()
+		}
+	}
+
 	m.applyTakenDecisions(outerKey, interestedNodeCounter, decisions, strongCollection, leaderDecisionTaken)
 
 }
@@ -192,6 +198,8 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 		return false
 	}
 	m.policy.log.Infof("DEFAULT-STRONG-POLICY, leader decision on collection %s has positive result for node %s", outerKey, innerKey)
+
+	buffer.ResetRead()
 
 	return true
 }

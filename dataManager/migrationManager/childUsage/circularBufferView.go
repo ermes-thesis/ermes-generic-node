@@ -42,3 +42,11 @@ func (cb *CircularBuffer) ResetRead() {
 		}
 	}
 }
+
+func (cb *CircularBuffer) ResetWrite() {
+	for _, d := range cb.data {
+		if d != nil {
+			d.Write = ResourceUsage{}
+		}
+	}
+}

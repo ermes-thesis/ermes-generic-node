@@ -175,7 +175,6 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 			return s.forwardRequest(s.serverInfo.Father.HostName, scheduleRequest)
 		}
 
-		// Sequential collection present - check if it is requested a write or read access
 		functionMetadata, err := s.cache.GetMetadata(scheduleRequest.FunctionName, scheduleRequest.FunctionVersion)
 		if err != nil {
 			s.log.Error("Failed to retrieve function metadata", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", scheduleRequest.Payload, "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname, "error", err)
@@ -211,6 +210,8 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 			} else if dest == "" && s.serverInfo.Father == nil {
 				return nil, 0, fmt.Errorf("sequential collection leader not found for collection %s", sequentialCollection.CollectionId())
 			}
+
+			sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
 			return s.forwardRequest(dest, scheduleRequest)
 		}
 

@@ -309,6 +309,15 @@ func (s *statefulPolicy) forwardRequest(dest string, scheduleRequest ScheduleReq
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode >= 400 {
+		s.log.Error("Received error response from offloaded scheduling", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency, "status_code", resp.StatusCode)
+		return &FunctionResult{
+			StatusCode: resp.StatusCode,
+			Hostname:   resp.Header.Get("X-ERMES-EXECUTION-HOST"),
+			Body:       nil,
+		}, 0, fmt.Errorf("error response from offloaded scheduling: status code %d", resp.StatusCode)
+	}
+
 	sequentialSeqNumberStr := resp.Header.Get("X-ERMES-SEQUENTIAL-NUMBER")
 	var sequentialSeqNumber uint64
 	if sequentialSeqNumberStr != "" {

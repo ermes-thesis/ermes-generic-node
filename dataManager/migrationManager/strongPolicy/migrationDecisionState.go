@@ -257,8 +257,9 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, int
 			//postpone the send as leader behaviour to when the lock will be released
 			strongCollection.AddPostponedDecisionBehaviour(func() {
 				m.policy.log.Info("DEFAULT-STRONG-POLICY, apply postponed leader decision for collection", "collectionId", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
-				strongCollection.IsLeader = !strongCollection.IsLeader
 				m.policy.sender.SendRemoteCollectionTo(decision.Destination, strongCollection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
+				strongCollection.IsLeader = false
+				strongCollection.LeaderId = decision.Destination
 			})
 			leaderDecisionTaken = false
 			continue

@@ -273,6 +273,7 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, int
 	strongCollection.IsLeader = strongCollection.IsLeader && !leaderDecisionTaken
 
 	if !isMigration {
+		m.tryToExecutePostponed(strongCollection)
 		return nil
 	} else if !lockAcquired {
 		m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot delete collection because collection is in use", "collection_id", outerKey)
@@ -281,11 +282,23 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, int
 			m.policy.log.Info("DEFAULT-STRONG-POLICY, apply posponed deletion decision for collection", "collectionId", strongCollection.CollectionId())
 			m.deleteCollectionAfterDecisionTaken(outerKey, strongCollection, outerKey)
 		})
+		m.tryToExecutePostponed(strongCollection)
 		return nil
 	}
 
 	m.deleteCollectionAfterDecisionTaken(outerKey, strongCollection, outerKey)
 	return nil
+}
+
+func (m *MigrationManagerDecisionState) tryToExecutePostponed(strongCollection *shared.StrongCollection) {
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, check postponed decision behaviour for collection for safety reason", "collection_id", strongCollection.CollectionId())
+	if strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
+		m.policy.log.Info("DEFAULT-STRONG-POLICY, starting postponed decision behaviour execution for strong collection for collection for safety reason", "collection_id", strongCollection.CollectionId())
+		localColl := strongCollection.GetCollectionState().(*shared.LocalCollection)
+		strongCollection.ExecutePostponedDecisionBehaviour()
+		localColl.CollectionLock.Unlock()
+	}
+
 }
 
 func (m *MigrationManagerDecisionState) deleteCollectionAfterDecisionTaken(collectionId string, strongCollection *shared.StrongCollection, outerKey string) {

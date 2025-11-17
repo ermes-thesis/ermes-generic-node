@@ -350,8 +350,10 @@ func (m *MigrationManagerImp) UpdatesRequestsInfo(info []messages.CollectionRequ
 func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionRequestInfoMessages) {
 	var msgs = make(map[string]messages.CollectionRequestInfoMessages) // host -> message
 	//sync
+	m.log.Info("MIG-MANAGER, update request info received", "num_messages", len(info.Messages))
 	m.collectionsLock.Lock()
 	defer m.collectionsLock.Unlock()
+	m.log.Info("MIG-MANAGER, update request info received - lock acquired")
 
 	for _, i := range info.Messages {
 
@@ -382,7 +384,7 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 			if collection.IsLocal() && collection.IsStrong() && collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
 				m.log.Info("MIG-MANAGER, starting postponed decision behaviour execution for strong collection", "collection_id", collection.CollectionId())
 				localColl := collection.GetCollectionState().(*shared.LocalCollection)
-				collection.(*shared.StrongCollection).ExecutePostponedDecisionBehaviour()
+				collection.(*shared.StrongCollection).ExecutePostponedDecisionBehaviour(m.log)
 				localColl.CollectionLock.Unlock()
 			}
 		}

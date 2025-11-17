@@ -295,7 +295,7 @@ func (m *MigrationManagerDecisionState) tryToExecutePostponed(strongCollection *
 	if strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
 		m.policy.log.Info("DEFAULT-STRONG-POLICY, starting postponed decision behaviour execution for strong collection for collection for safety reason", "collection_id", strongCollection.CollectionId())
 		localColl := strongCollection.GetCollectionState().(*shared.LocalCollection)
-		strongCollection.ExecutePostponedDecisionBehaviour()
+		strongCollection.ExecutePostponedDecisionBehaviour(m.policy.log)
 		localColl.CollectionLock.Unlock()
 	}
 

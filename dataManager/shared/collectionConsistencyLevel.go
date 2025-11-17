@@ -2,6 +2,8 @@ package dataManagerShared
 
 import (
 	"sync"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 // Collection Info
@@ -67,8 +69,9 @@ func (s *StrongCollection) AddPostponedDecisionBehaviour(f func()) {
 	}
 }
 
-func (s *StrongCollection) ExecutePostponedDecisionBehaviour() {
+func (s *StrongCollection) ExecutePostponedDecisionBehaviour(log logger.Logger) {
 	if s.postponedDecisionBehaviour != nil {
+		log.Info("ExecutePostponedDecisionBehaviour called", "collectionId", s.collectionId)
 		s.postponedDecisionBehaviour()
 		s.postponedDecisionBehaviour = nil
 	}

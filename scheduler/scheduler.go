@@ -144,6 +144,28 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 	s.log.Info("Function executed successfully", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_duration", time.Since(startTime).Nanoseconds())
 	s.log.Debug("Function executed successfully", "fn_response", fmt.Sprintf("%+v", resp))
 
+	defer func() {
+		if seqColLock != nil {
+			s.log.Info("Releasing sequential collection lock after function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
+			seqColLock.RUnlock()
+		} else {
+			s.log.Warn("No sequential collection lock to release after function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
+		}
+
+		var collRequestInfo []messages.CollectionRequestInfo
+		for _, colls := range scheduleRequest.Collections {
+			for _, coll := range colls {
+				collRequestInfo = append(collRequestInfo, messages.CollectionRequestInfo{
+					CollectionId:   coll.Id,
+					IsWrite:        writeSeqCollection,
+					RequestLatency: scheduleRequest.CumulativeLatency,
+				})
+			}
+		}
+		s.log.Info("Starting to update migration manager request infos for the used collections", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
+		s.dataManager.GetMigrationManager().UpdatesRequestsInfo(collRequestInfo, reqHostname)
+	}()
+
 	repBody, err := json.Marshal(resp.Response)
 	if err != nil {
 		s.log.Error("Failed to marshal function response", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "request_hostname", reqHostname, "with_sequential_collection", sequentialCollId != "", "sequential_collection_id", sequentialCollId, "sequential_collection_write_access", writeSeqCollection, "error", err)
@@ -364,25 +386,6 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 		s.sendUpdateToGTP(resp.CacheUpdates.Groups)
 		s.log.InfofWith("[%s] Finished propagation of updates on eventual collections", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates")
 	}()
-
-	// Update requests info synchronously
-	var collRequestInfo []messages.CollectionRequestInfo
-	for _, colls := range scheduleRequest.Collections {
-		for _, coll := range colls {
-			collRequestInfo = append(collRequestInfo, messages.CollectionRequestInfo{
-				CollectionId:   coll.Id,
-				IsWrite:        writeSeqCollection,
-				RequestLatency: scheduleRequest.CumulativeLatency,
-			})
-		}
-	}
-
-	if seqColLock != nil {
-		seqColLock.Unlock()
-	}
-
-	s.log.Info("Starting to update migration manager request infos for the used collections", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
-	s.dataManager.GetMigrationManager().UpdatesRequestsInfo(collRequestInfo, reqHostname)
 
 	s.log.Info("Local function execution completed successfully. Returning result", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result), "new_sequence_number", seqNumber)
 	return result, seqNumber, nil

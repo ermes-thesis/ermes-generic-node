@@ -96,9 +96,11 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 		outerKey := key.(string)
 		innerMap := value.(map[string]*usage.CircularBuffer)
 		//apply decision only on strong local collections
-		if m.policy.partialView.KnownCollections[outerKey] == nil ||
-			!m.policy.partialView.KnownCollections[outerKey].IsLocal() ||
-			!m.policy.partialView.KnownCollections[outerKey].IsStrong() {
+		col := m.policy.partialView.KnownCollections[outerKey]
+		if col == nil ||
+			!col.IsLocal() ||
+			!col.IsStrong() ||
+			col.(*shared.StrongCollection).HasPostponedDecisionBehaviour() {
 			return true
 		}
 		wg.Add(1)

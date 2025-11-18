@@ -25,6 +25,7 @@ import (
 	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -139,6 +140,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
+	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
@@ -259,6 +261,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 
 	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerFather.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
+	migrationManagerFather.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
 
 	dataManagerFather := datamanager_mock.NewDataManager(t)
 	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
@@ -330,8 +333,12 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
 
+	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerChild.EXPECT().HandlePostponedDecisions(mock.Anything).Return()
+
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
 	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
@@ -468,6 +475,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
@@ -558,6 +566,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 
 	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerFather.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+	migrationManagerFather.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
 
 	dataManagerFather := datamanager_mock.NewDataManager(t)
 	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
@@ -762,6 +771,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "54321"}).Return()
+	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
@@ -904,6 +914,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
@@ -1011,8 +1022,12 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collFather12345, nil)
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collFather1111, nil)
 
+	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerFather.EXPECT().HandlePostponedDecisions(mock.Anything).Return()
+
 	dataManagerFather := datamanager_mock.NewDataManager(t)
 	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
+	dataManagerFather.EXPECT().GetMigrationManager().Return(migrationManagerFather)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
@@ -1077,6 +1092,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
+	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
@@ -1281,6 +1297,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 
 	migrationManagerChild2 := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild2.EXPECT().UpdateCollectionsLatestUsage([]string{"1111"}).Return()
+	migrationManagerChild2.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
 
 	dataManagerChild2 := datamanager_mock.NewDataManager(t)
 	dataManagerChild2.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild2)

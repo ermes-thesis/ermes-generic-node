@@ -117,7 +117,6 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 	defer wg.Done()
 
 	replicaInterestedNodeCounter := 0
-	leaderDecisionRequired := false
 	leaderDecisionTaken := false
 
 	strongCollection := m.policy.partialView.KnownCollections[outerKey].(*shared.StrongCollection)
@@ -132,11 +131,6 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 			m.policy.log.Info("DEFAULT-STRONG-POLICY, leader total force computation", "collection_id", outerKey, "force", wForce, "num_requests", wReq)
 			totalForce += wForce
 			totalReqNumber += wReq
-
-			if wReq > 0 {
-				//the node is interested to the leader
-				leaderDecisionRequired = true
-			}
 
 			_, rReq := m.computeElasticForce(buffer, usage.GetRead)
 			if rReq > 0 {
@@ -193,7 +187,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 		}
 	}
 
-	m.applyTakenDecisions(outerKey, replicaInterestedNodeCounter, decisions, strongCollection, leaderDecisionTaken, leaderDecisionRequired)
+	m.applyTakenDecisions(outerKey, replicaInterestedNodeCounter, decisions, strongCollection, leaderDecisionTaken)
 
 }
 
@@ -237,8 +231,8 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 	return true
 }
 
-func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, replicaInterestedNodeCounter int, decisions []Decision, strongCollection *shared.StrongCollection, leaderDecisionTaken bool, leaderDecisionRequire bool) error {
-	isMigration := replicaInterestedNodeCounter == 0 && (!leaderDecisionRequire || leaderDecisionTaken)
+func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, replicaInterestedNodeCounter int, decisions []Decision, strongCollection *shared.StrongCollection, leaderDecisionTaken bool) error {
+	isMigration := (replicaInterestedNodeCounter == 0 && !strongCollection.IsLeader) || (strongCollection.IsLeader && replicaInterestedNodeCounter == 0 && leaderDecisionTaken)
 	m.policy.log.Info("DEFAULT-STRONG-POLICY, apply taken decisions", "collection_id", outerKey, "num_decisions", len(decisions), "is_migration", isMigration, "leader_decision_taken", leaderDecisionTaken, "strong_collection_is_leader", strongCollection.IsLeader, "interested_node_counter", replicaInterestedNodeCounter)
 
 	//sync -> avoid send a collection if used

@@ -212,7 +212,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 			collection.RemoveHost(hostAddress)
 		}
 
-		if collection.IsLocal() && collection.IsStrong() && isLeader && isStrong {
+		if collection.IsStrong() && isLeader && isStrong {
 			collection.(*shared.StrongCollection).IsLeader = true
 			collection.(*shared.StrongCollection).LeaderId = m.serverInfo.HostName
 		}
@@ -228,9 +228,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		}
 
 		collection.SetToLocal(actualSize)
-		if isStrong {
-			collection.(*shared.StrongCollection).IsLeader = isLeader
-		}
+
 		m.log.Info("MIG-MANAGER, new collection set to local")
 		m.updateLru(collectionId, uint(actualSize))
 		return false

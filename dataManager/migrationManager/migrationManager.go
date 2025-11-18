@@ -30,6 +30,7 @@ type MigrationManager interface {
 	// if the collection is strong used to update forces in real time.
 	// if the request comes from a user => nodeName = "user"
 	UpdatesRequestsInfo(info []messages.CollectionRequestInfo, sender string)
+	HandlePostponedDecisions(collection shared.Collection)
 	UpdateCollectionsLatestUsage(collections []string)
 	// ManageGossipMessage used to update non realtime info
 	ManageGossipMessage(messages.GossipMessage)
@@ -380,13 +381,7 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 		} else { // local update
 			m.localUpdateRequestInfo(i)
 			//execute postponed migration behaviours if any and if possible
-			m.log.Info("MIG-MANAGER, check postponed decision behaviour for collection", "collection_id", collection.CollectionId(), "is_strong", collection.IsStrong(), "is_local", collection.IsLocal())
-			if collection.IsLocal() && collection.IsStrong() && collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
-				m.log.Info("MIG-MANAGER, starting postponed decision behaviour execution for strong collection", "collection_id", collection.CollectionId())
-				localColl := collection.GetCollectionState().(*shared.LocalCollection)
-				collection.(*shared.StrongCollection).ExecutePostponedDecisionBehaviour(m.log)
-				localColl.CollectionLock.Unlock()
-			}
+			m.HandlePostponedDecisions(collection)
 		}
 	}
 
@@ -395,6 +390,16 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 	//send remote updates
 	for host, message := range msgs {
 		m.sender.SendRequestInfoMessage(message, host)
+	}
+}
+
+func (m *MigrationManagerImp) HandlePostponedDecisions(collection shared.Collection) {
+	m.log.Info("MIG-MANAGER, check postponed decision behaviour for collection", "collection_id", collection.CollectionId(), "is_strong", collection.IsStrong(), "is_local", collection.IsLocal())
+	if collection.IsLocal() && collection.IsStrong() && collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
+		m.log.Info("MIG-MANAGER, starting postponed decision behaviour execution for strong collection", "collection_id", collection.CollectionId())
+		localColl := collection.GetCollectionState().(*shared.LocalCollection)
+		collection.(*shared.StrongCollection).ExecutePostponedDecisionBehaviour(m.log)
+		localColl.CollectionLock.Unlock()
 	}
 }
 

@@ -212,6 +212,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 			}
 
 			sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
+			s.dataManager.GetMigrationManager().HandlePostponedDecisions(sequentialCollection)
 			return s.forwardRequest(dest, scheduleRequest)
 		}
 

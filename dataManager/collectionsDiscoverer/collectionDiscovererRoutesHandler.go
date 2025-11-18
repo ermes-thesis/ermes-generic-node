@@ -231,7 +231,7 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 				}
 				if !ok {
 					c.log.Warn("Duplicate collection name detected for same owner", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_name", msg.CollectionName, "owner", msg.CollectionOwner)
-					http.Error(w, fmt.Sprintf("Cannot create collection, since another one with the same name and owner already exists: %v", err), http.StatusConflict)
+					http.Error(w, "Cannot create collection, since another one with the same name and owner already exists", http.StatusConflict)
 					return
 				}
 			}

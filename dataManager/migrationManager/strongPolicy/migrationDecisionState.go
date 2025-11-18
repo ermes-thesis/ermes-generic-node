@@ -106,32 +106,49 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 		wg.Add(1)
 		m.policy.log.Infof("DEFAULT-STRONG-POLICY, start taking decisions for collection %s", outerKey)
 		//take decision on a secondary thread
-		go m.innerKeyDecision(outerKey, innerMap, &wg, len(innerMap))
+		go m.innerKeyDecision(outerKey, innerMap, &wg)
 		return true
 	})
 	//wait for all the decision to ends
 	wg.Wait()
 }
 
-func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerMap map[string]*usage.CircularBuffer, wg *sync.WaitGroup, interestedNodeCounter int) {
+func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerMap map[string]*usage.CircularBuffer, wg *sync.WaitGroup) {
 	defer wg.Done()
+
+	replicaInterestedNodeCounter := 0
+	leaderDecisionRequired := false
+	leaderDecisionTaken := false
 
 	strongCollection := m.policy.partialView.KnownCollections[outerKey].(*shared.StrongCollection)
 	decisions := []Decision{}
-	leaderDecisionTaken := false
 
 	//compute total forces sum -> value that must be outclassed to delegate the leader
 	var totalForce = 0
 	var totalReqNumber = 0
 	if strongCollection.IsLeader {
 		for _, buffer := range innerMap {
-			force, req := m.computeElasticForce(buffer, usage.GetWrite)
-			m.policy.log.Info("DEFAULT-STRONG-POLICY, leader total force computation", "collection_id", outerKey, "force", force, "num_requests", req)
-			totalForce += force
-			totalReqNumber += req
+			wForce, wReq := m.computeElasticForce(buffer, usage.GetWrite)
+			m.policy.log.Info("DEFAULT-STRONG-POLICY, leader total force computation", "collection_id", outerKey, "force", wForce, "num_requests", wReq)
+			totalForce += wForce
+			totalReqNumber += wReq
+
+			if wReq > 0 {
+				//the node is interested to the leader
+				leaderDecisionRequired = true
+			}
+
+			_, rReq := m.computeElasticForce(buffer, usage.GetRead)
+			if rReq > 0 {
+				//the node is interested to a replica
+				replicaInterestedNodeCounter++
+			}
 		}
 		totalForce += m.policy.currentConfig.LeaderThreshold
 		m.policy.log.Info("DEFAULT-STRONG-POLICY, leader total force with threshold", "collection_id", outerKey, "total_force", totalForce, "total_requests", totalReqNumber)
+	} else {
+		//if the node is not leader all requests are in read mode => all nodes in the inner map are interested to a replica
+		replicaInterestedNodeCounter = len(innerMap)
 	}
 
 	for innerKey, buffer := range innerMap {
@@ -144,7 +161,6 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 			m.policy.log.Info("DEFAULT-STRONG-POLICY, leader taking decision for collection", "collection_id", outerKey, "potential_new_leader", innerKey)
 			if m.leaderDecision(outerKey, innerKey, buffer, totalForce, totalReqNumber) {
 				leaderDecisionTaken = true
-				interestedNodeCounter--
 				decisions = append(decisions, Decision{
 					Destination:  innerKey,
 					SendAsLeader: true,
@@ -160,7 +176,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 		}
 
 		if m.replicaDecision(outerKey, innerKey, buffer) {
-			interestedNodeCounter--
+			replicaInterestedNodeCounter--
 			decisions = append(decisions, Decision{
 				Destination:  innerKey,
 				SendAsLeader: false,
@@ -177,7 +193,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 		}
 	}
 
-	m.applyTakenDecisions(outerKey, interestedNodeCounter, decisions, strongCollection, leaderDecisionTaken)
+	m.applyTakenDecisions(outerKey, replicaInterestedNodeCounter, decisions, strongCollection, leaderDecisionTaken, leaderDecisionRequired)
 
 }
 
@@ -221,9 +237,9 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 	return true
 }
 
-func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, interestedNodeCounter int, decisions []Decision, strongCollection *shared.StrongCollection, leaderDecisionTaken bool) error {
-	isMigration := interestedNodeCounter == 0 && (!strongCollection.IsLeader || leaderDecisionTaken)
-	m.policy.log.Info("DEFAULT-STRONG-POLICY, apply taken decisions", "collection_id", outerKey, "num_decisions", len(decisions), "is_migration", isMigration, "leader_decision_taken", leaderDecisionTaken, "strong_collection_is_leader", strongCollection.IsLeader, "interested_node_counter", interestedNodeCounter)
+func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, replicaInterestedNodeCounter int, decisions []Decision, strongCollection *shared.StrongCollection, leaderDecisionTaken bool, leaderDecisionRequire bool) error {
+	isMigration := replicaInterestedNodeCounter == 0 && (!leaderDecisionRequire || leaderDecisionTaken)
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, apply taken decisions", "collection_id", outerKey, "num_decisions", len(decisions), "is_migration", isMigration, "leader_decision_taken", leaderDecisionTaken, "strong_collection_is_leader", strongCollection.IsLeader, "interested_node_counter", replicaInterestedNodeCounter)
 
 	//sync -> avoid send a collection if used
 	localCollection := strongCollection.GetCollectionState().(*shared.LocalCollection)

@@ -268,6 +268,7 @@ func TestRemoveCollectionAndPropagate(t *testing.T) {
 }
 
 func TestPostponedDecisionBehaviour(t *testing.T) {
+	log := createNewLogger(t)
 	strongCollection := shared.NewStrongCollection("collectionId", 10, false, true, "leaderId").(*shared.StrongCollection)
 	strongCollection.ConsistencyClock = 5
 
@@ -284,13 +285,13 @@ func TestPostponedDecisionBehaviour(t *testing.T) {
 		t.Error("Expected ConsistencyClock to be 5 before executing postponed behaviours, got", strongCollection.ConsistencyClock)
 	}
 
-	strongCollection.ExecutePostponedDecisionBehaviour()
+	strongCollection.ExecutePostponedDecisionBehaviour(log)
 
 	if strongCollection.ConsistencyClock != 30 {
 		t.Error("Expected ConsistencyClock to be 30 after executing postponed behaviours, got", strongCollection.ConsistencyClock)
 	}
 
-	strongCollection.ExecutePostponedDecisionBehaviour() //should do nothing
+	strongCollection.ExecutePostponedDecisionBehaviour(log) //should do nothing
 
 	if strongCollection.ConsistencyClock != 30 {
 		t.Error("Expected ConsistencyClock to remain 30 after executing postponed behaviours again, got", strongCollection.ConsistencyClock)

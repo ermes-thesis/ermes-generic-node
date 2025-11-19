@@ -103,6 +103,7 @@ type collectionDump struct {
 	IsStrong       bool     `json:"is_strong"`
 	IsLocal        bool     `json:"is_local"`
 	IsLeader       bool     `json:"is_leader"`
+	SequenceNumber uint64   `json:"sequence_number"`
 	CollectionSize uint64   `json:"collection_size"`
 	LeaderID       string   `json:"leader_id,omitempty"`
 	HostsID        []string `json:"hosts_id"`
@@ -139,6 +140,7 @@ func (c *CollectionPartialView) DumpToJsonFile(path string) error {
 		if s, ok := collection.(*StrongCollection); ok {
 			entry.IsLeader = s.IsLeader
 			entry.LeaderID = s.LeaderId
+			entry.SequenceNumber = s.ConsistencyClock
 		}
 
 		snapshot = append(snapshot, entry)

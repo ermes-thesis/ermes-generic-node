@@ -280,6 +280,10 @@ func (c *CollectionsDiscovererImp) updateRecord(
 		return nil, err
 	}
 
+	if collection.IsStrong() {
+		collection.(*shared.StrongCollection).ConsistencyClock = updateMessage.GetSequence()
+	}
+
 	collection.GetCollectionState().(*shared.LocalCollection).IncSize(memUsage)
 	c.log.Info("UpdateRecord: Collection records updated successfully in local DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "memory_usage_change", memUsage, "new_memory_usage", collection.GetCollectionState().(*shared.LocalCollection).Size())
 

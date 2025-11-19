@@ -33,7 +33,6 @@ type RemoteUpdateRequest struct {
 type UpdateMessage interface {
 	GetSequence() uint64
 	SetSequence(seq uint64)
-	IncrementSequence()
 }
 
 type CollectionUpdate struct {
@@ -60,10 +59,6 @@ func (c *CollectionUpdateMessage) GetSequence() uint64 {
 
 func (c *CollectionUpdateMessage) SetSequence(seq uint64) {
 	c.Sequence = seq
-}
-
-func (c *CollectionUpdateMessage) IncrementSequence() {
-	c.Sequence++
 }
 
 type CollectionUpdateMessages struct {
@@ -132,9 +127,6 @@ func (c *CollectionGroupUpdateMessage) GetSequence() uint64 {
 }
 
 func (c *CollectionGroupUpdateMessage) SetSequence(seq uint64) { //do nothing
-}
-
-func (c *CollectionGroupUpdateMessage) IncrementSequence() { //do nothing
 }
 
 type CollectionGroupUpdateMessages []CollectionGroupUpdateMessage

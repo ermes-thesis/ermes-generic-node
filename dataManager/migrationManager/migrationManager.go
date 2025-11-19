@@ -36,7 +36,7 @@ type MigrationManager interface {
 	ManageGossipMessage(messages.GossipMessage)
 	// NewCollectionReceived used when the node receive  a collection from one of the directly connected nodes (collectionID,isStrong,leader)
 	//return True if the collection is already stored locally and must not be stored in Redis
-	NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool
+	NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool
 	// NewCollectionCreated used when user create a new collection in the local node (collectionID,size,isStrong)
 	//throw an error if the collection already exists locally
 	NewCollectionCreated(string, uint64, bool) error
@@ -199,7 +199,7 @@ func (m *MigrationManagerImp) RemoveCollectionFromLru(collectionId string) {
 }
 
 // methods
-func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool {
+func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool {
 	//sync
 	m.collectionsLock.Lock()
 	defer m.collectionsLock.Unlock()
@@ -228,6 +228,9 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		}
 
 		collection.SetToLocal(actualSize)
+		if isStrong && collection.IsStrong() {
+			collection.(*shared.StrongCollection).ConsistencyClock = sequence
+		}
 
 		m.log.Info("MIG-MANAGER, new collection set to local")
 		m.updateLru(collectionId, uint(actualSize))
@@ -240,7 +243,9 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	}
 
 	if isStrong {
-		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, actualSize, false, isLeader, m.serverInfo.HostName)
+		col := shared.NewStrongCollection(collectionId, actualSize, false, isLeader, m.serverInfo.HostName)
+		col.(*shared.StrongCollection).ConsistencyClock = sequence
+		m.collectionsPartialView.KnownCollections[collectionId] = col
 	} else {
 		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, actualSize, false)
 	}

@@ -35,7 +35,6 @@
 mocks/
 
 !.devcontainer/*
-!scheduler/wasm_integration_test/*/*.wasm
-!scheduler/wasm_integration_test/*/*/*.wasm
+!scheduler/wasm_integration_test/*.wasm
 
 !keys/*

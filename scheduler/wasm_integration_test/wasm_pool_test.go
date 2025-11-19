@@ -46,9 +46,9 @@ func TestWasmPool_Wasmedge(t *testing.T) {
 		Muted:         true,
 	})
 	require.NoError(t, logErr)
-	authFn, err := os.ReadFile("authFunc/auth.wasm")
+	authFn, err := os.ReadFile("auth.wasm")
 	require.NoError(t, err)
-	fun, err := os.ReadFile("genericFunc/fun.wasm")
+	fun, err := os.ReadFile("fun.wasm")
 	require.NoError(t, err)
 	pool := wasm.NewWasmedgeExecutorPool(wasm.Config{
 		PoolSize:  10,
@@ -108,9 +108,9 @@ func TestWasmPool_Wasmtime(t *testing.T) {
 		Muted:         true,
 	})
 	require.NoError(t, logErr)
-	authFn, err := os.ReadFile("authFunc/auth.wasm")
+	authFn, err := os.ReadFile("auth.wasm")
 	require.NoError(t, err)
-	fun, err := os.ReadFile("genericFunc/fun.wasm")
+	fun, err := os.ReadFile("fun.wasm")
 	require.NoError(t, err)
 	pool := wasm.NewWasmtimeExecutorPool(wasm.Config{
 		PoolSize:  10,
@@ -170,9 +170,9 @@ func TestWasmPool_Wazero(t *testing.T) {
 		Muted:         true,
 	})
 	require.NoError(t, logErr)
-	authFn, err := os.ReadFile("authFunc/auth.wasm")
+	authFn, err := os.ReadFile("auth.wasm")
 	require.NoError(t, err)
-	fun, err := os.ReadFile("genericFunc/fun.wasm")
+	fun, err := os.ReadFile("fun.wasm")
 	require.NoError(t, err)
 	pool := wasm.NewWazeroExecutorPool(wasm.Config{
 		PoolSize:  10,

@@ -50,9 +50,6 @@ type Node struct {
 
 func NewServerInfo(config config.Config) (*ServerInfo, error) {
 
-	// Parse info about the name, parent and children
-	// TODO: check if convention on names is respected (which we do not have yet)
-
 	// NB: these operations just copy the references !
 	// TODO: careful for the moment we do not manage errors in the configuration
 	hostname := config.Node.Name

@@ -197,7 +197,6 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 			}
 
 			if update.Deleted {
-				// TODO: Capire se è worth farla asincronamente (DeleteMetadata)
 				s.log.Debug("Requested deletion for sequential collection in executed function", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 				err = s.metadataManager.DeleteMetadata(sequentialCollId, update.Geolocation, propagation.FROM_LOCAL, update.Recreated)
 				if err != nil {
@@ -305,7 +304,6 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 				go func(collId string) {
 					routinePrefix := fmt.Sprintf("GO#%s", xid.New().String())
 
-					// TODO: Capire se è worth farla asincronamente (DeleteMetadata)
 					s.log.Debug("Requested deletion for sequential collection in executed function", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 					err = s.metadataManager.DeleteMetadata(sequentialCollId, update.Geolocation, propagation.FROM_LOCAL, update.Recreated)
 					if err != nil {

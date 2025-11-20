@@ -6,7 +6,7 @@ package tests
 import (
 	clDiscoverer "dataManager/collectionsDiscoverer"
 	gossip "dataManager/messages"
-	migrationManager "dataManager/migrationManager"
+	"dataManager/migrationManager"
 	penality "dataManager/migrationManager/penalityFunction"
 	database "db"
 	"fmt"
@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/ermes-thesis/ermes-common/logger"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/mock"
@@ -22,7 +21,7 @@ import (
 
 func createNewLogger(t *testing.T) logger.Logger {
 	log, err := logger.NewLogger(logger.Config{
-		Level:  zerolog.WarnLevel,
+		Level:  logger.EvalLevel,
 		Format: "text",
 	})
 	require.NoError(t, err)

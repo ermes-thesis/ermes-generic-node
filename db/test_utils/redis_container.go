@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/ermes-thesis/ermes-common/logger"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/testcontainers/testcontainers-go"
@@ -51,7 +50,7 @@ import (
 
 func createNewLogger(t *testing.T) logger.Logger {
 	log, err := logger.NewLogger(logger.Config{
-		Level:     zerolog.DebugLevel,
+		Level:     logger.DebugLevel,
 		Format:    "text",
 		AddSource: false,
 		Muted:     true,

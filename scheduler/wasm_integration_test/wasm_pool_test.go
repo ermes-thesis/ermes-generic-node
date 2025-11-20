@@ -18,14 +18,13 @@ import (
 	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/ermes-thesis/ermes-common/utils"
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
 func createNewLogger(t testing.TB) logger.Logger {
 	log, err := logger.NewLogger(logger.Config{
-		Level:     zerolog.DebugLevel,
+		Level:     logger.DebugLevel,
 		Format:    "text",
 		AddSource: false,
 		Muted:     true,
@@ -36,7 +35,7 @@ func createNewLogger(t testing.TB) logger.Logger {
 
 func TestWasmPool_Wasmedge(t *testing.T) {
 	log, logErr := logger.NewLogger(logger.Config{
-		Level:         zerolog.InfoLevel,
+		Level:         logger.InfoLevel,
 		Format:        "text",
 		Output:        nil,
 		StdoutEnabled: false,
@@ -98,7 +97,7 @@ func TestWasmPool_Wasmedge(t *testing.T) {
 
 func TestWasmPool_Wasmtime(t *testing.T) {
 	log, logErr := logger.NewLogger(logger.Config{
-		Level:         zerolog.InfoLevel,
+		Level:         logger.InfoLevel,
 		Format:        "text",
 		Output:        nil,
 		StdoutEnabled: false,
@@ -160,7 +159,7 @@ func TestWasmPool_Wasmtime(t *testing.T) {
 
 func TestWasmPool_Wazero(t *testing.T) {
 	log, logErr := logger.NewLogger(logger.Config{
-		Level:         zerolog.InfoLevel,
+		Level:         logger.InfoLevel,
 		Format:        "text",
 		Output:        nil,
 		StdoutEnabled: false,

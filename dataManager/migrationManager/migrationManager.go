@@ -132,8 +132,15 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.collectionsPartialView = collections
 
 		// --- START ASYNC DUMP ---
-		m.dumpCtx, m.dumpCancel = context.WithCancel(context.Background())
-		m.startAsyncDump(m.dumpCtx, config.KnownCollectionsDumpPath, config.KnownCollectionsDumpInterval)
+		interval := config.KnownCollectionsDumpInterval
+		if interval <= 0 {
+			m.dumpCtx, m.dumpCancel = context.WithCancel(context.Background())
+			m.startAsyncDump(m.dumpCtx, config.KnownCollectionsDumpPath, config.KnownCollectionsDumpInterval)
+			m.log.Info("MIG-MANAGER, async dump enabled")
+		} else {
+			m.dumpCtx, m.dumpCancel = nil, nil
+			m.log.Info("MIG-MANAGER, async dump disabled")
+		}
 		m.log.Info("MIG-MANAGER, migration manager instance has been initialized")
 	})
 }

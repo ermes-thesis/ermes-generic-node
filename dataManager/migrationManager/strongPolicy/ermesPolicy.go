@@ -102,7 +102,7 @@ func (s *ErmesStrongCollectionPolicy) setState(state MigrationManagerState) {
 
 // transitionToGossip handles automatic transition from idle to gossip
 func (s *ErmesStrongCollectionPolicy) transitionToGossip() {
-	s.log.Info("[DEFAULT-STRONG-POLICY], transition to gossip state")
+	s.log.Eval("[DEFAULT-STRONG-POLICY], transition to gossip state")
 	//sync
 	s.migLock.Lock()
 	defer s.migLock.Unlock()
@@ -126,7 +126,7 @@ func (s *ErmesStrongCollectionPolicy) transitionToGossip() {
 }
 
 func (s *ErmesStrongCollectionPolicy) transitionToDecision(childrenResourceUsage map[string]NodeStateInfo) {
-	s.log.Info("DEFAULT-STRONG-POLICY, transition to decision state")
+	s.log.Eval("DEFAULT-STRONG-POLICY, transition to decision state")
 	// Only transition if still in gossip state
 	if _, isGossip := s.currentState.(*MigrationManagerGossipState); isGossip {
 		//fmt.Println("Auto-transitioning from gossip to decision state")
@@ -139,7 +139,7 @@ func (s *ErmesStrongCollectionPolicy) transitionToDecision(childrenResourceUsage
 }
 
 func (s *ErmesStrongCollectionPolicy) transitionToIdle() {
-	s.log.Info("DEFAULT-STRONG-POLICY, transition to idle state")
+	s.log.Eval("DEFAULT-STRONG-POLICY, transition to idle state")
 
 	//imp
 	// Only transition if still in decision state

@@ -12,7 +12,7 @@ import (
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
-	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
+	"github.com/ermes-thesis/ermes-common/wasm-pool/adapter"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )

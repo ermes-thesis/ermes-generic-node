@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
-	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
+	"github.com/ermes-thesis/ermes-common/wasm-pool/adapter"
 	"github.com/second-state/WasmEdge-go/wasmedge"
 )
 

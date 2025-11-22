@@ -10,7 +10,6 @@ import (
 	collectionsDiscoverer_mock "mocks/dataManager/collectionsDiscoverer"
 	migrationManager_mock "mocks/dataManager/migrationManager"
 	wasm_mock "mocks/ermes-common/wasm-pool"
-	wasm_executor_mock "mocks/ermes-common/wasm-pool/executor"
 	metadataManager_mock "mocks/metadataManager"
 	tokenDecoder_mock "mocks/tokenDecoder"
 	"net/http"
@@ -24,14 +23,14 @@ import (
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
 func createNewLogger(t *testing.T) logger.Logger {
 	log, err := logger.NewLogger(logger.Config{
-		Level:     zerolog.DebugLevel,
+		Level:     logger.DebugLevel,
 		Format:    "text",
 		AddSource: true,
 	})
@@ -95,9 +94,6 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
 	schedulerFatherLog := createNewLogger(t)
 	cfg := config.SchedulerConfig{
-		StartingExecutorsBackoff:    time.Second,
-		MaxExecutorsRetries:         10,
-		MaxExecutorsBackoff:         time.Second * 5,
 		StartingOutdatedDataBackoff: time.Second,
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
@@ -143,6 +139,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
+	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
@@ -152,15 +149,11 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
+	wasmExecutorPoolChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
-	wasmExecutorChild.EXPECT().Release().Return()
-
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
 	schedulerLog := createNewLogger(t)
 	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerLog)
@@ -267,6 +260,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 
 	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerFather.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
+	migrationManagerFather.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
 
 	dataManagerFather := datamanager_mock.NewDataManager(t)
 	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
@@ -278,21 +272,14 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 
-	wasmExecutorFather := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorFather.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
+	wasmExecutorPoolFather.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
-	wasmExecutorFather.EXPECT().Release().Return()
-
-	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolFather.EXPECT().Acquire().Return(wasmExecutorFather)
 
 	schedulerLog := createNewLogger(t)
 	cfg := config.SchedulerConfig{
-		StartingExecutorsBackoff:    time.Second,
-		MaxExecutorsRetries:         10,
-		MaxExecutorsBackoff:         time.Second * 5,
 		StartingOutdatedDataBackoff: time.Second,
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
@@ -345,8 +332,12 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
 	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
 
+	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerChild.EXPECT().HandlePostponedDecisions(mock.Anything).Return()
+
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
+	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
 
 	schedulerChildLog := createNewLogger(t)
 	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
@@ -438,9 +429,6 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 
 	schedulerFatherLog := createNewLogger(t)
 	cfg := config.SchedulerConfig{
-		StartingExecutorsBackoff:    time.Second,
-		MaxExecutorsRetries:         10,
-		MaxExecutorsBackoff:         time.Second * 5,
 		StartingOutdatedDataBackoff: time.Second,
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
@@ -472,15 +460,11 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
+	wasmExecutorPoolChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
-	wasmExecutorChild.EXPECT().Release().Return()
-
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345 := shared.NewWeakCollection("12345", 40, false)
@@ -490,6 +474,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
@@ -580,6 +565,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 
 	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerFather.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+	migrationManagerFather.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
 
 	dataManagerFather := datamanager_mock.NewDataManager(t)
 	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
@@ -590,21 +576,14 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 
 	metadataManager := metadataManager_mock.NewMetadataManager(t)
 
-	wasmExecutorFather := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorFather.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
+	wasmExecutorPoolFather.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
-	wasmExecutorFather.EXPECT().Release().Return()
-
-	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolFather.EXPECT().Acquire().Return(wasmExecutorFather)
 
 	schedulerFatherLog := createNewLogger(t)
 	cfg := config.SchedulerConfig{
-		StartingExecutorsBackoff:    time.Second,
-		MaxExecutorsRetries:         10,
-		MaxExecutorsBackoff:         time.Second * 5,
 		StartingOutdatedDataBackoff: time.Second,
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
@@ -744,9 +723,6 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 
 	schedulerFatherLog := createNewLogger(t)
 	cfg := config.SchedulerConfig{
-		StartingExecutorsBackoff:    time.Second,
-		MaxExecutorsRetries:         10,
-		MaxExecutorsBackoff:         time.Second * 5,
 		StartingOutdatedDataBackoff: time.Second,
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
@@ -778,15 +754,11 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
+	wasmExecutorPoolChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
-	wasmExecutorChild.EXPECT().Release().Return()
-
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345 := shared.NewWeakCollection("12345", 40, false)
@@ -798,6 +770,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "54321"}).Return()
+	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
@@ -895,9 +868,6 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 
 	schedulerFatherLog := createNewLogger(t)
 	cfg := config.SchedulerConfig{
-		StartingExecutorsBackoff:    time.Second,
-		MaxExecutorsRetries:         10,
-		MaxExecutorsBackoff:         time.Second * 5,
 		StartingOutdatedDataBackoff: time.Second,
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
@@ -929,15 +899,11 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
+	wasmExecutorPoolChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
-	wasmExecutorChild.EXPECT().Release().Return()
-
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild12345Child := shared.NewWeakCollection("12345", 40, false)
@@ -947,6 +913,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
@@ -1054,8 +1021,12 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collFather12345, nil)
 	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collFather1111, nil)
 
+	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
+	migrationManagerFather.EXPECT().HandlePostponedDecisions(mock.Anything).Return()
+
 	dataManagerFather := datamanager_mock.NewDataManager(t)
 	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
+	dataManagerFather.EXPECT().GetMigrationManager().Return(migrationManagerFather)
 
 	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
@@ -1066,9 +1037,6 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 
 	schedulerFatherLog := createNewLogger(t)
 	cfg := config.SchedulerConfig{
-		StartingExecutorsBackoff:    time.Second,
-		MaxExecutorsRetries:         10,
-		MaxExecutorsBackoff:         time.Second * 5,
 		StartingOutdatedDataBackoff: time.Second,
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
@@ -1108,15 +1076,11 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	wasmExecutorChild := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
+	wasmExecutorPoolChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
-	wasmExecutorChild.EXPECT().Release().Return()
-
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolChild.EXPECT().Acquire().Return(wasmExecutorChild)
 
 	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild1111 := shared.NewStrongCollection("1111", 40, false, true, "")
@@ -1127,6 +1091,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 
 	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
+	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
 
 	dataManagerChild := datamanager_mock.NewDataManager(t)
 	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
@@ -1233,9 +1198,6 @@ func TestScheduleThreeNodes(t *testing.T) {
 
 	schedulerFatherLog := createNewLogger(t)
 	cfg := config.SchedulerConfig{
-		StartingExecutorsBackoff:    time.Second,
-		MaxExecutorsRetries:         10,
-		MaxExecutorsBackoff:         time.Second * 5,
 		StartingOutdatedDataBackoff: time.Second,
 		MaxOutdatedDataRetries:      10,
 		MaxOutdatedDataBackoff:      time.Second * 5,
@@ -1320,15 +1282,11 @@ func TestScheduleThreeNodes(t *testing.T) {
 	tknDecoderChild2 := tokenDecoder_mock.NewTokenDecoder(t)
 	tknDecoderChild2.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	wasmExecutorChild2 := wasm_executor_mock.NewExecutor(t)
-	wasmExecutorChild2.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
+	wasmExecutorPoolChild2 := wasm_mock.NewExecutorPool(t)
+	wasmExecutorPoolChild2.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
 		HttpCode: 200,
 		Response: "function executed correctly",
 	})
-	wasmExecutorChild2.EXPECT().Release().Return()
-
-	wasmExecutorPoolChild2 := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolChild2.EXPECT().Acquire().Return(wasmExecutorChild2)
 
 	collectionDiscovererChild2 := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	collChild1111_2 := shared.NewStrongCollection("1111", 40, false, true, "")
@@ -1338,6 +1296,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 
 	migrationManagerChild2 := migrationManager_mock.NewMigrationManager(t)
 	migrationManagerChild2.EXPECT().UpdateCollectionsLatestUsage([]string{"1111"}).Return()
+	migrationManagerChild2.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
 
 	dataManagerChild2 := datamanager_mock.NewDataManager(t)
 	dataManagerChild2.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild2)

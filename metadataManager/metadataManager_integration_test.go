@@ -20,7 +20,6 @@ import (
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
@@ -67,7 +66,7 @@ var templates = map[string]model.QueryTemplate{
 
 func createNewLogger(t *testing.T) logger.Logger {
 	log, err := logger.NewLogger(logger.Config{
-		Level:     zerolog.DebugLevel,
+		Level:     logger.DebugLevel,
 		Format:    "text",
 		AddSource: false,
 	})

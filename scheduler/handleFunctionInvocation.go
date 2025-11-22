@@ -52,7 +52,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			collections = cachedQueries
 		}
 
-		if queryParams != "" {
+		if queryParams != "" && queryParams != "{}" {
 			s.log.Info("Executing metadata queries", "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams)
 			s.log.Debug("Executing metadata queries", "user_access_groups", groups, "queries_geolocation", geolocation)
 			res, err := s.metadataManager.ExecuteQueries(fnName, fnVersion, queryParams, groups, userId, groupToken, geolocation)
@@ -103,8 +103,12 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			Payload:             body,
 		}, "user", groups, userId)
 		if err != nil {
+			statusCode := http.StatusInternalServerError
+			if functionResponse != nil {
+				statusCode = functionResponse.StatusCode
+			}
 			s.log.Error("Error during function scheduling", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)
-			http.Error(w, fmt.Sprintf("error executing function: %v", err), http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("error executing function: %v", err), statusCode)
 			return
 		}
 

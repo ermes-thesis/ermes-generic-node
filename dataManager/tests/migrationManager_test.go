@@ -47,8 +47,8 @@ func TestManageNewStrongRequest(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
-	instance1.NewCollectionReceived("repoId", true, false, make(map[string]database.RecordValue, 13), []string{}, "", 0, 13, false, "host")
-	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]database.RecordValue, 14), []string{}, "", 0, 14, false, "host")
+	instance1.NewCollectionReceived("repoId", true, 0, false, make(map[string]database.RecordValue, 13), []string{}, "", 0, 13, false, "host")
+	instance1.NewCollectionReceived("repoId1", true, 0, false, make(map[string]database.RecordValue, 14), []string{}, "", 0, 14, false, "host")
 
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
@@ -123,8 +123,8 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
-	instance1.NewCollectionReceived("repoId", true, false, make(map[string]database.RecordValue), []string{}, "", 0, 12, false, "host")
-	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]database.RecordValue), []string{}, "", 0, 13, false, "host")
+	instance1.NewCollectionReceived("repoId", true, 0, false, make(map[string]database.RecordValue), []string{}, "", 0, 12, false, "host")
+	instance1.NewCollectionReceived("repoId1", true, 0, false, make(map[string]database.RecordValue), []string{}, "", 0, 13, false, "host")
 
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
@@ -167,8 +167,8 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
 	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
-	instance1.NewCollectionReceived("repoId", true, false, make(map[string]database.RecordValue), []string{}, "", 0, 13, false, "host")
-	instance1.NewCollectionReceived("repoId1", true, false, make(map[string]database.RecordValue), []string{}, "", 0, 14, false, "host")
+	instance1.NewCollectionReceived("repoId", true, 0, false, make(map[string]database.RecordValue), []string{}, "", 0, 13, false, "host")
+	instance1.NewCollectionReceived("repoId1", true, 0, false, make(map[string]database.RecordValue), []string{}, "", 0, 14, false, "host")
 
 	instance1.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{

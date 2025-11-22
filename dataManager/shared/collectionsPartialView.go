@@ -1,12 +1,14 @@
 package dataManagerShared
 
 import (
+	"cmp"
 	"config"
 	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
 	"server"
+	"slices"
 	"sync"
 	"time"
 )
@@ -101,34 +103,28 @@ type collectionDump struct {
 	IsStrong       bool     `json:"is_strong"`
 	IsLocal        bool     `json:"is_local"`
 	IsLeader       bool     `json:"is_leader"`
+	SequenceNumber uint64   `json:"sequence_number"`
 	CollectionSize uint64   `json:"collection_size"`
 	LeaderID       string   `json:"leader_id,omitempty"`
 	HostsID        []string `json:"hosts_id"`
 }
 
 func (c *CollectionPartialView) DumpToJsonFile(path string) error {
-	c.Mutex.Lock()
-	snapshot := maps.Clone(c.KnownCollections)
-	c.Mutex.Unlock()
-
-	dump := make([]collectionDump, 0, len(c.KnownCollections))
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 
-	for id, coll := range snapshot {
-		hosts := make([]string, 0, len(coll.HostsId()))
-		for h := range coll.HostsId() {
-			hosts = append(hosts, h)
-		}
+	c.Mutex.Lock()
 
-		isLocal := coll.IsLocal()
-		isStrong := coll.IsStrong()
+	snapshot := make([]collectionDump, 0, len(c.KnownCollections))
+
+	for id, collection := range c.KnownCollections {
+		hosts := maps.Clone(collection.HostsId())
+		isStrong := collection.IsStrong()
+		isLocal := collection.IsLocal()
 
 		// Default size = 0 if remote (we can’t measure it)
 		var size uint64 = 0
-		if isLocal {
-			if state, ok := coll.GetCollectionState().(*LocalCollection); ok {
-				size = state.Size()
-			}
+		if state, ok := collection.GetCollectionState().(*LocalCollection); ok {
+			size = state.Size()
 		}
 
 		entry := collectionDump{
@@ -137,18 +133,23 @@ func (c *CollectionPartialView) DumpToJsonFile(path string) error {
 			IsStrong:       isStrong,
 			IsLocal:        isLocal,
 			CollectionSize: size,
-			HostsID:        hosts,
+			HostsID:        slices.Sorted(maps.Keys(hosts)),
 		}
 
 		// For strong collections, include leader info
-		if s, ok := coll.(*StrongCollection); ok {
+		if s, ok := collection.(*StrongCollection); ok {
 			entry.IsLeader = s.IsLeader
 			entry.LeaderID = s.LeaderId
+			entry.SequenceNumber = s.ConsistencyClock
 		}
 
-		dump = append(dump, entry)
+		snapshot = append(snapshot, entry)
 	}
+	c.Mutex.Unlock()
 
+	slices.SortFunc(snapshot, func(e collectionDump, e2 collectionDump) int {
+		return cmp.Compare(e.CollectionID, e2.CollectionID)
+	})
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return err
@@ -156,7 +157,7 @@ func (c *CollectionPartialView) DumpToJsonFile(path string) error {
 	defer file.Close()
 
 	encoder := json.NewEncoder(file)
-	for _, d := range dump {
+	for _, d := range snapshot {
 		err = encoder.Encode(d)
 		if err != nil {
 			return fmt.Errorf("failed to marshal known collections: %w", err)

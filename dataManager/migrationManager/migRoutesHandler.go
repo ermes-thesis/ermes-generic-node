@@ -62,7 +62,7 @@ func (m *MigrationManagerImp) handleIncomingGossipMessages() http.Handler {
 
 func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m.log.Info("HTTP-REQ, New collection received through HTTP request")
+		m.log.Info("HTTP-REQ, New collection received through HTTP request", "sender_ip", r.RemoteAddr)
 
 		defer r.Body.Close()
 
@@ -80,7 +80,9 @@ func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 			return
 		}
 
-		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.IsLeader, collection.Records, collection.Groups, collection.Owner, collection.GroupsSequence, collection.CollectionSize, collection.HostToRemove, collection.SenderIp)
+		m.log.Info("HTTP-REQ, New collection received info", "collection_id", collection.CollectionId, "is_strong", collection.IsStrong, "is_leader", collection.IsLeader, "records_count", len(collection.Records), "groups", collection.Groups, "owner", collection.Owner, "groups_sequence", collection.GroupsSequence, "collection_size", collection.CollectionSize, "host_to_remove", collection.HostToRemove, "sender_ip", collection.SenderIp)
+
+		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.SequenceNumber, collection.IsLeader, collection.Records, collection.Groups, collection.Owner, collection.GroupsSequence, collection.CollectionSize, collection.HostToRemove, collection.SenderIp)
 
 		w.WriteHeader(http.StatusOK)
 	})

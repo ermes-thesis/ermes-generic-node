@@ -9,11 +9,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"math/rand"
 	"metadataManager"
 	"metadataManager/propagation"
 	"net/http"
 	"server"
+	"sync"
 	"time"
 	"tokenDecoder"
 
@@ -109,7 +109,7 @@ type baseScheduler struct {
 	cfg              config.SchedulerConfig
 }
 
-func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string, sequentialCollId string, writeSeqCollection bool) (*FunctionResult, uint64, error) {
+func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string, sequentialCollId string, seqColLock *sync.RWMutex, writeSeqCollection bool) (*FunctionResult, uint64, error) {
 	var collIds []string
 	for _, cols := range scheduleRequest.Collections {
 		for _, col := range cols {
@@ -120,29 +120,6 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 	s.dataManager.GetMigrationManager().UpdateCollectionsLatestUsage(collIds)
 
 	s.log.Debug("Acquiring wasm executor from pool", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-	executor := s.wasmExecutorPool.Acquire()
-
-	backoff := s.cfg.StartingExecutorsBackoff
-	for i := 0; i < s.cfg.MaxExecutorsRetries && executor == nil; i++ {
-		jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
-		time.Sleep(backoff + jitter)
-		s.log.Debug("Retry acquiring wasm executor from pool", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-
-		backoff *= 2
-		if backoff > s.cfg.MaxExecutorsBackoff {
-			backoff = s.cfg.MaxExecutorsBackoff
-		}
-		executor = s.wasmExecutorPool.Acquire()
-	}
-	if executor == nil {
-		s.log.Error("Local execution failed. The WASM pool was too busy and there weren't any WASM executor available", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-		return nil, 0, fmt.Errorf("local execution failed. The WASM pool was too busy and there weren't any WASM executor available")
-	}
-
-	defer func() {
-		executor.Release()
-		s.log.Debug("Released wasm executor back to pool", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-	}()
 
 	ctx := WasmContext{
 		UserId:      userId,
@@ -163,9 +140,31 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 
 	s.log.Info("Invoking function locally", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 	startTime := time.Now()
-	resp := executor.Invoke(wasmBinary, "entry", scheduleRequest.Payload, ctxJson)
-	s.log.Info("Function executed successfully", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_duration", time.Since(startTime).Nanoseconds())
+	resp := s.wasmExecutorPool.Invoke(wasmBinary, "entry", scheduleRequest.Payload, ctxJson)
+	s.log.Eval("Function executed successfully", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_duration", time.Since(startTime).Nanoseconds())
 	s.log.Debug("Function executed successfully", "fn_response", fmt.Sprintf("%+v", resp))
+
+	defer func() {
+		if seqColLock != nil {
+			s.log.Info("Releasing sequential collection lock after function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
+			seqColLock.RUnlock()
+		} else {
+			s.log.Warn("No sequential collection lock to release after function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
+		}
+
+		var collRequestInfo []messages.CollectionRequestInfo
+		for _, colls := range scheduleRequest.Collections {
+			for _, coll := range colls {
+				collRequestInfo = append(collRequestInfo, messages.CollectionRequestInfo{
+					CollectionId:   coll.Id,
+					IsWrite:        writeSeqCollection,
+					RequestLatency: scheduleRequest.CumulativeLatency,
+				})
+			}
+		}
+		s.log.Info("Starting to update migration manager request infos for the used collections", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
+		s.dataManager.GetMigrationManager().UpdatesRequestsInfo(collRequestInfo, reqHostname)
+	}()
 
 	repBody, err := json.Marshal(resp.Response)
 	if err != nil {
@@ -198,7 +197,6 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 			}
 
 			if update.Deleted {
-				// TODO: Capire se è worth farla asincronamente (DeleteMetadata)
 				s.log.Debug("Requested deletion for sequential collection in executed function", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 				err = s.metadataManager.DeleteMetadata(sequentialCollId, update.Geolocation, propagation.FROM_LOCAL, update.Recreated)
 				if err != nil {
@@ -306,7 +304,6 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 				go func(collId string) {
 					routinePrefix := fmt.Sprintf("GO#%s", xid.New().String())
 
-					// TODO: Capire se è worth farla asincronamente (DeleteMetadata)
 					s.log.Debug("Requested deletion for sequential collection in executed function", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 					err = s.metadataManager.DeleteMetadata(sequentialCollId, update.Geolocation, propagation.FROM_LOCAL, update.Recreated)
 					if err != nil {
@@ -387,21 +384,6 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 		s.sendUpdateToGTP(resp.CacheUpdates.Groups)
 		s.log.InfofWith("[%s] Finished propagation of updates on eventual collections", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates")
 	}()
-
-	// Update requests info synchronously
-	var collRequestInfo []messages.CollectionRequestInfo
-	for _, colls := range scheduleRequest.Collections {
-		for _, coll := range colls {
-			collRequestInfo = append(collRequestInfo, messages.CollectionRequestInfo{
-				CollectionId:   coll.Id,
-				IsWrite:        writeSeqCollection,
-				RequestLatency: scheduleRequest.CumulativeLatency,
-			})
-		}
-	}
-
-	s.log.Info("Starting to update migration manager request infos for the used collections", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
-	s.dataManager.GetMigrationManager().UpdatesRequestsInfo(collRequestInfo, reqHostname)
 
 	s.log.Info("Local function execution completed successfully. Returning result", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result), "new_sequence_number", seqNumber)
 	return result, seqNumber, nil

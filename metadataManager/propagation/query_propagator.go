@@ -34,7 +34,7 @@ func (p *QueryPropagatorImpl) Propagate(functionName, functionVersion, templateP
 	p.log.Info("Starting query propagation", "fn_name", functionName, "fn_version", functionVersion, "node_geolocation", p.serverInfo.MetadataDomain, "query_geolocation", geolocation)
 
 	var sendTo string
-	if p.serverInfo.CloudNode == nil || strings.HasPrefix(p.serverInfo.MetadataDomain, geolocation) {
+	if p.serverInfo.CloudNode == nil || (geolocation != "" && strings.HasPrefix(p.serverInfo.MetadataDomain, geolocation)) {
 		p.log.Info("No cloud node configured or node geolocation is a subdomain of the query geolocation, forwarding query to father node.", "node_geolocation", p.serverInfo.MetadataDomain, "query_geolocation", geolocation, "father_hostname", p.serverInfo.Father.HostName, "father_geolocation", p.serverInfo.Father.MetadataDomain)
 		sendTo = p.serverInfo.Father.HostName
 	} else {

@@ -99,8 +99,13 @@ func (s *statefulPolicy) handleOffloadFunctionInvocation(tokenDecoder tokenDecod
 			NumRedirects:        redirectsInt,
 		}, hostname, groups, userId)
 		if err != nil {
-			s.log.Error("Error parsing sequential sequence number", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
-			http.Error(w, fmt.Sprintf("error executing function: %v", err), http.StatusInternalServerError)
+			statusCode := http.StatusInternalServerError
+			if functionResponse != nil {
+				statusCode = functionResponse.StatusCode
+			}
+
+			s.log.Error("Error executing offloaded function", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
+			http.Error(w, fmt.Sprintf("error executing offloaded function: %v", err), statusCode)
 			return
 		}
 

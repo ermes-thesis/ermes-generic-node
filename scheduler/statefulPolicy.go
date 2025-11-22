@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"bytes"
+	"dataManager/collectionsDiscoverer"
 	shared "dataManager/shared"
 	"encoding/json"
 	"errors"
@@ -55,6 +56,7 @@ func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum ui
 
 	for i := 0; i < s.cfg.MaxOutdatedDataRetries; i++ {
 		found, collection, err = s.dataManager.GetCollectionsDiscoverer().IsCollectionLocallyPresent(colId, seqNum)
+		var toMigrateErr *collectionsDiscoverer.ToMigrateError
 		if err == nil {
 			if collection != nil {
 				s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection))
@@ -62,6 +64,8 @@ func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum ui
 				s.log.Info("Collection found locally", "collection_id", colId, "seq_num", seqNum, "is_locally_present", found)
 			}
 			return found, collection, nil
+		} else if errors.As(err, &toMigrateErr) {
+			return false, nil, toMigrateErr
 		}
 		s.log.Debug("Retry collection presence check", "collection_id", colId, "seq_num", seqNum, "current_attempt", i, "error", err)
 		if i < s.cfg.MaxOutdatedDataRetries-1 {
@@ -85,7 +89,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 	if len(scheduleRequest.Collections) == 0 {
 		s.log.Info("No collections specified, executing locally", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 		s.log.Debug("No collections specified, executing locally", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload))
-		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", false)
+		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false)
 	}
 
 	s.log.Info("Start to analyze collections for scheduling decision", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId)
@@ -107,9 +111,16 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 			// Checking if the collection is locally present, the check is retried maximum 10 times, every 500ms if the
 			// collection is a sequential consistent one. (In case of an eventual consistent the seqNumber passed is ignored)
 			found, collection, err := s.retryIsCollectionLocallyPresent(col.Id, scheduleRequest.SequentialSeqNumber)
+			var toMigrateErr *collectionsDiscoverer.ToMigrateError
 			if err != nil {
-				s.log.Error("Failed to verify collection presence", "collection_id", col.Id, "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", scheduleRequest.Payload, "req_hostname", reqHostname, "error", err)
-				return nil, 0, s.log.ErrorfErr("wrong sequence number for collection: %v, %v", col.Id, err)
+				if errors.As(err, &toMigrateErr) {
+					s.log.Error("Collection is being migrated, cannot schedule function", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_id", col.Id, "seq_num", scheduleRequest.SequentialSeqNumber, "error", err)
+					return &FunctionResult{
+						StatusCode: 423,
+						Hostname:   "",
+						Body:       nil,
+					}, 0, toMigrateErr
+				}
 			}
 
 			if col.Metadata.Consistency == model.SequentialConsistent {
@@ -164,7 +175,6 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 			return s.forwardRequest(s.serverInfo.Father.HostName, scheduleRequest)
 		}
 
-		// Sequential collection present - check if it is requested a write or read access
 		functionMetadata, err := s.cache.GetMetadata(scheduleRequest.FunctionName, scheduleRequest.FunctionVersion)
 		if err != nil {
 			s.log.Error("Failed to retrieve function metadata", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", scheduleRequest.Payload, "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname, "error", err)
@@ -186,10 +196,9 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 					sequentialCollection.WriteMutex.Lock()
 					defer sequentialCollection.WriteMutex.Unlock()
 				}
-				defer sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
 				s.log.Info("Executing function locally with sequential collection", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 				s.log.Debug("Executing function locally with sequential collection", "seq_collection_id", sequentialCollection.CollectionId(), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "is_leader", sequentialCollection.IsLeader, "write_access_requested", functionMetadata.StrongCollWriteAccess)
-				return s.executeLocally(scheduleRequest, reqHostname, groups, userId, sequentialCollection.CollectionId(), functionMetadata.StrongCollWriteAccess)
+				return s.executeLocally(scheduleRequest, reqHostname, groups, userId, sequentialCollection.CollectionId(), &sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock, functionMetadata.StrongCollWriteAccess)
 			}
 
 			s.log.Info("Sequential collection must be accessed in write but the local sequential collection is not the leader. Forwarding request to the host containing the leader sequential collection",
@@ -201,6 +210,9 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 			} else if dest == "" && s.serverInfo.Father == nil {
 				return nil, 0, fmt.Errorf("sequential collection leader not found for collection %s", sequentialCollection.CollectionId())
 			}
+
+			sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
+			s.dataManager.GetMigrationManager().HandlePostponedDecisions(sequentialCollection)
 			return s.forwardRequest(dest, scheduleRequest)
 		}
 
@@ -213,7 +225,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 	if hasEventualLocal {
 		s.log.Info("Executing function locally with eventual", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId)
 		s.log.Debug("Executing function locally with eventual", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "user_access_groups", groups, "request_hostname", reqHostname)
-		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", false)
+		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false)
 	}
 
 	// We have only Eventual Collection requested, and no one of them is local, we forward the scheduling request
@@ -297,6 +309,15 @@ func (s *statefulPolicy) forwardRequest(dest string, scheduleRequest ScheduleReq
 		return nil, 0, fmt.Errorf("error forwarding request: %v", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		s.log.Error("Received error response from offloaded scheduling", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency, "status_code", resp.StatusCode)
+		return &FunctionResult{
+			StatusCode: resp.StatusCode,
+			Hostname:   resp.Header.Get("X-ERMES-EXECUTION-HOST"),
+			Body:       nil,
+		}, 0, fmt.Errorf("error response from offloaded scheduling: status code %d", resp.StatusCode)
+	}
 
 	sequentialSeqNumberStr := resp.Header.Get("X-ERMES-SEQUENTIAL-NUMBER")
 	var sequentialSeqNumber uint64

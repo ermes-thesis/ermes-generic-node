@@ -40,7 +40,7 @@ func (m *MigrationManagerGossipState) SendGossipMessages() {
 		m.policy.log.Errorf("GOSSIP-STATE, failed to get memory stats: %v", err)
 	}
 	redisFreeSize := 1.0 - memStats.UsedMemoryDatasetPercentage
-	m.policy.log.Info("GOSSIP-STATE, sending gossip messages with free redis size:", redisFreeSize)
+	m.policy.log.Infof("GOSSIP-STATE, sending gossip messages with free redis size: %f", redisFreeSize)
 
 	for value := range m.policy.serverInfo.Children {
 		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.HostName, redisFreeSize)

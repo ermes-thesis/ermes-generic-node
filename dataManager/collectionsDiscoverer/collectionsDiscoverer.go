@@ -99,6 +99,8 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 		if strongCollection.ConsistencyClock < consistencyClock {
 			c.log.Warn("Outdated strong collection replica", "collection_id", collectionId, "provided_consistency_clock", consistencyClock, "collection", fmt.Sprintf("%+v", collection), "local_consistency_clock", strongCollection.ConsistencyClock)
 			return true, collection, errors.New("outdated data in a strong collection replica")
+		} else if strongCollection.HasPostponedDecisionBehaviour() {
+			return true, collection, &ToMigrateError{Code: 423, Message: "Strong collection has postponed migration behaviour to execute, can't be used until migration is completed"}
 		}
 		collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
 		c.log.Debug("LOCK: Locked in READ the sequential collection", "collection_id", collectionId)
@@ -276,6 +278,10 @@ func (c *CollectionsDiscovererImp) updateRecord(
 			c.log.Error("UpdateRecord: Failed to update collection records in DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "error", err)
 		}
 		return nil, err
+	}
+
+	if collection.IsStrong() {
+		collection.(*shared.StrongCollection).ConsistencyClock = updateMessage.GetSequence()
 	}
 
 	collection.GetCollectionState().(*shared.LocalCollection).IncSize(memUsage)

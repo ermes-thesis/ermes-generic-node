@@ -5,7 +5,7 @@ import (
 
 	"github.com/bytecodealliance/wasmtime-go/v37"
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
-	"github.com/ermes-thesis/ermes-common/wasm-pool/executor/adapter"
+	"github.com/ermes-thesis/ermes-common/wasm-pool/adapter"
 )
 
 func (h *HostFunctions) RegisterWasmtimeHostFns(pool *wasm.WasmtimeExecutorPool) error {

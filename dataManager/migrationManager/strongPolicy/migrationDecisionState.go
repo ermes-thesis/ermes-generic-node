@@ -18,6 +18,10 @@ type MigrationManagerDecisionState struct {
 
 	requestStack *stack.CallStack
 }
+type Decision struct {
+	Destination  string
+	SendAsLeader bool
+}
 
 // methods
 func (m *MigrationManagerDecisionState) Setup(args ...any) {
@@ -73,7 +77,7 @@ func (m *MigrationManagerDecisionState) computeElasticForce(cb *usage.CircularBu
 			break
 		}
 		resourceUsage := data(el)
-		reqT += resourceUsage.TotalRequests //TODO: penality anche per questo?
+		reqT += m.policy.penalityFunc(i, resourceUsage.TotalRequests)
 		fe += m.policy.penalityFunc(i, resourceUsage.GetElasticForce())
 	}
 
@@ -88,42 +92,57 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 	//imp
 	var wg sync.WaitGroup
 
-	m.policy.equilibriumState.Range(func(key, value any) bool {
+	m.policy.equilibriumState.Range(func(key, value any) bool { // key: string (resource), value: map[string]*usage.CircularBuffer mapping resource - nodeName
 		outerKey := key.(string)
 		innerMap := value.(map[string]*usage.CircularBuffer)
 		//apply decision only on strong local collections
-		if m.policy.partialView.KnownCollections[outerKey] == nil ||
-			!m.policy.partialView.KnownCollections[outerKey].IsLocal() ||
-			!m.policy.partialView.KnownCollections[outerKey].IsStrong() {
+		col := m.policy.partialView.KnownCollections[outerKey]
+		if col == nil ||
+			!col.IsLocal() ||
+			!col.IsStrong() ||
+			col.(*shared.StrongCollection).HasPostponedDecisionBehaviour() {
 			return true
 		}
 		wg.Add(1)
 		m.policy.log.Infof("DEFAULT-STRONG-POLICY, start taking decisions for collection %s", outerKey)
 		//take decision on a secondary thread
-		go m.innerKeyDecision(outerKey, innerMap, &wg, len(innerMap))
+		go m.innerKeyDecision(outerKey, innerMap, &wg)
 		return true
 	})
 	//wait for all the decision to ends
 	wg.Wait()
 }
 
-func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerMap map[string]*usage.CircularBuffer, wg *sync.WaitGroup, interestedNodeCounter int) {
+func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerMap map[string]*usage.CircularBuffer, wg *sync.WaitGroup) {
 	defer wg.Done()
 
+	replicaInterestedNodeCounter := 0
+	leaderDecisionTaken := false
+
 	strongCollection := m.policy.partialView.KnownCollections[outerKey].(*shared.StrongCollection)
+	decisions := []Decision{}
 
 	//compute total forces sum -> value that must be outclassed to delegate the leader
 	var totalForce = 0
 	var totalReqNumber = 0
 	if strongCollection.IsLeader {
 		for _, buffer := range innerMap {
-			force, req := m.computeElasticForce(buffer, usage.GetWrite)
-			m.policy.log.Info("DEFAULT-STRONG-POLICY, leader total force computation", "collection_id", outerKey, "force", force, "num_requests", req)
-			totalForce += force
-			totalReqNumber += req
+			wForce, wReq := m.computeElasticForce(buffer, usage.GetWrite)
+			m.policy.log.Info("DEFAULT-STRONG-POLICY, leader total force computation", "collection_id", outerKey, "force", wForce, "num_requests", wReq)
+			totalForce += wForce
+			totalReqNumber += wReq
+
+			_, rReq := m.computeElasticForce(buffer, usage.GetRead)
+			if rReq > 0 {
+				//the node is interested to a replica
+				replicaInterestedNodeCounter++
+			}
 		}
 		totalForce += m.policy.currentConfig.LeaderThreshold
 		m.policy.log.Info("DEFAULT-STRONG-POLICY, leader total force with threshold", "collection_id", outerKey, "total_force", totalForce, "total_requests", totalReqNumber)
+	} else {
+		//if the node is not leader all requests are in read mode => all nodes in the inner map are interested to a replica
+		replicaInterestedNodeCounter = len(innerMap)
 	}
 
 	for innerKey, buffer := range innerMap {
@@ -131,11 +150,17 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 			continue
 		}
 
-		if strongCollection.IsLeader {
+		if strongCollection.IsLeader && !leaderDecisionTaken {
 			//if the collection has been moved and removed locally
 			m.policy.log.Info("DEFAULT-STRONG-POLICY, leader taking decision for collection", "collection_id", outerKey, "potential_new_leader", innerKey)
-			if m.leaderDecision(outerKey, innerKey, buffer, strongCollection, totalForce, totalReqNumber) {
-				return
+			if m.leaderDecision(outerKey, innerKey, buffer, totalForce, totalReqNumber) {
+				leaderDecisionTaken = true
+				decisions = append(decisions, Decision{
+					Destination:  innerKey,
+					SendAsLeader: true,
+				})
+
+				continue
 			}
 		}
 
@@ -144,85 +169,52 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 			continue
 		}
 
-		if m.replicaDecision(outerKey, innerKey, buffer, strongCollection, interestedNodeCounter) {
-			interestedNodeCounter--
+		if m.replicaDecision(outerKey, innerKey, buffer) {
+			replicaInterestedNodeCounter--
+			decisions = append(decisions, Decision{
+				Destination:  innerKey,
+				SendAsLeader: false,
+			})
 		}
 
 		//after taking all the decision skip to next round for this buffer
 		buffer.MoveHead()
-
 	}
+
+	if leaderDecisionTaken {
+		for _, buffer := range innerMap {
+			buffer.ResetWrite()
+		}
+	}
+
+	m.applyTakenDecisions(outerKey, replicaInterestedNodeCounter, decisions, strongCollection, leaderDecisionTaken)
+
 }
 
 // return true if the leader has been moved (only 1 direction can return true)
-func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, strongCollection *shared.StrongCollection, totalForce int, totalReq int) bool {
+func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, totalForce int, totalReq int) bool {
 	//compute decision
 	feW, req := m.computeElasticForce(buffer, usage.GetWrite)
 
-	var latency int
-	for _, child := range m.policy.serverInfo.Children {
-		if child.HostName == innerKey {
-			latency = child.Latency
-			break
-		}
-	}
+	latency := m.policy.serverInfo.GetLatencyFor(innerKey)
+
 	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader latency retrieval", "collection_id", outerKey, "potential_new_leader", innerKey, "NodeResourceUsage", fmt.Sprintf("%+v", m.NodeResourceUsage))
 	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader decision computation", "collection_id", outerKey, "elastic_force", feW, "num_requests", req, "latency", latency, "free_memory", m.NodeResourceUsage[innerKey].FreeRedisMemory, "gravity_constant", m.policy.currentConfig.GravityConstant, "total_requests", totalReq, "total_force", totalForce)
-	var driverForce = float64(2*feW) - ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(latency)
+	var driverForce = float64(2*feW) - ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(latency) - float64(totalForce)
 	m.policy.log.Infof("DEFAULT-STRONG-POLICY, leader decision on collection %s result in force %f and resistance %f", outerKey, driverForce, float64(totalForce))
 	//evaluate decision
-	if driverForce <= float64(totalForce) {
+	if driverForce < 0 {
 		m.policy.log.Infof("DEFAULT-STRONG-POLICY, leader decision on collection %s has negative reseult for node %s", outerKey, innerKey)
 		return false
 	}
 	m.policy.log.Infof("DEFAULT-STRONG-POLICY, leader decision on collection %s has positive result for node %s", outerKey, innerKey)
 
-	//react to positive decision
-	//sync -> avoid send a collection if used
-	localCollection := strongCollection.GetCollectionState().(*shared.LocalCollection)
-	b := localCollection.CollectionLock.TryLock()
-	if !b {
-		return false
-	}
+	buffer.ResetRead()
 
-	defer localCollection.CollectionLock.Unlock()
-
-	//get collection from redis instance
-	res, groups, owner, groupsSequence, err := m.policy.dbInterface.GetCollection(outerKey)
-	if err != nil {
-		m.policy.log.Error("Error getting collection from database", "error", err)
-		return false //TODO: decide
-	}
-	collectionSize, sizeError := m.policy.dbInterface.GetCollectionMemoryUsage(outerKey)
-	if sizeError != nil {
-		m.policy.log.Error("Error getting collection size from database", "error", sizeError)
-		return false //TODO: decide
-	}
-
-	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, true, res, groups, owner, groupsSequence, collectionSize, true)
-
-	if len(strongCollection.HostsId()) == 0 {
-		delete(m.policy.partialView.KnownCollections, strongCollection.CollectionId())
-	}
-
-	//remove collection from redis instance
-	m.policy.dbInterface.DeleteCollection(outerKey)
-
-	//set the collection as remote only in the node partial view
-	strongCollection.SetToRemote()
-	strongCollection.LeaderId = innerKey
-
-	//remove the collection from the lru
-	m.policy.lruCache.Remove(outerKey)
-	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader migrated collection", "collection_id", outerKey, "new_leader", innerKey, "lru_size", m.policy.lruCache.GetCurrentSize())
-
-	//stop keep track of access for a remote collection
-	m.policy.equilibriumState.Delete(outerKey)
 	return true
 }
 
-func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer, strongCollection *shared.StrongCollection, interestedNodeCounter int) bool {
+func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer) bool {
 	//compute decision
 	feR, _ := m.computeElasticForce(buffer, usage.GetRead)
 	resistance := ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) + float64(m.policy.currentConfig.FollowerThreshold)
@@ -235,56 +227,108 @@ func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKe
 	}
 	m.policy.log.Infof("DEFAULT-STRONG-POLICY, follower decision on collection %s has positive result for node %s", outerKey, innerKey)
 
-	//react to positive decision
+	buffer.ResetRead()
+	return true
+}
+
+func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, replicaInterestedNodeCounter int, decisions []Decision, strongCollection *shared.StrongCollection, leaderDecisionTaken bool) error {
+	isMigration := (replicaInterestedNodeCounter == 0 && !strongCollection.IsLeader) || (strongCollection.IsLeader && replicaInterestedNodeCounter == 0 && leaderDecisionTaken)
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, apply taken decisions", "collection_id", outerKey, "num_decisions", len(decisions), "is_migration", isMigration, "leader_decision_taken", leaderDecisionTaken, "strong_collection_is_leader", strongCollection.IsLeader, "interested_node_counter", replicaInterestedNodeCounter)
+
 	//sync -> avoid send a collection if used
 	localCollection := strongCollection.GetCollectionState().(*shared.LocalCollection)
-	b := localCollection.CollectionLock.TryLock()
-	if !b {
-		return false
+	lockAcquired := true
+
+	if isMigration || leaderDecisionTaken {
+		lockAcquired = localCollection.CollectionLock.TryLock()
+		if !lockAcquired {
+			m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot apply taken decisions because collection is in use", "collection_id", outerKey)
+		} else {
+			defer localCollection.CollectionLock.Unlock()
+		}
 	}
-	defer localCollection.CollectionLock.Unlock()
 
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.policy.dbInterface.GetCollection(outerKey)
 	if err != nil {
 		m.policy.log.Error("Error getting collection from database", "error", err)
-		return false //TODO: decide
+		return err
 	}
 	collectionSize, sizeError := m.policy.dbInterface.GetCollectionMemoryUsage(outerKey)
 	if sizeError != nil {
 		m.policy.log.Error("Error getting collection size from database", "error", sizeError)
-		return false //TODO: decide
+		return sizeError
 	}
 
-	//if all the interest adjacent node has been satisfied
-	isMigration := interestedNodeCounter <= 1 && !strongCollection.IsLeader
-	m.policy.log.Debug("DEFAULT-STRONG-POLICY, follower migration decision", "collection_id", outerKey, "interested_node_counter", interestedNodeCounter, "current_hosts_num", len(strongCollection.HostsId()), "is_migration", isMigration)
-
-	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	m.policy.sender.SendRemoteCollectionTo(innerKey, strongCollection, false, res, groups, owner, groupsSequence, collectionSize, isMigration)
-
-	if isMigration {
-		if len(strongCollection.HostsId()) == 0 {
-			delete(m.policy.partialView.KnownCollections, strongCollection.CollectionId())
+	//send collection to the remote nodes that has positive decision
+	for _, decision := range decisions {
+		if leaderDecisionTaken && decision.SendAsLeader && !lockAcquired {
+			m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot send collection as leader because collection is in use", "collection_id", outerKey, "destination", decision.Destination)
+			//postpone the send as leader behaviour to when the lock will be released
+			strongCollection.AddPostponedDecisionBehaviour(func() {
+				m.policy.log.Info("DEFAULT-STRONG-POLICY, apply postponed leader decision for collection", "collectionId", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
+				m.policy.sender.SendRemoteCollectionTo(decision.Destination, strongCollection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
+				strongCollection.IsLeader = false
+				strongCollection.LeaderId = decision.Destination
+			})
+			leaderDecisionTaken = false
+			continue
 		}
+		m.policy.log.Info("send collection", "collectionId", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
+		if leaderDecisionTaken && decision.SendAsLeader {
+			strongCollection.LeaderId = decision.Destination
+		}
+		m.policy.sender.SendRemoteCollectionTo(decision.Destination, strongCollection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
+	}
+	strongCollection.IsLeader = strongCollection.IsLeader && !leaderDecisionTaken
 
-		//remove collection from redis instance
-		m.policy.dbInterface.DeleteCollection(outerKey)
+	if !isMigration {
+		m.tryToExecutePostponed(strongCollection)
+		return nil
+	} else if !lockAcquired {
+		m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot delete collection because collection is in use", "collection_id", outerKey)
+		//postpone the delete behaviour to when the lock will be released
+		strongCollection.AddPostponedDecisionBehaviour(func() {
+			m.policy.log.Info("DEFAULT-STRONG-POLICY, apply posponed deletion decision for collection", "collectionId", strongCollection.CollectionId())
+			m.deleteCollectionAfterDecisionTaken(outerKey, strongCollection, outerKey)
+		})
+		m.tryToExecutePostponed(strongCollection)
+		return nil
+	}
 
+	m.deleteCollectionAfterDecisionTaken(outerKey, strongCollection, outerKey)
+	return nil
+}
+
+func (m *MigrationManagerDecisionState) tryToExecutePostponed(strongCollection *shared.StrongCollection) {
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, check postponed decision behaviour for collection for safety reason", "collection_id", strongCollection.CollectionId())
+	if strongCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
+		m.policy.log.Info("DEFAULT-STRONG-POLICY, starting postponed decision behaviour execution for strong collection for collection for safety reason", "collection_id", strongCollection.CollectionId())
+		localColl := strongCollection.GetCollectionState().(*shared.LocalCollection)
+		strongCollection.ExecutePostponedDecisionBehaviour(m.policy.log)
+		localColl.CollectionLock.Unlock()
+	}
+
+}
+
+func (m *MigrationManagerDecisionState) deleteCollectionAfterDecisionTaken(collectionId string, strongCollection *shared.StrongCollection, outerKey string) {
+	//if collection not present in subtree
+	if len(strongCollection.HostsId()) == 0 {
+		//remove collection from partial view
+		delete(m.policy.partialView.KnownCollections, strongCollection.CollectionId())
+	} else {
 		//set the collection as remote only in the node partial view
 		strongCollection.SetToRemote()
-
-		//remove the collection from the lru
-		m.policy.lruCache.Remove(outerKey)
-		m.policy.log.Info("DEFAULT-STRONG-POLICY, follower migrated collection", "collection_id", outerKey, "new_host", innerKey, "lru_size", m.policy.lruCache.GetCurrentSize())
-
-		//stop keep track of access for a remote collection
-		m.policy.equilibriumState.Delete(outerKey)
-	} else {
-		buffer.ResetRead()
 	}
 
-	return true
+	//remove collection from redis instance
+	m.policy.dbInterface.DeleteCollection(outerKey)
+
+	//remove the collection from the lru
+	m.policy.lruCache.Remove(outerKey)
+
+	//stop keep track of access for a remote collection
+	m.policy.equilibriumState.Delete(outerKey)
 }
 
 func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
@@ -352,6 +396,7 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 	if len(collection.HostsId()) == 0 {
 		delete(m.policy.partialView.KnownCollections, collection.CollectionId())
 	}
+
 	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.HostName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
 
 	//remove collection from redis instance

@@ -12,14 +12,12 @@ import (
 	"github.com/ermes-thesis/ermes-common/caches"
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
-	"github.com/rs/zerolog"
-
 	"github.com/stretchr/testify/require"
 )
 
 func createNewLogger(t *testing.T) logger.Logger {
 	log, err := logger.NewLogger(logger.Config{
-		Level:     zerolog.DebugLevel,
+		Level:     logger.DebugLevel,
 		AddSource: false,
 	})
 	require.NoError(t, err)

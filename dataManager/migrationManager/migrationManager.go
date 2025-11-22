@@ -2,6 +2,7 @@ package migrationManager
 
 import (
 	"config"
+	"context"
 	"dataManager/lru"
 	"dataManager/messages"
 	penality "dataManager/migrationManager/penalityFunction"
@@ -29,12 +30,13 @@ type MigrationManager interface {
 	// if the collection is strong used to update forces in real time.
 	// if the request comes from a user => nodeName = "user"
 	UpdatesRequestsInfo(info []messages.CollectionRequestInfo, sender string)
+	HandlePostponedDecisions(collection shared.Collection)
 	UpdateCollectionsLatestUsage(collections []string)
 	// ManageGossipMessage used to update non realtime info
 	ManageGossipMessage(messages.GossipMessage)
 	// NewCollectionReceived used when the node receive  a collection from one of the directly connected nodes (collectionID,isStrong,leader)
 	//return True if the collection is already stored locally and must not be stored in Redis
-	NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool
+	NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool
 	// NewCollectionCreated used when user create a new collection in the local node (collectionID,size,isStrong)
 	//throw an error if the collection already exists locally
 	NewCollectionCreated(string, uint64, bool) error
@@ -70,7 +72,8 @@ type MigrationManagerImp struct {
 
 	sender sender.MigrationManagerSender
 
-	dumpStopCh chan struct{}
+	dumpCtx    context.Context
+	dumpCancel context.CancelFunc
 }
 
 // Singleton pattern
@@ -115,7 +118,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		if weakpolicy.GetPolicy(config.WeakPolicy) == weakpolicy.DONOTHINGPOLICY {
 			m.doNothingPolicy = weakpolicy.NewDoNothingPolicy()
 		} else {
-			m.WeakCollectionPolicy = weakpolicy.NewAlwaysCopyPolicy(config, m.sender, m.log, collections, dbInterface)
+			m.WeakCollectionPolicy = weakpolicy.NewAlwaysCopyPolicy(config, m.sender, m.log, collections, dbInterface, serverInfo)
 		}
 
 		//policy update strategy
@@ -129,10 +132,16 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.collectionsPartialView = collections
 
 		// --- START ASYNC DUMP ---
-		m.dumpStopCh = make(chan struct{})
-		m.startAsyncDump(config.KnownCollectionsDumpPath, config.KnownCollectionsDumpInterval)
+		interval := config.KnownCollectionsDumpInterval
+		if interval > 0 {
+			m.dumpCtx, m.dumpCancel = context.WithCancel(context.Background())
+			m.startAsyncDump(m.dumpCtx, config.KnownCollectionsDumpPath, config.KnownCollectionsDumpInterval)
+			m.log.Info("MIG-MANAGER, async dump enabled")
+		} else {
+			m.dumpCtx, m.dumpCancel = nil, nil
+			m.log.Info("MIG-MANAGER, async dump disabled")
+		}
 		m.log.Info("MIG-MANAGER, migration manager instance has been initialized")
-
 	})
 }
 
@@ -158,7 +167,7 @@ func (m *MigrationManagerImp) StatelessInit(collections *shared.CollectionPartia
 	})
 }
 
-func (m *MigrationManagerImp) startAsyncDump(dumpPath string, interval time.Duration) {
+func (m *MigrationManagerImp) startAsyncDump(ctx context.Context, dumpPath string, interval time.Duration) {
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -169,7 +178,7 @@ func (m *MigrationManagerImp) startAsyncDump(dumpPath string, interval time.Dura
 				if err := m.collectionsPartialView.DumpToJsonFile(dumpPath); err != nil {
 					m.log.Warn("Failed to dump known collections", "error", err)
 				}
-			case <-m.dumpStopCh:
+			case <-ctx.Done():
 				m.log.Info("Async dump goroutine received stop signal. Dump known collection for last time")
 				if err := m.collectionsPartialView.DumpToJsonFile(dumpPath); err != nil {
 					m.log.Warn("Failed to dump known collections", "error", err)
@@ -181,9 +190,8 @@ func (m *MigrationManagerImp) startAsyncDump(dumpPath string, interval time.Dura
 }
 
 func (m *MigrationManagerImp) StopAsyncDump() {
-	if m.dumpStopCh != nil {
-		close(m.dumpStopCh)
-		m.dumpStopCh = nil
+	if m.dumpCancel != nil {
+		m.dumpCancel()
 		m.log.Info("MIG-MANAGER, async dump has been stopped")
 	}
 }
@@ -198,7 +206,7 @@ func (m *MigrationManagerImp) RemoveCollectionFromLru(collectionId string) {
 }
 
 // methods
-func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool {
+func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool {
 	//sync
 	m.collectionsLock.Lock()
 	defer m.collectionsLock.Unlock()
@@ -211,13 +219,13 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 			collection.RemoveHost(hostAddress)
 		}
 
-		if collection.IsLocal() && collection.IsStrong() && isLeader && isStrong {
+		if collection.IsStrong() && isLeader && isStrong {
 			collection.(*shared.StrongCollection).IsLeader = true
 			collection.(*shared.StrongCollection).LeaderId = m.serverInfo.HostName
 		}
 
 		if collection.IsLocal() {
-			m.log.Warn("MIG-MANAGER, new collection already present locally")
+			m.log.Warn("MIG-MANAGER, new collection already present locally", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
 			return true
 		}
 		actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
@@ -227,9 +235,10 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		}
 
 		collection.SetToLocal(actualSize)
-		if isStrong {
-			collection.(*shared.StrongCollection).IsLeader = isLeader
+		if isStrong && collection.IsStrong() {
+			collection.(*shared.StrongCollection).ConsistencyClock = sequence
 		}
+
 		m.log.Info("MIG-MANAGER, new collection set to local")
 		m.updateLru(collectionId, uint(actualSize))
 		return false
@@ -241,7 +250,9 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	}
 
 	if isStrong {
-		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, actualSize, false, isLeader, m.serverInfo.HostName)
+		col := shared.NewStrongCollection(collectionId, actualSize, false, isLeader, m.serverInfo.HostName)
+		col.(*shared.StrongCollection).ConsistencyClock = sequence
+		m.collectionsPartialView.KnownCollections[collectionId] = col
 	} else {
 		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, actualSize, false)
 	}
@@ -338,7 +349,7 @@ func (m *MigrationManagerImp) ManageGossipMessage(msg messages.GossipMessage) {
 	m.log.Info("MIG-MANAGER, gossip message received")
 	m.StrongCollectionPolicy.ManageGossipMessage(msg)
 }
-func (m *MigrationManagerImp) UpdateCollectionsLatestUsage(collections []string) {
+func (m *MigrationManagerImp) UpdateCollectionsLatestUsage(collections []string) { // Fix: Added opening brace
 	m.policyUpdateStrategy.updateCollectionsLatestUsage(collections, m)
 }
 
@@ -350,12 +361,17 @@ func (m *MigrationManagerImp) UpdatesRequestsInfo(info []messages.CollectionRequ
 func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionRequestInfoMessages) {
 	var msgs = make(map[string]messages.CollectionRequestInfoMessages) // host -> message
 	//sync
+	m.log.Info("MIG-MANAGER, update request info received", "num_messages", len(info.Messages))
 	m.collectionsLock.Lock()
 	defer m.collectionsLock.Unlock()
+	m.log.Info("MIG-MANAGER, update request info received - lock acquired")
 
 	for _, i := range info.Messages {
+
+		collection := m.collectionsPartialView.KnownCollections[i.CollectionId]
+
 		//if no local info on the collection -> remote update -> save the message to send it later
-		if m.collectionsPartialView.KnownCollections[i.CollectionId] == nil {
+		if collection == nil {
 			if m.serverInfo.Father == nil {
 				m.log.Error("MIG-MANAGER, no info on the collection and no father to send the info")
 				continue
@@ -364,8 +380,8 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 			fatherId := m.serverInfo.Father.HostName
 			i.Sender = m.serverInfo.HostName
 			msgs[fatherId] = messages.CollectionRequestInfoMessages{Messages: append(msgs[fatherId].Messages, i)}
-		} else if !m.collectionsPartialView.KnownCollections[i.CollectionId].IsStrong() && !m.collectionsPartialView.KnownCollections[i.CollectionId].IsLocal() {
-			hostId := m.collectionsPartialView.GetClosestChild(m.collectionsPartialView.KnownCollections[i.CollectionId].HostsId(), m.serverInfo)
+		} else if !collection.IsStrong() && !collection.IsLocal() {
+			hostId := m.collectionsPartialView.GetClosestChild(collection.HostsId(), m.serverInfo)
 			if hostId == "" {
 				m.log.Error("MIG-MANAGER, no info on the collection and no child to send the info")
 				continue
@@ -374,6 +390,8 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 			msgs[hostId] = messages.CollectionRequestInfoMessages{Messages: append(msgs[hostId].Messages, i)}
 		} else { // local update
 			m.localUpdateRequestInfo(i)
+			//execute postponed migration behaviours if any and if possible
+			m.HandlePostponedDecisions(collection)
 		}
 	}
 
@@ -382,6 +400,16 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 	//send remote updates
 	for host, message := range msgs {
 		m.sender.SendRequestInfoMessage(message, host)
+	}
+}
+
+func (m *MigrationManagerImp) HandlePostponedDecisions(collection shared.Collection) {
+	m.log.Info("MIG-MANAGER, check postponed decision behaviour for collection", "collection_id", collection.CollectionId(), "is_strong", collection.IsStrong(), "is_local", collection.IsLocal())
+	if collection.IsLocal() && collection.IsStrong() && collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
+		m.log.Info("MIG-MANAGER, starting postponed decision behaviour execution for strong collection", "collection_id", collection.CollectionId())
+		localColl := collection.GetCollectionState().(*shared.LocalCollection)
+		collection.(*shared.StrongCollection).ExecutePostponedDecisionBehaviour(m.log)
+		localColl.CollectionLock.Unlock()
 	}
 }
 

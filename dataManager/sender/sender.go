@@ -31,7 +31,7 @@ const (
 //###############################################################
 
 type MigrationManagerSender interface {
-	SendRemoteCollectionTo(string, shared.Collection, bool, map[string]db.RecordValue, []string, string, uint64, uint64, bool)
+	SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool)
 	SendGossipMessages(gossip.GossipMessage, string)
 	SendRequestInfoMessage(gossip.CollectionRequestInfoMessages, string)
 	GossipPath() string
@@ -58,9 +58,8 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 	s.log.Info("SENDER: Preparing to send collection", "collectionId", collection.CollectionId(), "destination", destination, "isMigration", isMigration, "sendAsLeader", sendAsLeader, "collectionSize", collectionSize)
 	s.log.Infof("[SENDER] send collection %s to %s", collection.CollectionId(), destination)
 	if s.serverInfo.Father == nil || destination != s.serverInfo.Father.HostName {
-		s.log.Warn("ADDING HOST TO COLLECTION", "hostname", s.serverInfo.HostName, "destination", destination, "KNWN HOSTS", collection.HostsId())
+		s.log.Debug("Adding host to collection", "hostname", s.serverInfo.HostName, "destination", destination, "known_host_ids", collection.HostsId())
 		collection.AddHost(destination)
-		s.log.Warn("ADDED HOST TO COLLECTION", "KNOWN HOSTS", collection.HostsId())
 	}
 
 	hostToRemove := isMigration && s.serverInfo.Father != nil && destination == s.serverInfo.Father.HostName && len(collection.HostsId()) == 0
@@ -78,6 +77,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 	}
 	if collection.IsStrong() {
 		msg.IsLeader = collection.(*shared.StrongCollection).IsLeader && sendAsLeader
+		msg.SequenceNumber = collection.(*shared.StrongCollection).ConsistencyClock
 	} else {
 		msg.IsLeader = false
 	}

@@ -133,7 +133,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 
 		// --- START ASYNC DUMP ---
 		interval := config.KnownCollectionsDumpInterval
-		if interval <= 0 {
+		if interval > 0 {
 			m.dumpCtx, m.dumpCancel = context.WithCancel(context.Background())
 			m.startAsyncDump(m.dumpCtx, config.KnownCollectionsDumpPath, config.KnownCollectionsDumpInterval)
 			m.log.Info("MIG-MANAGER, async dump enabled")

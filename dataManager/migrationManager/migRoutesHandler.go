@@ -9,7 +9,7 @@ import (
 
 func (m *MigrationManagerImp) handleIncomingGossipMessages() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m.log.Info("HTTP-REQ, New gossip message received through HTTP request")
+		m.log.Eval("HTTP-REQ, New gossip message received through HTTP request", "remote_addr", r.RemoteAddr)
 
 		defer r.Body.Close()
 
@@ -62,7 +62,7 @@ func (m *MigrationManagerImp) handleIncomingGossipMessages() http.Handler {
 
 func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m.log.Info("HTTP-REQ, New collection received through HTTP request", "sender_ip", r.RemoteAddr)
+		m.log.Eval("HTTP-REQ, New collection received through HTTP request", "remote_addr", r.RemoteAddr)
 
 		defer r.Body.Close()
 
@@ -90,7 +90,7 @@ func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 
 func (m *MigrationManagerImp) handleIncomingRequestInfoMessages() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		m.log.Info("HTTP-REQ, New collection request info message received through HTTP request")
+		m.log.Eval("HTTP-REQ, New collection request info message received through HTTP request", "remote_addr", r.RemoteAddr)
 
 		defer r.Body.Close()
 

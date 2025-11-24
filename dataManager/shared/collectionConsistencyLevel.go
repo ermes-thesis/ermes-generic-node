@@ -29,7 +29,7 @@ type StrongCollection struct {
 	LeaderId                   string
 	WriteMutex                 *sync.Mutex
 	ConsistencyClock           uint64
-	postponedDecisionBehaviour func()
+	postponedDecisionBehaviour FunctionQueue
 }
 
 func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLeader bool, leaderId string) Collection {
@@ -41,7 +41,7 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 			IsLeader:                   false,
 			LeaderId:                   leaderId,
 			WriteMutex:                 &sync.Mutex{},
-			postponedDecisionBehaviour: nil,
+			postponedDecisionBehaviour: NewFunctionQueue(),
 		}
 	}
 	c := &StrongCollection{
@@ -49,7 +49,7 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 		collectionState:            NewLocalCollection(size, hosts),
 		IsLeader:                   isLeader,
 		WriteMutex:                 &sync.Mutex{},
-		postponedDecisionBehaviour: nil,
+		postponedDecisionBehaviour: NewFunctionQueue(),
 	}
 	if isLeader {
 		c.LeaderId = leaderId
@@ -58,27 +58,16 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 }
 
 func (s *StrongCollection) AddPostponedDecisionBehaviour(f func()) {
-	oldBehaviour := s.postponedDecisionBehaviour
-	if oldBehaviour == nil {
-		s.postponedDecisionBehaviour = f
-	} else {
-		s.postponedDecisionBehaviour = func() {
-			oldBehaviour()
-			f()
-		}
-	}
+	s.postponedDecisionBehaviour.AddFunction(f)
 }
 
 func (s *StrongCollection) ExecutePostponedDecisionBehaviour(log logger.Logger) {
-	if s.postponedDecisionBehaviour != nil {
-		log.Info("ExecutePostponedDecisionBehaviour called", "collectionId", s.collectionId)
-		s.postponedDecisionBehaviour()
-		s.postponedDecisionBehaviour = nil
-	}
+	log.Info("ExecutePostponedDecisionBehaviour called", "collectionId", s.collectionId)
+	s.postponedDecisionBehaviour.ExecuteFunctions()
 }
 
 func (s *StrongCollection) HasPostponedDecisionBehaviour() bool {
-	return s.postponedDecisionBehaviour != nil
+	return s.postponedDecisionBehaviour.HasFunctions()
 }
 
 func (s *StrongCollection) GetCollectionState() CollectionState {

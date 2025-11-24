@@ -20,7 +20,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			fnVersion = "latest"
 		}
 
-		s.log.Info("Received function invocation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion)
+		s.log.Eval("Received function invocation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion)
 
 		queryParams := r.Header.Get("X-ERMES-QUERY")
 		cachedQuery := r.Header.Get("X-ERMES-CACHED-QUERY")

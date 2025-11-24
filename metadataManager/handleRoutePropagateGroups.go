@@ -12,7 +12,7 @@ func (m *MetadataManagerImpl) handleRoutePropagateGroups() http.HandlerFunc {
 		defer r.Body.Close()
 		collectionId := r.PathValue("collection_id")
 
-		m.log.Info("Received group update propagation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
+		m.log.Eval("Received group update propagation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 		m.log.Debug("Received group update propagation request", "collection_id", collectionId, "node_geolocation", m.serverInfo.MetadataDomain)
 
 		var message propagation.UpdateGroupResponse

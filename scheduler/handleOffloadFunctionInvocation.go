@@ -23,7 +23,7 @@ func (s *statefulPolicy) handleOffloadFunctionInvocation(tokenDecoder tokenDecod
 			fnVersion = "latest"
 		}
 
-		s.log.Info("Received offloaded function invocation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion)
+		s.log.Eval("Received offloaded function invocation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion)
 
 		collectionJson := r.Header.Get("X-ERMES-COLLECTIONS")
 		groupToken := r.Header.Get("X-ERMES-GROUPS")

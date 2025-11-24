@@ -14,7 +14,7 @@ func (m *MetadataManagerImpl) handleRouteRequestUpdateGroups() http.HandlerFunc 
 		defer r.Body.Close()
 		collectionId := r.PathValue("collection_id")
 
-		m.log.Info("Received group update new request for metadata", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
+		m.log.Eval("Received group update new request for metadata", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 		m.log.Debug("Received group update new request for metadata", "collection_id", collectionId)
 
 		var message propagation.GroupMessage

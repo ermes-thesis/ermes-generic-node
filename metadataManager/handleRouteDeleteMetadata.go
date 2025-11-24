@@ -14,7 +14,7 @@ func (m *MetadataManagerImpl) handleRouteDeleteMetadata() http.HandlerFunc {
 		reqMetadataDomain := r.Header.Get("X-ERMES-METADATA-DOMAIN")
 		isCollRecreated := r.Header.Get("X-ERMES-COLLECTION-RECREATED") == "true"
 
-		m.log.Info("Received metadata deletion request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "node_geolocation", m.serverInfo.MetadataDomain)
+		m.log.Eval("Received metadata deletion request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "node_geolocation", m.serverInfo.MetadataDomain)
 		m.log.Debug("Received metadata deletion request", "collection_id", collectionId, "previous_node_geolocation", reqMetadataDomain)
 
 		var geolocation string

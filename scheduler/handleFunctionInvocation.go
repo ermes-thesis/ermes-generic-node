@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"tokenDecoder"
 
 	"github.com/ermes-thesis/ermes-common/model"
@@ -69,6 +71,13 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			}
 			for _, v := range res {
 				collections[v.As] = append(collections[v.As], v.Collections...)
+
+				tmpMap := make(map[string]model.CollectionInfo)
+				for _, coll := range collections[v.As] {
+					tmpMap[coll.Id] = coll
+				}
+
+				collections[v.As] = slices.Collect(maps.Values(tmpMap))
 			}
 		}
 

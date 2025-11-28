@@ -312,14 +312,8 @@ func (m *MigrationManagerDecisionState) tryToExecutePostponed(strongCollection *
 }
 
 func (m *MigrationManagerDecisionState) deleteCollectionAfterDecisionTaken(collectionId string, strongCollection *shared.StrongCollection, outerKey string) {
-	//if collection not present in subtree
-	if len(strongCollection.HostsId()) == 0 {
-		//remove collection from partial view
-		delete(m.policy.partialView.KnownCollections, strongCollection.CollectionId())
-	} else {
-		//set the collection as remote only in the node partial view
-		strongCollection.SetToRemote()
-	}
+	//set the collection as remote only in the node partial view -> if no more host removed from partial view after response to send collection to
+	strongCollection.SetToRemote()
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(outerKey)
@@ -392,9 +386,6 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 		}
 		//stop keep track of access for a remote collection
 		m.policy.RemoveInfo(collection.CollectionId())
-	}
-	if len(collection.HostsId()) == 0 {
-		delete(m.policy.partialView.KnownCollections, collection.CollectionId())
 	}
 
 	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.HostName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)

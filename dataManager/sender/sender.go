@@ -40,16 +40,18 @@ type MigrationManagerSender interface {
 }
 
 type MigrationManagerSenderImpl struct {
-	serverInfo server.ServerInfo
-	server     server.ServerType
-	log        logger.Logger
+	serverInfo  server.ServerInfo
+	partialView *shared.CollectionPartialView
+	server      server.ServerType
+	log         logger.Logger
 }
 
-func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo) MigrationManagerSender {
+func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo, partialView *shared.CollectionPartialView) MigrationManagerSender {
 	return &MigrationManagerSenderImpl{
-		server:     server,
-		log:        logger,
-		serverInfo: serverInfo,
+		server:      server,
+		log:         logger,
+		serverInfo:  serverInfo,
+		partialView: partialView,
 	}
 }
 
@@ -84,7 +86,14 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 
 	s.log.Info("Sending GossipMessage", "msg", fmt.Sprintf("%+v", msg))
 
-	go s.server.SendGenericHTTPRequest(destination, repoPath, msg)
+	go func() {
+		s.server.SendGenericHTTPRequest(destination, repoPath, msg)
+		//if collection not present in subtree
+		if isMigration && len(collection.HostsId()) == 0 { //TODO: if receive response in all pending http messages
+			//remove collection from partial view
+			delete(s.partialView.KnownCollections, collection.CollectionId())
+		}
+	}()
 }
 
 func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage, destination string) {

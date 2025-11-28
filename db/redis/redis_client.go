@@ -336,22 +336,26 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]db.RecordVa
 
 			var keysCmd, timestampCmd *redis.SliceCmd
 			_, err = tx.TxPipelined(r.ctx, func(pipe redis.Pipeliner) error {
-				keysCmd = pipe.MGet(r.ctx, buildKeys(collectionId, keys)...)
-				timestampCmd = pipe.MGet(r.ctx, buildTimestampKeys(collectionId, keys)...)
+				if len(keys) > 0 {
+					keysCmd = pipe.MGet(r.ctx, buildKeys(collectionId, keys)...)
+					timestampCmd = pipe.MGet(r.ctx, buildTimestampKeys(collectionId, keys)...)
+				}
 				return nil
 			})
 			if err != nil {
 				return err
 			}
 
-			values, err = keysCmd.Result()
-			if err != nil {
-				return err
-			}
+			if len(keys) > 0 {
+				values, err = keysCmd.Result()
+				if err != nil {
+					return err
+				}
 
-			timestamps, err = timestampCmd.Result()
-			if err != nil {
-				return err
+				timestamps, err = timestampCmd.Result()
+				if err != nil {
+					return err
+				}
 			}
 
 			return nil

@@ -504,7 +504,9 @@ func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collecti
 		m.StrongCollectionPolicy.RemoveInfo(collection.CollectionId())
 	}
 
-	m.sender.SendRemoteCollectionTo(m.serverInfo.Father.HostName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
+	fatherName := m.serverInfo.Father.HostName
+	collection.GetCollectionState().AddCollectionMigrationHost(fatherName)
+	m.sender.SendRemoteCollectionTo(fatherName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
 
 	//remove collection from redis instance
 	m.dbInterface.DeleteCollection(collection.CollectionId())

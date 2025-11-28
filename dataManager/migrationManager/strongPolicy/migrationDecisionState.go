@@ -267,6 +267,7 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, rep
 			//postpone the send as leader behaviour to when the lock will be released
 			strongCollection.AddPostponedDecisionBehaviour(func() {
 				m.policy.log.Info("DEFAULT-STRONG-POLICY, apply postponed leader decision for collection", "collectionId", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
+				strongCollection.GetCollectionState().AddCollectionMigrationHost(decision.Destination)
 				m.policy.sender.SendRemoteCollectionTo(decision.Destination, strongCollection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
 				strongCollection.IsLeader = false
 				strongCollection.LeaderId = decision.Destination
@@ -278,6 +279,8 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, rep
 		if leaderDecisionTaken && decision.SendAsLeader {
 			strongCollection.LeaderId = decision.Destination
 		}
+
+		strongCollection.GetCollectionState().AddCollectionMigrationHost(decision.Destination)
 		m.policy.sender.SendRemoteCollectionTo(decision.Destination, strongCollection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
 	}
 	strongCollection.IsLeader = strongCollection.IsLeader && !leaderDecisionTaken
@@ -388,7 +391,9 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 		m.policy.RemoveInfo(collection.CollectionId())
 	}
 
-	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.HostName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
+	fatherName := m.policy.serverInfo.Father.HostName
+	collection.GetCollectionState().AddCollectionMigrationHost(fatherName)
+	m.policy.sender.SendRemoteCollectionTo(fatherName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(collection.CollectionId())

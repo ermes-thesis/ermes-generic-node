@@ -84,12 +84,21 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		msg.IsLeader = false
 	}
 
-	s.log.Info("Sending GossipMessage", "msg", fmt.Sprintf("%+v", msg))
-
 	go func() {
 		s.server.SendGenericHTTPRequest(destination, repoPath, msg)
-		//if collection not present in subtree
-		if isMigration && len(collection.HostsId()) == 0 { //TODO: if receive response in all pending http messages
+
+		//sync
+		s.partialView.Mutex.Lock()
+		defer s.partialView.Mutex.Unlock()
+
+		//stop postpone updates for this destination + apply eventually postponed updates
+		err := collection.GetCollectionState().RemoveCollectionMigrationHostAndExecutePostponedUpdates(destination)
+		if err != nil {
+			s.log.Error("SENDER: try to remove non present migration host from collection", "collectionId", collection.CollectionId(), "destination", destination, "err", err)
+		}
+
+		//if collection not present in subtree and no more postponed updates
+		if isMigration && len(collection.HostsId()) == 0 && !collection.GetCollectionState().IsCollectionBeingMigrated() {
 			//remove collection from partial view
 			delete(s.partialView.KnownCollections, collection.CollectionId())
 		}

@@ -50,6 +50,7 @@ type CollectionUpdateMessage struct {
 	UpdateHostIp string   `json:"updateHostIp"`
 	SenderIp     string   `json:"senderIp"`
 	IsDelete     bool     `json:"isDelete"`
+	ToForward    bool     `json:"toForward"`
 	Sequence     uint64   `json:"sequence"`
 }
 
@@ -84,6 +85,7 @@ func ToCollectionUpdateMessages(
 			UpdateHostIp: updateHostIp,
 			SenderIp:     senderIp,
 			IsDelete:     u.IsDelete,
+			ToForward:    true,
 		}
 		result = append(result, msg)
 	}
@@ -104,6 +106,7 @@ type CollectionGroupUpdateMessage struct {
 	GroupNames   []string `json:"recordNames"`
 	Sequence     uint64   `json:"sequence"`
 	SenderIp     string   `json:"senderIp"`
+	ToForward    bool     `json:"toForward"`
 }
 
 func ToCollectionGroupUpdateMessages(updates []CollectionGroupUpdate, senderIp string) []CollectionGroupUpdateMessage {
@@ -115,6 +118,7 @@ func ToCollectionGroupUpdateMessages(updates []CollectionGroupUpdate, senderIp s
 			GroupNames:   u.GroupNames,
 			Sequence:     u.Sequence,
 			SenderIp:     senderIp,
+			ToForward:    true,
 		}
 		result = append(result, msg)
 	}

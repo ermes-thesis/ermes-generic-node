@@ -419,7 +419,7 @@ func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionReques
 	m.log.Info("MIG-MANAGER, update size in the LRU")
 	err := m.lruCache.UpdateSize(i.CollectionId, uint(m.collectionsPartialView.KnownCollections[i.CollectionId].GetCollectionState().(*shared.LocalCollection).Size()))
 	if err != nil {
-		m.log.Errorf("MIG-MANAGER, not enough space in the LRU to update the collection %s size even after free", i.CollectionId)
+		m.log.ErrorfWith("MIG-MANAGER, not enough space in the LRU to update the collection %s size even after free", []any{i.CollectionId}, "error", err)
 		return err
 	}
 

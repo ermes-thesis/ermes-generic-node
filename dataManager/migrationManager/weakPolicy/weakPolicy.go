@@ -72,7 +72,7 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 
 	res, groups, owner, groupsSequence, err := a.dbInterface.GetCollection(collectionId)
 	if err != nil {
-		a.log.Error("WEAK-POLICY, got an error getting the collection from redis")
+		a.log.Error("WEAK-POLICY, got an error getting the collection from redis", "error", err)
 		return err
 	}
 	collectionSize, sizeError := a.dbInterface.GetCollectionMemoryUsage(collectionId)

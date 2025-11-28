@@ -16,7 +16,7 @@ func (s *Server) checkErmesSecret(h http.HandlerFunc) http.HandlerFunc {
 			s.logger.DebugfWith("Forbidden request: mismatched X-ERMES-SECRET '%s'",
 				[]any{r.Header.Get("X-ERMES-SECRET")},
 				"true_ermes_secret", s.ServerInfo.Secret)
-			http.Error(w, "Forbidden: invalid Ermes secret", http.StatusForbidden)
+			http.Error(w, "Forbidden: invalid Ermes secret", http.StatusUnauthorized)
 			return
 		}
 		h(w, r)
@@ -35,7 +35,7 @@ func (s *Server) checkClientSecret(h http.HandlerFunc) http.HandlerFunc {
 			s.logger.DebugfWith("Forbidden request: mismatched X-CLIENT-SECRET '%s'",
 				[]any{r.Header.Get("X-CLIENT-SECRET")},
 				"true_ermes_secret", s.ServerInfo.ClientSecret)
-			http.Error(w, "Forbidden: invalid Ermes client library secret", http.StatusForbidden)
+			http.Error(w, "Forbidden: invalid Ermes client library secret", http.StatusUnauthorized)
 			return
 		}
 		h(w, r)

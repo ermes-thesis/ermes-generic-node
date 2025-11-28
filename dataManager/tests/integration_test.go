@@ -21,8 +21,6 @@ import (
 )
 
 func TestIntegrationOppositeUpdatePropagationAndReplica(t *testing.T) {
-	//TODO: enable test after fixing propagation in opposite direction
-	t.Skip()
 	logger := createNewLogger(t)
 	defer logger.Close()
 

@@ -93,6 +93,26 @@ func ToCollectionUpdateMessages(
 	return result
 }
 
+func (m CollectionUpdateMessage) Copy() CollectionUpdateMessage {
+	newNames := make([]string, len(m.RecordNames))
+	copy(newNames, m.RecordNames)
+
+	newValues := make([]string, len(m.RecordValues))
+	copy(newValues, m.RecordValues)
+
+	return CollectionUpdateMessage{
+		CollectionId: m.CollectionId,
+		RecordNames:  newNames,
+		RecordValues: newValues,
+		Time:         m.Time,
+		UpdateHostIp: m.UpdateHostIp,
+		SenderIp:     m.SenderIp,
+		IsDelete:     m.IsDelete,
+		ToForward:    m.ToForward,
+		Sequence:     m.Sequence,
+	}
+}
+
 // put and delete groups
 
 type CollectionGroupUpdate struct {
@@ -124,6 +144,19 @@ func ToCollectionGroupUpdateMessages(updates []CollectionGroupUpdate, senderIp s
 	}
 
 	return result
+}
+
+func (m CollectionGroupUpdateMessage) Copy() CollectionGroupUpdateMessage {
+	newSlice := make([]string, len(m.GroupNames))
+	copy(newSlice, m.GroupNames)
+
+	return CollectionGroupUpdateMessage{
+		CollectionId: m.CollectionId,
+		GroupNames:   newSlice,
+		Sequence:     m.Sequence,
+		SenderIp:     m.SenderIp,
+		ToForward:    m.ToForward,
+	}
 }
 
 func (c *CollectionGroupUpdateMessage) GetSequence() uint64 {

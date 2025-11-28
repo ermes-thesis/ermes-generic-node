@@ -121,8 +121,8 @@ func (s *MigrationManagerSenderImpl) RequestInfoPath() string {
 type CollectionDiscovererSender interface {
 	RemoteSetCollectionAndPropagate(hostId string, collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong, skipUniquenessCheck bool) error
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error)
-	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages)
-	PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages)
+	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages, saftyQueues []shared.FunctionQueue)
+	PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages, saftyQueues []shared.FunctionQueue)
 	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage) error
 	RemoveCollection(hostId string, collectionId string, senderIp string, groups []string, userId string)
 
@@ -239,16 +239,30 @@ func (s *CollectionDiscovererSenderImpl) RemoteSetCollectionAndPropagate(hostId 
 	return nil
 }
 
-func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages) {
+func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages, saftyQueues []shared.FunctionQueue) {
 	s.log.Infof("SENDER: request collection update propagation to %s", hostId)
 
-	go s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)
+	go func() {
+		s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)
+		s.executeUpdateSaftyCheck(saftyQueues)
+	}()
 }
 
-func (s *CollectionDiscovererSenderImpl) PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages) {
+func (s *CollectionDiscovererSenderImpl) PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages, saftyQueues []shared.FunctionQueue) {
 	s.log.Infof("SENDER: request collection group update propagation to %s", hostId)
 
-	go s.server.SendGenericHTTPRequest(hostId, updateGroupPropagationPath, update)
+	go func() {
+		s.server.SendGenericHTTPRequest(hostId, updateGroupPropagationPath, update)
+		s.executeUpdateSaftyCheck(saftyQueues)
+	}()
+}
+
+// execute order 66
+func (s *CollectionDiscovererSenderImpl) executeUpdateSaftyCheck(saftyQueues []shared.FunctionQueue) {
+	for _, saftyQueue := range saftyQueues {
+		saftyQueue.ExecuteFunctions()
+	}
+
 }
 
 func (s *CollectionDiscovererSenderImpl) RemoteAccessPath() string {

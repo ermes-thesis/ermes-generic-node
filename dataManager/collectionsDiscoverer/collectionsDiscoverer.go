@@ -450,12 +450,29 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 		}
 
 		// for each host that has the collection prepare the message
+		collection, exists := c.collectionsPartialView.KnownCollections[update.CollectionId]
 		for host := range hosts {
+			if exists && collection.GetCollectionState().IsCollectionBeingMigrated() && collection.GetCollectionState().IsCollectionBeingMigratedTo(host) {
+				copyMsg := update.Copy()
+				if host == ignoredHostName {
+					copyMsg.ToForward = false
+				}
+				msg := messages.CollectionUpdateMessages{Groups: groups, UserId: userId, Messages: []messages.CollectionUpdateMessage{copyMsg}}
+				collection.GetCollectionState().AddPostponedUpdate(host,
+					func() {
+						c.sender.PropagateUpdate(host, msg, make([]shared.FunctionQueue, 0))
+					},
+				)
+				continue
+			}
+
 			if host == ignoredHostName {
 				c.log.Debug("UpdateCollectionsRecordsAndPropagate: skipping ignored host", "collection_id", update.CollectionId, "ignored_host", ignoredHostName)
 				continue
 			}
-			msgs[host] = messages.CollectionUpdateMessages{Groups: groups, UserId: userId, Messages: append(msgs[host].Messages, update)}
+			if update.ToForward {
+				msgs[host] = messages.CollectionUpdateMessages{Groups: groups, UserId: userId, Messages: append(msgs[host].Messages, update)}
+			}
 			if saftyQueue != nil && saftyQueue.HasFunctions() {
 				safetymap[host] = append(safetymap[host], saftyQueue)
 			}
@@ -507,14 +524,32 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 			c.popolateUpdateSafetyCheck(saftyQueue, dbFn, &update, hosts, update.CollectionId)
 		}
 
-		for host := range hosts { // for each host that has the collection prepare the message
+		// for each host that has the collection prepare the message
+		collection, exists := c.collectionsPartialView.KnownCollections[update.CollectionId]
+		for host := range hosts {
+			if exists && collection.GetCollectionState().IsCollectionBeingMigrated() && collection.GetCollectionState().IsCollectionBeingMigratedTo(host) {
+				copyMsg := update.Copy()
+				if host == ignoredHostName {
+					copyMsg.ToForward = false
+				}
+				msg := make(messages.CollectionGroupUpdateMessages, 0)
+				msg = append(msg, copyMsg)
+				collection.GetCollectionState().AddPostponedUpdate(host,
+					func() {
+						c.sender.PropagateGroupUpdate(host, msg, make([]shared.FunctionQueue, 0))
+					},
+				)
+				continue
+			}
 			if host == ignoredHostName {
 				continue
 			}
-			if _, ok := msgs[host]; !ok {
-				msgs[host] = make(messages.CollectionGroupUpdateMessages, 0)
+			if update.ToForward {
+				if _, ok := msgs[host]; !ok {
+					msgs[host] = make(messages.CollectionGroupUpdateMessages, 0)
+				}
+				msgs[host] = append(msgs[host], update)
 			}
-			msgs[host] = append(msgs[host], update)
 			if saftyQueue != nil && saftyQueue.HasFunctions() {
 				safetymap[host] = append(safetymap[host], saftyQueue)
 			}

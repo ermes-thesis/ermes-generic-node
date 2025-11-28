@@ -79,6 +79,7 @@ func (s *StrongCollection) SetToLocal(size uint64) {
 		return
 	}
 	collectionState := NewLocalCollection(size, s.collectionState.HostsId())
+	collectionState.setCollectionSendingTo(s.GetCollectionState().getCollectionSendingTo())
 	s.collectionState = collectionState
 }
 
@@ -88,6 +89,7 @@ func (s *StrongCollection) SetToRemote() {
 	}
 	s.IsLeader = false
 	collectionState := NewRemoteCollection(s.collectionState.HostsId())
+	collectionState.setCollectionSendingTo(s.GetCollectionState().getCollectionSendingTo())
 	s.collectionState = collectionState
 }
 
@@ -140,6 +142,7 @@ func (w *WeakCollection) SetToLocal(size uint64) {
 		return
 	}
 	collectionState := NewLocalCollection(size, w.collectionState.HostsId())
+	collectionState.setCollectionSendingTo(w.GetCollectionState().getCollectionSendingTo())
 	w.collectionState = collectionState
 }
 
@@ -148,6 +151,7 @@ func (w *WeakCollection) SetToRemote() {
 		return
 	}
 	collectionState := NewRemoteCollection(w.collectionState.HostsId())
+	collectionState.setCollectionSendingTo(w.GetCollectionState().getCollectionSendingTo())
 	w.collectionState = collectionState
 }
 

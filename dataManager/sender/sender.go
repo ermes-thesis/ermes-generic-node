@@ -40,16 +40,18 @@ type MigrationManagerSender interface {
 }
 
 type MigrationManagerSenderImpl struct {
-	serverInfo server.ServerInfo
-	server     server.ServerType
-	log        logger.Logger
+	serverInfo  server.ServerInfo
+	partialView *shared.CollectionPartialView
+	server      server.ServerType
+	log         logger.Logger
 }
 
-func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo) MigrationManagerSender {
+func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo, partialView *shared.CollectionPartialView) MigrationManagerSender {
 	return &MigrationManagerSenderImpl{
-		server:     server,
-		log:        logger,
-		serverInfo: serverInfo,
+		server:      server,
+		log:         logger,
+		serverInfo:  serverInfo,
+		partialView: partialView,
 	}
 }
 
@@ -82,9 +84,25 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		msg.IsLeader = false
 	}
 
-	s.log.Info("Sending GossipMessage", "msg", fmt.Sprintf("%+v", msg))
+	go func() {
+		s.server.SendGenericHTTPRequest(destination, repoPath, msg)
 
-	go s.server.SendGenericHTTPRequest(destination, repoPath, msg)
+		//sync
+		s.partialView.Mutex.Lock()
+		defer s.partialView.Mutex.Unlock()
+
+		//stop postpone updates for this destination + apply eventually postponed updates
+		err := collection.GetCollectionState().RemoveCollectionMigrationHostAndExecutePostponedUpdates(destination)
+		if err != nil {
+			s.log.Error("SENDER: try to remove non present migration host from collection", "collectionId", collection.CollectionId(), "destination", destination, "err", err)
+		}
+
+		//if collection not present in subtree and no more postponed updates
+		if isMigration && len(collection.HostsId()) == 0 && !collection.GetCollectionState().IsCollectionBeingMigrated() {
+			//remove collection from partial view
+			delete(s.partialView.KnownCollections, collection.CollectionId())
+		}
+	}()
 }
 
 func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage, destination string) {

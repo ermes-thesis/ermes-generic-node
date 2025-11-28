@@ -100,7 +100,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.collectionsLock = &collections.Mutex
 
 		//prepare server
-		m.sender = sender.NewMigrationManagerSender(m.log, server, serverInfo)
+		m.sender = sender.NewMigrationManagerSender(m.log, server, serverInfo, collections)
 		server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages().ServeHTTP)
 		server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection().ServeHTTP)
 		server.AddCustomRoute(m.sender.RequestInfoPath(), true, m.handleIncomingRequestInfoMessages().ServeHTTP)
@@ -503,10 +503,10 @@ func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collecti
 		//stop keep track of access for a remote collection
 		m.StrongCollectionPolicy.RemoveInfo(collection.CollectionId())
 	}
-	if len(collection.HostsId()) == 0 {
-		delete(m.collectionsPartialView.KnownCollections, collection.CollectionId())
-	}
-	m.sender.SendRemoteCollectionTo(m.serverInfo.Father.HostName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
+
+	fatherName := m.serverInfo.Father.HostName
+	collection.GetCollectionState().AddCollectionMigrationHost(fatherName)
+	m.sender.SendRemoteCollectionTo(fatherName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
 
 	//remove collection from redis instance
 	m.dbInterface.DeleteCollection(collection.CollectionId())

@@ -267,6 +267,7 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, rep
 			//postpone the send as leader behaviour to when the lock will be released
 			strongCollection.AddPostponedDecisionBehaviour(func() {
 				m.policy.log.Info("DEFAULT-STRONG-POLICY, apply postponed leader decision for collection", "collectionId", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
+				strongCollection.GetCollectionState().AddCollectionMigrationHost(decision.Destination)
 				m.policy.sender.SendRemoteCollectionTo(decision.Destination, strongCollection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
 				strongCollection.IsLeader = false
 				strongCollection.LeaderId = decision.Destination
@@ -278,6 +279,8 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, rep
 		if leaderDecisionTaken && decision.SendAsLeader {
 			strongCollection.LeaderId = decision.Destination
 		}
+
+		strongCollection.GetCollectionState().AddCollectionMigrationHost(decision.Destination)
 		m.policy.sender.SendRemoteCollectionTo(decision.Destination, strongCollection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
 	}
 	strongCollection.IsLeader = strongCollection.IsLeader && !leaderDecisionTaken
@@ -312,14 +315,8 @@ func (m *MigrationManagerDecisionState) tryToExecutePostponed(strongCollection *
 }
 
 func (m *MigrationManagerDecisionState) deleteCollectionAfterDecisionTaken(collectionId string, strongCollection *shared.StrongCollection, outerKey string) {
-	//if collection not present in subtree
-	if len(strongCollection.HostsId()) == 0 {
-		//remove collection from partial view
-		delete(m.policy.partialView.KnownCollections, strongCollection.CollectionId())
-	} else {
-		//set the collection as remote only in the node partial view
-		strongCollection.SetToRemote()
-	}
+	//set the collection as remote only in the node partial view -> if no more host removed from partial view after response to send collection to
+	strongCollection.SetToRemote()
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(outerKey)
@@ -393,11 +390,10 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 		//stop keep track of access for a remote collection
 		m.policy.RemoveInfo(collection.CollectionId())
 	}
-	if len(collection.HostsId()) == 0 {
-		delete(m.policy.partialView.KnownCollections, collection.CollectionId())
-	}
 
-	m.policy.sender.SendRemoteCollectionTo(m.policy.serverInfo.Father.HostName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
+	fatherName := m.policy.serverInfo.Father.HostName
+	collection.GetCollectionState().AddCollectionMigrationHost(fatherName)
+	m.policy.sender.SendRemoteCollectionTo(fatherName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(collection.CollectionId())

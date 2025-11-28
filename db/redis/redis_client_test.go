@@ -8,12 +8,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/stretchr/testify/require"
 )
 
+func createNewLogger(t *testing.T) logger.Logger {
+	log, err := logger.NewLogger(logger.Config{
+		Level:  logger.WarnLevel,
+		Format: "text",
+	})
+	require.NoError(t, err)
+	return log
+}
+
 func TestRecord(t *testing.T) {
-	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -73,7 +83,7 @@ func TestRecord(t *testing.T) {
 }
 
 func TestCollection(t *testing.T) {
-	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -108,7 +118,7 @@ func TestCollection(t *testing.T) {
 }
 
 func TestMetadata(t *testing.T) {
-	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -140,7 +150,7 @@ func TestMetadata(t *testing.T) {
 }
 
 func TestGroup(t *testing.T) {
-	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -203,7 +213,7 @@ func TestGroup(t *testing.T) {
 }
 
 func TestIndex(t *testing.T) {
-	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -288,7 +298,7 @@ func TestIndex(t *testing.T) {
 }
 
 func TestMemStats(t *testing.T) {
-	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
 	defer redisClient.Close()
 
@@ -403,7 +413,7 @@ func TestMemStats(t *testing.T) {
 }
 
 func TestMemoryStress(t *testing.T) {
-	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t)
+	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
 	defer redisClient.Close()
 

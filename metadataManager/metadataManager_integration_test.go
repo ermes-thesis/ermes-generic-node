@@ -65,23 +65,29 @@ var templates = map[string]model.QueryTemplate{
 }
 
 func createNewLogger(t *testing.T) logger.Logger {
+	lvl := logger.WarnLevel
+	if testing.Verbose() {
+		lvl = logger.DebugLevel
+	}
 	log, err := logger.NewLogger(logger.Config{
-		Level:     logger.DebugLevel,
-		Format:    "text",
-		AddSource: false,
+		Level:  lvl,
+		Format: "text",
 	})
 	require.NoError(t, err)
 	return log
 }
 
 func TestMetadataLookupIntegration(t *testing.T) {
-	redisClient1, shutdownFunc1 := startRedisContainer(t, false)
-	defer shutdownFunc1()
-	defer redisClient1.Close()
+	log := createNewLogger(t)
+	defer log.Close()
 
-	redisClient2, shutdownFunc2 := startRedisContainer(t, true)
-	defer shutdownFunc2()
-	defer redisClient2.Close()
+	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
+	defer shutdownFuncFather()
+	defer redisClientFather.Close()
+
+	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
+	defer shutdownFuncChild()
+	defer redisClientChild.Close()
 
 	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
@@ -102,12 +108,10 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	tknDecoder := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClient1, serverInfoFather, metadataFatherLog, fnCache)
+	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, log.Component("father/metadata_manager"), fnCache)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
+	serverFather, err := server.NewServer(log.Component("father/server"), serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -133,12 +137,10 @@ func TestMetadataLookupIntegration(t *testing.T) {
 	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
 
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClient2, serverInfoChild, metadataChildLog, fnCache2)
+	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, log.Component("child/metadata_manager"), fnCache2)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
+	serverChild, err := server.NewServer(log.Component("child/server"), serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -207,11 +209,14 @@ func TestMetadataLookupIntegration(t *testing.T) {
 }
 
 func TestMetadataCreationFromChildIntegration(t *testing.T) {
-	redisClientFather, shutdownFuncFather := startRedisContainer(t, false)
+	log := createNewLogger(t)
+	defer log.Close()
+
+	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
 	defer redisClientFather.Close()
 
-	redisClientChild, shutdownFuncChild := startRedisContainer(t, true)
+	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
 	defer redisClientChild.Close()
 
@@ -227,12 +232,10 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	tknDecoder := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCache)
+	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, log.Component("father/metadata_manager"), fnCache)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
+	serverFather, err := server.NewServer(log.Component("father/server"), serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -257,12 +260,10 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
+	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, log.Component("child/metadata_manager"), fnCacheChild)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
+	serverChild, err := server.NewServer(log.Component("child/server"), serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -320,11 +321,14 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 }
 
 func TestMetadataCreationFromFatherIntegration(t *testing.T) {
-	redisClientFather, shutdownFuncFather := startRedisContainer(t, false)
+	log := createNewLogger(t)
+	defer log.Close()
+
+	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
 	defer redisClientFather.Close()
 
-	redisClientChild, shutdownFuncChild := startRedisContainer(t, true)
+	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
 	defer redisClientChild.Close()
 
@@ -342,12 +346,10 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	tknDecoderFather := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCache)
+	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, log.Component("father/metadata_manager"), fnCache)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
+	serverFather, err := server.NewServer(log.Component("father/server"), serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -372,12 +374,10 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
+	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, log.Component("child/metadata_manager"), fnCacheChild)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
+	serverChild, err := server.NewServer(log.Component("child/server"), serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
@@ -435,15 +435,18 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 }
 
 func TestMetadataCreationFromLocalIntegration(t *testing.T) {
-	redisClientFather, shutdownFuncFather := startRedisContainer(t, false)
+	log := createNewLogger(t)
+	defer log.Close()
+
+	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
 	defer redisClientFather.Close()
 
-	redisClientLocal, shutdownFuncLocal := startRedisContainer(t, true)
+	redisClientLocal, shutdownFuncLocal := startRedisContainer(t, log.Component("local/redis"), true)
 	defer shutdownFuncLocal()
 	defer redisClientLocal.Close()
 
-	redisClientChild, shutdownFuncChild := startRedisContainer(t, true)
+	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
 	defer redisClientChild.Close()
 
@@ -464,12 +467,10 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	tknDecoderFather := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCacheFather)
+	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, log.Component("father/metadata_manager"), fnCacheFather)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
+	serverFather, err := server.NewServer(log.Component("father/server"), serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -490,12 +491,10 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
+	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, log.Component("child/metadata_manager"), fnCacheChild)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
+	serverChild, err := server.NewServer(log.Component("child/server"), serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
@@ -526,8 +525,7 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	}
 	fnCacheLocal := &caches_mock.FunctionCache{}
 
-	metadataLocalLog := createNewLogger(t)
-	metadataManagerLocal, err := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, metadataLocalLog, fnCacheLocal)
+	metadataManagerLocal, err := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, log.Component("local/metadata_manager"), fnCacheLocal)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	metadata := model.Metadata{
@@ -584,11 +582,14 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 }
 
 func TestMetadataDeletionFromChildIntegration(t *testing.T) {
-	redisClientFather, shutdownFuncFather := startRedisContainer(t, false)
+	log := createNewLogger(t)
+	defer log.Close()
+
+	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
 	defer redisClientFather.Close()
 
-	redisClientChild, shutdownFuncChild := startRedisContainer(t, true)
+	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
 	defer redisClientChild.Close()
 
@@ -604,12 +605,10 @@ func TestMetadataDeletionFromChildIntegration(t *testing.T) {
 	tknDecoder := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCache)
+	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, log.Component("father/metadata_manager"), fnCache)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
+	serverFather, err := server.NewServer(log.Component("father/server"), serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -634,12 +633,10 @@ func TestMetadataDeletionFromChildIntegration(t *testing.T) {
 	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
+	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, log.Component("child/metadata_manager"), fnCacheChild)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
+	serverChild, err := server.NewServer(log.Component("child/server"), serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerChild := httptest.NewServer(serverChild.Handler)
@@ -688,11 +685,14 @@ func TestMetadataDeletionFromChildIntegration(t *testing.T) {
 }
 
 func TestMetadataDeletionFromFatherIntegration(t *testing.T) {
-	redisClientFather, shutdownFuncFather := startRedisContainer(t, false)
+	log := createNewLogger(t)
+	defer log.Close()
+
+	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
 	defer redisClientFather.Close()
 
-	redisClientChild, shutdownFuncChild := startRedisContainer(t, true)
+	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
 	defer redisClientChild.Close()
 
@@ -710,12 +710,10 @@ func TestMetadataDeletionFromFatherIntegration(t *testing.T) {
 	tknDecoderFather := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCache)
+	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, log.Component("father/metadata_manager"), fnCache)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
+	serverFather, err := server.NewServer(log.Component("father/server"), serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -740,12 +738,10 @@ func TestMetadataDeletionFromFatherIntegration(t *testing.T) {
 	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
+	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, log.Component("child/metadata_manager"), fnCacheChild)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
+	serverChild, err := server.NewServer(log.Component("child/server"), serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
@@ -795,15 +791,18 @@ func TestMetadataDeletionFromFatherIntegration(t *testing.T) {
 }
 
 func TestMetadataDeletionFromLocalIntegration(t *testing.T) {
-	redisClientFather, shutdownFuncFather := startRedisContainer(t, false)
+	log := createNewLogger(t)
+	defer log.Close()
+
+	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
 	defer redisClientFather.Close()
 
-	redisClientLocal, shutdownFuncLocal := startRedisContainer(t, true)
+	redisClientLocal, shutdownFuncLocal := startRedisContainer(t, log.Component("local/redis"), true)
 	defer shutdownFuncLocal()
 	defer redisClientLocal.Close()
 
-	redisClientChild, shutdownFuncChild := startRedisContainer(t, true)
+	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
 	defer redisClientChild.Close()
 
@@ -824,12 +823,10 @@ func TestMetadataDeletionFromLocalIntegration(t *testing.T) {
 	tknDecoderFather := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCacheFather)
+	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, log.Component("father/metadata_manager"), fnCacheFather)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
+	serverFather, err := server.NewServer(log.Component("father/server"), serverInfoFather)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	httpServerFather := httptest.NewServer(serverFather.Handler)
@@ -850,12 +847,10 @@ func TestMetadataDeletionFromLocalIntegration(t *testing.T) {
 	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
 	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
 
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
+	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, log.Component("child/metadata_manager"), fnCacheChild)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
+	serverChild, err := server.NewServer(log.Component("child/server"), serverInfoChild)
 	assert.NoError(t, err, "Expected no error when creating server")
 
 	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
@@ -886,8 +881,7 @@ func TestMetadataDeletionFromLocalIntegration(t *testing.T) {
 	}
 	fnCacheLocal := &caches_mock.FunctionCache{}
 
-	metadataLocalLog := createNewLogger(t)
-	metadataManagerLocal, err := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, metadataLocalLog, fnCacheLocal)
+	metadataManagerLocal, err := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, log.Component("local/metadata_manager"), fnCacheLocal)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	metadata := model.Metadata{
@@ -975,8 +969,8 @@ func TestMetadataDeletionFromLocalIntegration(t *testing.T) {
 	assert.Zero(t, metaLocal2, "Expected no metadata found for local")
 }
 
-func startRedisContainer(t *testing.T, child bool) (db.GenericDB, func()) {
-	client, shutdownFunc := test_utils.StartRedisTestContainer(t)
+func startRedisContainer(t *testing.T, log logger.Logger, child bool) (db.GenericDB, func()) {
+	client, shutdownFunc := test_utils.StartRedisTestContainer(t, log)
 
 	//https://redis.io/docs/latest/develop/ai/search-and-query/indexing/#index-limitations:~:text=After%20you%20create,modify%20command%20finishes
 	err := client.CreateIndex()

@@ -48,18 +48,7 @@ import (
 //	return "172.17.0.1"
 //}
 
-func createNewLogger(t *testing.T) logger.Logger {
-	log, err := logger.NewLogger(logger.Config{
-		Level:     logger.DebugLevel,
-		Format:    "text",
-		AddSource: false,
-		Muted:     true,
-	})
-	require.NoError(t, err)
-	return log
-}
-
-func StartRedisTestContainer(t *testing.T) (*redis.RedisClient, func()) {
+func StartRedisTestContainer(t *testing.T, log logger.Logger) (*redis.RedisClient, func()) {
 	//if !IsWSL() {
 	//	t.Setenv("TESTCONTAINERS_HOST_OVERRIDE", GetDockerHost())
 	//}
@@ -81,7 +70,6 @@ func StartRedisTestContainer(t *testing.T) (*redis.RedisClient, func()) {
 	connectionString, _ := redisContainer.ConnectionString(ctx)
 	parsedUrl, _ := url.Parse(connectionString)
 
-	log := createNewLogger(t)
 	client, err := redis.NewRedisClient(config.RedisConfig{
 		Address:    parsedUrl.Hostname(),
 		Port:       parsedUrl.Port(),

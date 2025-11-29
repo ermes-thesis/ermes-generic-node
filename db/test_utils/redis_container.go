@@ -6,6 +6,7 @@ import (
 	"db/redis"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/stretchr/testify/require"
@@ -55,11 +56,9 @@ func StartRedisTestContainer(t *testing.T, log logger.Logger) (*redis.RedisClien
 	ctx := context.Background()
 	redisContainer, err := tcredis.Run(ctx,
 		"redis/redis-stack:latest",
-		tcredis.WithSnapshotting(10, 1),
-		tcredis.WithLogLevel(tcredis.LogLevelVerbose),
+		tcredis.WithLogLevel(tcredis.LogLevelWarning),
 		testcontainers.WithCmd("redis-stack-server"),
 		testcontainers.WithCmdArgs("--maxmemory", "500mb"),
-		//tcredis.WithConfigFile(filepath.Join("testdata", "redis7.conf")),
 	)
 
 	if err != nil {
@@ -81,7 +80,10 @@ func StartRedisTestContainer(t *testing.T, log logger.Logger) (*redis.RedisClien
 	require.NoError(t, err, "failed to create redis client")
 
 	return client, func() {
-		if err := redisContainer.Terminate(ctx); err != nil {
+		if err := client.Close(); err != nil {
+			t.Fatalf("failed to close redis client: %s", err)
+		}
+		if err := redisContainer.Terminate(ctx, testcontainers.StopTimeout(100*time.Millisecond)); err != nil {
 			t.Fatalf("failed to terminate container: %s", err)
 		}
 	}

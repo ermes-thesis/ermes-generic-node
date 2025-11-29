@@ -23,14 +23,13 @@ import (
 )
 
 var defaultMigrationConfig = config.MigrationManagerConfig{
-	IdleTimeoutMs:                1e18,
-	LeaderThreshold:              0,
-	FollowerThreshold:            1,
-	ViewSize:                     3,
-	GravityConstant:              0.981,
-	KnownCollectionsDumpInterval: time.Minute,
-	StrongPolicy:                 "ERMESPOLICY",
-	WeakPolicy:                   "ALWAYSCOPYPOLICY",
+	IdleTimeoutMs:     1e18,
+	LeaderThreshold:   0,
+	FollowerThreshold: 1,
+	ViewSize:          3,
+	GravityConstant:   0.981,
+	StrongPolicy:      "ERMESPOLICY",
+	WeakPolicy:        "ALWAYSCOPYPOLICY",
 }
 
 var defaultLruConfig = config.LruConfig{
@@ -125,6 +124,7 @@ func setupTestNode(t *testing.T, log logger.Logger, opts setupOptions) (*testNod
 
 func TestUpdateAndReplica_OppositeDirections(t *testing.T) {
 	log := createNewLogger(t)
+	defer log.Close()
 
 	// --- SETUP FATHER ---
 	father, cleanupFather := setupTestNode(t, log, setupOptions{Name: "father"})
@@ -145,13 +145,14 @@ func TestUpdateAndReplica_OppositeDirections(t *testing.T) {
 		{CollectionId: "col1"},
 	}, child.URL.Host)
 
-	child.DataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{
+	err = child.DataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{
 		{
 			CollectionId: "col1",
 			RecordNames:  []string{"record1"},
 			RecordValues: []string{"value1"},
 		},
 	}, []string{}, "userId")
+	require.NoError(t, err, "failed to update records in child")
 
 	// --- ASSERT ---
 	assert.Eventually(t, func() bool {
@@ -167,6 +168,7 @@ func TestUpdateAndReplica_OppositeDirections(t *testing.T) {
 
 func TestUpdateAndReplica_OppositeDirections_SlowReplica(t *testing.T) {
 	log := createNewLogger(t)
+	defer log.Close()
 
 	// --- SETUP FATHER ---
 	father, cleanupFather := setupTestNode(t, log, setupOptions{Name: "father"})
@@ -198,13 +200,14 @@ func TestUpdateAndReplica_OppositeDirections_SlowReplica(t *testing.T) {
 		{CollectionId: "col1"},
 	}, child.URL.Host)
 
-	child.DataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{
+	err = child.DataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{
 		{
 			CollectionId: "col1",
 			RecordNames:  []string{"record1"},
 			RecordValues: []string{"value1"},
 		},
 	}, []string{}, "userId")
+	require.NoError(t, err, "failed to update records in child")
 
 	// --- ASSERT ---
 	assert.Eventually(t, func() bool {
@@ -220,6 +223,7 @@ func TestUpdateAndReplica_OppositeDirections_SlowReplica(t *testing.T) {
 
 func TestUpdateAndReplica_OppositeDirections_SlowPropagation(t *testing.T) {
 	log := createNewLogger(t)
+	defer log.Close()
 
 	// --- SETUP FATHER ---
 	slowMiddleware := func(next http.Handler) http.Handler {
@@ -250,13 +254,14 @@ func TestUpdateAndReplica_OppositeDirections_SlowPropagation(t *testing.T) {
 		{CollectionId: "col1"},
 	}, child.URL.Host)
 
-	child.DataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{
+	err = child.DataManager.UpdateCollectionsRecordsAndPropagate([]messages.CollectionUpdate{
 		{
 			CollectionId: "col1",
 			RecordNames:  []string{"record1"},
 			RecordValues: []string{"value1"},
 		},
 	}, []string{}, "userId")
+	require.NoError(t, err, "failed to update records in child")
 
 	// --- ASSERT ---
 	assert.Eventually(t, func() bool {

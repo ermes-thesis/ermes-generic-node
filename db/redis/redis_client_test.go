@@ -25,7 +25,6 @@ func createNewLogger(t *testing.T) logger.Logger {
 func TestRecord(t *testing.T) {
 	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
-	defer redisClient.Close()
 
 	exists, err := redisClient.RecordExists("collection1", "record1")
 	require.NoError(t, err, "Expected no error checking record existence")
@@ -85,7 +84,6 @@ func TestRecord(t *testing.T) {
 func TestCollection(t *testing.T) {
 	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
-	defer redisClient.Close()
 
 	collectionId := "collection1"
 	records := map[string]db.RecordValue{
@@ -120,7 +118,6 @@ func TestCollection(t *testing.T) {
 func TestMetadata(t *testing.T) {
 	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
-	defer redisClient.Close()
 
 	collectionId := "collection1"
 	metadata := model.Metadata{
@@ -152,7 +149,6 @@ func TestMetadata(t *testing.T) {
 func TestGroup(t *testing.T) {
 	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
-	defer redisClient.Close()
 
 	collectionId := "collection1"
 	members := []string{"member1", "member2"}
@@ -215,7 +211,6 @@ func TestGroup(t *testing.T) {
 func TestIndex(t *testing.T) {
 	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
-	defer redisClient.Close()
 
 	err := redisClient.CreateIndex("unused_key")
 	require.NoError(t, err, "Expected no error creating index")
@@ -300,7 +295,6 @@ func TestIndex(t *testing.T) {
 func TestMemStats(t *testing.T) {
 	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
-	defer redisClient.Close()
 
 	emptyStats, err := redisClient.GetMemoryStats()
 	require.NoError(t, err, "Expected no error getting memory stats on empty DB")
@@ -415,7 +409,6 @@ func TestMemStats(t *testing.T) {
 func TestMemoryStress(t *testing.T) {
 	redisClient, shutdownFunc1 := test_utils.StartRedisTestContainer(t, createNewLogger(t))
 	defer shutdownFunc1()
-	defer redisClient.Close()
 
 	err := redisClient.SetCollection("collection1", nil, nil, "", 0)
 	fmt.Println("Starting...")

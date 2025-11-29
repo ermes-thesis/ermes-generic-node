@@ -83,11 +83,9 @@ func TestMetadataLookupIntegration(t *testing.T) {
 
 	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
-	defer redisClientFather.Close()
 
 	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
-	defer redisClientChild.Close()
 
 	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
@@ -214,11 +212,9 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 
 	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
-	defer redisClientFather.Close()
 
 	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
-	defer redisClientChild.Close()
 
 	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
@@ -326,11 +322,9 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 
 	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
-	defer redisClientFather.Close()
 
 	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
-	defer redisClientChild.Close()
 
 	serverInfoFather := &server.ServerInfo{
 		Father: &server.Node{
@@ -440,15 +434,12 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 
 	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
-	defer redisClientFather.Close()
 
 	redisClientLocal, shutdownFuncLocal := startRedisContainer(t, log.Component("local/redis"), true)
 	defer shutdownFuncLocal()
-	defer redisClientLocal.Close()
 
 	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
-	defer redisClientChild.Close()
 
 	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
@@ -587,11 +578,9 @@ func TestMetadataDeletionFromChildIntegration(t *testing.T) {
 
 	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
-	defer redisClientFather.Close()
 
 	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
-	defer redisClientChild.Close()
 
 	serverInfoFather := &server.ServerInfo{
 		Father:         nil,
@@ -690,11 +679,9 @@ func TestMetadataDeletionFromFatherIntegration(t *testing.T) {
 
 	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
-	defer redisClientFather.Close()
 
 	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
-	defer redisClientChild.Close()
 
 	serverInfoFather := &server.ServerInfo{
 		Father: &server.Node{
@@ -796,15 +783,12 @@ func TestMetadataDeletionFromLocalIntegration(t *testing.T) {
 
 	redisClientFather, shutdownFuncFather := startRedisContainer(t, log.Component("father/redis"), false)
 	defer shutdownFuncFather()
-	defer redisClientFather.Close()
 
 	redisClientLocal, shutdownFuncLocal := startRedisContainer(t, log.Component("local/redis"), true)
 	defer shutdownFuncLocal()
-	defer redisClientLocal.Close()
 
 	redisClientChild, shutdownFuncChild := startRedisContainer(t, log.Component("child/redis"), true)
 	defer shutdownFuncChild()
-	defer redisClientChild.Close()
 
 	serverInfoFather := &server.ServerInfo{
 		Father:         nil,

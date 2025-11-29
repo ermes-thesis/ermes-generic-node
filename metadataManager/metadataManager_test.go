@@ -21,7 +21,6 @@ func TestExecuteQueries(t *testing.T) {
 
 	redisClient, shutdownFun := startRedisContainer(t, log.Component("redis"), false)
 	defer shutdownFun()
-	defer redisClient.Close()
 
 	srvInfo := &server.ServerInfo{
 		MetadataDomain: "IT",
@@ -111,7 +110,6 @@ func TestCreateMetadata(t *testing.T) {
 
 	redisClient, shutdownFun := startRedisContainer(t, log.Component("redis"), false)
 	defer shutdownFun()
-	defer redisClient.Close()
 
 	srvInfo := &server.ServerInfo{
 		MetadataDomain: "IT",

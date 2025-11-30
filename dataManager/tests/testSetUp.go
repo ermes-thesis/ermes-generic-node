@@ -90,14 +90,13 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 
 func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
-		IdleTimeoutMs:                1000000000000000000,
-		LeaderThreshold:              0,
-		FollowerThreshold:            1,
-		ViewSize:                     3,
-		GravityConstant:              0.981,
-		KnownCollectionsDumpInterval: time.Minute,
-		StrongPolicy:                 "ERMESPOLICY",
-		WeakPolicy:                   "ALWAYSCOPYPOLICY",
+		IdleTimeoutMs:     1000000000000000000,
+		LeaderThreshold:   0,
+		FollowerThreshold: 1,
+		ViewSize:          3,
+		GravityConstant:   0.981,
+		StrongPolicy:      "ERMESPOLICY",
+		WeakPolicy:        "ALWAYSCOPYPOLICY",
 	}
 	lurConfig := config.LruConfig{
 		Size:      100000,

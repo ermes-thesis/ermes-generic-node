@@ -73,6 +73,9 @@ func (l *LocalCollection) IsCollectionBeingMigrated() bool {
 }
 
 func (l *LocalCollection) AddCollectionMigrationHost(hostId string) {
+	if _, exists := l.collectionSendingTo[hostId]; exists {
+		return
+	}
 	l.collectionSendingTo[hostId] = NewFunctionQueue()
 }
 

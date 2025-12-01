@@ -299,8 +299,9 @@ func (c *CollectionsDiscovererImp) popolateUpdateSafetyCheck(saftyQueue shared.F
 		defer c.collectionsPartialView.Mutex.Unlock()
 
 		collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
-		//if I receive the collection durign the update
+		//if I receive the collection during the update
 		if exists && collection.IsLocal() {
+			c.log.Debug("UpdateRecord: Executing postponed update for collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 			//if update older than the collection strong
 			var isStrong = false
 			if collection.IsStrong() {
@@ -458,8 +459,10 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 					copyMsg.ToForward = false
 				}
 				msg := messages.CollectionUpdateMessages{Groups: groups, UserId: userId, Messages: []messages.CollectionUpdateMessage{copyMsg}}
+				c.log.Debug("UpdateCollectionsRecordsAndPropagate: postponing update propagation", "collection_id", update.CollectionId, "to_host", host, "update", fmt.Sprintf("%+v", msg))
 				collection.GetCollectionState().AddPostponedUpdate(host,
 					func() {
+						c.log.Debug("UpdateCollectionsRecordsAndPropagate: executing postponed update propagation", "collection_id", update.CollectionId, "to_host", host, "update", fmt.Sprintf("%+v", msg))
 						c.sender.PropagateUpdate(host, msg, make([]shared.FunctionQueue, 0))
 					},
 				)
@@ -534,8 +537,10 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 				}
 				msg := make(messages.CollectionGroupUpdateMessages, 0)
 				msg = append(msg, copyMsg)
+				c.log.Debug("UpdateCollectionsGroupsAndPropagate: postponing group update propagation", "collection_id", update.CollectionId, "to_host", host, "update", fmt.Sprintf("%+v", msg))
 				collection.GetCollectionState().AddPostponedUpdate(host,
 					func() {
+						c.log.Debug("UpdateCollectionsGroupsAndPropagate: executing postponed group update propagation", "collection_id", update.CollectionId, "to_host", host, "update", fmt.Sprintf("%+v", msg))
 						c.sender.PropagateGroupUpdate(host, msg, make([]shared.FunctionQueue, 0))
 					},
 				)

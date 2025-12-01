@@ -73,10 +73,11 @@ func (f *FunctionQueueWithCounter) AddFunction(function func()) {
 }
 
 func (f *FunctionQueueWithCounter) ExecuteFunctions() {
+	val := f.counter.Load()
 	if f.counter.Load() > 0 {
-		f.counter.Add(^uint32(0)) // Decrement by 1
+		val = f.counter.Add(^uint32(0)) // Decrement by 1
 	}
-	if f.functions != nil && f.counter.Load() == 0 {
+	if f.functions != nil && val == 0 { // atomic condition???
 		f.functions()
 		f.functions = nil
 	}

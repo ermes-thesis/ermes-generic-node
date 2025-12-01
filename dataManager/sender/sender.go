@@ -280,7 +280,6 @@ func (s *CollectionDiscovererSenderImpl) executeUpdateSaftyCheck(saftyQueues []s
 	for _, saftyQueue := range saftyQueues {
 		saftyQueue.ExecuteFunctions()
 	}
-
 }
 
 func (s *CollectionDiscovererSenderImpl) RemoteAccessPath() string {

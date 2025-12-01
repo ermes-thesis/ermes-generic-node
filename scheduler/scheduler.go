@@ -148,8 +148,6 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 		if seqColLock != nil {
 			s.log.Info("Releasing sequential collection lock after function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 			seqColLock.RUnlock()
-		} else {
-			s.log.Warn("No sequential collection lock to release after function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 		}
 
 		var collRequestInfo []messages.CollectionRequestInfo

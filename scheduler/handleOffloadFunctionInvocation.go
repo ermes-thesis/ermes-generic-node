@@ -15,7 +15,10 @@ const maxRedirects = 10
 
 func (s *statefulPolicy) handleOffloadFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
 
 		fnName := r.PathValue("name")
 		fnVersion := r.PathValue("version")

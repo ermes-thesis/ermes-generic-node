@@ -11,7 +11,10 @@ func (m *MigrationManagerImp) handleIncomingGossipMessages() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m.log.Eval("HTTP-REQ, New gossip message received through HTTP request", "remote_addr", r.RemoteAddr)
 
-		defer r.Body.Close()
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -64,7 +67,10 @@ func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m.log.Eval("HTTP-REQ, New collection received through HTTP request", "remote_addr", r.RemoteAddr)
 
-		defer r.Body.Close()
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -92,7 +98,10 @@ func (m *MigrationManagerImp) handleIncomingRequestInfoMessages() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		m.log.Eval("HTTP-REQ, New collection request info message received through HTTP request", "remote_addr", r.RemoteAddr)
 
-		defer r.Body.Close()
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
 
 		bodyBytes, err := io.ReadAll(r.Body)
 		if err != nil {

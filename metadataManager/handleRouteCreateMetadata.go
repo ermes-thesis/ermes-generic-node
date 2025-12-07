@@ -3,6 +3,7 @@ package metadataManager
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"metadataManager/propagation"
 	"net/http"
 
@@ -11,7 +12,11 @@ import (
 
 func (m *MetadataManagerImpl) handleRouteCreateMetadata() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
+
 		collectionId := r.PathValue("collection_id")
 		reqMetadataDomain := r.Header.Get("X-ERMES-METADATA-DOMAIN")
 

@@ -77,6 +77,7 @@ func (m *MigrationManagerDecisionState) computeElasticForce(cb *usage.CircularBu
 			break
 		}
 		resourceUsage := data(el)
+		m.policy.log.Info("DEFAULT-STRONG-POLICY, compute elastic force", "index", i, "resource_usage", fmt.Sprintf("%+v", resourceUsage))
 		reqT += m.policy.penalityFunc(i, resourceUsage.TotalRequests)
 		fe += m.policy.penalityFunc(i, resourceUsage.GetElasticForce())
 	}

@@ -7,12 +7,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 )
 
 func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
+
 		c.log.Eval("Received remote access request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
 		var msg gossip.RemoteAccessRequest
@@ -133,7 +138,11 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 
 func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
+
 		c.log.Eval("Received update propagation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
 		var msg gossip.CollectionUpdateMessages
@@ -181,7 +190,11 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdateGroupPropagation() http.H
 
 func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
+
 		c.log.Eval("Received new collection creation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
 		var msg gossip.NewCollectionMessage
@@ -255,7 +268,11 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 
 func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
+
 		c.log.Eval("Received collection removal request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
 		var msg gossip.RemoveCollectionMessage

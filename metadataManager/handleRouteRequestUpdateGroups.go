@@ -5,13 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"metadataManager/propagation"
 	"net/http"
 )
 
 func (m *MetadataManagerImpl) handleRouteRequestUpdateGroups() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
+
 		collectionId := r.PathValue("collection_id")
 
 		m.log.Eval("Received group update new request for metadata", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())

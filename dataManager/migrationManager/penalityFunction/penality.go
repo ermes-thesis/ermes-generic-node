@@ -29,7 +29,9 @@ func PolyPenalty(alpha float64) PenalityFunc {
 // logarithmic penalty: value / log(bufferPos + c)
 func LogPenalty(c float64) PenalityFunc {
 	return func(bufferPos int, currentValue int) int {
-		val := float64(currentValue) / math.Log(float64(bufferPos)+c)
+		// +2 to avoid division by zero
+		log := math.Log(float64(bufferPos)+2) / math.Log(c)
+		val := float64(currentValue) / log
 		return int(math.Round(val))
 	}
 }

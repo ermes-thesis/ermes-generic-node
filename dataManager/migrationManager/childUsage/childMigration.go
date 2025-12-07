@@ -23,7 +23,7 @@ func (cr *ResourceUsage) ManageNewRequest(requestLatency int) {
 }
 
 func (cr *ResourceUsage) GetElasticForce() int {
-	return cr.CumulativeLatency * cr.TotalRequests
+	return cr.CumulativeLatency // * cr.TotalRequests
 }
 
 type GetUsage func(*ChildResourceUsage) ResourceUsage

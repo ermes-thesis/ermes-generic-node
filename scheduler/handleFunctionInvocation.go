@@ -117,6 +117,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 				statusCode = functionResponse.StatusCode
 			}
 			s.log.Error("Error during function scheduling", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)
+			w.Header().Set("X-ERMES-EXECUTION-HOST", functionResponse.Hostname)
 			http.Error(w, fmt.Sprintf("error executing function: %v", err), statusCode)
 			return
 		}

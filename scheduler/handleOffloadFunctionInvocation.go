@@ -108,6 +108,7 @@ func (s *statefulPolicy) handleOffloadFunctionInvocation(tokenDecoder tokenDecod
 			}
 
 			s.log.Error("Error executing offloaded function", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "error", err)
+			w.Header().Set("X-ERMES-EXECUTION-HOST", functionResponse.Hostname)
 			http.Error(w, fmt.Sprintf("error executing offloaded function: %v", err), statusCode)
 			return
 		}

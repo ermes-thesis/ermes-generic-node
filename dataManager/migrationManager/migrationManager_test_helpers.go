@@ -60,9 +60,9 @@ func NewMigrationManagerForTest(collections *shared.CollectionPartialView, penal
 
 	//policy update strategy
 	if wp == weakpolicy.DONOTHINGPOLICY && sp == strongPolicy.DONOTHINGPOLICY {
-		m.policyUpdateStrategy = NewNoUpdateStrategy()
+		m.policyUpdateStrategy = newNoUpdateStrategy()
 	} else {
-		m.policyUpdateStrategy = NewErmesPolicyUpdateStrategy()
+		m.policyUpdateStrategy = newErmesPolicyUpdateStrategy()
 	}
 	return m
 }

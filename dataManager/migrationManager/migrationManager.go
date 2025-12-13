@@ -123,9 +123,9 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 
 		//policy update strategy
 		if wp == weakpolicy.DONOTHINGPOLICY && sp == strongPolicy.DONOTHINGPOLICY {
-			m.policyUpdateStrategy = NewNoUpdateStrategy()
+			m.policyUpdateStrategy = newNoUpdateStrategy()
 		} else {
-			m.policyUpdateStrategy = NewErmesPolicyUpdateStrategy()
+			m.policyUpdateStrategy = newErmesPolicyUpdateStrategy()
 		}
 
 		//init data
@@ -161,7 +161,7 @@ func (m *MigrationManagerImp) StatelessInit(collections *shared.CollectionPartia
 		m.WeakCollectionPolicy = weakpolicy.NewDoNothingPolicy()
 
 		//policy update strategy
-		m.policyUpdateStrategy = NewNoUpdateStrategy()
+		m.policyUpdateStrategy = newNoUpdateStrategy()
 
 		//Dump ?
 	})

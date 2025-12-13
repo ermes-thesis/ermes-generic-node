@@ -301,6 +301,7 @@ func (s *statefulPolicy) forwardRequest(dest string, scheduleRequest ScheduleReq
 	req.Header.Set("X-ERMES-HOSTNAME", s.serverInfo.HostName)
 	req.Header.Set("X-ERMES-LATENCY", strconv.Itoa(scheduleRequest.CumulativeLatency+s.serverInfo.GetLatencyFor(dest)))
 	req.Header.Set("X-ERMES-REDIRECTS", strconv.Itoa(scheduleRequest.NumRedirects+1))
+	req.Header.Set("X-ERMES-NODES", scheduleRequest.Nodes)
 
 	s.log.Debug("Forward request prepared with headers", "headers", fmt.Sprintf("%v", req.Header))
 	resp, err := httpClient.CustomClient.Do(req)

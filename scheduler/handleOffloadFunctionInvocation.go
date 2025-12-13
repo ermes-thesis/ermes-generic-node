@@ -34,6 +34,7 @@ func (s *statefulPolicy) handleOffloadFunctionInvocation(tokenDecoder tokenDecod
 		hostname := r.Header.Get("X-ERMES-HOSTNAME")
 		cumulativeLatency := r.Header.Get("X-ERMES-LATENCY")
 		redirects := r.Header.Get("X-ERMES-REDIRECTS")
+		nodes := r.Header.Get("X-ERMES-NODES")
 
 		cumuLatInt, err := strconv.Atoi(cumulativeLatency)
 		if err != nil {
@@ -49,7 +50,7 @@ func (s *statefulPolicy) handleOffloadFunctionInvocation(tokenDecoder tokenDecod
 			return
 		}
 		if redirectsInt > maxRedirects {
-			s.log.Error("Max redirects exceeded for offloaded invocation", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "redirects", redirectsInt)
+			s.log.Error("Max redirects exceeded for offloaded invocation", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "redirects", redirectsInt, "nodes", nodes)
 			http.Error(w, "Max redirects exceeded for offloaded invocation", http.StatusLoopDetected)
 			return
 		}
@@ -100,6 +101,7 @@ func (s *statefulPolicy) handleOffloadFunctionInvocation(tokenDecoder tokenDecod
 			Payload:             body,
 			CumulativeLatency:   cumuLatInt,
 			NumRedirects:        redirectsInt,
+			Nodes:               nodes + "," + s.serverInfo.HostName,
 		}, hostname, groups, userId)
 		if err != nil {
 			statusCode := http.StatusInternalServerError

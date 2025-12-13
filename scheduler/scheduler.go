@@ -36,6 +36,7 @@ type ScheduleRequest struct {
 	Payload           []byte
 	CumulativeLatency int
 	NumRedirects      int
+	Nodes             string
 }
 
 type fnResBody []byte

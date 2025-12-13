@@ -98,7 +98,7 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 
 			// Do nothing
 
-			return errors.New("not enough space in the list")
+			return errors.New("not enough space in the list (new item case), current: " + fmt.Sprint(this.current) + ", capacity: " + fmt.Sprint(this.capacity) + ", new size: " + fmt.Sprint(size))
 		}
 
 		// Update the size
@@ -117,7 +117,7 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 	el := get.Value.(lruCacheType[T])
 
 	if this.current-el.size+size > this.capacity {
-		return errors.New("not enough space in the list")
+		return errors.New("not enough space in the list (update case), current: " + fmt.Sprint(this.current) + ", capacity: " + fmt.Sprint(this.capacity) + ", old size: " + fmt.Sprint(el.size) + ", new size: " + fmt.Sprint(size))
 	}
 
 	this.current -= el.size
@@ -230,7 +230,7 @@ func (this *LRUCache[T]) Remove(key string) error {
 	get := this.cache[key]
 
 	if get == nil {
-		return errors.New("Trying to remove a non existing key")
+		return errors.New("trying to remove a non existing key")
 	}
 
 	// The returned element will be garbage collected (brrrr)

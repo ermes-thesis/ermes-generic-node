@@ -240,6 +240,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		}
 
 		m.log.Info("MIG-MANAGER, new collection set to local")
+		m.log.Warn("AAAAAAAAAAAAAA", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
 		m.updateLru(collectionId, uint(actualSize))
 		return false
 	}
@@ -257,6 +258,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, actualSize, false)
 	}
 	m.log.Info("MIG-MANAGER, new collection added to known collections")
+	m.log.Warn("BBBBBBBBBBBBBBBBBB", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
 	m.updateLru(collectionId, uint(actualSize))
 	m.log.Info("MIG-MANAGER, collection placed on top in the LRU")
 	return false
@@ -270,7 +272,8 @@ func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records 
 	}
 
 	//check size before set collection
-	if availableMem < collectionSize || m.lruCache.GetAvailableSize() < uint(collectionSize) { //if not enoght space in redis or in the lru => free space
+	m.log.Warn("Available memory and lru size before adding collection", "available_mem", availableMem, "available_lru", m.lruCache.GetAvailableSize(), "collection_size", collectionSize)
+	if availableMem < collectionSize || m.lruCache.GetAvailableSize() < uint(collectionSize) { //if not enough space in redis or in the lru => free space
 		m.log.Warnf("MIG-MANAGER, not enough space in the LRU to place the collection %s", collectionId)
 		err := m.freeLru(uint(collectionSize))
 		if err != nil {
@@ -441,7 +444,7 @@ func (m *MigrationManagerImp) updateLru(collectionId string, collectionSize uint
 	err := m.lruCache.Put(collectionId, m.collectionsPartialView.KnownCollections[collectionId], collectionSize)
 	m.log.Info("MIG-MANAGER, collection placed on top in the LRU", "lru_size", m.lruCache.GetCurrentSize())
 	if err != nil {
-		m.log.Errorf("MIG-MANAGER, not enough space in the LRU to place the collection %s even after free", collectionId)
+		m.log.Error("MIG-MANAGER, not enough space in the LRU to place the collection even after free", "collection_id", collectionId, "error", err)
 		return err //TODO: decide
 	}
 	return nil

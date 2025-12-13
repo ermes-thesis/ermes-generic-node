@@ -59,9 +59,9 @@ func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum ui
 		var toMigrateErr *collectionsDiscoverer.ToMigrateError
 		if err == nil {
 			if collection != nil {
-				s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection))
+				s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection), "is_locally_present", found)
 			} else {
-				s.log.Info("Collection found locally", "collection_id", colId, "seq_num", seqNum, "is_locally_present", found)
+				s.log.Info("Collection not known locally", "collection_id", colId, "seq_num", seqNum, "is_locally_present", found)
 			}
 			return found, collection, nil
 		} else if errors.As(err, &toMigrateErr) {
@@ -96,6 +96,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 	// Initializing vars for function returned collections analysis
 	var sequentialCollection *shared.StrongCollection
 	sequentialCollectionNeeded := false
+	hasSequentialLocal := false
 	hasEventualLocal := false
 	eventualHostCounts := make(map[string]uint)
 	maxEventualCount := uint(0)
@@ -131,6 +132,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 				}
 				// If collection is NIL, it means that the current node does not know its existence
 				if collection != nil {
+					hasSequentialLocal = found
 					sequentialCollection = collection.(*shared.StrongCollection)
 				}
 			} else {
@@ -181,7 +183,11 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 			return nil, 0, fmt.Errorf("error retrieving function metadata: %v", err)
 		}
 
-		if sequentialCollection.IsLocal() {
+		if hasSequentialLocal != sequentialCollection.IsLocal() {
+			s.log.Warn("Sequential collection local presence changed during scheduling.", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "was_local", hasSequentialLocal, "is_local_now", sequentialCollection.IsLocal())
+		}
+
+		if hasSequentialLocal {
 			// Re-check if the collection is still local, after acquiring the lock
 			// This is needed because the collection could be migrated while we were waiting for the lock
 			// If the collection is not local anymore, we need to forward the request

@@ -146,9 +146,9 @@ func (this *LRUCache[T]) UpdateSize(key string, size uint) error {
 
 	el := get.Value.(lruCacheType[T])
 
-	if this.current-el.size+size > this.capacity {
-		return errors.New("not enough space in the list")
-	}
+	//if this.current-el.size+size > this.capacity {
+	//	return errors.New("not enough space in the list")
+	//}
 
 	this.current -= el.size
 	el.size = size

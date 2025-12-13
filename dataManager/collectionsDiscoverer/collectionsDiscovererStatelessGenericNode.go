@@ -1,6 +1,7 @@
 package collectionsDiscoverer
 
 import (
+	"dataManager/lru"
 	"dataManager/messages"
 	"dataManager/migrationManager"
 	"dataManager/sender"
@@ -26,7 +27,7 @@ func GetCollectionsDiscovererStatelessGenericNodeInstance() CollectionsDiscovere
 	return collectionsDiscovererInstance
 }
 
-func (c *CollectionsDiscovererStatelessGenericNode) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger) {
+func (c *CollectionsDiscovererStatelessGenericNode) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection]) {
 	initOnce.Do(func() {
 		c.log = logger
 		c.serverInfo = serverInfo

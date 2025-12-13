@@ -417,10 +417,9 @@ func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionReques
 	m.log.Info("MIG-MANAGER, new request for a local collection received")
 
 	m.log.Info("MIG-MANAGER, update size in the LRU")
-	err := m.lruCache.UpdateSize(i.CollectionId, uint(m.collectionsPartialView.KnownCollections[i.CollectionId].GetCollectionState().(*shared.LocalCollection).Size()))
+	err := m.lruCache.MoveToFront(i.CollectionId)
 	if err != nil {
-		m.log.ErrorfWith("MIG-MANAGER, not enough space in the LRU to update the collection %s size even after free", []any{i.CollectionId}, "error", err)
-		return err
+		m.log.Warn("Error moving to front in LRU cache", "collection_id", i.CollectionId, "error", err)
 	}
 
 	//if the collection is strong update forces

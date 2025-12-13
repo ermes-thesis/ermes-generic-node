@@ -1,6 +1,7 @@
 package collectionsDiscoverer
 
 import (
+	"dataManager/lru"
 	"dataManager/messages"
 	"dataManager/migrationManager"
 	"dataManager/sender"
@@ -17,7 +18,7 @@ import (
 
 type CollectionsDiscoverer interface {
 	IsCollectionLocallyPresent(collectionId string, consistencyClock uint64) (bool, shared.Collection, error)
-	Init(*shared.CollectionPartialView, server.ServerInfo, server.ServerType, db.GenericDB, logger.Logger)
+	Init(*shared.CollectionPartialView, server.ServerInfo, server.ServerType, db.GenericDB, logger.Logger, *lru.LRUCache[shared.Collection])
 
 	AccessRecords(collectionId string, dbFn func() (any, error), remoteFn func(addr string) (any, error)) (any, error)
 
@@ -39,6 +40,7 @@ type CollectionsDiscovererImp struct {
 	sender                 sender.CollectionDiscovererSender
 	log                    logger.Logger
 	dbInterface            db.GenericDB
+	lruCache               *lru.LRUCache[shared.Collection]
 }
 
 // Singleton pattern
@@ -53,13 +55,14 @@ func GetCollectionsDiscovererInstance() CollectionsDiscoverer {
 	return collectionsDiscovererInstance
 }
 
-func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger) {
+func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection]) {
 	initOnce.Do(func() {
 		c.collectionsPartialView = collections
 		c.serverInfo = serverInfo
 		c.log = logger
 		c.sender = sender.NewCollectionDiscovererSender(logger, server)
 		c.dbInterface = dbInterface
+		c.lruCache = lruCache
 
 		server.AddCustomRoute(c.sender.RemoteAccessPath(), true, c.handleIncomingRemoteAccess().ServeHTTP)
 		server.AddCustomRoute(c.sender.UpdatePropagationPath(), true, c.handleIncomingUpdatePropagation().ServeHTTP)
@@ -285,6 +288,7 @@ func (c *CollectionsDiscovererImp) updateRecord(
 	}
 
 	collection.GetCollectionState().(*shared.LocalCollection).IncSize(memUsage)
+	c.lruCache.UpdateSize(collection.CollectionId(), uint(collection.GetCollectionState().(*shared.LocalCollection).Size()))
 	c.log.Info("UpdateRecord: Collection records updated successfully in local DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "memory_usage_change", memUsage, "new_memory_usage", collection.GetCollectionState().(*shared.LocalCollection).Size())
 
 	c.log.Debug("List of hosts prepared successfully", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", fmt.Sprintf("%+v", hosts))

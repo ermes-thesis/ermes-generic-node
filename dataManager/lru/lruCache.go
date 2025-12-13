@@ -170,7 +170,7 @@ func (this *LRUCache[T]) FreeToAchieveSize(sizeGoal uint) *list.List {
 	returnList := list.New()
 
 	// Start removing elements from the back until the condition is satisfied
-	for this.capacity-this.current <= sizeGoal {
+	for this.GetAvailableSize() <= sizeGoal {
 		backElement := this.linkedlist.Back()
 		if backElement == nil {
 			// Lista vuota, non possiamo liberare più spazio
@@ -249,7 +249,11 @@ func (this *LRUCache[T]) GetTotalSize() uint {
 }
 
 func (this *LRUCache[T]) GetAvailableSize() uint {
-	return this.GetTotalSize() - this.GetCurrentSize()
+	diff := int(this.GetTotalSize()) - int(this.GetCurrentSize())
+	if diff < 0 {
+		return 0
+	}
+	return uint(diff)
 }
 
 // Potentially useful for debug, but tricky to manage with generics

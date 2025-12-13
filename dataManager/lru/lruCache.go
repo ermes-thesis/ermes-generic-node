@@ -131,6 +131,20 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 	return nil
 }
 
+func (this *LRUCache[T]) MoveToFront(key string) error {
+
+	this.mux.Lock()
+	defer this.mux.Unlock()
+
+	get := this.cache[key]
+	if get == nil {
+		return errors.New("key not present in the cache")
+	}
+
+	this.linkedlist.MoveToFront(get)
+	return nil
+}
+
 // UpdateSize update the size of an element, without changing its position in the LRU.
 // This operation is thread safe.
 func (this *LRUCache[T]) UpdateSize(key string, size uint) error {

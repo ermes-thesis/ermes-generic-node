@@ -38,7 +38,11 @@ func (e ermesPolicyUpdateStrategy) updateCollectionsLatestUsage(collections []st
 	for _, c := range collections {
 		collection := m.collectionsPartialView.KnownCollections[c]
 		if collection != nil && collection.IsLocal() {
-			m.updateLru(c, uint(collection.GetCollectionState().(*shared.LocalCollection).Size()))
+			m.log.Warn("CCCCCCCCCCCCCCCCCCCCCCCCC", "collection_id", collection.CollectionId())
+			err := m.lruCache.MoveToFront(c)
+			if err != nil {
+				m.log.Warn("Error moving to front in LRU cache", "collection_id", c, "error", err)
+			}
 		}
 	}
 }

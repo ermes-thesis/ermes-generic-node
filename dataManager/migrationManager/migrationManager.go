@@ -296,6 +296,14 @@ func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records 
 	}
 	m.log.Info("Collection memory usage after adding in redis", "collection_id", collectionId, "collection_memory_usage", colMemUsage)
 
+	if colMemUsage > collectionSize {
+		m.log.Warn("MIG-MANAGER, collection size in redis is greater than the size sent by the remote node", "collection_id", collectionId, "size_in_redis", colMemUsage, "size_sent", collectionSize)
+		err := m.freeLru(uint(colMemUsage))
+		if err != nil {
+			m.log.Error("MIG-MANAGER, free lru fails", "collection_id", collectionId, "required_size", collectionSize, "available_mem", availableMem, "available_lru", m.lruCache.GetAvailableSize(), "error", err)
+			return 0, err
+		}
+	}
 	return colMemUsage, nil
 }
 

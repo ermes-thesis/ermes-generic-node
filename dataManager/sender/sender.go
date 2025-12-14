@@ -99,7 +99,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		}
 
 		//if collection not present in subtree and no more postponed updates
-		if isMigration && len(collection.HostsId()) == 0 /* && !collection.GetCollectionState().IsCollectionBeingMigrated() */ {
+		if isMigration && len(collection.HostsId()) == 0 && !collection.IsLocal() /* && !collection.GetCollectionState().IsCollectionBeingMigrated() */ {
 			//remove collection from partial view
 			delete(s.partialView.KnownCollections, collection.CollectionId())
 		}

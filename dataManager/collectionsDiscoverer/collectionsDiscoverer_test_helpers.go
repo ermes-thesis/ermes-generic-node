@@ -4,6 +4,7 @@
 package collectionsDiscoverer
 
 import (
+	"dataManager/lru"
 	"dataManager/sender"
 	shared "dataManager/shared"
 	"db"
@@ -19,13 +20,14 @@ func ResetSingleton() {
 	initOnce = sync.Once{}
 }
 
-func NewCollectionsDiscovererForTest(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger) CollectionsDiscoverer {
+func NewCollectionsDiscovererForTest(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection]) CollectionsDiscoverer {
 	c := &CollectionsDiscovererImp{
 		collectionsPartialView: collections,
 		serverInfo:             serverInfo,
 		sender:                 sender.NewCollectionDiscovererSender(logger, server),
 		log:                    logger,
 		dbInterface:            dbInterface,
+		lruCache:               lruCache,
 	}
 
 	server.AddCustomRoute(c.sender.RemoteAccessPath(), true, c.handleIncomingRemoteAccess().ServeHTTP)

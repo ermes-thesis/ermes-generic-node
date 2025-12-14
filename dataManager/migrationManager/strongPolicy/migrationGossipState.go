@@ -35,20 +35,26 @@ func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string
 }
 
 func (m *MigrationManagerGossipState) SendGossipMessages() {
-	memStats, err := m.dbInterface.GetMemoryStats()
-	if err != nil {
-		m.policy.log.Errorf("GOSSIP-STATE, failed to get memory stats: %v", err)
-	}
-	redisFreeSize := 1.0 - memStats.UsedMemoryDatasetPercentage
-	m.policy.log.Infof("GOSSIP-STATE, sending gossip messages with free redis size: %f", redisFreeSize)
+	//memStats, err := m.dbInterface.GetMemoryStats()
+	//if err != nil {
+	//	m.policy.log.Errorf("GOSSIP-STATE, failed to get memory stats: %v", err)
+	//}
+	//redisFreeSize := 1.0 - memStats.UsedMemoryDatasetPercentage
+	//m.policy.log.Infof("GOSSIP-STATE, sending gossip messages with free redis size: %f", redisFreeSize)
 
+	// If lru has the same dimension of redis, use redis size
+	// for testing purposes lru size << redis size
+	freeLruSize := 1 - (float64(m.policy.lruCache.GetCurrentSize()) / float64(m.policy.lruCache.GetTotalSize()))
+	if freeLruSize < 0 {
+		freeLruSize = 0
+	}
 	for value := range m.policy.serverInfo.Children {
-		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.HostName, redisFreeSize)
+		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.HostName, freeLruSize)
 		m.policy.sender.SendGossipMessages(msgToChild, m.policy.serverInfo.Children[value].HostName)
 	}
 
 	if m.policy.serverInfo.Father != nil {
-		msgToFather := gossip.NewChildStateMessage(m.policy.serverInfo.HostName, redisFreeSize)
+		msgToFather := gossip.NewChildStateMessage(m.policy.serverInfo.HostName, freeLruSize)
 		m.policy.sender.SendGossipMessages(msgToFather, m.policy.serverInfo.Father.HostName)
 	}
 }

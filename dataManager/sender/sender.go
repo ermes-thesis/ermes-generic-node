@@ -78,7 +78,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		SenderIp:       s.serverInfo.HostName,
 	}
 	if collection.IsStrong() {
-		msg.IsLeader = collection.(*shared.StrongCollection).IsLeader && sendAsLeader
+		msg.IsLeader = sendAsLeader
 		msg.SequenceNumber = collection.(*shared.StrongCollection).ConsistencyClock
 	} else {
 		msg.IsLeader = false

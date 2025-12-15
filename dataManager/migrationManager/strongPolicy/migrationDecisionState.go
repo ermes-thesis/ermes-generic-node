@@ -278,13 +278,13 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, rep
 		}
 		m.policy.log.Info("send collection", "collectionId", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
 		if leaderDecisionTaken && decision.SendAsLeader {
+			strongCollection.IsLeader = false
 			strongCollection.LeaderId = decision.Destination
 		}
 
 		strongCollection.GetCollectionState().AddCollectionMigrationHost(decision.Destination)
 		m.policy.sender.SendRemoteCollectionTo(decision.Destination, strongCollection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
 	}
-	strongCollection.IsLeader = strongCollection.IsLeader && !leaderDecisionTaken
 
 	if !isMigration {
 		m.tryToExecutePostponed(strongCollection)

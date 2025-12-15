@@ -70,6 +70,10 @@ func (s *StrongCollection) HasPostponedDecisionBehaviour() bool {
 	return s.postponedDecisionBehaviour.HasFunctions()
 }
 
+func (s *StrongCollection) PopPostponedDecisionBehaviour() func() {
+	return s.postponedDecisionBehaviour.PopFunction()
+}
+
 func (s *StrongCollection) GetCollectionState() CollectionState {
 	return s.collectionState
 }

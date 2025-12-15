@@ -8,39 +8,40 @@ type FunctionQueue interface {
 	AddFunction(f func())
 	ExecuteFunctions()
 	HasFunctions() bool
+	PopFunction() func()
 }
 
 type functionQueue struct {
-	functions func()
+	functions []func()
 }
 
 func NewFunctionQueue() FunctionQueue {
 	return &functionQueue{
-		functions: nil,
+		functions: make([]func(), 0),
 	}
 }
 
 func (f *functionQueue) AddFunction(function func()) {
-	oldFunctions := f.functions
-	if oldFunctions == nil {
-		f.functions = function
-	} else {
-		f.functions = func() {
-			oldFunctions()
-			function()
-		}
-	}
+	f.functions = append(f.functions, function)
 }
 
 func (f *functionQueue) ExecuteFunctions() {
-	if f.functions != nil {
-		f.functions()
-		f.functions = nil
+	for _, function := range f.functions {
+		function()
 	}
+	f.functions = make([]func(), 0)
 }
 
 func (f *functionQueue) HasFunctions() bool {
-	return f.functions != nil
+	return len(f.functions) > 0
+}
+
+func (f *functionQueue) PopFunction() func() {
+	fn := f.functions[len(f.functions)-1]
+	if len(f.functions) > 0 {
+		f.functions = f.functions[:len(f.functions)-1]
+	}
+	return fn
 }
 
 type FunctionQueueWithCounter struct {
@@ -85,4 +86,9 @@ func (f *FunctionQueueWithCounter) ExecuteFunctions() {
 
 func (f *FunctionQueueWithCounter) HasFunctions() bool {
 	return f.functions != nil
+}
+
+func (f *FunctionQueueWithCounter) PopFunction() func() {
+	// Not implemented
+	return nil
 }

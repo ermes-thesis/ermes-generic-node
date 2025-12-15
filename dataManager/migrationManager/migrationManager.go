@@ -219,6 +219,10 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 			collection.RemoveHost(hostAddress)
 		}
 
+		if collection.IsStrong() && collection.IsLocal() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() {
+			collection.(*shared.StrongCollection).PopPostponedDecisionBehaviour()
+		}
+
 		if collection.IsStrong() && isLeader && isStrong {
 			collection.(*shared.StrongCollection).IsLeader = true
 			collection.(*shared.StrongCollection).LeaderId = m.serverInfo.HostName

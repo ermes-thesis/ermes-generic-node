@@ -287,6 +287,9 @@ func TestPostponedDecisionBehaviour(t *testing.T) {
 
 	strongCollection.ExecutePostponedDecisionBehaviour(log)
 
+	if strongCollection.HasPostponedDecisionBehaviour() {
+		t.Error("Expected no postponed behaviours to be present")
+	}
 	if strongCollection.ConsistencyClock != 30 {
 		t.Error("Expected ConsistencyClock to be 30 after executing postponed behaviours, got", strongCollection.ConsistencyClock)
 	}
@@ -295,5 +298,9 @@ func TestPostponedDecisionBehaviour(t *testing.T) {
 
 	if strongCollection.ConsistencyClock != 30 {
 		t.Error("Expected ConsistencyClock to remain 30 after executing postponed behaviours again, got", strongCollection.ConsistencyClock)
+	}
+
+	if strongCollection.HasPostponedDecisionBehaviour() {
+		t.Error("Expected no postponed behaviours to be present")
 	}
 }

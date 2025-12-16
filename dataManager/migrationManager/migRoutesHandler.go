@@ -88,7 +88,12 @@ func (m *MigrationManagerImp) handleIncomingCollection() http.Handler {
 
 		m.log.Info("HTTP-REQ, New collection received info", "collection_id", collection.CollectionId, "is_strong", collection.IsStrong, "is_leader", collection.IsLeader, "records_count", len(collection.Records), "groups", collection.Groups, "owner", collection.Owner, "groups_sequence", collection.GroupsSequence, "collection_size", collection.CollectionSize, "host_to_remove", collection.HostToRemove, "sender_ip", collection.SenderIp)
 
-		m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.SequenceNumber, collection.IsLeader, collection.Records, collection.Groups, collection.Owner, collection.GroupsSequence, collection.CollectionSize, collection.HostToRemove, collection.SenderIp)
+		_, err = m.NewCollectionReceived(collection.CollectionId, collection.IsStrong, collection.SequenceNumber, collection.IsLeader, collection.Records, collection.Groups, collection.Owner, collection.GroupsSequence, collection.CollectionSize, collection.HostToRemove, collection.SenderIp)
+		if err != nil {
+			m.log.Error("HTTP-REQ, Error processing new collection", "error", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
 
 		w.WriteHeader(http.StatusOK)
 	})

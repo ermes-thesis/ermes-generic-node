@@ -85,14 +85,24 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 	}
 
 	go func() {
-		s.server.SendGenericHTTPRequest(destination, repoPath, msg)
+		code, err := s.server.SendGenericHTTPRequest(destination, repoPath, msg)
+
+		if err != nil || code != http.StatusOK {
+			if code == http.StatusInternalServerError {
+				s.log.Warnf("SENDER , Collection refused from %s, for: %v", destination, err)
+				//TODO handle collection refused
+			} else {
+				s.log.Errorf("SENDER, Error sending collection to %s: %v", destination, err)
+				return
+			}
+		}
 
 		//sync
 		s.partialView.Mutex.Lock()
 		defer s.partialView.Mutex.Unlock()
 
 		//stop postpone updates for this destination + apply eventually postponed updates
-		err := collection.GetCollectionState().RemoveCollectionMigrationHostAndExecutePostponedUpdates(destination)
+		err = collection.GetCollectionState().RemoveCollectionMigrationHostAndExecutePostponedUpdates(destination)
 		if err != nil {
 			s.log.Warn("SENDER: try to remove non present migration host from collection", "collectionId", collection.CollectionId(), "destination", destination, "err", err)
 			return

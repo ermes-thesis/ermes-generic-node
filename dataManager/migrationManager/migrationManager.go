@@ -36,7 +36,8 @@ type MigrationManager interface {
 	ManageGossipMessage(messages.GossipMessage)
 	// NewCollectionReceived used when the node receive  a collection from one of the directly connected nodes (collectionID,isStrong,leader)
 	//return True if the collection is already stored locally and must not be stored in Redis
-	NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool
+	//throw an error if there is not enough space to store the collection locally and the LRU cannot free enough space
+	NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) (bool, error)
 	// NewCollectionCreated used when user create a new collection in the local node (collectionID,size,isStrong)
 	//throw an error if the collection already exists locally
 	NewCollectionCreated(string, uint64, bool) error
@@ -206,7 +207,7 @@ func (m *MigrationManagerImp) RemoveCollectionFromLru(collectionId string) {
 }
 
 // methods
-func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool {
+func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) (bool, error) {
 	//sync
 	m.collectionsLock.Lock()
 	defer m.collectionsLock.Unlock()
@@ -230,12 +231,13 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 
 		if collection.IsLocal() {
 			m.log.Warn("MIG-MANAGER, new collection already present locally", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
-			return true
+			return true, nil
 		}
+
 		actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
 		if err != nil {
 			m.log.Warn("MIG-MANAGER, new collection could not be added to redis")
-			return true
+			return true, err
 		}
 
 		collection.SetToLocal(actualSize)
@@ -246,12 +248,12 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		m.log.Info("MIG-MANAGER, new collection set to local")
 		m.log.Warn("AAAAAAAAAAAAAA", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
 		m.updateLru(collectionId, uint(actualSize))
-		return false
+		return false, nil
 	}
 	actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
 	if err != nil {
 		m.log.Warn("MIG-MANAGER, new collection could not be added")
-		return true
+		return true, err
 	}
 
 	if isStrong {
@@ -265,7 +267,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	m.log.Warn("BBBBBBBBBBBBBBBBBB", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
 	m.updateLru(collectionId, uint(actualSize))
 	m.log.Info("MIG-MANAGER, collection placed on top in the LRU")
-	return false
+	return false, nil
 }
 
 func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64) (uint64, error) {

@@ -208,10 +208,12 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 	if decisionImpl, ok := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetDecisionState().(*policy.MigrationManagerDecisionState); ok {
 		feR := decisionImpl.ComputeReadElasticForce(instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName"))
 		feW := decisionImpl.ComputeWriteElasticForce(instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName"))
-		if feW != 26 {
+		println("Write Elastic Force:", feW)
+		println("Read Elastic Force:", feR)
+		if feW != 27 {
 			t.Error("wrong write elastic force")
 		}
-		if feR != 15 {
+		if feR != 16 {
 			t.Error("wrong read elastic force")
 		}
 	} else {

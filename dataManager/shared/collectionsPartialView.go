@@ -18,6 +18,12 @@ type CollectionPartialView struct {
 	Mutex sync.Mutex
 	//data
 	KnownCollections map[string]Collection //maps collectionID to info related to that collection
+
+	NodeResourceUsage map[string]NodeStateInfo //maps nodeID to resource usage info
+}
+
+type NodeStateInfo struct {
+	FreeRedisMemory float64
 }
 
 type collectionDump struct {
@@ -101,6 +107,8 @@ func (c *CollectionPartialView) RestoreInfoFromSettings(configData []config.Coll
 	//imp
 
 	c.KnownCollections = make(map[string]Collection)
+	c.NodeResourceUsage = make(map[string]NodeStateInfo)
+
 	for _, coll := range configData {
 		if coll.IsStrong {
 			c.restoreStrongCollectionFromSettings(coll, serverInfo)

@@ -67,7 +67,8 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 	server.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-newCollection", mock.Anything).Return(&http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("response"))}, nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
-		KnownCollections: make(map[string]shared.Collection),
+		KnownCollections:  make(map[string]shared.Collection),
+		NodeResourceUsage: make(map[string]shared.NodeStateInfo),
 	}
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{
@@ -112,7 +113,8 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 	server.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
-		KnownCollections: make(map[string]shared.Collection),
+		KnownCollections:  make(map[string]shared.Collection),
+		NodeResourceUsage: make(map[string]shared.NodeStateInfo),
 	}
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{
@@ -166,7 +168,8 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
-		KnownCollections: make(map[string]shared.Collection),
+		KnownCollections:  make(map[string]shared.Collection),
+		NodeResourceUsage: make(map[string]shared.NodeStateInfo),
 	}
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{

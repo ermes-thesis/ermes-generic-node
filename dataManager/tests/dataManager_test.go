@@ -229,7 +229,7 @@ func TestIterationModule(t *testing.T) {
 	// verify second cycle
 	time.Sleep(2 * time.Second)
 	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
-	fmt.Println(lru)
+	lru.PrintLRU()
 	if !lru.CheckOrder([]string{"repoId4", "repoId3", "repoId0"}) {
 		t.Fatal("fail in second cycle")
 	}
@@ -262,6 +262,7 @@ func TestIterationModule(t *testing.T) {
 	mig.ManageGossipMessage(child1Gossip1)
 	child2Gossip1 = gossip.NewChildStateMessage("2222", 0.90)
 	mig.ManageGossipMessage(child2Gossip1)
+
 	// decisionState
 	// ---
 
@@ -271,10 +272,12 @@ func TestIterationModule(t *testing.T) {
 	if !lru.CheckOrder([]string{"repoId0"}) {
 		t.Fatal("fail in third cycle")
 	}
+	lru.PrintLRU()
 
 	// FOURTH CYCLE
 	fmt.Println(string(red), "START FOURTH CYCLE", string(reset))
-	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Twice()
+	lru.PrintLRU()
+	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Times(2)
 	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
 
 	// idle
@@ -283,6 +286,7 @@ func TestIterationModule(t *testing.T) {
 	// verify fourth cycle p1
 	time.Sleep(2 * time.Second)
 	lru = mig.(*migrationManager.MigrationManagerImp).GetLru()
+	lru.PrintLRU()
 	if !lru.CheckOrder([]string{"repoId5"}) {
 		t.Fatal("fail in fourth cycle")
 	}

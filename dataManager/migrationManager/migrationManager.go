@@ -246,7 +246,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		}
 
 		m.log.Info("MIG-MANAGER, new collection set to local")
-		m.log.Warn("AAAAAAAAAAAAAA", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
+		//m.log.Warn("AAAAAAAAAAAAAA", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
 		m.updateLru(collectionId, uint(actualSize))
 		return false, nil
 	}
@@ -264,7 +264,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, actualSize, false)
 	}
 	m.log.Info("MIG-MANAGER, new collection added to known collections")
-	m.log.Warn("BBBBBBBBBBBBBBBBBB", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
+	//m.log.Warn("BBBBBBBBBBBBBBBBBB", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
 	m.updateLru(collectionId, uint(actualSize))
 	m.log.Info("MIG-MANAGER, collection placed on top in the LRU")
 	return false, nil

@@ -470,7 +470,7 @@ func (m *MigrationManagerImp) freeLru(sizeGoal uint) error {
 		return errors.New("no father to send collections to free lru space")
 	}
 
-	collectionList := m.lruCache.FreeToAchieveSize(sizeGoal) //TODO send the collection up to the
+	collectionList := m.lruCache.PeekFreeToAchieveSize(sizeGoal) //get elements to remove from lru without removing them
 	m.log.Info("DEFAULT-STRONG-POLICY, collections to send to remote nodes to achieve safe level", "num_collections", collectionList.Len(), "collections", collectionList, "new_lru_size", m.lruCache.GetCurrentSize())
 
 	var wg sync.WaitGroup
@@ -480,6 +480,13 @@ func (m *MigrationManagerImp) freeLru(sizeGoal uint) error {
 		go m.sendCollectionAndRemove(collection, &wg)
 	}
 	wg.Wait()
+
+	//double check size to return error if cannot free enough space
+	if m.lruCache.GetAvailableSize() < sizeGoal {
+		m.log.Error("MIG-MANAGER, could not free enough space in the LRU", "required_size", sizeGoal, "available_size", m.lruCache.GetAvailableSize())
+		return errors.New("could not free enough space in the LRU")
+	}
+
 	return nil
 }
 
@@ -491,10 +498,12 @@ func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collecti
 	if !localColl.CollectionLock.TryLock() {
 		//TODO: capire cosa fare in questo caso
 		m.log.Warn("MIG-MANAGER, collection is currently in use, skip migration", "collection", collection)
-		return nil
+		return errors.New("collection is currently in use, skip migration")
 	}
-
 	defer localColl.CollectionLock.Unlock()
+
+	//remove collection from lru
+	m.lruCache.Remove(collection.CollectionId())
 
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.dbInterface.GetCollection(collection.CollectionId())

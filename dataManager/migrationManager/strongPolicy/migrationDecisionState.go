@@ -344,7 +344,7 @@ func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
 	defer m.policy.partialView.Mutex.Unlock()
 
 	m.policy.log.InfofWith("DEFAULT-STRONG-POLICY, set lru to safe level %d", []any{sizeGoal}, "lru_size", m.policy.lruCache.GetCurrentSize())
-	collectionList := m.policy.lruCache.FreeToAchieveSize(sizeGoal)
+	collectionList := m.policy.lruCache.PeekFreeToAchieveSize(sizeGoal) //get elements to remove from lru without removing them
 	m.policy.log.Info("DEFAULT-STRONG-POLICY, collections to send to remote nodes to achieve safe level", "num_collections", collectionList.Len(), "collections", lru.PrettyPrintList(collectionList), "new_lru_size", m.policy.lruCache.GetCurrentSize())
 	var wg sync.WaitGroup
 
@@ -366,8 +366,10 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 	if !b {
 		return nil
 	}
-
 	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+
+	//remove collection from lru
+	m.policy.lruCache.Remove(collection.CollectionId())
 
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.policy.dbInterface.GetCollection(collection.CollectionId())

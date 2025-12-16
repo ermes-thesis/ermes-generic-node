@@ -219,6 +219,37 @@ func (this *LRUCache[T]) FreeToAchieveSize(sizeGoal uint) *list.List {
 	return returnList
 }
 
+func (this *LRUCache[T]) PeekFreeToAchieveSize(sizeGoal uint) *list.List {
+
+	this.mux.Lock()
+	defer this.mux.Unlock()
+
+	returnList := list.New()
+
+	simulatedAvailable := this.GetAvailableSize()
+	backElement := this.linkedlist.Back()
+
+	for simulatedAvailable <= sizeGoal {
+
+		if backElement == nil {
+			break
+		}
+
+		converted, ok := backElement.Value.(lruCacheType[T])
+		if !ok {
+			return returnList
+		}
+
+		returnList.PushFront(converted.obj)
+
+		simulatedAvailable += converted.size
+
+		backElement = backElement.Prev()
+	}
+
+	return returnList
+}
+
 // Remove Function to remove a value given its key.
 // This operation is thread safe and O(1)
 func (this *LRUCache[T]) Remove(key string) error {

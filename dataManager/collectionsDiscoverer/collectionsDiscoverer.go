@@ -590,10 +590,12 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 		return errors.New("collection already exists")
 	}
 
+	//compute size estimation
 	size := uint(len(userId))
 	for _, group := range groups {
 		size += uint(len(group))
 	}
+	//frea space for collection
 	if err := migrationManager.FreeSpaceToCreateCollection(size); err != nil {
 		c.log.Error("Failed to free space for the new collection", "collection_id", collectionId, "collection_name", collectionName, "records", fmt.Sprintf("%+v", records), "executing_user", userId, "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck, "error", err)
 		return err

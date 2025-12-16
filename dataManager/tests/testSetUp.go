@@ -43,14 +43,15 @@ func SetupGetMemoryStatsMock(mockDB *mockDb.GenericDB, server *mockServer.Server
 
 func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
-		IdleTimeoutMs:                1000000000000000000,
-		LeaderThreshold:              0,
-		FollowerThreshold:            1,
-		ViewSize:                     3,
-		GravityConstant:              0.981,
-		KnownCollectionsDumpInterval: time.Minute,
-		StrongPolicy:                 "ERMESPOLICY",
-		WeakPolicy:                   "ALWAYSCOPYPOLICY",
+		IdleTimeoutMs:                  1000000000000000000,
+		LeaderThreshold:                0,
+		FollowerThreshold:              1,
+		ViewSize:                       3,
+		GravityConstant:                0.981,
+		KnownCollectionsDumpInterval:   time.Minute,
+		StrongPolicy:                   "ERMESPOLICY",
+		WeakPolicy:                     "ALWAYSCOPYPOLICY",
+		WeakCollectionSendingThreshold: 1,
 	}
 	lurConfig := config.LruConfig{
 		Size:      100000,
@@ -91,13 +92,14 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 
 func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
-		IdleTimeoutMs:     1000000000000000000,
-		LeaderThreshold:   0,
-		FollowerThreshold: 1,
-		ViewSize:          3,
-		GravityConstant:   0.981,
-		StrongPolicy:      "ERMESPOLICY",
-		WeakPolicy:        "ALWAYSCOPYPOLICY",
+		IdleTimeoutMs:                  1000000000000000000,
+		LeaderThreshold:                0,
+		FollowerThreshold:              1,
+		ViewSize:                       3,
+		GravityConstant:                0.981,
+		StrongPolicy:                   "ERMESPOLICY",
+		WeakPolicy:                     "ALWAYSCOPYPOLICY",
+		WeakCollectionSendingThreshold: 1,
 	}
 	lurConfig := config.LruConfig{
 		Size:      100000,
@@ -137,15 +139,16 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 
 func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
-		IdleTimeoutMs:                1000000000000000000,
-		LeaderThreshold:              0,
-		FollowerThreshold:            1,
-		ViewSize:                     3,
-		GravityConstant:              0.981,
-		KnownCollectionsDumpInterval: time.Second * 3,
-		KnownCollectionsDumpPath:     "temp.ndjson",
-		StrongPolicy:                 "ERMESPOLICY",
-		WeakPolicy:                   "ALWAYSCOPYPOLICY",
+		IdleTimeoutMs:                  1000000000000000000,
+		LeaderThreshold:                0,
+		FollowerThreshold:              1,
+		ViewSize:                       3,
+		GravityConstant:                0.981,
+		KnownCollectionsDumpInterval:   time.Second * 3,
+		KnownCollectionsDumpPath:       "temp.ndjson",
+		StrongPolicy:                   "ERMESPOLICY",
+		WeakPolicy:                     "ALWAYSCOPYPOLICY",
+		WeakCollectionSendingThreshold: 1,
 	}
 	lurConfig := config.LruConfig{
 		Size:      10,

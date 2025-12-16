@@ -44,15 +44,18 @@ type AlwaysCopyPolicy struct {
 	dbInterface db.GenericDB
 	sender      sender.MigrationManagerSender
 	serverInfo  server.ServerInfo
+
+	sendingThreshold float64
 }
 
 func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.MigrationManagerSender, logger logger.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB, serverInfo server.ServerInfo) WeakCollectionPolicy {
 	policy := &AlwaysCopyPolicy{
-		dbInterface: dbInterface,
-		partialView: partialView,
-		sender:      sender,
-		serverInfo:  serverInfo,
-		log:         logger,
+		dbInterface:      dbInterface,
+		partialView:      partialView,
+		sender:           sender,
+		serverInfo:       serverInfo,
+		log:              logger,
+		sendingThreshold: config.WeakCollectionSendingThreshold,
 	}
 
 	return policy
@@ -63,7 +66,14 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 	if childName == "user" {
 		return nil
 	}
+	//verify threshold
+	lruFreeMemory, ok := a.partialView.NodeResourceUsage[childName]
+	if ok && lruFreeMemory.FreeRedisMemory <= a.sendingThreshold { //if not known, we assume we can send
+		a.log.Warnf("WEAK-POLICY, not sending weak collection %s to node %s due to memory threshold", collectionId, childName)
+		return nil
+	}
 
+	//send collection
 	a.log.Info("WEAK-POLICY, handle request for a weak collection")
 	weakCollection := a.partialView.KnownCollections[collectionId]
 

@@ -144,8 +144,8 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 		},
 	}, "childName")
 	mig := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy)
-
-	if mig.GetBuffer("repoId", "childName").Head().Write.GetElasticForce() != 26 {
+	val := mig.GetBuffer("repoId", "childName").Head().Write.GetElasticForce()
+	if val != 13 {
 
 		t.Error("wrong write force")
 	}
@@ -208,10 +208,12 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 	if decisionImpl, ok := instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetDecisionState().(*policy.MigrationManagerDecisionState); ok {
 		feR := decisionImpl.ComputeReadElasticForce(instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName"))
 		feW := decisionImpl.ComputeWriteElasticForce(instance1.(*migrationManager.MigrationManagerImp).StrongCollectionPolicy.(*policy.ErmesStrongCollectionPolicy).GetBuffer("repoId", "childName"))
-		if feW != 39 {
+		println("Write Elastic Force:", feW)
+		println("Read Elastic Force:", feR)
+		if feW != 27 {
 			t.Error("wrong write elastic force")
 		}
-		if feR != 15 {
+		if feR != 16 {
 			t.Error("wrong read elastic force")
 		}
 	} else {

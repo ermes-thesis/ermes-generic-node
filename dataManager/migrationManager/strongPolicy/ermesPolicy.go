@@ -75,8 +75,8 @@ func (s *ErmesStrongCollectionPolicy) SetDefaultState() {
 	s.log.Info("[DEFAULT-STRONG-POLICY], Setting default state")
 	//state pattern
 	s.idleState = &MigrationManagerIdleState{policy: s}
-	s.gossipState = &MigrationManagerGossipState{policy: s, dbInterface: s.dbInterface, MissingMessageCounter: 0, NodeResourceUsage: make(map[string]NodeStateInfo)}
-	s.decisionState = &MigrationManagerDecisionState{policy: s, NodeResourceUsage: make(map[string]NodeStateInfo)}
+	s.gossipState = &MigrationManagerGossipState{policy: s, dbInterface: s.dbInterface, MissingMessageCounter: 0}
+	s.decisionState = &MigrationManagerDecisionState{policy: s}
 
 	s.currentState = s.idleState
 
@@ -125,13 +125,13 @@ func (s *ErmesStrongCollectionPolicy) transitionToGossip() {
 	}
 }
 
-func (s *ErmesStrongCollectionPolicy) transitionToDecision(childrenResourceUsage map[string]NodeStateInfo) {
+func (s *ErmesStrongCollectionPolicy) transitionToDecision() {
 	s.log.Eval("DEFAULT-STRONG-POLICY, transition to decision state")
 	// Only transition if still in gossip state
 	if _, isGossip := s.currentState.(*MigrationManagerGossipState); isGossip {
 		//fmt.Println("Auto-transitioning from gossip to decision state")
 		s.setState(s.decisionState)
-		s.decisionState.Setup(childrenResourceUsage)
+		s.decisionState.Setup()
 
 	} else {
 		s.log.Error("DEFAULT-STRONG-POLICY, can't translate to decision state from a state different from gossip")

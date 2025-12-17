@@ -20,6 +20,8 @@ type CollectionState interface {
 	IsCollectionBeingMigratedTo(hostId string) bool
 	AddCollectionMigrationHost(hostId string)
 	RemoveCollectionMigrationHostAndExecutePostponedUpdates(hostId string) error
+	HasPostponedUpdate(hostId string) bool
+	RemoveCollectionMigrationHostWithoutExecutingPostponedUpdates(hostId string)
 	AddPostponedUpdate(hostId string, f func())
 
 	setCollectionSendingTo(map[string]FunctionQueue)
@@ -90,6 +92,14 @@ func (l *LocalCollection) RemoveCollectionMigrationHostAndExecutePostponedUpdate
 	delete(l.collectionSendingTo, hostId)
 	return nil
 }
+func (l *LocalCollection) HasPostponedUpdate(hostId string) bool {
+	_, ok := l.collectionSendingTo[hostId]
+	return ok
+}
+
+func (l *LocalCollection) RemoveCollectionMigrationHostWithoutExecutingPostponedUpdates(hostId string) {
+	delete(l.collectionSendingTo, hostId)
+}
 
 func (l *LocalCollection) IsCollectionBeingMigratedTo(hostId string) bool {
 	_, ok := l.collectionSendingTo[hostId]
@@ -157,6 +167,15 @@ func (l *RemoteCollection) RemoveCollectionMigrationHostAndExecutePostponedUpdat
 
 	delete(l.collectionSendingTo, hostId)
 	return nil
+}
+
+func (l *RemoteCollection) HasPostponedUpdate(hostId string) bool {
+	_, ok := l.collectionSendingTo[hostId]
+	return ok
+}
+
+func (l *RemoteCollection) RemoveCollectionMigrationHostWithoutExecutingPostponedUpdates(hostId string) {
+	delete(l.collectionSendingTo, hostId)
 }
 
 func (l *RemoteCollection) setCollectionSendingTo(collectionSendingTo map[string]FunctionQueue) {

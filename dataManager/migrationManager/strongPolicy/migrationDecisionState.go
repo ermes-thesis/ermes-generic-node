@@ -13,8 +13,7 @@ import (
 // MigrationManagerDecisionState
 // - Decision state -> in this state the Migration manager ignore all the messages, take decisions on collection migration; consume the stack
 type MigrationManagerDecisionState struct {
-	policy            *ErmesStrongCollectionPolicy
-	NodeResourceUsage map[string]NodeStateInfo
+	policy *ErmesStrongCollectionPolicy
 
 	requestStack *stack.CallStack
 }
@@ -25,18 +24,9 @@ type Decision struct {
 
 // methods
 func (m *MigrationManagerDecisionState) Setup(args ...any) {
-	if len(args) != 1 {
-		panic("invalid arguments for Setup in DecisionState")
-	}
-	childrenResourceUsage, ok := args[0].(map[string]NodeStateInfo)
-	if !ok {
-		panic("expected []ChildStateInfo for childrenResourceUsage")
-	}
 
 	fmt.Printf("DEFAULT-STRONG-POLICY, switch to DECISION state\n")
 	m.requestStack = stack.NewCallStack()
-
-	m.NodeResourceUsage = childrenResourceUsage
 
 	m.computeEqState()
 
@@ -77,7 +67,7 @@ func (m *MigrationManagerDecisionState) computeElasticForce(cb *usage.CircularBu
 			break
 		}
 		resourceUsage := data(el)
-		m.policy.log.Info("DEFAULT-STRONG-POLICY, compute elastic force", "index", i, "resource_usage", fmt.Sprintf("%+v", resourceUsage))
+		//m.policy.log.Info("DEFAULT-STRONG-POLICY, compute elastic force", "index", i, "resource_usage", fmt.Sprintf("%+v", resourceUsage))
 		reqT += m.policy.penalityFunc(i, resourceUsage.TotalRequests)
 		fe += m.policy.penalityFunc(i, resourceUsage.GetElasticForce())
 	}
@@ -129,7 +119,7 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerM
 	if strongCollection.IsLeader {
 		for _, buffer := range innerMap {
 			wForce, wReq := m.computeElasticForce(buffer, usage.GetWrite)
-			m.policy.log.Info("DEFAULT-STRONG-POLICY, leader total force computation", "collection_id", outerKey, "force", wForce, "num_requests", wReq)
+			//m.policy.log.Info("DEFAULT-STRONG-POLICY, leader total force computation", "collection_id", outerKey, "force", wForce, "num_requests", wReq)
 			totalForce += wForce
 			totalReqNumber += wReq
 
@@ -199,9 +189,9 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 
 	latency := m.policy.serverInfo.GetLatencyFor(innerKey)
 
-	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader latency retrieval", "collection_id", outerKey, "potential_new_leader", innerKey, "NodeResourceUsage", fmt.Sprintf("%+v", m.NodeResourceUsage))
-	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader decision computation", "collection_id", outerKey, "elastic_force", feW, "num_requests", req, "latency", latency, "free_memory", m.NodeResourceUsage[innerKey].FreeRedisMemory, "gravity_constant", m.policy.currentConfig.GravityConstant, "total_requests", totalReq, "total_force", totalForce)
-	var driverForce = float64(2*feW) - ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(latency) - float64(totalForce)
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader latency retrieval", "collection_id", outerKey, "potential_new_leader", innerKey, "NodeResourceUsage", fmt.Sprintf("%+v", m.policy.partialView.NodeResourceUsage))
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, leader decision computation", "collection_id", outerKey, "elastic_force", feW, "num_requests", req, "latency", latency, "free_memory", m.policy.partialView.NodeResourceUsage[innerKey].FreeRedisMemory, "gravity_constant", m.policy.currentConfig.GravityConstant, "total_requests", totalReq, "total_force", totalForce)
+	var driverForce = float64(2*feW) - ((1 / m.policy.partialView.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) - float64(totalReq-req)*float64(latency) - float64(totalForce)
 	m.policy.log.Infof("DEFAULT-STRONG-POLICY, leader decision on collection %s result in force %f and resistance %f", outerKey, driverForce, float64(totalForce))
 	//evaluate decision
 	if driverForce < 0 {
@@ -218,7 +208,7 @@ func (m *MigrationManagerDecisionState) leaderDecision(outerKey string, innerKey
 func (m *MigrationManagerDecisionState) replicaDecision(outerKey string, innerKey string, buffer *usage.CircularBuffer) bool {
 	//compute decision
 	feR, _ := m.computeElasticForce(buffer, usage.GetRead)
-	resistance := ((1 / m.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) + float64(m.policy.currentConfig.FollowerThreshold)
+	resistance := ((1 / m.policy.partialView.NodeResourceUsage[innerKey].FreeRedisMemory) * m.policy.currentConfig.GravityConstant) + float64(m.policy.currentConfig.FollowerThreshold)
 	m.policy.log.Infof("DEFAULT-STRONG-POLICY, follower decision on collection %s result in force %d and resistance %f", outerKey, feR, resistance)
 
 	//evaluate decision
@@ -344,7 +334,7 @@ func (m *MigrationManagerDecisionState) setLruToSafeLevel() {
 	defer m.policy.partialView.Mutex.Unlock()
 
 	m.policy.log.InfofWith("DEFAULT-STRONG-POLICY, set lru to safe level %d", []any{sizeGoal}, "lru_size", m.policy.lruCache.GetCurrentSize())
-	collectionList := m.policy.lruCache.FreeToAchieveSize(sizeGoal)
+	collectionList := m.policy.lruCache.PeekFreeToAchieveSize(sizeGoal) //get elements to remove from lru without removing them
 	m.policy.log.Info("DEFAULT-STRONG-POLICY, collections to send to remote nodes to achieve safe level", "num_collections", collectionList.Len(), "collections", lru.PrettyPrintList(collectionList), "new_lru_size", m.policy.lruCache.GetCurrentSize())
 	var wg sync.WaitGroup
 
@@ -366,8 +356,10 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 	if !b {
 		return nil
 	}
-
 	defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+
+	//remove collection from lru
+	m.policy.lruCache.Remove(collection.CollectionId())
 
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.policy.dbInterface.GetCollection(collection.CollectionId())

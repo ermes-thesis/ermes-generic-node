@@ -1,6 +1,7 @@
 package sender
 
 import (
+	"dataManager/lru"
 	gossip "dataManager/messages"
 	shared "dataManager/shared"
 	"db"
@@ -44,14 +45,18 @@ type MigrationManagerSenderImpl struct {
 	partialView *shared.CollectionPartialView
 	server      server.ServerType
 	log         logger.Logger
+	dbInterface db.GenericDB
+	lruCache    *lru.LRUCache[shared.Collection]
 }
 
-func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo, partialView *shared.CollectionPartialView) MigrationManagerSender {
+func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo, partialView *shared.CollectionPartialView, dbInterface db.GenericDB, lruCache *lru.LRUCache[shared.Collection]) MigrationManagerSender {
 	return &MigrationManagerSenderImpl{
 		server:      server,
 		log:         logger,
 		serverInfo:  serverInfo,
 		partialView: partialView,
+		dbInterface: dbInterface,
+		lruCache:    lruCache,
 	}
 }
 
@@ -85,14 +90,33 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 	}
 
 	go func() {
-		s.server.SendGenericHTTPRequest(destination, repoPath, msg)
+		code, err := s.server.SendGenericHTTPRequest(destination, repoPath, msg)
 
 		//sync
 		s.partialView.Mutex.Lock()
 		defer s.partialView.Mutex.Unlock()
 
+		//handle errors
+		if err != nil || code != http.StatusOK {
+			if code == http.StatusInternalServerError {
+				s.log.Warnf("SENDER , Collection refused from %s, for: %v", destination, err)
+
+				//stop sending to this node, at least until next gossip
+				nodeInfo, ok := s.partialView.NodeResourceUsage[destination]
+				if ok {
+					nodeInfo.FreeRedisMemory = 0.0
+					s.partialView.NodeResourceUsage[destination] = nodeInfo
+				}
+
+				s.sendRemoteCollectionErrorHandler(destination, collection, sendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
+			} else {
+				s.log.Errorf("SENDER, Error sending collection to %s: %v", destination, err)
+			}
+			return
+		}
+
 		//stop postpone updates for this destination + apply eventually postponed updates
-		err := collection.GetCollectionState().RemoveCollectionMigrationHostAndExecutePostponedUpdates(destination)
+		err = collection.GetCollectionState().RemoveCollectionMigrationHostAndExecutePostponedUpdates(destination)
 		if err != nil {
 			s.log.Warn("SENDER: try to remove non present migration host from collection", "collectionId", collection.CollectionId(), "destination", destination, "err", err)
 			return
@@ -104,6 +128,59 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 			delete(s.partialView.KnownCollections, collection.CollectionId())
 		}
 	}()
+}
+
+func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool) {
+	collection.GetCollectionState().RemoveHost(destination) // remove host from known hosts
+
+	//remove postponed delete behaviour
+	if collection.IsStrong() && collection.IsLocal() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() {
+		collection.(*shared.StrongCollection).PopPostponedDecisionBehaviour()
+	}
+
+	if isMigration {
+		//set collection back in redis
+		availableMem, memErr := s.dbInterface.GetAvailableMemory()
+		if memErr != nil {
+			s.log.Error("SENDER, get memory usage fails")
+			return
+		}
+		if availableMem < collectionSize { //fails to rollback, only if 2 adjacent nodes has full memory and try to migrate between them
+			s.log.Error("SENDER, IRREVERSIBLE ERROR, not enough memory to rollback collection after migration fails", "collectionId", collection.CollectionId())
+			return
+		}
+		err := s.dbInterface.SetCollection(collection.CollectionId(), res, groups, owner, groupsSequence)
+		if err != nil {
+			s.log.Error("SENDER, add collection in redis fails")
+			return
+		}
+
+		//place back in LRU
+		lruErr := s.lruCache.Put(collection.CollectionId(), collection, uint(collectionSize))
+		if lruErr != nil { //fails to rollback, only if 2 adjacent nodes has full memory and try to migrate between them
+			s.log.Error("SENDER, IRREVERSIBLE ERROR, add collection back in LRU fails")
+			return
+		}
+
+		if collection.GetCollectionState().HasPostponedUpdate(destination) {
+			collection.GetCollectionState().RemoveCollectionMigrationHostWithoutExecutingPostponedUpdates(destination)
+			s.log.Info("SENDER, IRREVERSIBLE ERROR, some postponed updates were lost during migration error handling", "collectionId", collection.CollectionId())
+		}
+
+		collection.SetToLocal(collectionSize) // set collection back to local
+		if collection.IsStrong() {
+			collection.(*shared.StrongCollection).ConsistencyClock = groupsSequence // set back consistency clock
+		}
+		s.partialView.KnownCollections[collection.CollectionId()] = collection // add back to known collections
+		s.log.Info("SENDER: Migration failed, set collection back to local", "collectionId", collection.CollectionId())
+
+	}
+
+	if sendAsLeader && collection.IsStrong() {
+		collection.(*shared.StrongCollection).IsLeader = true                  // set back as leader
+		collection.(*shared.StrongCollection).LeaderId = s.serverInfo.HostName // set back as leader
+		s.log.Info("SENDER: Leader migration failed, set collection back as leader", "collectionId", collection.CollectionId())
+	}
 }
 
 func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage, destination string) {

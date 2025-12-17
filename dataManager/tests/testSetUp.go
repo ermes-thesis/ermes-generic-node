@@ -43,14 +43,15 @@ func SetupGetMemoryStatsMock(mockDB *mockDb.GenericDB, server *mockServer.Server
 
 func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
-		IdleTimeoutMs:                1000000000000000000,
-		LeaderThreshold:              0,
-		FollowerThreshold:            1,
-		ViewSize:                     3,
-		GravityConstant:              0.981,
-		KnownCollectionsDumpInterval: time.Minute,
-		StrongPolicy:                 "ERMESPOLICY",
-		WeakPolicy:                   "ALWAYSCOPYPOLICY",
+		IdleTimeoutMs:                  1000000000000000000,
+		LeaderThreshold:                0,
+		FollowerThreshold:              1,
+		ViewSize:                       3,
+		GravityConstant:                0.981,
+		KnownCollectionsDumpInterval:   time.Minute,
+		StrongPolicy:                   "ERMESPOLICY",
+		WeakPolicy:                     "ALWAYSCOPYPOLICY",
+		WeakCollectionSendingThreshold: 1,
 	}
 	lurConfig := config.LruConfig{
 		Size:      100000,
@@ -67,7 +68,8 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 	server.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-newCollection", mock.Anything).Return(&http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("response"))}, nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
-		KnownCollections: make(map[string]shared.Collection),
+		KnownCollections:  make(map[string]shared.Collection),
+		NodeResourceUsage: make(map[string]shared.NodeStateInfo),
 	}
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{
@@ -90,13 +92,14 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 
 func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
-		IdleTimeoutMs:     1000000000000000000,
-		LeaderThreshold:   0,
-		FollowerThreshold: 1,
-		ViewSize:          3,
-		GravityConstant:   0.981,
-		StrongPolicy:      "ERMESPOLICY",
-		WeakPolicy:        "ALWAYSCOPYPOLICY",
+		IdleTimeoutMs:                  1000000000000000000,
+		LeaderThreshold:                0,
+		FollowerThreshold:              1,
+		ViewSize:                       3,
+		GravityConstant:                0.981,
+		StrongPolicy:                   "ERMESPOLICY",
+		WeakPolicy:                     "ALWAYSCOPYPOLICY",
+		WeakCollectionSendingThreshold: 1,
 	}
 	lurConfig := config.LruConfig{
 		Size:      100000,
@@ -112,7 +115,8 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 	server.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
-		KnownCollections: make(map[string]shared.Collection),
+		KnownCollections:  make(map[string]shared.Collection),
+		NodeResourceUsage: make(map[string]shared.NodeStateInfo),
 	}
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{
@@ -135,15 +139,16 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 
 func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
 	migrationManagerConfig := config.MigrationManagerConfig{
-		IdleTimeoutMs:                1000000000000000000,
-		LeaderThreshold:              0,
-		FollowerThreshold:            1,
-		ViewSize:                     3,
-		GravityConstant:              0.981,
-		KnownCollectionsDumpInterval: time.Second * 3,
-		KnownCollectionsDumpPath:     "temp.ndjson",
-		StrongPolicy:                 "ERMESPOLICY",
-		WeakPolicy:                   "ALWAYSCOPYPOLICY",
+		IdleTimeoutMs:                  1000000000000000000,
+		LeaderThreshold:                0,
+		FollowerThreshold:              1,
+		ViewSize:                       3,
+		GravityConstant:                0.981,
+		KnownCollectionsDumpInterval:   time.Second * 3,
+		KnownCollectionsDumpPath:       "temp.ndjson",
+		StrongPolicy:                   "ERMESPOLICY",
+		WeakPolicy:                     "ALWAYSCOPYPOLICY",
+		WeakCollectionSendingThreshold: 1,
 	}
 	lurConfig := config.LruConfig{
 		Size:      10,
@@ -166,7 +171,8 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
-		KnownCollections: make(map[string]shared.Collection),
+		KnownCollections:  make(map[string]shared.Collection),
+		NodeResourceUsage: make(map[string]shared.NodeStateInfo),
 	}
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{

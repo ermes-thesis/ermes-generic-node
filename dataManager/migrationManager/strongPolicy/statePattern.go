@@ -11,7 +11,3 @@ type MigrationManagerState interface {
 	ManageGossipMessage(msg gossip.GossipMessage)
 	Setup(args ...any)
 }
-
-type NodeStateInfo struct {
-	FreeRedisMemory float64
-}

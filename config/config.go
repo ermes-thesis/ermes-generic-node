@@ -26,13 +26,14 @@ type Config struct {
 }
 
 type MigrationManagerConfig struct {
-	LeaderThreshold              int           `yaml:"leaderThreshold"`
-	FollowerThreshold            int           `yaml:"followerThreshold"`
-	ViewSize                     int           `yaml:"viewSize"`
-	IdleTimeoutMs                int           `yaml:"idleTimeoutMs"`
-	GravityConstant              float64       `yaml:"gravityConstant"`
-	KnownCollectionsDumpPath     string        `yaml:"knownCollectionsDumpPath"`
-	KnownCollectionsDumpInterval time.Duration `yaml:"knownCollectionsDumpInterval"`
+	LeaderThreshold                int           `yaml:"leaderThreshold"`
+	FollowerThreshold              int           `yaml:"followerThreshold"`
+	ViewSize                       int           `yaml:"viewSize"`
+	IdleTimeoutMs                  int           `yaml:"idleTimeoutMs"`
+	GravityConstant                float64       `yaml:"gravityConstant"`
+	KnownCollectionsDumpPath       string        `yaml:"knownCollectionsDumpPath"`
+	KnownCollectionsDumpInterval   time.Duration `yaml:"knownCollectionsDumpInterval"`
+	WeakCollectionSendingThreshold float64       `yaml:"weakCollectionSendingThreshold"` //percentage of free memory usage over which we stop sending weak collections
 
 	WeakPolicy        string `yaml:"weakPolicy"`   // ALWAYSCOPYPOLICY  or DONOTHINGPOLICY
 	StrongPolicy      string `yaml:"strongPolicy"` // ERMESPOLICY or DONOTHINGPOLICY

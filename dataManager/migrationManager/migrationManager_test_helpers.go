@@ -37,7 +37,7 @@ func NewMigrationManagerForTest(collections *shared.CollectionPartialView, penal
 		collectionsLock:        &collections.Mutex,
 		lruCache:               lruCache,
 		dbInterface:            dbInterface,
-		sender:                 sender.NewMigrationManagerSender(logger, server, serverInfo, collections),
+		sender:                 sender.NewMigrationManagerSender(logger, server, serverInfo, collections, dbInterface, lruCache),
 	}
 	server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages().ServeHTTP)
 	server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection().ServeHTTP)

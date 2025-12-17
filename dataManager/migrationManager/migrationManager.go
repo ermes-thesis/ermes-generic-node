@@ -36,7 +36,8 @@ type MigrationManager interface {
 	ManageGossipMessage(messages.GossipMessage)
 	// NewCollectionReceived used when the node receive  a collection from one of the directly connected nodes (collectionID,isStrong,leader)
 	//return True if the collection is already stored locally and must not be stored in Redis
-	NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool
+	//throw an error if there is not enough space to store the collection locally and the LRU cannot free enough space
+	NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) (bool, error)
 	// NewCollectionCreated used when user create a new collection in the local node (collectionID,size,isStrong)
 	//throw an error if the collection already exists locally
 	NewCollectionCreated(string, uint64, bool) error
@@ -100,7 +101,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.collectionsLock = &collections.Mutex
 
 		//prepare server
-		m.sender = sender.NewMigrationManagerSender(m.log, server, serverInfo, collections)
+		m.sender = sender.NewMigrationManagerSender(m.log, server, serverInfo, collections, dbInterface, lruCache)
 		server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages().ServeHTTP)
 		server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection().ServeHTTP)
 		server.AddCustomRoute(m.sender.RequestInfoPath(), true, m.handleIncomingRequestInfoMessages().ServeHTTP)
@@ -206,7 +207,7 @@ func (m *MigrationManagerImp) RemoveCollectionFromLru(collectionId string) {
 }
 
 // methods
-func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) bool {
+func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) (bool, error) {
 	//sync
 	m.collectionsLock.Lock()
 	defer m.collectionsLock.Unlock()
@@ -230,12 +231,13 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 
 		if collection.IsLocal() {
 			m.log.Warn("MIG-MANAGER, new collection already present locally", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
-			return true
+			return true, nil
 		}
+
 		actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
 		if err != nil {
 			m.log.Warn("MIG-MANAGER, new collection could not be added to redis")
-			return true
+			return true, err
 		}
 
 		collection.SetToLocal(actualSize)
@@ -244,14 +246,14 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		}
 
 		m.log.Info("MIG-MANAGER, new collection set to local")
-		m.log.Warn("AAAAAAAAAAAAAA", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
+		//m.log.Warn("AAAAAAAAAAAAAA", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
 		m.updateLru(collectionId, uint(actualSize))
-		return false
+		return false, nil
 	}
 	actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
 	if err != nil {
 		m.log.Warn("MIG-MANAGER, new collection could not be added")
-		return true
+		return true, err
 	}
 
 	if isStrong {
@@ -262,10 +264,10 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, actualSize, false)
 	}
 	m.log.Info("MIG-MANAGER, new collection added to known collections")
-	m.log.Warn("BBBBBBBBBBBBBBBBBB", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
+	//m.log.Warn("BBBBBBBBBBBBBBBBBB", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
 	m.updateLru(collectionId, uint(actualSize))
 	m.log.Info("MIG-MANAGER, collection placed on top in the LRU")
-	return false
+	return false, nil
 }
 
 func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64) (uint64, error) {
@@ -470,7 +472,7 @@ func (m *MigrationManagerImp) freeLru(sizeGoal uint) error {
 		return errors.New("no father to send collections to free lru space")
 	}
 
-	collectionList := m.lruCache.FreeToAchieveSize(sizeGoal) //TODO send the collection up to the
+	collectionList := m.lruCache.PeekFreeToAchieveSize(sizeGoal) //get elements to remove from lru without removing them
 	m.log.Info("DEFAULT-STRONG-POLICY, collections to send to remote nodes to achieve safe level", "num_collections", collectionList.Len(), "collections", collectionList, "new_lru_size", m.lruCache.GetCurrentSize())
 
 	var wg sync.WaitGroup
@@ -480,6 +482,13 @@ func (m *MigrationManagerImp) freeLru(sizeGoal uint) error {
 		go m.sendCollectionAndRemove(collection, &wg)
 	}
 	wg.Wait()
+
+	//double check size to return error if cannot free enough space
+	if m.lruCache.GetAvailableSize() < sizeGoal {
+		m.log.Error("MIG-MANAGER, could not free enough space in the LRU", "required_size", sizeGoal, "available_size", m.lruCache.GetAvailableSize())
+		return errors.New("could not free enough space in the LRU")
+	}
+
 	return nil
 }
 
@@ -491,10 +500,12 @@ func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collecti
 	if !localColl.CollectionLock.TryLock() {
 		//TODO: capire cosa fare in questo caso
 		m.log.Warn("MIG-MANAGER, collection is currently in use, skip migration", "collection", collection)
-		return nil
+		return errors.New("collection is currently in use, skip migration")
 	}
-
 	defer localColl.CollectionLock.Unlock()
+
+	//remove collection from lru
+	m.lruCache.Remove(collection.CollectionId())
 
 	//get collection from redis instance
 	res, groups, owner, groupsSequence, err := m.dbInterface.GetCollection(collection.CollectionId())

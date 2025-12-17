@@ -46,7 +46,7 @@ func (p *QueryPropagatorImpl) Propagate(functionName, functionVersion, templateP
 }
 
 func (p *QueryPropagatorImpl) sendHttpReqToDest(dest, functionName, functionVersion, templateParamsMappings, groupToken, geolocation string) (map[uint64]model.QueryResult, error) {
-	url := fmt.Sprintf("http://%s%s", dest, EndpointLookup)
+	url := "http://" + dest + EndpointLookup
 
 	p.log.Debug("Creating HTTP request for query propagation", "fn_name", functionName, "fn_version", functionVersion, "destination", dest, "template_parameters_mappings", templateParamsMappings, "query_geolocation", geolocation)
 	req, err := http.NewRequest(http.MethodGet, url, nil)

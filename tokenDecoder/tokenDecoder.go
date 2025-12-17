@@ -21,12 +21,14 @@ type TokenDecoder interface {
 
 type TokenDecoderImpl struct {
 	publicKey *rsa.PublicKey
+	parser    *jwt.Parser
 	issuer    string
 }
 
 func NewTokenDecoder(path string) (TokenDecoder, error) {
 	tknDecoder := &TokenDecoderImpl{
 		publicKey: nil,
+		parser:    jwt.NewParser(),
 		issuer:    "ermes-central-repository",
 	}
 
@@ -46,7 +48,7 @@ func NewTokenDecoderWithKey(publicKey *rsa.PublicKey, issuer string) TokenDecode
 
 func (t *TokenDecoderImpl) DecodeGroupToken(tokenString string) ([]string, string, error) {
 	var claims *GroupTokenClaims
-	token, err := jwt.ParseWithClaims(tokenString, &GroupTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
+	token, err := t.parser.ParseWithClaims(tokenString, &GroupTokenClaims{}, func(token *jwt.Token) (interface{}, error) {
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}

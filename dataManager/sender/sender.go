@@ -161,7 +161,11 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 			s.log.Error("SENDER, IRREVERSIBLE ERROR, add collection back in LRU fails")
 			return
 		}
-		//TODO: fix postponed updates lost during migration?
+
+		if collection.GetCollectionState().HasPostponedUpdate(destination) {
+			collection.GetCollectionState().RemoveCollectionMigrationHostWithoutExecutingPostponedUpdates(destination)
+			s.log.Info("SENDER, IRREVERSIBLE ERROR, some postponed updates were lost during migration error handling", "collectionId", collection.CollectionId())
+		}
 
 		collection.SetToLocal(collectionSize) // set collection back to local
 		if collection.IsStrong() {

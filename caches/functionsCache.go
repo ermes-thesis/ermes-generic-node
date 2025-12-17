@@ -13,7 +13,7 @@ import (
 
 type FunctionCache interface {
 	GetTemplate(functionName string, functionVersion string, templateName string) (*model.QueryTemplate, error)
-	GetBinary(functionName string, functionVersion string) (*caches.ReusableBuffer, error)
+	GetBinary(functionName string, functionVersion string) ([]byte, error)
 	GetMetadata(functionName string, functionVersion string) (*model.FunctionMetadata, error)
 }
 
@@ -147,7 +147,7 @@ func (f *FunctionCacheImpl) GetTemplate(functionName string, functionVersion str
 	}
 }
 
-func (f *FunctionCacheImpl) GetBinary(functionName string, functionVersion string) (*caches.ReusableBuffer, error) {
+func (f *FunctionCacheImpl) GetBinary(functionName string, functionVersion string) ([]byte, error) {
 	f.log.Info("GetBinary called", "fn_name", functionName, "fn_version", functionVersion)
 
 	if functionVersion == "latest" {
@@ -236,7 +236,7 @@ func (f *FunctionCacheImpl) getSnapshot(functionName string, functionVersion str
 	case "binary":
 		if bin, _, okBin, err := f.MetadataBinaries.GetWithBinary(functionName, functionVersion); okBin && bin != nil {
 			if f.log.Enabled(logger.DebugLevel) {
-				f.log.Debug("Returning binary snapshot", "fn_name", functionName, "fn_version", functionVersion, "binary", slices.Clone(bin.Buf[:min(len(bin.Buf), 30)]))
+				f.log.Debug("Returning binary snapshot", "fn_name", functionName, "fn_version", functionVersion, "binary", slices.Clone(bin[:min(len(bin), 30)]))
 			}
 			return &caches.FunctionBundle{Binary: bin}, err
 		}
@@ -288,7 +288,6 @@ func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*caches.Fu
 			return nil, err
 		}
 
-		fetchedBundle.Binary.ReleaseFunc = func() {}
 		f.log.Debug("Function bundle fetched correctly, proceeding to store it in the caches", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
 		f.LatestVersions.Set(functionName, fetchedBundle.Metadata.Version)
 		err = f.store(fetchedBundle)
@@ -332,7 +331,7 @@ func (f *FunctionCacheImpl) store(bundle *caches.FunctionBundle) error {
 	for name, template := range bundle.Templates {
 		f.Templates.Set(name, template)
 	}
-	if err := f.MetadataBinaries.Set(bundle.Metadata, bundle.Binary.Buf); err != nil {
+	if err := f.MetadataBinaries.Set(bundle.Metadata, bundle.Binary); err != nil {
 		f.log.Error("Failed to store bundle in MetadataBinaryCache", "fn_bundle", fmt.Sprintf("%+v", bundle), "error", err)
 		return err
 	}

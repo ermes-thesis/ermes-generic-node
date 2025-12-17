@@ -31,7 +31,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 	fn := "func1"
 	fnVer := "1.0.0"
 
-	fetcher := &common_caches.Fetcher[*FunctionBundle]{}
+	fetcher := &common_caches.Fetcher[*caches.FunctionBundle]{}
 	query := model.QueryTemplate{
 		Select: "ALL",
 		As:     "test",
@@ -41,7 +41,7 @@ func TestFunctionCacheImpl_GetTemplateAndBinary(t *testing.T) {
 		},
 		},
 	}
-	fetcher.EXPECT().Fetch(fn, fnVer).Return(&FunctionBundle{
+	fetcher.EXPECT().Fetch(fn, fnVer).Return(&caches.FunctionBundle{
 		Binary: []byte("binary-" + fn),
 		Templates: map[string]model.QueryTemplate{
 			"tmpl" + fn: query,
@@ -109,7 +109,7 @@ func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
 
 	fnName := "func1"
 	fnVer := "1.0.0"
-	fetcher := &common_caches.Fetcher[*FunctionBundle]{}
+	fetcher := &common_caches.Fetcher[*caches.FunctionBundle]{}
 	// Return invalid bundle (empty binary)
 	query := model.QueryTemplate{
 		Select: "ALL",
@@ -120,7 +120,7 @@ func TestFunctionCacheImpl_FetcherReturnsInvalidBundle(t *testing.T) {
 		},
 		},
 	}
-	fetcher.EXPECT().Fetch(fnName, fnVer).Return(&FunctionBundle{
+	fetcher.EXPECT().Fetch(fnName, fnVer).Return(&caches.FunctionBundle{
 		Binary: []byte{},
 		Templates: map[string]model.QueryTemplate{
 			"tmpl" + fnName: query,

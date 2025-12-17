@@ -61,7 +61,9 @@ func (p *QueryPropagatorImpl) sendHttpReqToDest(dest, functionName, functionVers
 	req.Header.Set("X-ERMES-POSITION", geolocation)
 	req.Header.Set("X-ERMES-QUERY", templateParamsMappings)
 
-	p.log.Debug("Sending HTTP request to destination node", "url", req.URL, "headers", fmt.Sprintf("%+v", req.Header))
+	if p.log.Enabled(logger.DebugLevel) {
+		p.log.Debug("Sending HTTP request to destination node", "url", req.URL, "headers", fmt.Sprintf("%+v", req.Header))
+	}
 
 	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {

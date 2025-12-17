@@ -286,8 +286,9 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 				}
 
 				m.log.InfofWith("Query template '%s' executed successfully", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion)
-				m.log.DebugfWith("Query template '%s' executed successfully", []any{templateName}, "query_AS", query.As, "retrieved_collections", fmt.Sprintf("%+v", collInfo))
-
+				if m.log.Enabled(logger.DebugLevel) {
+					m.log.DebugfWith("Query template '%s' executed successfully", []any{templateName}, "query_AS", query.As, "retrieved_collections", fmt.Sprintf("%+v", collInfo))
+				}
 				if len(collInfo) > 0 {
 					hash := model.NewQueryIdentifier(templateName, params).Hash()
 					result[hash] = model.QueryResult{
@@ -302,8 +303,9 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 		}
 
 		m.log.Info("Query templates execution completed successfully", "fn_name", functionName, "fn_version", functionVersion)
-		m.log.Debug("Query templates execution completed successfully", "queries_results", fmt.Sprintf("%+v", result))
-
+		if m.log.Enabled(logger.DebugLevel) {
+			m.log.Debug("Query templates execution completed successfully", "queries_results", fmt.Sprintf("%+v", result))
+		}
 		return result, nil
 	}
 

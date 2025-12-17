@@ -3,16 +3,17 @@ package caches
 import (
 	"config"
 	"fmt"
+	"slices"
+
 	"github.com/ermes-thesis/ermes-common/caches"
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 	"golang.org/x/sync/singleflight"
-	"slices"
 )
 
 type FunctionCache interface {
 	GetTemplate(functionName string, functionVersion string, templateName string) (*model.QueryTemplate, error)
-	GetBinary(functionName string, functionVersion string) ([]byte, error)
+	GetBinary(functionName string, functionVersion string) (*caches.ReusableBuffer, error)
 	GetMetadata(functionName string, functionVersion string) (*model.FunctionMetadata, error)
 }
 
@@ -20,40 +21,18 @@ type FunctionCacheImpl struct {
 	Templates        *TemplatesCache
 	MetadataBinaries *caches.MetadataBinaryCache
 	LatestVersions   *caches.BaseCache[string]
-	fetcher          caches.Fetcher[*FunctionBundle]
+	fetcher          caches.Fetcher[*caches.FunctionBundle]
 	group            singleflight.Group
 	log              logger.Logger
 }
 
-type FunctionBundle struct {
-	Binary    []byte
-	Metadata  model.FunctionMetadata
-	Templates map[string]model.QueryTemplate
-}
-
-func (f FunctionBundle) String() string {
-	displayBytes := f.Binary
-	truncated := false
-	if len(displayBytes) > 30 {
-		displayBytes = displayBytes[:30]
-		truncated = true
-	}
-
-	binStr := fmt.Sprintf("%v", displayBytes)
-	if truncated {
-		binStr = fmt.Sprintf("%s...(truncated, total %d bytes)", binStr, len(f.Binary))
-	}
-
-	return fmt.Sprintf("{Binary:%s Metadata:%+v Templates:%+v}", binStr, f.Metadata, f.Templates)
-}
-
-func NewFunctionCache(config config.FunctionsCacheConfig, fetcher caches.Fetcher[*FunctionBundle], log logger.Logger) (*FunctionCacheImpl, error) {
+func NewFunctionCache(config config.FunctionsCacheConfig, fetcher caches.Fetcher[*caches.FunctionBundle], log logger.Logger) (*FunctionCacheImpl, error) {
 	tmplCache, err := NewTemplatesCache(config.TemplateCache)
 	if err != nil {
 		log.Error("Failed to create template cache", "config", fmt.Sprintf("%+v", config), "fetcher", fmt.Sprintf("%+v", fetcher), "error", err)
 		return nil, fmt.Errorf("error creating template cache: %v", err)
 	}
-	binCache, err := caches.NewMetadataBinaryCache(config.BinaryCache)
+	binCache, err := caches.NewMetadataBinaryCache(config.BinaryCache, log)
 	if err != nil {
 		log.Error("Failed to create metadata&binary cache", "config", fmt.Sprintf("%+v", config), "fetcher", fmt.Sprintf("%+v", fetcher), "error", err)
 		return nil, fmt.Errorf("error creating binary cache: %v", err)
@@ -81,7 +60,7 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret str
 		log.Error("Failed to create template cache", "config", fmt.Sprintf("%+v", config), "ermes_secret", ermesSecret, "function_registry_address", config.FunctionRegistry.Address, "function_registry_port", "error", err)
 		return nil, fmt.Errorf("error creating template cache: %v", err)
 	}
-	binCache, err := caches.NewMetadataBinaryCache(config.BinaryCache)
+	binCache, err := caches.NewMetadataBinaryCache(config.BinaryCache, log)
 	if err != nil {
 		log.Error("Failed to create metadata&binary cache", "config", fmt.Sprintf("%+v", config), "ermes_secret", ermesSecret, "function_registry_address", config.FunctionRegistry.Address, "function_registry_port", "error", err)
 		return nil, fmt.Errorf("error creating binary cache: %v", err)
@@ -96,7 +75,7 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret str
 		Templates:        tmplCache,
 		MetadataBinaries: binCache,
 		LatestVersions:   latest,
-		fetcher:          caches.NewRemoteBundleFetcher[FunctionBundle](fmt.Sprintf("http://%s:%s/retrieve-function", config.FunctionRegistry.Address, config.FunctionRegistry.Port), ermesSecret),
+		fetcher:          caches.NewRemoteBundleFetcher[caches.FunctionBundle](fmt.Sprintf("http://%s:%s/retrieve-function", config.FunctionRegistry.Address, config.FunctionRegistry.Port), ermesSecret),
 		group:            singleflight.Group{},
 		log:              log,
 	}, nil
@@ -168,7 +147,7 @@ func (f *FunctionCacheImpl) GetTemplate(functionName string, functionVersion str
 	}
 }
 
-func (f *FunctionCacheImpl) GetBinary(functionName string, functionVersion string) ([]byte, error) {
+func (f *FunctionCacheImpl) GetBinary(functionName string, functionVersion string) (*caches.ReusableBuffer, error) {
 	f.log.Info("GetBinary called", "fn_name", functionName, "fn_version", functionVersion)
 
 	if functionVersion == "latest" {
@@ -242,20 +221,24 @@ func (f *FunctionCacheImpl) GetMetadata(functionName string, functionVersion str
 	return &fnBundle.Metadata, err
 }
 
-func (f *FunctionCacheImpl) getSnapshot(functionName string, functionVersion string, want string) (*FunctionBundle, error) {
+func (f *FunctionCacheImpl) getSnapshot(functionName string, functionVersion string, want string) (*caches.FunctionBundle, error) {
 	f.log.Debug("Creating cache snapshot", "fn_name", functionName, "fn_version", functionVersion, "part_wanted", want)
 
 	switch want {
 	case "metadata":
 		if meta, ok := f.MetadataBinaries.Get(functionName, functionVersion); ok {
-			f.log.Debug("Returning metadata snapshot", "fn_name", functionName, "fn_version", functionVersion, "metadata", fmt.Sprintf("%+v", meta))
-			return &FunctionBundle{Metadata: meta}, nil
+			if f.log.Enabled(logger.DebugLevel) {
+				f.log.Debug("Returning metadata snapshot", "fn_name", functionName, "fn_version", functionVersion, "metadata", fmt.Sprintf("%+v", meta))
+			}
+			return &caches.FunctionBundle{Metadata: meta}, nil
 		}
 
 	case "binary":
-		if bin, _, okBin, err := f.MetadataBinaries.GetWithBinary(functionName, functionVersion); okBin && len(bin) > 0 {
-			f.log.Debug("Returning binary snapshot", "fn_name", functionName, "fn_version", functionVersion, "binary", slices.Clone(bin[:min(len(bin), 30)]))
-			return &FunctionBundle{Binary: bin}, err
+		if bin, _, okBin, err := f.MetadataBinaries.GetWithBinary(functionName, functionVersion); okBin && bin != nil {
+			if f.log.Enabled(logger.DebugLevel) {
+				f.log.Debug("Returning binary snapshot", "fn_name", functionName, "fn_version", functionVersion, "binary", slices.Clone(bin.Buf[:min(len(bin.Buf), 30)]))
+			}
+			return &caches.FunctionBundle{Binary: bin}, err
 		}
 
 	case "template":
@@ -271,8 +254,10 @@ func (f *FunctionCacheImpl) getSnapshot(functionName string, functionVersion str
 				}
 			}
 			if all {
-				f.log.Debug("Returning templates snapshot", "fn_name", functionName, "fn_version", functionVersion, "templates", fmt.Sprintf("%+v", tmpls))
-				return &FunctionBundle{Templates: tmpls}, nil
+				if f.log.Enabled(logger.DebugLevel) {
+					f.log.Debug("Returning templates snapshot", "fn_name", functionName, "fn_version", functionVersion, "templates", fmt.Sprintf("%+v", tmpls))
+				}
+				return &caches.FunctionBundle{Templates: tmpls}, nil
 			}
 		}
 	default:
@@ -284,7 +269,7 @@ func (f *FunctionCacheImpl) getSnapshot(functionName string, functionVersion str
 	return nil, nil
 }
 
-func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*FunctionBundle, error) {
+func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*caches.FunctionBundle, error) {
 	f.log.Debug("Resolving latest", "fn_name", functionName, "part_wanted", want)
 
 	cachedVersion, found, expired := f.LatestVersions.GetWithStatus(functionName)
@@ -303,6 +288,7 @@ func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*FunctionB
 			return nil, err
 		}
 
+		fetchedBundle.Binary.ReleaseFunc = func() {}
 		f.log.Debug("Function bundle fetched correctly, proceeding to store it in the caches", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
 		f.LatestVersions.Set(functionName, fetchedBundle.Metadata.Version)
 		err = f.store(fetchedBundle)
@@ -341,19 +327,19 @@ func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*FunctionB
 	}
 }
 
-func (f *FunctionCacheImpl) store(bundle *FunctionBundle) error {
+func (f *FunctionCacheImpl) store(bundle *caches.FunctionBundle) error {
 	f.log.Debug("Storing bundle in caches", "fn_bundle", fmt.Sprintf("%+v", bundle))
 	for name, template := range bundle.Templates {
 		f.Templates.Set(name, template)
 	}
-	if err := f.MetadataBinaries.Set(bundle.Metadata, bundle.Binary); err != nil {
+	if err := f.MetadataBinaries.Set(bundle.Metadata, bundle.Binary.Buf); err != nil {
 		f.log.Error("Failed to store bundle in MetadataBinaryCache", "fn_bundle", fmt.Sprintf("%+v", bundle), "error", err)
 		return err
 	}
 	return nil
 }
 
-func (f *FunctionCacheImpl) fetchAndStore(functionName string, functionVersion string) (*FunctionBundle, error) {
+func (f *FunctionCacheImpl) fetchAndStore(functionName string, functionVersion string) (*caches.FunctionBundle, error) {
 	f.log.Debug("Fetching bundle and storing function bundle", "fn_name", functionName, "fn_version", functionVersion)
 
 	if functionVersion == "latest" {
@@ -370,7 +356,7 @@ func (f *FunctionCacheImpl) fetchAndStore(functionName string, functionVersion s
 			return nil, err
 		}
 
-		if bundle == nil || len(bundle.Binary) == 0 || bundle.Templates == nil {
+		if bundle == nil || bundle.Binary == nil || bundle.Templates == nil {
 			f.log.Error("Invalid bundle fetched", "fn_name", functionName, "fn_version", functionVersion, "fn_bundle", fmt.Sprintf("%+v", bundle))
 			return nil, fmt.Errorf("invalid bundle from registry")
 		}
@@ -388,5 +374,5 @@ func (f *FunctionCacheImpl) fetchAndStore(functionName string, functionVersion s
 		f.log.Error("Failed to fetch bundle", "fn_name", functionName, "fn_version", functionVersion, "error", err)
 		return nil, err
 	}
-	return fetchedValue.(*FunctionBundle), nil
+	return fetchedValue.(*caches.FunctionBundle), nil
 }

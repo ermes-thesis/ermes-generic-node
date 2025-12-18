@@ -119,7 +119,6 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		err = collection.GetCollectionState().RemoveCollectionMigrationHostAndExecutePostponedUpdates(destination)
 		if err != nil {
 			s.log.Warn("SENDER: try to remove non present migration host from collection", "collectionId", collection.CollectionId(), "destination", destination, "err", err)
-			return
 		}
 
 		//if collection not present in subtree and no more postponed updates

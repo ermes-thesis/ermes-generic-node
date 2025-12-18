@@ -297,7 +297,7 @@ func (s *statefulPolicy) forwardRequestWithSequential(scheduleRequest ScheduleRe
 
 	// If we are here, it means that something wrong has happened in the scheduling process, and we are in the Cloud Node
 	s.log.Error("No available host for sequential collection (unexpected)", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "collection_id", sequentialCollection.CollectionId())
-	return nil, 0, errors.New("no available host for sequential collection")
+	return &FunctionResult{StatusCode: 404}, 0, errors.New("no available host for sequential collection")
 }
 
 func (s *statefulPolicy) forwardRequest(dest string, scheduleRequest ScheduleRequest) (*FunctionResult, uint64, error) {

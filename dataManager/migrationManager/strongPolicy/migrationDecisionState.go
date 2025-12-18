@@ -386,13 +386,14 @@ func (m *MigrationManagerDecisionState) sendCollectionAndRemove(collection share
 
 	fatherName := m.policy.serverInfo.Father.HostName
 	collection.GetCollectionState().AddCollectionMigrationHost(fatherName)
-	m.policy.sender.SendRemoteCollectionTo(fatherName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
 
 	//remove collection from redis instance
 	m.policy.dbInterface.DeleteCollection(collection.CollectionId())
 
 	//set the collection as remote only in the node partial view
 	collection.SetToRemote()
+
+	m.policy.sender.SendRemoteCollectionTo(fatherName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
 
 	return nil
 }

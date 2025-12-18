@@ -417,7 +417,7 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 		} else { // local update
 			m.localUpdateRequestInfo(i)
 			//execute postponed migration behaviours if any and if possible
-			m.HandlePostponedDecisions(collection)
+			m.handlePostponedDecisions(collection)
 		}
 	}
 
@@ -430,6 +430,13 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 }
 
 func (m *MigrationManagerImp) HandlePostponedDecisions(collection shared.Collection) {
+	m.collectionsLock.Lock()
+	defer m.collectionsLock.Unlock()
+
+	m.handlePostponedDecisions(collection)
+}
+
+func (m *MigrationManagerImp) handlePostponedDecisions(collection shared.Collection) {
 	m.log.Info("MIG-MANAGER, check postponed decision behaviour for collection", "collection_id", collection.CollectionId(), "is_strong", collection.IsStrong(), "is_local", collection.IsLocal())
 	if collection.IsLocal() && collection.IsStrong() && collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
 		m.log.Info("MIG-MANAGER, starting postponed decision behaviour execution for strong collection", "collection_id", collection.CollectionId())

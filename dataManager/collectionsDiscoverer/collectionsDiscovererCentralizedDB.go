@@ -28,7 +28,7 @@ func SetCollectionsDiscovererCentralizedDBInstance(wrapped *CollectionsDiscovere
 func (c *CollectionsDiscovererCentralizedDB) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection]) {
 	logger.Info("Init collections discoverer as centralized DB...")
 	c.wrapped.Init(collections, serverInfo, server, dbInterface, logger, lruCache)
-	server.AddCustomRoute(c.wrapped.getSender().RemoteCollectionSetPath(), true, c.wrapped.handleIncomingRemoteCollectionSet(c.migrationManager).ServeHTTP)
+	server.AddCustomRoute(c.wrapped.getSender().RemoteCollectionSetPath(), true, "GET,POST", c.wrapped.handleIncomingRemoteCollectionSet(c.migrationManager))
 }
 
 func (c *CollectionsDiscovererCentralizedDB) IsCollectionLocallyPresent(collectionId string, consistencyClock uint64) (bool, shared.Collection, error) {

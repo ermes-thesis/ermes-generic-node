@@ -31,15 +31,15 @@ func newStatefulPolicy(sched *baseScheduler) Scheduler {
 }
 
 func (s *statefulPolicy) RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder) error {
-	err := server.AddCustomRoute("/pvt-offload-function/{name}/{version}", true, s.handleOffloadFunctionInvocation(tokenDecoder))
+	err := server.AddCustomRoute("/pvt-offload-function/<name>/<version>", true, "GET,POST", s.handleOffloadFunctionInvocation(tokenDecoder))
 	if err != nil {
-		s.log.Error("Failed to register custom routes", "path", "/pvt-offload-function/{name}/{version}", "error", err)
-		return fmt.Errorf("Error while registering /pvt-offload-function/{name}/{version}: %v\n", err)
+		s.log.Error("Failed to register custom routes", "path", "/pvt-offload-function/<name>/<version>", "error", err)
+		return fmt.Errorf("Error while registering /pvt-offload-function/<name>/<version>: %v\n", err)
 	}
-	err = server.AddCustomRoute("/pvt-offload-function/{name}", true, s.handleOffloadFunctionInvocation(tokenDecoder))
+	err = server.AddCustomRoute("/pvt-offload-function/<name>", true, "GET,POST", s.handleOffloadFunctionInvocation(tokenDecoder))
 	if err != nil {
-		s.log.Error("Failed to register custom routes", "path", "/pvt-offload-function/{name}", "error", err)
-		return fmt.Errorf("Error while registering /pvt-offload-function/{name}: %v\n", err)
+		s.log.Error("Failed to register custom routes", "path", "/pvt-offload-function/<name>", "error", err)
+		return fmt.Errorf("Error while registering /pvt-offload-function/<name>: %v\n", err)
 	}
 
 	return nil

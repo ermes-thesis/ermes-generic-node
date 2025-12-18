@@ -63,7 +63,7 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 	db.On("GetRecordsMemoryUsage", mock.AnythingOfType("string"), mock.AnythingOfType("[]string")).Return(uint64(5), nil).Maybe()
 
 	server := mockServer.NewServerType(t)
-	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
+	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("string"), mock.AnythingOfType("routing.Handler")).Return(nil).Maybe()
 	server.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-newCollection", mock.Anything).Return(&http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("response"))}, nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
@@ -108,7 +108,7 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 	db.On("SetCollection", mock.AnythingOfType("string"), mock.AnythingOfType("map[string]db.RecordValue"), mock.AnythingOfType("[]string"), mock.AnythingOfType("string"), mock.AnythingOfType("uint64")).Return(nil).Maybe()
 
 	server := mockServer.NewServerType(t)
-	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
+	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("string"), mock.AnythingOfType("routing.Handler")).Return(nil).Maybe()
 	server.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
@@ -163,7 +163,7 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	db.On("GetCollection", mock.AnythingOfType("string")).Return(map[string]database.RecordValue{"a": {Value: "1"}, "b": {Value: "2"}}, []string{"a", "b"}, "", uint64(0), nil).Maybe()
 
 	server := mockServer.NewServerType(t)
-	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
+	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("string"), mock.AnythingOfType("routing.Handler")).Return(nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
 		KnownCollections: make(map[string]shared.Collection),

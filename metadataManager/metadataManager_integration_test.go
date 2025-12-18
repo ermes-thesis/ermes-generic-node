@@ -7,10 +7,10 @@ import (
 	"io"
 	"metadataManager"
 	"metadataManager/propagation"
-	"mocks/caches"
-	"mocks/tokenDecoder"
+	caches_mock "mocks/caches"
+	tokenDecoder_mock "mocks/tokenDecoder"
+	"net"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"server"
 	"testing"
@@ -18,14 +18,16 @@ import (
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
+	routing "github.com/qiangxue/fasthttp-routing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/valyala/fasthttp"
 )
 
 // TestMetadataNode encapsulates all components of a test metadata node
 type TestMetadataNode struct {
 	Server          *server.Server
-	HttpServer      *httptest.Server
+	HttpServer      *fasthttp.Server
 	Host            string
 	MetadataManager metadataManager.MetadataManager
 	Db              db.GenericDB
@@ -36,7 +38,7 @@ type TestMetadataNode struct {
 
 // Close shuts down the test metadata node
 func (n *TestMetadataNode) Close() {
-	n.HttpServer.Close()
+	n.HttpServer.Shutdown()
 }
 
 // setupMetadataNode sets up a test metadata node with optional parent node
@@ -66,8 +68,29 @@ func setupMetadataNode(t *testing.T, log logger.Logger, domain string, parent *T
 	require.NoError(t, err)
 
 	// 5. Start HTTP Server
-	httpServer := httptest.NewServer(srv.Handler)
-	parsedURL, _ := url.Parse(httpServer.URL)
+	var handler *routing.Router = srv.Handler
+	ln, err := net.Listen("tcp", "127.0.0.1:0") // :0 = random free port
+	if err != nil {
+		panic(err)
+	}
+
+	httpServer := &fasthttp.Server{
+		Handler: handler.HandleRequest,
+	}
+
+	go func() {
+		if err := httpServer.Serve(ln); err != nil {
+			if err != fasthttp.ErrConnectionClosed {
+				panic(err)
+			}
+		}
+	}()
+
+	baseURL := "http://" + ln.Addr().String()
+
+	// 5. Update Hostname post-bind
+	parsedURL, err := url.Parse(baseURL)
+	require.NoError(t, err)
 	serverInfo.HostName = parsedURL.Host
 
 	// 6. Link with Parent if provided
@@ -90,7 +113,7 @@ func setupMetadataNode(t *testing.T, log logger.Logger, domain string, parent *T
 	}
 
 	cleanup := func() {
-		httpServer.Close()
+		httpServer.Shutdown()
 		shutdownRedis()
 	}
 
@@ -128,7 +151,7 @@ func TestMetadataLookupIntegration(t *testing.T) {
 
 	child.TokenDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{groupC}, userID, nil)
 
-	req, err := http.NewRequest(http.MethodPost, child.HttpServer.URL+"/pvt-lookup", nil)
+	req, err := http.NewRequest(http.MethodPost, "http://"+child.Server.ServerInfo.HostName+"/pvt-lookup", nil)
 	require.NoError(t, err, "Expected no error creating HTTP request")
 
 	queryParams, _ := json.Marshal(map[string]map[string]any{
@@ -182,7 +205,7 @@ func TestMetadataCreationFromChildIntegration(t *testing.T) {
 	jsonMetadata, err := json.Marshal(metadata)
 	require.NoError(t, err, "Expected no error marshaling metadata to JSON")
 
-	req, err := http.NewRequest(http.MethodPost, child.HttpServer.URL+"/pvt-create-metadata/"+collectionId1, bytes.NewReader(jsonMetadata))
+	req, err := http.NewRequest(http.MethodPost, "http://"+child.Server.ServerInfo.HostName+"/pvt-create-metadata/"+collectionId1, bytes.NewReader(jsonMetadata))
 	require.NoError(t, err, "Expected no error creating HTTP request")
 	req.Header.Set("X-ERMES-SECRET", secret)
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", "IT/Milan/test")
@@ -223,7 +246,7 @@ func TestMetadataCreationFromFatherIntegration(t *testing.T) {
 	jsonMetadata, err := json.Marshal(metadata)
 	require.NoError(t, err, "Expected no error marshaling metadata to JSON")
 
-	req, err := http.NewRequest(http.MethodPost, father.HttpServer.URL+"/pvt-create-metadata/"+collectionId1, bytes.NewReader(jsonMetadata))
+	req, err := http.NewRequest(http.MethodPost, "http://"+father.Server.ServerInfo.HostName+"/pvt-create-metadata/"+collectionId1, bytes.NewReader(jsonMetadata))
 	require.NoError(t, err, "Expected no error creating HTTP request")
 	req.Header.Set("X-ERMES-SECRET", secret)
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", "")
@@ -254,7 +277,7 @@ func TestMetadataCreationFromLocalIntegration(t *testing.T) {
 	father, cleanupFather := setupMetadataNode(t, log.With("node", "father"), "IT", nil)
 	defer cleanupFather()
 
-	local, cleanupLocal := setupMetadataNode(t, log.With("node", "local"), "IT/Milan", father)
+	local, cleanupLocal := setupMetadataNode(t, log.With("node", "child"), "IT/Milan", father)
 	defer cleanupLocal()
 
 	child, cleanupChild := setupMetadataNode(t, log.With("node", "child"), "IT/Milan/Polimi", local)
@@ -312,7 +335,7 @@ func TestMetadataDeletionFromChildIntegration(t *testing.T) {
 	payload, err := json.Marshal(geolocation)
 	require.NoError(t, err, "Expected no error marshaling geolocation to JSON")
 
-	req, err := http.NewRequest(http.MethodDelete, child.HttpServer.URL+"/pvt-delete-metadata/"+collectionId2, bytes.NewBuffer(payload))
+	req, err := http.NewRequest(http.MethodDelete, "http://"+child.Server.ServerInfo.HostName+"/pvt-delete-metadata/"+collectionId2, bytes.NewBuffer(payload))
 	require.NoError(t, err, "Expected no error creating HTTP request")
 	req.Header.Set("X-ERMES-SECRET", secret)
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", "IT/Milan/test")
@@ -352,7 +375,7 @@ func TestMetadataDeletionFromFatherIntegration(t *testing.T) {
 	jsonMetadata, err := json.Marshal(geolocation)
 	require.NoError(t, err, "Expected no error marshaling geolocation to JSON")
 
-	req, err := http.NewRequest(http.MethodDelete, father.HttpServer.URL+"/pvt-delete-metadata/"+collectionId2, bytes.NewBuffer(jsonMetadata))
+	req, err := http.NewRequest(http.MethodDelete, "http://"+father.Server.ServerInfo.HostName+"/pvt-delete-metadata/"+collectionId2, bytes.NewBuffer(jsonMetadata))
 	require.NoError(t, err, "Expected no error creating HTTP request")
 	req.Header.Set("X-ERMES-SECRET", secret)
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", "")

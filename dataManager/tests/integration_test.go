@@ -9,8 +9,7 @@ import (
 	shared "dataManager/shared"
 	"db"
 	"db/test_utils"
-	"net/http"
-	"net/http/httptest"
+	"net"
 	"net/url"
 	"server"
 	"sync"
@@ -18,8 +17,10 @@ import (
 	"time"
 
 	"github.com/ermes-thesis/ermes-common/logger"
+	routing "github.com/qiangxue/fasthttp-routing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/valyala/fasthttp"
 )
 
 var defaultMigrationConfig = config.MigrationManagerConfig{
@@ -40,7 +41,7 @@ var defaultLruConfig = config.LruConfig{
 // testNode encapsulate all components of a test node
 type testNode struct {
 	Server      *server.Server
-	HttpServer  *httptest.Server
+	HttpServer  *fasthttp.Server
 	DataManager datamanager.DataManager
 	Db          db.GenericDB
 	URL         *url.URL
@@ -49,8 +50,8 @@ type testNode struct {
 // setupOptions defines options for setting up a test node
 type setupOptions struct {
 	Name           string
-	FatherURL      string
-	HandlerWrapper func(http.Handler) http.Handler
+	FatherHost     string
+	HandlerWrapper func(routing.Handler) routing.Handler
 }
 
 // setupTestNode creates and configures a test node with the specified options
@@ -65,9 +66,8 @@ func setupTestNode(t *testing.T, log logger.Logger, opts setupOptions) (*testNod
 		Secret:         "secret",
 	}
 
-	if opts.FatherURL != "" {
-		fatherUrlParsed, _ := url.Parse(opts.FatherURL)
-		info.Father = &server.Node{HostName: fatherUrlParsed.Host}
+	if opts.FatherHost != "" {
+		info.Father = &server.Node{HostName: opts.FatherHost}
 	}
 
 	// 3. Server
@@ -75,14 +75,28 @@ func setupTestNode(t *testing.T, log logger.Logger, opts setupOptions) (*testNod
 	require.NoError(t, err)
 
 	// 4. HTTP Handler
-	var handler http.Handler = srv.Handler
-	if opts.HandlerWrapper != nil {
-		handler = opts.HandlerWrapper(srv.Handler)
+	var handler *routing.Router = srv.Handler
+	ln, err := net.Listen("tcp", "127.0.0.1:0") // :0 = random free port
+	if err != nil {
+		panic(err)
 	}
-	httpServer := httptest.NewServer(handler)
+
+	httpServer := &fasthttp.Server{
+		Handler: handler.HandleRequest,
+	}
+
+	go func() {
+		if err := httpServer.Serve(ln); err != nil {
+			if err != fasthttp.ErrConnectionClosed {
+				panic(err)
+			}
+		}
+	}()
+
+	baseURL := "http://" + ln.Addr().String()
 
 	// 5. Update Hostname post-bind
-	parsedURL, err := url.Parse(httpServer.URL)
+	parsedURL, err := url.Parse(baseURL)
 	require.NoError(t, err)
 	srv.ServerInfo.HostName = parsedURL.Host
 
@@ -115,7 +129,7 @@ func setupTestNode(t *testing.T, log logger.Logger, opts setupOptions) (*testNod
 	}
 
 	cleanup := func() {
-		httpServer.Close()
+		httpServer.Shutdown()
 		shutdownRedis()
 	}
 
@@ -135,8 +149,8 @@ func TestUpdateAndReplica_OppositeDirections(t *testing.T) {
 
 	// --- SETUP CHILD ---
 	child, cleanupChild := setupTestNode(t, log, setupOptions{
-		Name:      "child",
-		FatherURL: father.HttpServer.URL,
+		Name:       "child",
+		FatherHost: father.Server.ServerInfo.HostName,
 	})
 	defer cleanupChild()
 
@@ -178,19 +192,20 @@ func TestUpdateAndReplica_OppositeDirections_SlowReplica(t *testing.T) {
 	require.NoError(t, err)
 
 	// --- SETUP CHILD (SLOW) ---
-	slowMiddleware := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/pvt-repo" {
+	slowMiddleware := func(next routing.Handler) routing.Handler {
+		return func(ctx *routing.Context) error {
+			if string(ctx.Path()[:]) == "/pvt-repo" {
 				log.Warn("Delaying /pvt-repo response...")
 				time.Sleep(500 * time.Millisecond)
 			}
-			next.ServeHTTP(w, r)
-		})
+			next(ctx)
+			return nil
+		}
 	}
 
 	child, cleanupChild := setupTestNode(t, log, setupOptions{
 		Name:           "child",
-		FatherURL:      father.HttpServer.URL,
+		FatherHost:     father.Server.ServerInfo.HostName,
 		HandlerWrapper: slowMiddleware,
 	})
 	defer cleanupChild()
@@ -226,14 +241,15 @@ func TestUpdateAndReplica_OppositeDirections_SlowPropagation(t *testing.T) {
 	defer log.Close()
 
 	// --- SETUP FATHER ---
-	slowMiddleware := func(next http.Handler) http.Handler {
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/pvt-dataUpdatePropagation" {
+	slowMiddleware := func(next routing.Handler) routing.Handler {
+		return func(ctx *routing.Context) error {
+			if string(ctx.Path()[:]) == "/pvt-dataUpdatePropagation" {
 				log.Warn("Delaying /pvt-dataUpdatePropagation response...")
 				time.Sleep(500 * time.Millisecond)
 			}
-			next.ServeHTTP(w, r)
-		})
+			next(ctx)
+			return nil
+		}
 	}
 
 	father, cleanupFather := setupTestNode(t, log, setupOptions{Name: "father", HandlerWrapper: slowMiddleware})
@@ -244,8 +260,8 @@ func TestUpdateAndReplica_OppositeDirections_SlowPropagation(t *testing.T) {
 
 	// --- SETUP CHILD ---
 	child, cleanupChild := setupTestNode(t, log, setupOptions{
-		Name:      "child",
-		FatherURL: father.HttpServer.URL,
+		Name:       "child",
+		FatherHost: father.Server.ServerInfo.HostName,
 	})
 	defer cleanupChild()
 

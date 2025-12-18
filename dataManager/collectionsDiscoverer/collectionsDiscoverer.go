@@ -64,11 +64,11 @@ func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialVie
 		c.dbInterface = dbInterface
 		c.lruCache = lruCache
 
-		server.AddCustomRoute(c.sender.RemoteAccessPath(), true, c.handleIncomingRemoteAccess().ServeHTTP)
-		server.AddCustomRoute(c.sender.UpdatePropagationPath(), true, c.handleIncomingUpdatePropagation().ServeHTTP)
-		server.AddCustomRoute(c.sender.UpdateGroupPropagationPath(), true, c.handleIncomingUpdateGroupPropagation().ServeHTTP)
-		server.AddCustomRoute(c.sender.CreateCollectionPropagationPath(), true, c.handleIncomingNewCollection().ServeHTTP)
-		server.AddCustomRoute(c.sender.RemoveCollectionPropagationPath(), true, c.handleIncomingRemoveCollection().ServeHTTP)
+		server.AddCustomRoute(c.sender.RemoteAccessPath(), true, "GET,POST", c.handleIncomingRemoteAccess)
+		server.AddCustomRoute(c.sender.UpdatePropagationPath(), true, "GET,POST", c.handleIncomingUpdatePropagation)
+		server.AddCustomRoute(c.sender.UpdateGroupPropagationPath(), true, "GET,POST", c.handleIncomingUpdateGroupPropagation)
+		server.AddCustomRoute(c.sender.CreateCollectionPropagationPath(), true, "GET,POST", c.handleIncomingNewCollection)
+		server.AddCustomRoute(c.sender.RemoveCollectionPropagationPath(), true, "GET,POST,DELETE", c.handleIncomingRemoveCollection)
 
 		c.log.Info("Collection discoverer component initialized", "server_info", fmt.Sprintf("%+v", c.serverInfo))
 	})

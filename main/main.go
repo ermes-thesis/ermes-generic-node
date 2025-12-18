@@ -23,6 +23,7 @@ import (
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
+	"github.com/valyala/fasthttp"
 )
 
 func run(ctx context.Context, configPath string) error {
@@ -117,8 +118,7 @@ func run(ctx context.Context, configPath string) error {
 
 	go func() {
 		generalLog.Infof("Server correctly created and listening on port %s", serverInfo.Port)
-
-		if err := httpServer.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		if err := fasthttp.ListenAndServe(":"+serverInfo.Port, httpServer.Handler.HandleRequest); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			generalLog.Errorf("error starting http server: %v", err)
 		}
 	}()
@@ -126,16 +126,13 @@ func run(ctx context.Context, configPath string) error {
 	var wg sync.WaitGroup
 	wg.Add(1)
 
+	// In theory now this line should be useless
 	go func() {
 		defer wg.Done()
 		<-ctx.Done()
-		shutdownCtx, newCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		dataManager.GetMigrationManager().StopAsyncDump()
+		_, newCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		//dataManager.GetMigrationManager().StopAsyncDump()
 		defer newCancel()
-
-		if err := httpServer.Shutdown(shutdownCtx); err != nil {
-			generalLog.Errorf("error shutting down http server: %v", err)
-		}
 	}()
 
 	wg.Wait()

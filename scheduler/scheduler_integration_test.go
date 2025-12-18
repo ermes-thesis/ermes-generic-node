@@ -12,8 +12,8 @@ import (
 	wasm_mock "mocks/ermes-common/wasm-pool"
 	metadataManager_mock "mocks/metadataManager"
 	tokenDecoder_mock "mocks/tokenDecoder"
+	"net"
 	"net/http"
-	"net/http/httptest"
 	"net/url"
 	"scheduler"
 	"server"
@@ -22,9 +22,11 @@ import (
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
+	routing "github.com/qiangxue/fasthttp-routing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"github.com/valyala/fasthttp"
 )
 
 // --- Constants & Global Configuration ---
@@ -112,7 +114,7 @@ func createNewLogger(t *testing.T) logger.Logger {
 
 type TestNode struct {
 	Server     *server.Server
-	HttpServer *httptest.Server
+	HttpServer *fasthttp.Server
 	Host       string
 	Scheduler  scheduler.Scheduler
 	Logger     logger.Logger
@@ -128,7 +130,7 @@ type TestNode struct {
 }
 
 func (n *TestNode) Close() {
-	n.HttpServer.Close()
+	n.HttpServer.Shutdown()
 }
 
 // CollectionState defines how a collection exists on a node.
@@ -194,8 +196,29 @@ func setupTestNode(t *testing.T, log logger.Logger) *TestNode {
 	err = sched.RegisterRoutes(srv, tokenDecoder)
 	require.NoError(t, err)
 
-	httpServer := httptest.NewServer(srv.Handler)
-	parsedURL, _ := url.Parse(httpServer.URL)
+	var handler *routing.Router = srv.Handler
+	ln, err := net.Listen("tcp", "127.0.0.1:0") // :0 = random free port
+	if err != nil {
+		panic(err)
+	}
+
+	httpServer := &fasthttp.Server{
+		Handler: handler.HandleRequest,
+	}
+
+	go func() {
+		if err := httpServer.Serve(ln); err != nil {
+			if err != fasthttp.ErrConnectionClosed {
+				panic(err)
+			}
+		}
+	}()
+
+	baseURL := "http://" + ln.Addr().String()
+
+	// 5. Update Hostname post-bind
+	parsedURL, err := url.Parse(baseURL)
+	require.NoError(t, err)
 	serverInfo.HostName = parsedURL.Host
 
 	// Default expectations for getting components
@@ -224,7 +247,7 @@ func connectNodes(father, child *TestNode) {
 }
 
 func executeInvokeRequest(t *testing.T, targetNode *TestNode, ctx scheduler.WasmContext) string {
-	reqUrl := targetNode.HttpServer.URL + "/invoke-function/" + fnName + "/" + fnVer
+	reqUrl := "http://" + targetNode.Server.ServerInfo.HostName + "/invoke-function/" + fnName + "/" + fnVer
 	req, err := http.NewRequest(http.MethodPost, reqUrl, nil)
 	require.NoError(t, err)
 

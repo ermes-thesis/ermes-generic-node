@@ -39,9 +39,9 @@ func NewMigrationManagerForTest(collections *shared.CollectionPartialView, penal
 		dbInterface:            dbInterface,
 		sender:                 sender.NewMigrationManagerSender(logger, server, serverInfo, collections),
 	}
-	server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages().ServeHTTP)
-	server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection().ServeHTTP)
-	server.AddCustomRoute(m.sender.RequestInfoPath(), true, m.handleIncomingRequestInfoMessages().ServeHTTP)
+	server.AddCustomRoute(m.sender.GossipPath(), true, "GET,POST", m.handleIncomingGossipMessages)
+	server.AddCustomRoute(m.sender.RepoPath(), true, "GET,POST", m.handleIncomingCollection)
+	server.AddCustomRoute(m.sender.RequestInfoPath(), true, "GET,POST", m.handleIncomingRequestInfoMessages)
 
 	wp := weakpolicy.GetPolicy(config.WeakPolicy)
 	sp := strongPolicy.GetPolicy(config.StrongPolicy)

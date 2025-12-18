@@ -101,9 +101,9 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 
 		//prepare server
 		m.sender = sender.NewMigrationManagerSender(m.log, server, serverInfo, collections)
-		server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages().ServeHTTP)
-		server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection().ServeHTTP)
-		server.AddCustomRoute(m.sender.RequestInfoPath(), true, m.handleIncomingRequestInfoMessages().ServeHTTP)
+		server.AddCustomRoute(m.sender.GossipPath(), true, "GET,POST", m.handleIncomingGossipMessages)
+		server.AddCustomRoute(m.sender.RepoPath(), true, "GET,POST", m.handleIncomingCollection)
+		server.AddCustomRoute(m.sender.RequestInfoPath(), true, "GET,POST", m.handleIncomingRequestInfoMessages)
 
 		//policy
 		wp := weakpolicy.GetPolicy(config.WeakPolicy)

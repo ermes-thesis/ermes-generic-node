@@ -3,13 +3,13 @@ package server
 import (
 	"errors"
 	"fmt"
-	"io"
-	"net/http"
+
+	routing "github.com/qiangxue/fasthttp-routing"
 )
 
 // Method to add pre-defined routes to the server.
 func (s *Server) compileRoutes() error {
-	err := s.AddCustomRoute("/info", false, s.handleRouteInfo())
+	err := s.AddCustomRoute("/info", false, "GET", s.handleRouteInfo)
 	if err != nil {
 		s.logger.Error("Failed to register custom routes", "path", "/info", "error", err)
 		return fmt.Errorf("Error while registering /info route: %v\n", err)
@@ -19,7 +19,7 @@ func (s *Server) compileRoutes() error {
 }
 
 // AddCustomRoute Method to add a route defined by the user to the server. DO NOT ADD IT AFTER THE SERVER HAS BEEN STARTED PLS (idk what could happen)
-func (s *Server) AddCustomRoute(path string, isPrivate bool, handler http.HandlerFunc) error {
+func (s *Server) AddCustomRoute(path string, isPrivate bool, methods string, handler routing.Handler) error {
 	if len(path) < 1 || path[0] != '/' {
 		return errors.New("Request badly formatted. The first character should be a '/' ")
 	}
@@ -29,23 +29,22 @@ func (s *Server) AddCustomRoute(path string, isPrivate bool, handler http.Handle
 	}
 
 	if isPrivate {
-		s.Handler.Handle(path, s.checkErmesSecret(handler))
+		s.Handler.To(methods, path, s.checkErmesSecret(handler))
 	} else {
-		s.Handler.Handle(path, s.checkClientSecret(handler))
+		s.Handler.To(methods, path, s.checkClientSecret(handler))
 	}
 
 	return nil
 }
 
-func (s *Server) handleRouteInfo() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			_, _ = io.Copy(io.Discard, r.Body)
-			_ = r.Body.Close()
-		}()
+func (s *Server) handleRouteInfo(c *routing.Context) error {
 
-		s.logger.Info("Received info request for the current node", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
-		fmt.Fprintf(w, "Hello! Since you have requested it I will dump all of my info now\n")
-		fmt.Fprintf(w, "%s", s.ServerInfo.PrettyString())
-	}
+	// In theory I should not close the body
+
+	s.logger.Info("Received info request for the current node", "remote_addr", c.RemoteAddr(), "method", c.Method(), "path", c.RequestURI())
+
+	fmt.Fprintf(c, "Hello! Since you have requested it I will dump all of my info now\n")
+	fmt.Fprintf(c, "%s", s.ServerInfo.PrettyString())
+
+	return nil
 }

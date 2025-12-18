@@ -2,43 +2,41 @@ package scheduler
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
 	"maps"
 	"net/http"
+	"server/helper"
 	"slices"
 	"tokenDecoder"
 
 	"github.com/ermes-thesis/ermes-common/model"
+	routing "github.com/qiangxue/fasthttp-routing"
 )
 
-func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			_, _ = io.Copy(io.Discard, r.Body)
-			_ = r.Body.Close()
-		}()
+func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder) routing.Handler {
+	return func(ctx *routing.Context) error {
 
-		fnName := r.PathValue("name")
-		fnVersion := r.PathValue("version")
+		fnName := ctx.Param("name")
+		fnVersion := ctx.Param("version")
 		if fnVersion == "" {
 			fnVersion = "latest"
 		}
 
-		s.log.Eval("Received function invocation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion)
+		s.log.Eval("Received function invocation request", "remote_addr", ctx.RemoteAddr(), "method", ctx.Method(), "path", ctx.RequestURI(), "fn_name", fnName, "fn_version", fnVersion)
 
-		queryParams := r.Header.Get("X-ERMES-QUERY")
-		cachedQuery := r.Header.Get("X-ERMES-CACHED-QUERY")
-		sequentialSeqNumberStr := r.Header.Get("X-ERMES-SEQUENTIAL-NUMBER")
-		geolocation := r.Header.Get("X-ERMES-POSITION")
-		groupToken := r.Header.Get("X-ERMES-GROUPS")
+		queryParams := helper.UnsafeString(ctx.Request.Header.Peek("X-ERMES-QUERY"))
+		cachedQuery := helper.UnsafeString(ctx.Request.Header.Peek("X-ERMES-CACHED-QUERY"))
+		sequentialSeqNumberStr := helper.UnsafeString(ctx.Request.Header.Peek("X-ERMES-SEQUENTIAL-NUMBER"))
+		geolocation := helper.UnsafeString(ctx.Request.Header.Peek("X-ERMES-POSITION"))
+		groupToken := helper.UnsafeString(ctx.Request.Header.Peek("X-ERMES-GROUPS"))
 
 		groups, userId, err := tokenDecoder.DecodeGroupToken(groupToken)
 		s.log.Info("Token decoded successfully", "executing_user", userId, "user_acces_groups", groups)
 		if err != nil {
-			s.log.Error("Failed to decode group token", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number", sequentialSeqNumberStr, "queries_geolocation", geolocation, "error", err)
-			http.Error(w, "Error decoding group token", http.StatusUnauthorized)
-			return
+			s.log.Error("Failed to decode group token", "remote_addr", ctx.RemoteAddr(), "method", ctx.Method(), "path", ctx.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number", sequentialSeqNumberStr, "queries_geolocation", geolocation, "error", err)
+			ctx.Error("Error decoding group token", http.StatusUnauthorized)
+			return errors.New("error decoding group token")
 		}
 		s.log.Debug("Received function invocation request", "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number", sequentialSeqNumberStr, "queries_geolocation", geolocation)
 
@@ -50,9 +48,9 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			var cachedQueries map[string][]model.CollectionInfo
 			err := json.Unmarshal([]byte(cachedQuery), &cachedQueries)
 			if err != nil {
-				s.log.Error("Error unmarshalling cached query", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number", sequentialSeqNumberStr, "queries_geolocation", geolocation, "error", err)
-				http.Error(w, fmt.Sprintf("error unmarshalling cached query: %v", err), http.StatusInternalServerError)
-				return
+				s.log.Error("Error unmarshalling cached query", "remote_addr", ctx.RemoteAddr(), "method", ctx.Method(), "path", ctx.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number", sequentialSeqNumberStr, "queries_geolocation", geolocation, "error", err)
+				ctx.Error(fmt.Sprintf("error unmarshalling cached query: %v", err), http.StatusInternalServerError)
+				return errors.New(fmt.Sprintf("error unmarshalling cached query: %v", err))
 			}
 			collections = cachedQueries
 		}
@@ -62,9 +60,9 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			s.log.Debug("Executing metadata queries", "user_access_groups", groups, "queries_geolocation", geolocation)
 			res, err := s.metadataManager.ExecuteQueries(fnName, fnVersion, queryParams, groups, userId, groupToken, geolocation)
 			if err != nil {
-				s.log.Error("Error when executing metadata queries", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number", sequentialSeqNumberStr, "queries_geolocation", geolocation, "error", err)
-				http.Error(w, fmt.Sprintf("error executing metadata queries: %v", err), http.StatusInternalServerError)
-				return
+				s.log.Error("Error when executing metadata queries", "remote_addr", ctx.RemoteAddr(), "method", ctx.Method(), "path", ctx.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number", sequentialSeqNumberStr, "queries_geolocation", geolocation, "error", err)
+				ctx.Error(fmt.Sprintf("error executing metadata queries: %v", err), http.StatusInternalServerError)
+				return errors.New(fmt.Sprintf("error executing metadata queries: %v", err))
 			}
 			toCache = res
 			s.log.Debug("Metadata queries executed successfully", "queries_results", fmt.Sprintf("%+v", res))
@@ -85,22 +83,17 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 		}
 
 		body := []byte("{}")
-		if r.Body != http.NoBody {
-			body, err = io.ReadAll(r.Body)
-			if err != nil {
-				s.log.Error("Error reading request body", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number", sequentialSeqNumberStr, "queries_geolocation", geolocation, "error", err)
-				http.Error(w, fmt.Sprintf("error reading request body: %v", err), http.StatusInternalServerError)
-				return
-			}
+		if len(ctx.PostBody()) != 0 {
+			body = ctx.PostBody()
 		}
 
 		var sequentialSeqNumber uint64
 		if sequentialSeqNumberStr != "" {
 			_, err := fmt.Sscanf(sequentialSeqNumberStr, "%d", &sequentialSeqNumber)
 			if err != nil {
-				s.log.Error("Error parsing sequential sequence number", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)
-				http.Error(w, fmt.Sprintf("error parsing sequential number: %v", err), http.StatusBadRequest)
-				return
+				s.log.Error("Error parsing sequential sequence number", "remote_addr", ctx.RemoteAddr(), "method", ctx.Method(), "path", ctx.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)
+				ctx.Error(fmt.Sprintf("error parsing sequential number: %v", err), http.StatusBadRequest)
+				return errors.New(fmt.Sprintf("error parsing sequential number: %v", err))
 			}
 			s.log.Info("Parsing sequential sequence number", "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "sequential_sequence_number", sequentialSeqNumber)
 		}
@@ -111,7 +104,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			Collections:         collections,
 			SequentialSeqNumber: sequentialSeqNumber,
 			GroupToken:          groupToken,
-			HTTPMethod:          r.Method,
+			HTTPMethod:          helper.UnsafeString(ctx.Method()),
 			Payload:             body,
 		}, "user", groups, userId)
 		if err != nil {
@@ -121,31 +114,32 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 				statusCode = functionResponse.StatusCode
 				executionHostName = functionResponse.Hostname
 			}
-			s.log.Error("Error during function scheduling", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)
-			w.Header().Set("X-ERMES-EXECUTION-HOST", executionHostName)
-			http.Error(w, fmt.Sprintf("error executing function: %v", err), statusCode)
-			return
+			s.log.Error("Error during function scheduling", "remote_addr", ctx.RemoteAddr(), "method", ctx.Method(), "path", ctx.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)
+			ctx.Response.Header.Set("X-ERMES-EXECUTION-HOST", executionHostName)
+			ctx.Error(fmt.Sprintf("error executing function: %v", err), statusCode)
+			return errors.New(fmt.Sprintf("error executing function: %v", err))
 		}
 
 		s.log.Info("Function scheduled and executed successfully", "fn_name", fnName, "fn_version", fnVersion, "fn_response", fmt.Sprintf("%+v", functionResponse), "new_sequential_sequence_num", sequentialSeqNumber)
 
 		jsonToCache, err := json.Marshal(toCache)
 		if err != nil {
-			s.log.Error("Error marshalling query results to cache client-side", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "queries_res_to_cache", fmt.Sprintf("%+v", toCache), "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)
-			http.Error(w, fmt.Sprintf("error marshalling query results to cache: %v", err), http.StatusInternalServerError)
-			return
+			s.log.Error("Error marshalling query results to cache client-side", "remote_addr", ctx.RemoteAddr(), "method", ctx.Method(), "path", ctx.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "queries_res_to_cache", fmt.Sprintf("%+v", toCache), "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)
+			ctx.Error(fmt.Sprintf("error marshalling query results to cache: %v", err), http.StatusInternalServerError)
+			return errors.New(fmt.Sprintf("error marshalling query results to cache: %v", err))
 		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-ERMES-CACHE", string(jsonToCache))
-		w.Header().Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", resSeqNumber))
-		w.Header().Set("X-ERMES-EXECUTION-HOST", functionResponse.Hostname)
-		w.WriteHeader(functionResponse.StatusCode)
-		if _, err = w.Write(functionResponse.Body); err != nil {
-			s.log.Error("Error while writing HTTP response", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)
-			http.Error(w, fmt.Sprintf("error while writing HTTP response: %v", err), http.StatusInternalServerError)
-			return
+		ctx.SetContentType("application/json")
+		ctx.Response.Header.Set("X-ERMES-CACHE", helper.UnsafeString(jsonToCache))
+		ctx.Response.Header.Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", resSeqNumber))
+		ctx.Response.Header.Set("X-ERMES-EXECUTION-HOST", functionResponse.Hostname)
+		ctx.SetStatusCode(functionResponse.StatusCode)
+		if _, err = ctx.Write(functionResponse.Body); err != nil {
+			s.log.Error("Error while writing HTTP response", "remote_addr", ctx.RemoteAddr(), "method", ctx.Method(), "path", ctx.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)
+			ctx.Error(fmt.Sprintf("error while writing HTTP response: %v", err), http.StatusInternalServerError)
+			return errors.New(fmt.Sprintf("error while writing HTTP response: %v", err))
 		}
 
 		s.log.Info("Function invocation completed successfully", "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups)
+		return nil
 	}
 }

@@ -5,41 +5,36 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/utils/httpClient"
+	routing "github.com/qiangxue/fasthttp-routing"
 )
 
 type ServerType interface {
 	SendGenericHTTPRequest(nodeTo string, pathTo string, messageContent any) (int, error)
 	SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo string, messageContent any) (*http.Response, error)
-	AddCustomRoute(path string, isPrivate bool, handler http.HandlerFunc) error
+	AddCustomRoute(path string, isPrivate bool, methods string, handler routing.Handler) error
 }
 
 type Server struct {
-	*http.Server
 	ServerInfo *ServerInfo
 	logger     logger.Logger
-	Handler    *http.ServeMux
+	Handler    *routing.Router
 }
 
 func NewServer(log logger.Logger, serverInfo *ServerInfo) (*Server, error) {
 	log.Info("Creating a new Server instance...")
 
-	mux := http.NewServeMux()
+	router := routing.New()
 
 	log.Debug("Creating server data structure...")
 
 	ser := &Server{
 		ServerInfo: serverInfo,
 		logger:     log,
-		Handler:    mux,
-		Server: &http.Server{
-			Addr:    net.JoinHostPort("", serverInfo.Port),
-			Handler: mux,
-		},
+		Handler:    router,
 	}
 
 	log.Debug("Adding correct routes to the server...")

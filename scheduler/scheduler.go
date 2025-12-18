@@ -86,15 +86,15 @@ func NewScheduler(stateful bool, dataManager datamanager.DataManager, metadataMa
 
 func (s *SchedulerImpl) RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder) error {
 	s.log.Info("Registering custom routes for SchedulerImpl...")
-	err := server.AddCustomRoute("/invoke-function/{name}/{version}", false, s.handleFunctionInvocation(tokenDecoder))
+	err := server.AddCustomRoute("/invoke-function/<name>/<version>", false, "GET,POST", s.handleFunctionInvocation(tokenDecoder))
 	if err != nil {
-		s.log.Error("Failed to register custom routes", "path", "/invoke-function/{name}/{version}", "error", err)
+		s.log.Error("Failed to register custom routes", "path", "/invoke-function/<name>/<version>", "error", err)
 		return fmt.Errorf("Error while registering /invoke-function/{name}/{version}: %v\n", err)
 	}
-	err = server.AddCustomRoute("/invoke-function/{name}", false, s.handleFunctionInvocation(tokenDecoder))
+	err = server.AddCustomRoute("/invoke-function/<name>", false, "GET,POST", s.handleFunctionInvocation(tokenDecoder))
 	if err != nil {
-		s.log.Error("Failed to register custom routes", "path", "/invoke-function/{name}", "error", err)
-		return fmt.Errorf("Error while registering /invoke-function/{name}: %v\n", err)
+		s.log.Error("Failed to register custom routes", "path", "/invoke-function/<name>", "error", err)
+		return fmt.Errorf("Error while registering /invoke-function/<name>: %v\n", err)
 	}
 
 	return s.Scheduler.RegisterRoutes(server, tokenDecoder)

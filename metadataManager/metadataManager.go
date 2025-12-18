@@ -73,30 +73,30 @@ func NewMetadataManager(redis db.GenericDB, serverInfo *server.ServerInfo, log l
 func (m *MetadataManagerImpl) RegisterRoutes(server server.ServerType, tokenDecoder tokenDecoder.TokenDecoder) error {
 	m.log.Info("Registering MetadataManager routes")
 
-	err := server.AddCustomRoute("/pvt-lookup", true, m.handleRouteLookup(tokenDecoder))
+	err := server.AddCustomRoute("/pvt-lookup", true, "GET,POST", m.handleRouteLookup(tokenDecoder))
 	if err != nil {
 		m.log.Error("Failed to register custom routes", "path", "/pvt-lookup", "error", err)
 		return fmt.Errorf("Error while registering /pvt-lookup route: %v\n", err)
 	}
-	err = server.AddCustomRoute("/pvt-create-metadata/{collection_id}", true, m.handleRouteCreateMetadata())
+	err = server.AddCustomRoute("/pvt-create-metadata/<collection_id>", true, "GET,POST", m.handleRouteCreateMetadata)
 	if err != nil {
-		m.log.Error("Failed to register custom routes", "path", "/pvt-create-metadata/{collection_id}", "error", err)
-		return fmt.Errorf("Error while registering /pvt-create-metadata/{collection_id} route: %v\n", err)
+		m.log.Error("Failed to register custom routes", "path", "/pvt-create-metadata/<collection_id>", "error", err)
+		return fmt.Errorf("Error while registering /pvt-create-metadata/<collection_id> route: %v\n", err)
 	}
-	err = server.AddCustomRoute("/pvt-delete-metadata/{collection_id}", true, m.handleRouteDeleteMetadata())
+	err = server.AddCustomRoute("/pvt-delete-metadata/<collection_id>", true, "GET,POST,DELETE", m.handleRouteDeleteMetadata)
 	if err != nil {
-		m.log.Error("Failed to register custom routes", "path", "/pvt-delete-metadata/{collection_id}", "error", err)
-		return fmt.Errorf("Error while registering /pvt-delete-metadata/{collection_id} route: %v\n", err)
+		m.log.Error("Failed to register custom routes", "path", "/pvt-delete-metadata/<collection_id>", "error", err)
+		return fmt.Errorf("Error while registering /pvt-delete-metadata/<collection_id> route: %v\n", err)
 	}
-	err = server.AddCustomRoute("/pvt-request-update-group/{collection_id}", true, m.handleRouteRequestUpdateGroups())
+	err = server.AddCustomRoute("/pvt-request-update-group/<collection_id>", true, "GET,POST", m.handleRouteRequestUpdateGroups)
 	if err != nil {
-		m.log.Error("Failed to register custom routes", "path", "/pvt-request-update-group/{collection_id}", "error", err)
-		return fmt.Errorf("Error while registering /pvt-request-update-group/{collection_id} route: %v\n", err)
+		m.log.Error("Failed to register custom routes", "path", "/pvt-request-update-group/<collection_id>", "error", err)
+		return fmt.Errorf("Error while registering /pvt-request-update-group/<collection_id> route: %v\n", err)
 	}
-	err = server.AddCustomRoute("/pvt-propagate-groups/{collection_id}", true, m.handleRoutePropagateGroups())
+	err = server.AddCustomRoute("/pvt-propagate-groups/<collection_id>", true, "GET,POST", m.handleRoutePropagateGroups)
 	if err != nil {
-		m.log.Error("Failed to register custom routes", "path", "/pvt-propagate-groups/{collection_id}", "error", err)
-		return fmt.Errorf("Error while registering /pvt-propagate-groups/{collection_id} route: %v\n", err)
+		m.log.Error("Failed to register custom routes", "path", "/pvt-propagate-groups/<collection_id>", "error", err)
+		return fmt.Errorf("Error while registering /pvt-propagate-groups/<collection_id> route: %v\n", err)
 	}
 
 	m.log.Info("MetadataManager routes successfully registered")

@@ -21,11 +21,11 @@ type CollectionState interface {
 	AddCollectionMigrationHost(hostId string)
 	RemoveCollectionMigrationHostAndExecutePostponedUpdates(hostId string) error
 	HasPostponedUpdate(hostId string) bool
-	RemoveCollectionMigrationHostWithoutExecutingPostponedUpdates(hostId string)
-	AddPostponedUpdate(hostId string, f func())
+	RemoveCollectionMigrationHostExecutingPostponedUpdatesLocally(hostId string) error
+	AddPostponedUpdate(hostId string, remote func(), local func())
 
-	setCollectionSendingTo(map[string]FunctionQueue)
-	getCollectionSendingTo() map[string]FunctionQueue
+	setCollectionSendingTo(map[string]DoubleFunctionQueue)
+	getCollectionSendingTo() map[string]DoubleFunctionQueue
 }
 
 type LocalCollection struct {
@@ -34,7 +34,12 @@ type LocalCollection struct {
 	hostsId        map[string]struct{} //map to guarantee univocity
 	CollectionLock sync.RWMutex        //if  lock is taken, a collection can't be moved from this node => wasm functions that use a collection must take the lock
 
-	collectionSendingTo map[string]FunctionQueue //map to guarantee univocity
+	collectionSendingTo map[string]DoubleFunctionQueue //map to guarantee univocity
+}
+
+type DoubleFunctionQueue struct {
+	remoteUpdates FunctionQueue
+	localUpdates  FunctionQueue
 }
 
 func (l *LocalCollection) String() string {
@@ -45,7 +50,7 @@ func NewLocalCollection(size uint64, hostNames map[string]struct{}) CollectionSt
 	return &LocalCollection{
 		size:                size,
 		hostsId:             hostNames,
-		collectionSendingTo: make(map[string]FunctionQueue),
+		collectionSendingTo: make(map[string]DoubleFunctionQueue),
 	}
 }
 func (l *LocalCollection) AddHost(hostId string) {
@@ -78,7 +83,10 @@ func (l *LocalCollection) AddCollectionMigrationHost(hostId string) {
 	if _, exists := l.collectionSendingTo[hostId]; exists {
 		return
 	}
-	l.collectionSendingTo[hostId] = NewFunctionQueue()
+	l.collectionSendingTo[hostId] = DoubleFunctionQueue{
+		remoteUpdates: NewFunctionQueue(),
+		localUpdates:  NewFunctionQueue(),
+	}
 }
 
 func (l *LocalCollection) RemoveCollectionMigrationHostAndExecutePostponedUpdates(hostId string) error {
@@ -87,7 +95,7 @@ func (l *LocalCollection) RemoveCollectionMigrationHostAndExecutePostponedUpdate
 		return errors.New("hostId not found in collectionSendingTo")
 	}
 
-	postponed.ExecuteFunctions()
+	postponed.remoteUpdates.ExecuteFunctions()
 
 	delete(l.collectionSendingTo, hostId)
 	return nil
@@ -97,8 +105,16 @@ func (l *LocalCollection) HasPostponedUpdate(hostId string) bool {
 	return ok
 }
 
-func (l *LocalCollection) RemoveCollectionMigrationHostWithoutExecutingPostponedUpdates(hostId string) {
+func (l *LocalCollection) RemoveCollectionMigrationHostExecutingPostponedUpdatesLocally(hostId string) error {
+	postponed, ok := l.collectionSendingTo[hostId]
+	if !ok {
+		return errors.New("hostId not found in collectionSendingTo")
+	}
+
+	postponed.remoteUpdates.ExecuteFunctions()
+
 	delete(l.collectionSendingTo, hostId)
+	return nil
 }
 
 func (l *LocalCollection) IsCollectionBeingMigratedTo(hostId string) bool {
@@ -106,22 +122,23 @@ func (l *LocalCollection) IsCollectionBeingMigratedTo(hostId string) bool {
 	return ok
 }
 
-func (l *LocalCollection) AddPostponedUpdate(hostId string, f func()) {
-	l.collectionSendingTo[hostId].AddFunction(f)
+func (l *LocalCollection) AddPostponedUpdate(hostId string, remote func(), local func()) {
+	l.collectionSendingTo[hostId].remoteUpdates.AddFunction(remote)
+	l.collectionSendingTo[hostId].localUpdates.AddFunction(local)
 }
 
-func (l *LocalCollection) setCollectionSendingTo(collectionSendingTo map[string]FunctionQueue) {
+func (l *LocalCollection) setCollectionSendingTo(collectionSendingTo map[string]DoubleFunctionQueue) {
 	l.collectionSendingTo = collectionSendingTo
 }
 
-func (l *LocalCollection) getCollectionSendingTo() map[string]FunctionQueue {
+func (l *LocalCollection) getCollectionSendingTo() map[string]DoubleFunctionQueue {
 	return l.collectionSendingTo
 }
 
 type RemoteCollection struct {
 	hostsId map[string]struct{} //map to guarantee univocity
 
-	collectionSendingTo map[string]FunctionQueue //map to guarantee univocity
+	collectionSendingTo map[string]DoubleFunctionQueue //map to guarantee univocity
 }
 
 func (l *RemoteCollection) String() string {
@@ -131,7 +148,7 @@ func (l *RemoteCollection) String() string {
 func NewRemoteCollection(hostNames map[string]struct{}) CollectionState {
 	return &RemoteCollection{
 		hostsId:             hostNames,
-		collectionSendingTo: make(map[string]FunctionQueue),
+		collectionSendingTo: make(map[string]DoubleFunctionQueue),
 	}
 }
 
@@ -154,7 +171,10 @@ func (l *RemoteCollection) IsCollectionBeingMigrated() bool {
 }
 
 func (l *RemoteCollection) AddCollectionMigrationHost(hostId string) {
-	l.collectionSendingTo[hostId] = NewFunctionQueue()
+	l.collectionSendingTo[hostId] = DoubleFunctionQueue{
+		remoteUpdates: NewFunctionQueue(),
+		localUpdates:  NewFunctionQueue(),
+	}
 }
 
 func (l *RemoteCollection) RemoveCollectionMigrationHostAndExecutePostponedUpdates(hostId string) error {
@@ -163,7 +183,7 @@ func (l *RemoteCollection) RemoveCollectionMigrationHostAndExecutePostponedUpdat
 		return errors.New("hostId not found in collectionSendingTo")
 	}
 
-	postponed.ExecuteFunctions()
+	postponed.remoteUpdates.ExecuteFunctions()
 
 	delete(l.collectionSendingTo, hostId)
 	return nil
@@ -174,15 +194,23 @@ func (l *RemoteCollection) HasPostponedUpdate(hostId string) bool {
 	return ok
 }
 
-func (l *RemoteCollection) RemoveCollectionMigrationHostWithoutExecutingPostponedUpdates(hostId string) {
+func (l *RemoteCollection) RemoveCollectionMigrationHostExecutingPostponedUpdatesLocally(hostId string) error {
+	postponed, ok := l.collectionSendingTo[hostId]
+	if !ok {
+		return errors.New("hostId not found in collectionSendingTo")
+	}
+
+	postponed.localUpdates.ExecuteFunctions()
+
 	delete(l.collectionSendingTo, hostId)
+	return nil
 }
 
-func (l *RemoteCollection) setCollectionSendingTo(collectionSendingTo map[string]FunctionQueue) {
+func (l *RemoteCollection) setCollectionSendingTo(collectionSendingTo map[string]DoubleFunctionQueue) {
 	l.collectionSendingTo = collectionSendingTo
 }
 
-func (l *RemoteCollection) getCollectionSendingTo() map[string]FunctionQueue {
+func (l *RemoteCollection) getCollectionSendingTo() map[string]DoubleFunctionQueue {
 	return l.collectionSendingTo
 }
 
@@ -191,6 +219,7 @@ func (l *RemoteCollection) IsCollectionBeingMigratedTo(hostId string) bool {
 	return ok
 }
 
-func (l *RemoteCollection) AddPostponedUpdate(hostId string, f func()) {
-	l.collectionSendingTo[hostId].AddFunction(f)
+func (l *RemoteCollection) AddPostponedUpdate(hostId string, remote func(), local func()) {
+	l.collectionSendingTo[hostId].remoteUpdates.AddFunction(remote)
+	l.collectionSendingTo[hostId].localUpdates.AddFunction(local)
 }

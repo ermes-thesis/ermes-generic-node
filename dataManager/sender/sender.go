@@ -159,8 +159,11 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 		s.lruCache.ForcePut(collection.CollectionId(), collection, uint(collectionSize))
 
 		if collection.GetCollectionState().HasPostponedUpdate(destination) {
-			collection.GetCollectionState().RemoveCollectionMigrationHostWithoutExecutingPostponedUpdates(destination)
-			s.log.Info("SENDER, IRREVERSIBLE ERROR, some postponed updates were lost during migration error handling", "collectionId", collection.CollectionId())
+			err = collection.GetCollectionState().RemoveCollectionMigrationHostExecutingPostponedUpdatesLocally(destination)
+			if err != nil {
+				s.log.Error("SENDER, IRREVERSIBLE ERROR, some postponed updates were lost during migration error handling", "collectionId", collection.CollectionId())
+				return
+			}
 		}
 
 		collection.SetToLocal(collectionSize) // set collection back to local

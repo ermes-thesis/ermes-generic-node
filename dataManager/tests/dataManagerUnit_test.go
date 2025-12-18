@@ -272,11 +272,11 @@ func TestPostponedDecisionBehaviour(t *testing.T) {
 	strongCollection := shared.NewStrongCollection("collectionId", 10, false, true, "leaderId").(*shared.StrongCollection)
 	strongCollection.ConsistencyClock = 5
 
-	strongCollection.AddPostponedDecisionBehaviour(func() {
+	strongCollection.AddPostponedSendBehaviour(func() {
 		strongCollection.ConsistencyClock += 10
 		print(" First behaviour executed. ", strongCollection.ConsistencyClock, "\n")
 	})
-	strongCollection.AddPostponedDecisionBehaviour(func() {
+	strongCollection.AddPostponedDeleteBehaviour(func() {
 		strongCollection.ConsistencyClock *= 2
 		print(" Second behaviour executed. ", strongCollection.ConsistencyClock, "\n")
 	})

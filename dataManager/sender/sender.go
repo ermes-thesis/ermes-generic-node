@@ -134,8 +134,8 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 	collection.GetCollectionState().RemoveHost(destination) // remove host from known hosts
 
 	//remove postponed delete behaviour
-	if collection.IsStrong() && collection.IsLocal() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() {
-		collection.(*shared.StrongCollection).PopPostponedDecisionBehaviour()
+	if collection.IsStrong() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() && isMigration {
+		collection.(*shared.StrongCollection).RemovePostponedDeleteBehaviour()
 	}
 
 	if isMigration {

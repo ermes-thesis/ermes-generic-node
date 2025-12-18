@@ -19,6 +19,11 @@ type Collection interface {
 	GetCollectionState() CollectionState
 }
 
+type PostponedDecision struct {
+	SendFunc   func()
+	DeleteFunc func()
+}
+
 // consistency levels
 
 // StrongCollection strong collection
@@ -29,7 +34,7 @@ type StrongCollection struct {
 	LeaderId                   string
 	WriteMutex                 *sync.Mutex
 	ConsistencyClock           uint64
-	postponedDecisionBehaviour FunctionQueue
+	postponedDecisionBehaviour PostponedDecision
 }
 
 func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLeader bool, leaderId string) Collection {
@@ -41,7 +46,7 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 			IsLeader:                   false,
 			LeaderId:                   leaderId,
 			WriteMutex:                 &sync.Mutex{},
-			postponedDecisionBehaviour: NewFunctionQueue(),
+			postponedDecisionBehaviour: PostponedDecision{},
 		}
 	}
 	c := &StrongCollection{
@@ -49,7 +54,7 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 		collectionState:            NewLocalCollection(size, hosts),
 		IsLeader:                   isLeader,
 		WriteMutex:                 &sync.Mutex{},
-		postponedDecisionBehaviour: NewFunctionQueue(),
+		postponedDecisionBehaviour: PostponedDecision{},
 	}
 	if isLeader {
 		c.LeaderId = leaderId
@@ -57,21 +62,33 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 	return c
 }
 
-func (s *StrongCollection) AddPostponedDecisionBehaviour(f func()) {
-	s.postponedDecisionBehaviour.AddFunction(f)
+func (s *StrongCollection) AddPostponedSendBehaviour(f func()) {
+	s.postponedDecisionBehaviour.SendFunc = f
+}
+
+func (s *StrongCollection) AddPostponedDeleteBehaviour(f func()) {
+	s.postponedDecisionBehaviour.DeleteFunc = f
 }
 
 func (s *StrongCollection) ExecutePostponedDecisionBehaviour(log logger.Logger) {
 	log.Info("ExecutePostponedDecisionBehaviour called", "collectionId", s.collectionId)
-	s.postponedDecisionBehaviour.ExecuteFunctions()
+	if s.postponedDecisionBehaviour.SendFunc != nil {
+		log.Info("Executing postponed send behaviour", "collectionId", s.collectionId)
+		s.postponedDecisionBehaviour.SendFunc()
+	}
+	if s.postponedDecisionBehaviour.DeleteFunc != nil {
+		log.Info("Executing postponed delete behaviour", "collectionId", s.collectionId)
+		s.postponedDecisionBehaviour.DeleteFunc()
+	}
+	s.postponedDecisionBehaviour = PostponedDecision{}
 }
 
 func (s *StrongCollection) HasPostponedDecisionBehaviour() bool {
-	return s.postponedDecisionBehaviour.HasFunctions()
+	return s.postponedDecisionBehaviour.SendFunc != nil || s.postponedDecisionBehaviour.DeleteFunc != nil
 }
 
-func (s *StrongCollection) PopPostponedDecisionBehaviour() func() {
-	return s.postponedDecisionBehaviour.PopFunction()
+func (s *StrongCollection) RemovePostponedDeleteBehaviour() {
+	s.postponedDecisionBehaviour.DeleteFunc = nil
 }
 
 func (s *StrongCollection) GetCollectionState() CollectionState {

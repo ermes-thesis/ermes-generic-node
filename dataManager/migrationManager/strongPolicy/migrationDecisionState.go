@@ -256,7 +256,7 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, rep
 		if leaderDecisionTaken && decision.SendAsLeader && !lockAcquired {
 			m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot send collection as leader because collection is in use", "collection_id", outerKey, "destination", decision.Destination)
 			//postpone the send as leader behaviour to when the lock will be released
-			strongCollection.AddPostponedDecisionBehaviour(func() {
+			strongCollection.AddPostponedSendBehaviour(func() {
 				m.policy.log.Info("DEFAULT-STRONG-POLICY, apply postponed leader decision for collection", "collectionId", strongCollection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
 				strongCollection.GetCollectionState().AddCollectionMigrationHost(decision.Destination)
 				m.policy.sender.SendRemoteCollectionTo(decision.Destination, strongCollection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
@@ -282,9 +282,9 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, rep
 	} else if !lockAcquired {
 		m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot delete collection because collection is in use", "collection_id", outerKey)
 		//postpone the delete behaviour to when the lock will be released
-		strongCollection.AddPostponedDecisionBehaviour(func() {
-			m.policy.log.Info("DEFAULT-STRONG-POLICY, apply posponed deletion decision for collection", "collectionId", strongCollection.CollectionId())
-			m.deleteCollectionAfterDecisionTaken(outerKey, strongCollection, outerKey)
+		strongCollection.AddPostponedDeleteBehaviour(func() {
+			m.policy.log.Info("DEFAULT-STRONG-POLICY, apply postponed deletion decision for collection", "collectionId", strongCollection.CollectionId())
+			m.deleteCollectionAfterDecisionTaken(strongCollection, outerKey)
 		})
 		m.tryToExecutePostponed(strongCollection)
 		return nil

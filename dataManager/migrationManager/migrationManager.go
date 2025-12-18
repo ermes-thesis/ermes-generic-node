@@ -221,7 +221,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		}
 
 		if collection.IsStrong() && collection.IsLocal() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() {
-			collection.(*shared.StrongCollection).PopPostponedDecisionBehaviour()
+			collection.(*shared.StrongCollection).RemovePostponedDeleteBehaviour()
 		}
 
 		if collection.IsStrong() && isLeader && isStrong {

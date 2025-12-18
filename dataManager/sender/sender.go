@@ -166,10 +166,10 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 		}
 
 		collection.SetToLocal(collectionSize) // set collection back to local
-		if collection.IsStrong() {
-			collection.(*shared.StrongCollection).ConsistencyClock = groupsSequence // set back consistency clock
-		}
-		s.partialView.KnownCollections[collection.CollectionId()] = collection // add back to known collections
+		//if collection.IsStrong() {
+		//	collection.(*shared.StrongCollection).ConsistencyClock = groupsSequence // set back consistency clock
+		//}
+		//s.partialView.KnownCollections[collection.CollectionId()] = collection // add back to known collections
 		s.log.Info("SENDER: Migration failed, set collection back to local", "collectionId", collection.CollectionId())
 
 	}

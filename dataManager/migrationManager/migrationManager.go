@@ -216,20 +216,20 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	m.log.Info("MIG-MANAGER, new local collection received")
 	collection := m.collectionsPartialView.KnownCollections[collectionId]
 	if collection != nil {
-		if hostToRemove {
-			collection.RemoveHost(hostAddress)
-		}
-
 		if collection.IsStrong() && collection.IsLocal() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() {
 			collection.(*shared.StrongCollection).RemovePostponedDeleteBehaviour()
 		}
 
-		if collection.IsStrong() && isLeader && isStrong {
-			collection.(*shared.StrongCollection).IsLeader = true
-			collection.(*shared.StrongCollection).LeaderId = m.serverInfo.HostName
-		}
-
 		if collection.IsLocal() {
+			if hostToRemove {
+				collection.RemoveHost(hostAddress)
+			}
+
+			if collection.IsStrong() && isLeader && isStrong {
+				collection.(*shared.StrongCollection).IsLeader = true
+				collection.(*shared.StrongCollection).LeaderId = m.serverInfo.HostName
+			}
+
 			m.log.Warn("MIG-MANAGER, new collection already present locally", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
 			return true, nil
 		}
@@ -238,6 +238,15 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		if err != nil {
 			m.log.Warn("MIG-MANAGER, new collection could not be added to redis")
 			return true, err
+		}
+
+		if hostToRemove {
+			collection.RemoveHost(hostAddress)
+		}
+
+		if collection.IsStrong() && isLeader && isStrong {
+			collection.(*shared.StrongCollection).IsLeader = true
+			collection.(*shared.StrongCollection).LeaderId = m.serverInfo.HostName
 		}
 
 		collection.SetToLocal(actualSize)

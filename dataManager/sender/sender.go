@@ -137,7 +137,7 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 		collection.(*shared.StrongCollection).RemovePostponedDeleteBehaviour()
 	}
 
-	if isMigration {
+	if !collection.IsLocal() {
 		//set collection back in redis
 		availableMem, memErr := s.dbInterface.GetAvailableMemory()
 		if memErr != nil {

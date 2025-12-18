@@ -81,13 +81,13 @@ func TestWasmPool_Wasmedge(t *testing.T) {
 	err = hostFns.RegisterWasmedgeHostFns(pool)
 	require.NoError(t, err)
 
-	resp := pool.Invoke(authFn, "authEntry", []byte("token"))
+	resp := pool.Invoke("auth", authFn, "authEntry", []byte("token"))
 
 	fmt.Println("Auth function:", resp.HttpCode, resp.Response)
 
 	req, ctx := getTestReqAndCtx(resp.Response.(string), 0)
 
-	response := pool.Invoke(fun, "entry", req, ctx)
+	response := pool.Invoke("fun", fun, "entry", req, ctx)
 	fmt.Println("Invoke function:", response.Response, response.HttpCode)
 
 	if response.HttpCode != 200 {
@@ -143,13 +143,13 @@ func TestWasmPool_Wasmtime(t *testing.T) {
 	err = hostFns.RegisterWasmtimeHostFns(pool)
 	require.NoError(t, err)
 
-	resp := pool.Invoke(authFn, "authEntry", []byte("token"))
+	resp := pool.Invoke("auth", authFn, "authEntry", []byte("token"))
 
 	fmt.Println("Auth function:", resp.HttpCode, resp.Response)
 
 	req, ctx := getTestReqAndCtx(resp.Response.(string), 0)
 
-	response := pool.Invoke(fun, "entry", req, ctx)
+	response := pool.Invoke("fun", fun, "entry", req, ctx)
 	fmt.Println("Invoke function:", response.Response, response.HttpCode)
 
 	if response.HttpCode != 200 {
@@ -203,13 +203,13 @@ func TestWasmPool_Wazero(t *testing.T) {
 	err = hostFns.RegisterWazeroHostFns(pool)
 	require.NoError(t, err)
 
-	resp := pool.Invoke(authFn, "authEntry", []byte("token"))
+	resp := pool.Invoke("auth", authFn, "authEntry", []byte("token"))
 
 	fmt.Println("Auth function:", resp.HttpCode, resp.Response)
 
 	req, ctx := getTestReqAndCtx(resp.Response.(string), 0)
 
-	response := pool.Invoke(fun, "entry", req, ctx)
+	response := pool.Invoke("fun", fun, "entry", req, ctx)
 	fmt.Println("Invoke function:", response.Response, response.HttpCode)
 
 	if response.HttpCode != 200 {

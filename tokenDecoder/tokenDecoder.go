@@ -42,6 +42,7 @@ func NewTokenDecoder(path string) (TokenDecoder, error) {
 func NewTokenDecoderWithKey(publicKey *rsa.PublicKey, issuer string) TokenDecoder {
 	return &TokenDecoderImpl{
 		publicKey: publicKey,
+		parser:    jwt.NewParser(),
 		issuer:    issuer,
 	}
 }

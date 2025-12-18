@@ -355,7 +355,7 @@ func (f *FunctionCacheImpl) fetchAndStore(functionName string, functionVersion s
 			return nil, err
 		}
 
-		if bundle == nil || bundle.Binary == nil || bundle.Templates == nil {
+		if bundle == nil || len(bundle.Binary) == 0 || bundle.Templates == nil {
 			f.log.Error("Invalid bundle fetched", "fn_name", functionName, "fn_version", functionVersion, "fn_bundle", fmt.Sprintf("%+v", bundle))
 			return nil, fmt.Errorf("invalid bundle from registry")
 		}

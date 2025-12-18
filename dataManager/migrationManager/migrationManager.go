@@ -213,7 +213,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	defer m.collectionsLock.Unlock()
 
 	//imp
-	m.log.Info("MIG-MANAGER, new local collection received")
+	m.log.Info("MIG-MANAGER, new local collection received", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
 	collection := m.collectionsPartialView.KnownCollections[collectionId]
 	if collection != nil {
 		if collection.IsStrong() && collection.IsLocal() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() {
@@ -236,7 +236,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 
 		actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
 		if err != nil {
-			m.log.Warn("MIG-MANAGER, new collection could not be added to redis")
+			m.log.Warn("MIG-MANAGER, new collection could not be added to redis", "collection_id", collectionId)
 			return true, err
 		}
 
@@ -254,7 +254,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 			collection.(*shared.StrongCollection).ConsistencyClock = sequence
 		}
 
-		m.log.Info("MIG-MANAGER, new collection set to local")
+		m.log.Info("MIG-MANAGER, new collection set to local", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
 		//m.log.Warn("AAAAAAAAAAAAAA", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
 		m.updateLru(collectionId, uint(actualSize))
 		return false, nil

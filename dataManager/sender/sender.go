@@ -62,7 +62,7 @@ func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, s
 
 func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool) {
 	//imp
-	s.log.Info("SENDER: Preparing to send collection", "collectionId", collection.CollectionId(), "destination", destination, "isMigration", isMigration, "sendAsLeader", sendAsLeader, "collectionSize", collectionSize)
+	s.log.Eval("SENDER: Preparing to send collection", "collectionId", collection.CollectionId(), "destination", destination, "isMigration", isMigration, "sendAsLeader", sendAsLeader, "collectionSize", collectionSize)
 	s.log.Infof("[SENDER] send collection %s to %s", collection.CollectionId(), destination)
 	if s.serverInfo.Father == nil || destination != s.serverInfo.Father.HostName {
 		s.log.Debug("Adding host to collection", "hostname", s.serverInfo.HostName, "destination", destination, "known_host_ids", collection.HostsId())
@@ -99,7 +99,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		//handle errors
 		if err != nil || code != http.StatusOK {
 			if code == http.StatusInternalServerError {
-				s.log.Warnf("SENDER , Collection refused from %s, for: %v", destination, err)
+				s.log.Warnf("SENDER , Collection refused from %s (%d), for collection %s", destination, code, collection.CollectionId())
 
 				//stop sending to this node, at least until next gossip
 				nodeInfo, ok := s.partialView.NodeResourceUsage[destination]
@@ -141,7 +141,7 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 		//set collection back in redis
 		availableMem, memErr := s.dbInterface.GetAvailableMemory()
 		if memErr != nil {
-			s.log.Error("SENDER, get memory usage fails")
+			s.log.Error("SENDER, get memory usage fails", "collectionId", collection.CollectionId(), "err", memErr)
 			return
 		}
 		if availableMem < collectionSize { //fails to rollback, only if 2 adjacent nodes has full memory and try to migrate between them
@@ -150,7 +150,7 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 		}
 		err := s.dbInterface.SetCollection(collection.CollectionId(), res, groups, owner, groupsSequence)
 		if err != nil {
-			s.log.Error("SENDER, add collection in redis fails")
+			s.log.Error("SENDER, add collection in redis fails", "collectionId", collection.CollectionId(), "err", err)
 			return
 		}
 

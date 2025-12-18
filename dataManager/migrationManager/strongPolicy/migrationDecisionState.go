@@ -290,7 +290,7 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, rep
 		return nil
 	}
 
-	m.deleteCollectionAfterDecisionTaken(outerKey, strongCollection, outerKey)
+	m.deleteCollectionAfterDecisionTaken(strongCollection, outerKey)
 	return nil
 }
 
@@ -305,7 +305,7 @@ func (m *MigrationManagerDecisionState) tryToExecutePostponed(strongCollection *
 
 }
 
-func (m *MigrationManagerDecisionState) deleteCollectionAfterDecisionTaken(collectionId string, strongCollection *shared.StrongCollection, outerKey string) {
+func (m *MigrationManagerDecisionState) deleteCollectionAfterDecisionTaken(strongCollection *shared.StrongCollection, outerKey string) {
 	//set the collection as remote only in the node partial view -> if no more host removed from partial view after response to send collection to
 	strongCollection.SetToRemote()
 

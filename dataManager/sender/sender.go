@@ -156,11 +156,7 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 		}
 
 		//place back in LRU
-		lruErr := s.lruCache.Put(collection.CollectionId(), collection, uint(collectionSize))
-		if lruErr != nil { //fails to rollback, only if 2 adjacent nodes has full memory and try to migrate between them
-			s.log.Error("SENDER, IRREVERSIBLE ERROR, add collection back in LRU fails")
-			return
-		}
+		s.lruCache.ForcePut(collection.CollectionId(), collection, uint(collectionSize))
 
 		if collection.GetCollectionState().HasPostponedUpdate(destination) {
 			collection.GetCollectionState().RemoveCollectionMigrationHostWithoutExecutingPostponedUpdates(destination)

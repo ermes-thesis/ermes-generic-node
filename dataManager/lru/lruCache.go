@@ -131,6 +131,51 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 	return nil
 }
 
+// ForcePut update the value of the key if the key exists. Otherwise, add the key-value pair to the cache.
+// The element is marked as most recently used.
+// If the number of keys exceeds the capacity from this operation, it will still add the element.
+// This operation is thread safe.
+func (this *LRUCache[T]) ForcePut(key string, value T, size uint) {
+
+	this.mux.Lock()
+
+	defer this.mux.Unlock()
+
+	get := this.cache[key]
+
+	// If the item is not present then create it, else update it
+	if get == nil {
+
+		lruCacheTypeObj := lruCacheType[T]{
+			key:  key,
+			obj:  value,
+			size: size,
+		}
+
+		// Update the size
+		this.current += size
+
+		// Add the item on top
+		elem := this.linkedlist.PushFront(lruCacheTypeObj)
+
+		// Add the list element to the map
+		this.cache[key] = elem
+
+		return
+	}
+
+	// Else update and put on top of LRU
+	el := get.Value.(lruCacheType[T])
+
+	this.current -= el.size
+	el.size = size
+	this.current += size
+
+	get.Value = el
+
+	this.linkedlist.MoveToFront(get)
+}
+
 func (this *LRUCache[T]) MoveToFront(key string) error {
 
 	this.mux.Lock()

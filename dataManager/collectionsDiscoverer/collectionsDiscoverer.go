@@ -333,6 +333,7 @@ func (c *CollectionsDiscovererImp) popolateUpdateSafetyCheck(saftyQueue shared.F
 				collection.(*shared.StrongCollection).ConsistencyClock = update.GetSequence()
 			}
 			collection.GetCollectionState().(*shared.LocalCollection).IncSize(memUsage)
+			c.lruCache.UpdateSize(collection.CollectionId(), uint(collection.GetCollectionState().(*shared.LocalCollection).Size()))
 		}
 	})
 }

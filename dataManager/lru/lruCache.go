@@ -295,6 +295,42 @@ func (this *LRUCache[T]) PeekFreeToAchieveSize(sizeGoal uint) *list.List {
 	return returnList
 }
 
+func (this *LRUCache[T]) PeekFreeToAchieveSizeWithFreed(
+	sizeGoal uint64,
+	freedSize uint64,
+	alreadyFreed map[string]struct{},
+) *list.List {
+
+	this.mux.Lock()
+	defer this.mux.Unlock()
+
+	result := list.New()
+
+	simulatedAvailable := uint64(this.GetAvailableSize()) + freedSize
+
+	backElement := this.linkedlist.Back()
+
+	for simulatedAvailable <= sizeGoal && backElement != nil {
+
+		entry, ok := backElement.Value.(lruCacheType[T])
+		if !ok {
+			break
+		}
+
+		if _, exists := alreadyFreed[entry.key]; exists {
+			backElement = backElement.Prev()
+			continue
+		}
+
+		result.PushFront(entry.obj)
+		simulatedAvailable += uint64(entry.size)
+
+		backElement = backElement.Prev()
+	}
+
+	return result
+}
+
 // Remove Function to remove a value given its key.
 // This operation is thread safe and O(1)
 func (this *LRUCache[T]) Remove(key string) error {

@@ -435,12 +435,17 @@ func ensureMigrationToFather(decisions Decisions, collection shared.Collection, 
 		return decisions
 	}
 
+	decisions.IsMigration = true
+
 	for i := range decisions.Decisions {
 		if decisions.Decisions[i].Destination == father {
 			if leader && !decisions.LeaderDecisionTaken {
 				decisions.Decisions[i].SendAsLeader = true
 				decisions.LeaderDecisionTaken = true
 			}
+			f := decisions.Decisions[i]
+			decisions.Decisions[i] = decisions.Decisions[len(decisions.Decisions)-1]
+			decisions.Decisions[len(decisions.Decisions)-1] = f
 			return decisions
 		}
 	}

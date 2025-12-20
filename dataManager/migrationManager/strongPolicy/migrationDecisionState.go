@@ -139,13 +139,16 @@ func (m *MigrationManagerDecisionState) decisionReader(decisionCh chan Decisions
 	//upgrade decisions to reach safe lru level
 	m.upgradeDecisionsToReachSafeLRU(aggregatedDecisions, freedSize, migrationKeys)
 
-	//apply all the taken decisions
+	wg := sync.WaitGroup{}
+	wg.Add(len(aggregatedDecisions))
 	for outerKey, decisions := range aggregatedDecisions {
-		go func(outerKey string, decisions Decisions) {
-			collection := m.policy.partialView.KnownCollections[outerKey].(*shared.StrongCollection)
+		collection := m.policy.partialView.KnownCollections[outerKey].(*shared.StrongCollection)
+		go func() {
+			defer wg.Done()
 			m.applyTakenDecisions(outerKey, decisions.IsMigration, decisions.Decisions, collection, decisions.LeaderDecisionTaken)
-		}(outerKey, decisions)
+		}()
 	}
+	wg.Wait()
 }
 
 func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerMap map[string]*usage.CircularBuffer, wg *sync.WaitGroup, decisionCh chan<- Decisions) {

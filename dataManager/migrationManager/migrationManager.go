@@ -494,6 +494,15 @@ func (m *MigrationManagerImp) freeLru(sizeGoal uint) error {
 	var wg sync.WaitGroup
 	for item := collectionList.Front(); item != nil; item = item.Next() {
 		collection := item.Value.(shared.Collection)
+
+		if collection.IsStrong() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() {
+			continue
+		}
+
+		if m.serverInfo.Father != nil && collection.GetCollectionState().(*shared.LocalCollection).HasPostponedUpdate(m.serverInfo.Father.HostName) {
+			continue
+		}
+
 		wg.Add(1)
 		go m.sendCollectionAndRemove(collection, &wg)
 	}

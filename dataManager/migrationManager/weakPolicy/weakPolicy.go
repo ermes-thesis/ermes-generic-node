@@ -2,7 +2,7 @@ package weakpolicy
 
 import (
 	"config"
-	sender "dataManager/sender"
+	"dataManager/sender"
 	shared "dataManager/shared"
 	"db"
 	"server"
@@ -33,7 +33,7 @@ func GetPolicy(policyName string) CurrentPolicy {
 	}
 }
 
-// default policy
+// AlwaysCopyPolicy default policy for weak collections
 type AlwaysCopyPolicy struct {
 	//config
 	log logger.Logger
@@ -74,7 +74,7 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 	}
 
 	//send collection
-	a.log.Info("WEAK-POLICY, handle request for a weak collection")
+	a.log.Info("WEAK-POLICY, handle request for a weak collection", "collection_id", collectionId, "to_node", childName)
 	weakCollection := a.partialView.KnownCollections[collectionId]
 
 	weakCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
@@ -91,16 +91,13 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 		return sizeError
 	}
 
-	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	a.log.Infof("WEAK-POLICY, send weak collection%s to node %s", collectionId, childName)
-
 	weakCollection.GetCollectionState().AddCollectionMigrationHost(childName)
 	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups, owner, groupsSequence, collectionSize, false)
 
 	return nil
 }
 
-// dumb policy for comparison in evaluation
+// DoNothingPolicy dumb policy for comparison in evaluation
 type DoNothingPolicy struct{}
 
 func NewDoNothingPolicy() DoNothingPolicy {

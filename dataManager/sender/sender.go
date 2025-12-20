@@ -62,8 +62,7 @@ func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, s
 
 func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool) {
 	//imp
-	s.log.Eval("SENDER: Preparing to send collection", "collectionId", collection.CollectionId(), "destination", destination, "isMigration", isMigration, "sendAsLeader", sendAsLeader, "collectionSize", collectionSize)
-	s.log.Infof("[SENDER] send collection %s to %s", collection.CollectionId(), destination)
+	s.log.Info("SENDER: Preparing to send collection", "collectionId", collection.CollectionId(), "destination", destination, "isMigration", isMigration, "sendAsLeader", sendAsLeader, "collectionSize", collectionSize)
 	if s.serverInfo.Father == nil || destination != s.serverInfo.Father.HostName {
 		s.log.Debug("Adding host to collection", "hostname", s.serverInfo.HostName, "destination", destination, "known_host_ids", collection.HostsId())
 		collection.AddHost(destination)
@@ -165,11 +164,8 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 			}
 		}
 
-		collection.SetToLocal(collectionSize) // set collection back to local
-		//if collection.IsStrong() {
-		//	collection.(*shared.StrongCollection).ConsistencyClock = groupsSequence // set back consistency clock
-		//}
-		//s.partialView.KnownCollections[collection.CollectionId()] = collection // add back to known collections
+		collection.SetToLocal(collectionSize)                                  // set collection back to local
+		s.partialView.KnownCollections[collection.CollectionId()] = collection // add back to known collections
 		s.log.Info("SENDER: Migration failed, set collection back to local", "collectionId", collection.CollectionId())
 
 	}

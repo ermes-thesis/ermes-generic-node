@@ -32,7 +32,7 @@ type Decision struct {
 // methods
 func (m *MigrationManagerDecisionState) Setup(args ...any) {
 
-	fmt.Printf("DEFAULT-STRONG-POLICY, switch to DECISION state\n")
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, switch to DECISION state")
 	m.requestStack = stack.NewCallStack()
 
 	m.policy.partialView.Mutex.Lock()
@@ -61,7 +61,7 @@ func (m *MigrationManagerDecisionState) consumeStrongRequests() {
 		call := m.requestStack.Pop()
 		call()
 	}
-	fmt.Printf("DEFAULT-STRONG-POLICY, all strong requests consumed\n")
+	m.policy.log.Debug("DEFAULT-STRONG-POLICY, all strong requests consumed\n")
 }
 
 func (m *MigrationManagerDecisionState) ManageGossipMessage(msg gossip.GossipMessage) {
@@ -117,6 +117,7 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 		//wait for all the decision to ends
 
 		wg.Wait()
+		m.policy.log.Info("DEFAULT-STRONG-POLICY, all decision taken, closing decision channel")
 		close(decisionCh) //close the decision channel to stop the reader
 	}()
 

@@ -52,7 +52,7 @@ func TestWasmPool_Wasmedge(t *testing.T) {
 	pool := wasm.NewWasmedgeExecutorPool(wasm.Config{
 		PoolSize:  10,
 		Timeout:   5 * time.Second,
-		WithCache: false,
+		WithCache: wasm.CacheNone,
 		IsAot:     false,
 	}, createNewLogger(t))
 	defer pool.Close()
@@ -114,7 +114,7 @@ func TestWasmPool_Wasmtime(t *testing.T) {
 	pool := wasm.NewWasmtimeExecutorPool(wasm.Config{
 		PoolSize:  10,
 		Timeout:   5 * time.Second,
-		WithCache: false,
+		WithCache: wasm.CacheNone,
 		IsAot:     false,
 	}, createNewLogger(t))
 	defer pool.Close()
@@ -176,7 +176,7 @@ func TestWasmPool_Wazero(t *testing.T) {
 	pool := wasm.NewWazeroExecutorPool(wasm.Config{
 		PoolSize:  10,
 		Timeout:   5 * time.Second,
-		WithCache: false,
+		WithCache: wasm.CacheNone,
 		IsAot:     false,
 	}, context.Background(), createNewLogger(t))
 	defer pool.Close()

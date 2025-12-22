@@ -78,12 +78,12 @@ func (c *CollectionsDiscovererStatelessGenericNode) UpdateCollectionsRecordsAndP
 		UserId:   userId,
 	}
 
-	c.sender.PropagateUpdate(c.centralizedDBAddress, msg, make([]shared.FunctionQueue, 0))
+	c.sender.SyncPropagateUpdate(c.centralizedDBAddress, msg, make([]shared.FunctionQueue, 0))
 	return nil
 }
 
 func (c *CollectionsDiscovererStatelessGenericNode) UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdateMessage, isInitiator bool, ignoredHostName string) error {
-	c.sender.PropagateGroupUpdate(c.centralizedDBAddress, updates, make([]shared.FunctionQueue, 0))
+	c.sender.SyncPropagateGroupUpdate(c.centralizedDBAddress, updates, make([]shared.FunctionQueue, 0))
 	return nil
 }
 

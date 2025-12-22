@@ -212,7 +212,9 @@ type CollectionDiscovererSender interface {
 	RemoteSetCollectionAndPropagate(hostId string, collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong, skipUniquenessCheck bool) error
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error)
 	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages, saftyQueues []shared.FunctionQueue)
+	SyncPropagateUpdate(hostId string, update gossip.CollectionUpdateMessages, saftyQueues []shared.FunctionQueue)
 	PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages, saftyQueues []shared.FunctionQueue)
+	SyncPropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages, saftyQueues []shared.FunctionQueue)
 	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage) error
 	RemoveCollection(hostId string, collectionId string, senderIp string, groups []string, userId string)
 
@@ -338,6 +340,11 @@ func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update g
 	}()
 }
 
+func (s *CollectionDiscovererSenderImpl) SyncPropagateUpdate(hostId string, update gossip.CollectionUpdateMessages, saftyQueues []shared.FunctionQueue) {
+	s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)
+	s.executeUpdateSaftyCheck(saftyQueues)
+}
+
 func (s *CollectionDiscovererSenderImpl) PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages, saftyQueues []shared.FunctionQueue) {
 	s.log.Infof("SENDER: request collection group update propagation to %s", hostId)
 
@@ -345,6 +352,11 @@ func (s *CollectionDiscovererSenderImpl) PropagateGroupUpdate(hostId string, upd
 		s.server.SendGenericHTTPRequest(hostId, updateGroupPropagationPath, update)
 		s.executeUpdateSaftyCheck(saftyQueues)
 	}()
+}
+
+func (s *CollectionDiscovererSenderImpl) SyncPropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages, saftyQueues []shared.FunctionQueue) {
+	s.server.SendGenericHTTPRequest(hostId, updateGroupPropagationPath, update)
+	s.executeUpdateSaftyCheck(saftyQueues)
 }
 
 // execute order 66

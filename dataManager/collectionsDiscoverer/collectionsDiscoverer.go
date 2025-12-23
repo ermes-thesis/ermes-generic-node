@@ -157,7 +157,7 @@ func (c *CollectionsDiscovererImp) AccessRecords(
 
 	var zero any
 	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
-	if !exists {
+	if !exists || (!collection.IsLocal() && len(collection.HostsId()) == 0) {
 		if c.serverInfo.Father == nil {
 			c.log.Warn("AccessRecords: Collection not known locally, no father to query. Collection DOES NOT exists", "collection_id", collectionId)
 			c.collectionsPartialView.Mutex.Unlock() // lock release

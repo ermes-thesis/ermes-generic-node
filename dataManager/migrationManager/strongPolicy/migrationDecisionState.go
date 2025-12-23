@@ -47,6 +47,8 @@ func (m *MigrationManagerDecisionState) Setup(args ...any) {
 	m.policy.transitionToIdle()
 
 	go m.consumeStrongRequests()
+
+	m.policy.log.Info("Completed decision state")
 }
 
 // ManageNewStrongRequest save strong request in a buffer for future consumption
@@ -141,15 +143,17 @@ func (m *MigrationManagerDecisionState) decisionReader(decisionCh chan Decisions
 	m.upgradeDecisionsToReachSafeLRU(aggregatedDecisions, freedSize, migrationKeys)
 
 	wg := sync.WaitGroup{}
-	wg.Add(len(aggregatedDecisions))
+	m.policy.log.Warn("DEFAULT-STRONG-POLICY, applying taken decisions")
 	for outerKey, decisions := range aggregatedDecisions {
-		collection := m.policy.partialView.KnownCollections[outerKey].(*shared.StrongCollection)
+		collection := m.policy.partialView.KnownCollections[outerKey]
+		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			m.applyTakenDecisions(outerKey, decisions.IsMigration, decisions.Decisions, collection, decisions.LeaderDecisionTaken)
 		}()
 	}
 	wg.Wait()
+	m.policy.log.Warn("DEFAULT-STRONG-POLICY, all decisions applied")
 }
 
 func (m *MigrationManagerDecisionState) innerKeyDecision(outerKey string, innerMap map[string]*usage.CircularBuffer, wg *sync.WaitGroup, decisionCh chan<- Decisions) {
@@ -289,6 +293,9 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(outerKey string, isM
 		lockAcquired = localCollection.CollectionLock.TryLock()
 		if !lockAcquired {
 			m.policy.log.Warn("DEFAULT-STRONG-POLICY, cannot apply taken decisions because collection is in use", "collection_id", outerKey)
+			if !collection.IsStrong() {
+				return nil
+			}
 		} else {
 			defer localCollection.CollectionLock.Unlock()
 		}

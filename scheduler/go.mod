@@ -3,7 +3,7 @@ module scheduler
 go 1.24.4
 
 require (
-	github.com/bytecodealliance/wasmtime-go/v37 v37.0.0
+	github.com/bytecodealliance/wasmtime-go/v40 v40.0.0
 	github.com/ermes-thesis/ermes-common/logger v0.0.0-00010101000000-000000000000
 	github.com/ermes-thesis/ermes-common/model v0.0.0-00010101000000-000000000000
 	github.com/ermes-thesis/ermes-common/utils v0.0.0-00010101000000-000000000000
@@ -39,7 +39,7 @@ require (
 	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/sys v0.39.0 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.2.1 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

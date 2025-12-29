@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"server"
 	"strconv"
@@ -70,7 +70,7 @@ func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum ui
 		}
 		s.log.Debug("Retry collection presence check", "collection_id", colId, "seq_num", seqNum, "current_attempt", i, "error", err)
 		if i < s.cfg.MaxOutdatedDataRetries-1 {
-			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			jitter := time.Duration(rand.Int64N(int64(backoff / 2)))
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2

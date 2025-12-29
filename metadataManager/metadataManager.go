@@ -88,9 +88,9 @@ func (m *MetadataManagerImpl) RegisterRoutes(server server.ServerType, tokenDeco
 		m.log.Error("Failed to register custom routes", "path", "/pvt-delete-metadata/{collection_id}", "error", err)
 		return fmt.Errorf("Error while registering /pvt-delete-metadata/{collection_id} route: %v\n", err)
 	}
-	err = server.AddCustomRoute("/pvt-request-update-group/{collection_id}", true, m.handleRouteRequestUpdateGroups())
+	err = server.AddCustomRoute("/pvt-request-update-groups/{collection_id}", true, m.handleRouteRequestUpdateGroups())
 	if err != nil {
-		m.log.Error("Failed to register custom routes", "path", "/pvt-request-update-group/{collection_id}", "error", err)
+		m.log.Error("Failed to register custom routes", "path", "/pvt-request-update-groups/{collection_id}", "error", err)
 		return fmt.Errorf("Error while registering /pvt-request-update-group/{collection_id} route: %v\n", err)
 	}
 	err = server.AddCustomRoute("/pvt-propagate-groups/{collection_id}", true, m.handleRoutePropagateGroups())

@@ -274,16 +274,41 @@ func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*caches.Fu
 
 	cachedVersion, found, expired := f.LatestVersions.GetWithStatus(functionName)
 	f.log.Debug("Search in latest versions cache results", "fn_name", functionName, "retrieved_cached_version", cachedVersion, "expired", expired)
-	bundle, err := f.getSnapshot(functionName, cachedVersion, want)
-	if err != nil {
-		f.log.Error("Failed to get snapshot", "fn_name", functionName, "part_wanted", want, "error", err)
-		return nil, err
+
+	var bundle *caches.FunctionBundle
+	var err error
+	if found {
+		bundle, err = f.getSnapshot(functionName, cachedVersion, want)
+		if err != nil {
+			f.log.Error("Failed to get snapshot", "fn_name", functionName, "part_wanted", want, "error", err)
+			return nil, err
+		}
 	}
 
+	// Cache Hit (Fast Path)
+	// We found the latest version mapping, the data exists in the cache, and it's NOT expired
+	if found && bundle != nil && !expired {
+		f.log.Debug("Latest version found in cache, and it's NOT expired", "fn_name", functionName, "part_wanted", want)
+		return bundle, nil
+	}
+
+	// From this point onwards, the possible variable relevant values combinations are:
+	// - (found, expired, bundle) == (true, true, != nil)	-> Latest ver. mapping found, it's expired, and we have cached data
+	// - (found, expired, bundle) == (true, true, nil)		-> Latest ver. mapping found, it's expired but data was evicted (only possible if TTL is active for MetadataBinaries cache)
+	// - (found, expired, bundle) == (true, false, nil)		-> Latest ver. mapping found, NOT expired but data was evicted
+	// - (found, expired, bundle) == (false, false, nil)	-> Latest ver. mapping NOT found, we cannot possibly have cached data
+
 	key := functionName + "@latest"
-	if bundle == nil {
-		fetched, err, _ := f.group.Do(key, func() (interface{}, error) {
-			f.log.Debug("Cache miss: Missing latest version function bundle", "fn_name", functionName, "part_wanted", want)
+	fetched, err, _ := f.group.Do(key, func() (interface{}, error) {
+		f.log.Debug("Cache miss: Missing latest version function bundle", "fn_name", functionName, "part_wanted", want)
+
+		// Cold Start (If found == false, we reach this branch) OR Data Evicted
+		// We have no valid data in the cache, so we must perform a fetch
+		if bundle == nil {
+			// From this point onwards, the possible variable relevant values combinations are:
+			// - (found, expired, bundle) == (true, true, nil)		-> Latest ver. mapping found, it's expired but data was evicted (only possible if TTL is active for MetadataBinaries cache)
+			// - (found, expired, bundle) == (true, false, nil)		-> Latest ver. mapping found, NOT expired but data was evicted
+			// - (found, expired, bundle) == (false, false, nil)	-> Latest ver. mapping NOT found, we cannot possibly have cached data
 			fetchedBundle, err := f.fetcher.Fetch(functionName, "latest")
 			if err != nil {
 				f.log.Error("Failed to fetch latest bundle", "fn_name", functionName, "part_wanted", want, "error", err)
@@ -300,46 +325,42 @@ func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*caches.Fu
 
 			f.log.Debug("Function bundle stored successfully", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
 			return fetchedBundle, nil
-		})
+		}
+
+		// From this point onwards, the possible variable relevant values combinations are:
+		// - (found, expired, bundle) == (true, true, != nil)	-> Latest ver. mapping found, it's expired, and we have cached data
+
+		// We have a candidate version, but it is expired. We try a "Conditional Fetch" to see if it's still current
+		fetchedBundle, err := f.fetcher.FetchLatest(functionName, cachedVersion)
 		if err != nil {
-			f.log.Error("Failed to fetch bundle", "fn_name", functionName, "fn_version", "latest", "want", want, "error", err)
+			f.log.Error("Failed to fetch latest bundle", "fn_name", functionName, "part_wanted", want, "error", err)
 			return nil, err
 		}
-		return fetched.(*caches.FunctionBundle), nil
 
-	} else {
-		if found && !expired {
-			f.log.Debug("Latest version found in cache, and it's NOT expired", "fn_name", functionName, "part_wanted", want)
-			return bundle, nil
-		}
-
-		fetched, err, _ := f.group.Do(key, func() (interface{}, error) {
-			f.log.Debug("Latest version found in cache but it's expired. Refreshing it in the cache", "fn_name", functionName, "part_wanted", want)
-			fetchedBundle, err := f.fetcher.FetchLatest(functionName, cachedVersion)
-
-			if fetchedBundle != nil {
-				f.log.Debug("Function bundle fetched correctly, proceeding to store it in the caches", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
-				f.LatestVersions.Set(functionName, fetchedBundle.Metadata.Version)
-				err = f.store(fetchedBundle)
-				if err != nil {
-					f.log.Error("Failed to store function bundle", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle), "error", err)
-					return nil, err
-				}
-
-				f.log.Debug("Function bundle stored successfully", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
-				return fetchedBundle, nil
+		if fetchedBundle != nil {
+			f.log.Debug("Function bundle fetched correctly, proceeding to store it in the caches", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+			f.LatestVersions.Set(functionName, fetchedBundle.Metadata.Version)
+			err = f.store(fetchedBundle)
+			if err != nil {
+				f.log.Error("Failed to store function bundle", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle), "error", err)
+				return nil, err
 			}
 
-			// refresh latest cache
-			f.LatestVersions.Set(functionName, cachedVersion)
-			return bundle, err
-		})
-		if err != nil {
-			f.log.Error("Failed to fetch bundle", "fn_name", functionName, "fn_version", "latest", "want", want, "error", err)
-			return nil, err
+			f.log.Debug("Function bundle stored successfully", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+			return fetchedBundle, nil
 		}
-		return fetched.(*caches.FunctionBundle), nil
+
+		// Latest version hasn't changed. Refresh TTL and return existing bundle
+		f.log.Debug("Version not changed, refreshing TTL", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+		f.LatestVersions.Set(functionName, cachedVersion)
+		return bundle, err
+	})
+
+	if err != nil {
+		f.log.Error("Failed to fetch bundle", "fn_name", functionName, "fn_version", "latest", "want", want, "error", err)
+		return nil, err
 	}
+	return fetched.(*caches.FunctionBundle), nil
 }
 
 func (f *FunctionCacheImpl) store(bundle *caches.FunctionBundle) error {

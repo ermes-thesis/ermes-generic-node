@@ -17,14 +17,14 @@ import (
 const (
 	gossipPath                      = "/pvt-gossip"
 	repoPath                        = "/pvt-repo"
-	requestInfoPath                 = "/pvt-collectionRequestInfo"
-	remoteAccessPath                = "/pvt-dataRemoteAccess"
-	remoteUpdatePath                = "/pvt-dataRemoteUpdate"
-	updatePropagationPath           = "/pvt-dataUpdatePropagation"
-	updateGroupPropagationPath      = "/pvt-dataGroupUpdatePropagation"
-	createCollectionPropagationPath = "/pvt-newCollection"
-	removeCollectionPropagationPath = "/pvt-removeCollection"
-	remoteCollectionSet             = "/pvt-remoteCollectionSet"
+	requestInfoPath                 = "/pvt-collection-request-info"
+	remoteAccessPath                = "/pvt-data-remote-access"
+	remoteUpdatePath                = "/pvt-data-remote-update"
+	updatePropagationPath           = "/pvt-data-update-propagation"
+	updateGroupPropagationPath      = "/pvt-data-group-update-propagation"
+	createCollectionPropagationPath = "/pvt-new-collection"
+	removeCollectionPropagationPath = "/pvt-remove-collection"
+	remoteCollectionSet             = "/pvt-remote-collection-set"
 )
 
 //###############################################################

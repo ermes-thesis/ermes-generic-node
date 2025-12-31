@@ -101,7 +101,7 @@ func TestGetRecordRemotelyToFather(t *testing.T) {
 		t.Fatalf("failed to marshal response: %v", err)
 	}
 
-	ser.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-dataRemoteAccess", mock.Anything).Return(&http.Response{
+	ser.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-data-remote-access", mock.Anything).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(strings.NewReader(string(respJSON))),
 	}, nil).Times(1)
@@ -113,7 +113,7 @@ func TestGetRecordRemotelyToFather(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal response: %v", err)
 	}
-	ser.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-dataRemoteAccess", mock.Anything).Return(&http.Response{
+	ser.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-data-remote-access", mock.Anything).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(strings.NewReader(string(respJSON))),
 	}, nil).Times(1)

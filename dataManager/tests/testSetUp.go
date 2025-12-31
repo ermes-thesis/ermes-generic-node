@@ -65,7 +65,7 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 
 	server := mockServer.NewServerType(t)
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
-	server.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-newCollection", mock.Anything).Return(&http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("response"))}, nil).Maybe()
+	server.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-new-collection", mock.Anything).Return(&http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("response"))}, nil).Maybe()
 
 	collections := &shared.CollectionPartialView{
 		KnownCollections:  make(map[string]shared.Collection),

@@ -231,8 +231,8 @@ func TestUpdateAndReplica_OppositeDirections_SlowPropagation(t *testing.T) {
 	// --- SETUP FATHER ---
 	slowMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/pvt-dataUpdatePropagation" {
-				log.Warn("Delaying /pvt-dataUpdatePropagation response...")
+			if r.URL.Path == "/pvt-data-update-propagation" {
+				log.Warn("Delaying /pvt-data-update-propagation response...")
 				time.Sleep(500 * time.Millisecond)
 			}
 			next.ServeHTTP(w, r)

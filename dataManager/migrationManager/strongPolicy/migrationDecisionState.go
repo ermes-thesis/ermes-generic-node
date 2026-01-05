@@ -132,11 +132,21 @@ func (m *MigrationManagerDecisionState) decisionReader(decisionCh chan Decisions
 	var freedSize uint64 = 0
 	migrationKeys := make(map[string]struct{})
 	for decisions := range decisionCh {
-		aggregatedDecisions[decisions.CollectionId] = decisions
 		if decisions.IsMigration {
 			freedSize += decisions.CollectionSize
 			migrationKeys[decisions.CollectionId] = struct{}{}
 		}
+		for i, d := range decisions.Decisions {
+			father := m.policy.serverInfo.Father
+			if father != nil && d.Destination == father.HostName {
+				// Swap decision to father with the last decision
+				decisions.Decisions[i] = decisions.Decisions[len(decisions.Decisions)-1]
+				decisions.Decisions[len(decisions.Decisions)-1] = d
+
+				break
+			}
+		}
+		aggregatedDecisions[decisions.CollectionId] = decisions
 	}
 
 	//upgrade decisions to reach safe lru level
@@ -445,18 +455,25 @@ func ensureMigrationToFather(decisions Decisions, collection shared.Collection, 
 
 	decisions.IsMigration = true
 
-	for i := range decisions.Decisions {
-		if decisions.Decisions[i].Destination == father {
-			if leader && !decisions.LeaderDecisionTaken {
-				decisions.Decisions[i].SendAsLeader = true
-				decisions.LeaderDecisionTaken = true
-			}
-			f := decisions.Decisions[i]
-			decisions.Decisions[i] = decisions.Decisions[len(decisions.Decisions)-1]
-			decisions.Decisions[len(decisions.Decisions)-1] = f
-			return decisions
+	// If last decision destination is towards father enter the if
+	lastDecisionPos := len(decisions.Decisions) - 1
+	if decisions.Decisions[lastDecisionPos].Destination == father {
+		if leader && !decisions.LeaderDecisionTaken {
+			decisions.Decisions[lastDecisionPos].SendAsLeader = true
+			decisions.LeaderDecisionTaken = true
 		}
+		return decisions
 	}
+
+	//for i := range decisions.Decisions {
+	//	if decisions.Decisions[i].Destination == father {
+	//		if leader && !decisions.LeaderDecisionTaken {
+	//			decisions.Decisions[i].SendAsLeader = true
+	//			decisions.LeaderDecisionTaken = true
+	//		}
+	//		return decisions
+	//	}
+	//}
 
 	// not present -> append
 	decisions.Decisions = append(decisions.Decisions, Decision{

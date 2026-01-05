@@ -457,7 +457,7 @@ func ensureMigrationToFather(decisions Decisions, collection shared.Collection, 
 
 	// If last decision destination is towards father enter the if
 	lastDecisionPos := len(decisions.Decisions) - 1
-	if decisions.Decisions[lastDecisionPos].Destination == father {
+	if lastDecisionPos >= 0 && decisions.Decisions[lastDecisionPos].Destination == father {
 		if leader && !decisions.LeaderDecisionTaken {
 			decisions.Decisions[lastDecisionPos].SendAsLeader = true
 			decisions.LeaderDecisionTaken = true

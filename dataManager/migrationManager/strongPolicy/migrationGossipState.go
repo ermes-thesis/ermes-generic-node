@@ -87,7 +87,9 @@ func (m *MigrationManagerGossipState) manageChildGossipMessage(msg gossip.ChildS
 		//childName:   msg.GetSenderID(),
 		FreeRedisMemory: msg.FreeRedisMemory,
 	}
+	m.policy.partialView.Mutex.Lock()
 	m.policy.partialView.NodeResourceUsage[msg.GetSenderID()] = childStateInfo
+	m.policy.partialView.Mutex.Unlock()
 }
 
 func (m *MigrationManagerGossipState) manageAncestorGossipMessage(msg gossip.LeaderDelegaMessage) {
@@ -96,5 +98,7 @@ func (m *MigrationManagerGossipState) manageAncestorGossipMessage(msg gossip.Lea
 		//childName:   msg.GetSenderID(),
 		FreeRedisMemory: msg.FreeRedisMemory,
 	}
+	m.policy.partialView.Mutex.Lock()
 	m.policy.partialView.NodeResourceUsage[msg.GetSenderID()] = childStateInfo
+	m.policy.partialView.Mutex.Unlock()
 }

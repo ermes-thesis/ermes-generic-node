@@ -248,6 +248,12 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false)
 	}
 
+	// If hostWithMoreEventual is empty, it means that none of the eventual collections requested exists in the architecture
+	if hostWithMoreEventual == "" {
+		s.log.Error("No host found with eventual collections for forwarding", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "eventual_host_counts", fmt.Sprintf("%+v", eventualHostCounts))
+		return &FunctionResult{StatusCode: http.StatusNotFound}, 0, errors.New("no host found with eventual collections for forwarding")
+	}
+
 	// We have only Eventual Collection requested, and no one of them is local, we forward the scheduling request
 	// towards the DIRECTION where we have more Eventual Collections
 	s.log.Info("Only eventual collections detected. None is local, forwarding request to host with more eventual collections detected", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "forwarded_to", hostWithMoreEventual)
@@ -297,7 +303,7 @@ func (s *statefulPolicy) forwardRequestWithSequential(scheduleRequest ScheduleRe
 
 	// If we are here, it means that something wrong has happened in the scheduling process, and we are in the Cloud Node
 	s.log.Error("No available host for sequential collection (unexpected)", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "collection_id", sequentialCollection.CollectionId())
-	return &FunctionResult{StatusCode: 404}, 0, errors.New("no available host for sequential collection")
+	return &FunctionResult{StatusCode: http.StatusNotFound}, 0, errors.New("no available host for sequential collection")
 }
 
 func (s *statefulPolicy) forwardRequest(dest string, scheduleRequest ScheduleRequest) (*FunctionResult, uint64, error) {

@@ -8,6 +8,7 @@ import (
 	"db"
 	"errors"
 	"server"
+	"sync"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 )
@@ -25,9 +26,9 @@ func SetCollectionsDiscovererCentralizedDBInstance(wrapped *CollectionsDiscovere
 	return c
 }
 
-func (c *CollectionsDiscovererCentralizedDB) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection]) {
+func (c *CollectionsDiscovererCentralizedDB) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection], mutex *sync.Mutex) {
 	logger.Info("Init collections discoverer as centralized DB...")
-	c.wrapped.Init(collections, serverInfo, server, dbInterface, logger, lruCache)
+	c.wrapped.Init(collections, serverInfo, server, dbInterface, logger, lruCache, mutex)
 	server.AddCustomRoute(c.wrapped.getSender().RemoteCollectionSetPath(), true, c.wrapped.handleIncomingRemoteCollectionSet(c.migrationManager).ServeHTTP)
 }
 

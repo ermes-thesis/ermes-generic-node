@@ -67,7 +67,7 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 		return nil
 	}
 	//verify threshold
-	lruFreeMemory, ok := a.partialView.NodeResourceUsage[childName]
+	lruFreeMemory, ok := a.partialView.GetNodeResourceUsage(childName)
 	if ok && lruFreeMemory.FreeRedisMemory <= a.sendingThreshold { //if not known, we assume we can send
 		a.log.Warnf("WEAK-POLICY, not sending weak collection %s to node %s due to memory threshold. Free redis memory: %f", collectionId, childName, lruFreeMemory.FreeRedisMemory)
 		return nil
@@ -75,7 +75,7 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 
 	//send collection
 	a.log.Info("WEAK-POLICY, handle request for a weak collection", "collection_id", collectionId, "to_node", childName)
-	weakCollection := a.partialView.KnownCollections[collectionId]
+	weakCollection, _ := a.partialView.GetCollection(collectionId)
 
 	res, groups, owner, groupsSequence, err := a.dbInterface.GetCollection(collectionId)
 	if err != nil {

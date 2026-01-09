@@ -16,7 +16,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"server"
-	"sync"
 	"testing"
 	"time"
 
@@ -90,10 +89,8 @@ func setupTestNode(t *testing.T, log logger.Logger, opts setupOptions) (*testNod
 	srv.ServerInfo.HostName = parsedURL.Host
 
 	// 6. DataManager Dependencies
-	collections := &shared.CollectionPartialView{
-		KnownCollections: map[string]shared.Collection{},
-		Mutex:            sync.Mutex{},
-	}
+
+	collections := shared.NewCollectionPartialView()
 	lruCache := lru.LRUCacheConstructor[shared.Collection](defaultLruConfig.Size)
 
 	// 7. DataManager

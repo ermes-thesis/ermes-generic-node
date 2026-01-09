@@ -211,12 +211,14 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 		leaderIp := msg.LeaderIp
 
 		//sync
-		c.collectionsPartialView.Mutex.Lock()
-		defer c.collectionsPartialView.Mutex.Unlock()
+		//c.collectionsPartialView.Mutex.Lock()
+		//defer c.collectionsPartialView.Mutex.Unlock()
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
 
 		c.log.Info("Processing new collection creation", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
 
-		_, exists := c.collectionsPartialView.KnownCollections[collectionId]
+		_, exists := c.collectionsPartialView.GetCollection(collectionId)
 		if exists {
 			c.log.Error("Duplicate collection ID detected. A collection with the same UUID already exists", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_id", collectionId, "message", fmt.Sprintf("%+v", msg))
 			http.Error(w, "Duplicate collection ID detected", http.StatusConflict)
@@ -251,15 +253,17 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 		}
 
 		// Process the new collection creation
+		var coll shared.Collection
 		if isStrong {
-			c.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, 0, true, false, leaderIp) // remote strong collection
+			coll = shared.NewStrongCollection(collectionId, 0, true, false, leaderIp) // remote strong collection
 		} else {
-			c.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, 0, true) // remote weak collection
+			coll = shared.NewWeakCollection(collectionId, 0, true) // remote weak collection
 		}
 
-		c.log.Debug("Adding message sender hostname to the Hosts directions for the collection instance in the current node", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "node_hostname", c.serverInfo.HostName, "added_hostname(sender)", senderIp, "current_known_hosts", c.collectionsPartialView.KnownCollections[collectionId].HostsId())
-		c.collectionsPartialView.KnownCollections[collectionId].AddHost(senderIp)
-		c.log.Debug("Host added to collection successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "updated_known_hosts", c.collectionsPartialView.KnownCollections[collectionId].HostsId())
+		c.log.Debug("Adding message sender hostname to the Hosts directions for the collection instance in the current node", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "node_hostname", c.serverInfo.HostName, "added_hostname(sender)", senderIp, "current_known_hosts", coll.HostsId())
+		coll.AddHost(senderIp)
+		c.log.Debug("Host added to collection successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "updated_known_hosts", coll.HostsId())
+		c.collectionsPartialView.SetCollection(collectionId, coll)
 
 		c.log.Info("New collection creation completed successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 		w.WriteHeader(http.StatusOK)

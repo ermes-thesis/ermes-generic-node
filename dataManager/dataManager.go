@@ -39,6 +39,7 @@ type DataManagerImp struct {
 
 	dbInterface db.GenericDB
 	serverInfo  server.ServerInfo
+	mutex       sync.Mutex
 }
 
 // Singleton pattern
@@ -63,13 +64,13 @@ func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalit
 			} else {
 				dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.SetCollectionsDiscovererCentralizedDBInstance(collectionsDiscoverer.GetCollectionsDiscovererInstance().(*collectionsDiscoverer.CollectionsDiscovererImp), m.migrationManager))
 			}
-			m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger.Component("migration_manager"))
+			m.migrationManager.Init(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger.Component("migration_manager"), &m.mutex)
 		} else {
 			dataManagerInstance.setCollectionsDiscoverer(collectionsDiscoverer.GetCollectionsDiscovererStatelessGenericNodeInstance())
 			dataManagerInstance.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererStatelessGenericNode).SetCentralizedDBAddress(config.CentralizedDBName)
-			m.migrationManager.StatelessInit(collections, config, lruConfig, serverInfo, lruCache, logger.Component("migration_manager"))
+			m.migrationManager.StatelessInit(collections, config, lruConfig, serverInfo, lruCache, logger.Component("migration_manager"), &m.mutex)
 		}
-		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger.Component("collections_discoverer"), lruCache)
+		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger.Component("collections_discoverer"), lruCache, &m.mutex)
 
 		m.dbInterface = dbInterface
 		m.serverInfo = serverInfo

@@ -18,7 +18,7 @@ import (
 
 type CollectionsDiscoverer interface {
 	IsCollectionLocallyPresent(collectionId string, consistencyClock uint64) (bool, shared.Collection, error)
-	Init(*shared.CollectionPartialView, server.ServerInfo, server.ServerType, db.GenericDB, logger.Logger, *lru.LRUCache[shared.Collection])
+	Init(*shared.CollectionPartialView, server.ServerInfo, server.ServerType, db.GenericDB, logger.Logger, *lru.LRUCache[shared.Collection], *sync.Mutex)
 
 	AccessRecords(collectionId string, dbFn func() (any, error), remoteFn func(addr string) (any, error)) (any, error)
 
@@ -41,6 +41,7 @@ type CollectionsDiscovererImp struct {
 	log                    logger.Logger
 	dbInterface            db.GenericDB
 	lruCache               *lru.LRUCache[shared.Collection]
+	mutex                  *sync.Mutex
 }
 
 // Singleton pattern
@@ -55,7 +56,7 @@ func GetCollectionsDiscovererInstance() CollectionsDiscoverer {
 	return collectionsDiscovererInstance
 }
 
-func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection]) {
+func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection], mutex *sync.Mutex) {
 	initOnce.Do(func() {
 		c.collectionsPartialView = collections
 		c.serverInfo = serverInfo
@@ -63,6 +64,7 @@ func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialVie
 		c.sender = sender.NewCollectionDiscovererSender(logger, server)
 		c.dbInterface = dbInterface
 		c.lruCache = lruCache
+		c.mutex = mutex
 
 		server.AddCustomRoute(c.sender.RemoteAccessPath(), true, c.handleIncomingRemoteAccess().ServeHTTP)
 		server.AddCustomRoute(c.sender.UpdatePropagationPath(), true, c.handleIncomingUpdatePropagation().ServeHTTP)
@@ -81,23 +83,21 @@ func (c *CollectionsDiscovererImp) getSender() sender.CollectionDiscovererSender
 // methods
 func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId string, consistencyClock uint64) (bool, shared.Collection, error) {
 	//sync
-	c.collectionsPartialView.Mutex.Lock()
-	defer c.collectionsPartialView.Mutex.Unlock()
+	//c.collectionsPartialView.Mutex.Lock()
+	//defer c.collectionsPartialView.Mutex.Unlock()
 
 	c.log.Info("IsCollectionLocallyPresent called", "collection_id", collectionId, "consistency_clock", consistencyClock)
 
 	//imp
-	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
+	collection, exists := c.collectionsPartialView.GetCollection(collectionId)
 	if !exists {
 		c.log.Info("Collection is not known by the current node", "collection_id", collectionId)
 		return false, nil, nil
 	}
-	if !collection.IsLocal() {
+	if localState, ok := collection.GetCollectionState().(*shared.LocalCollection); !ok {
 		c.log.Info("Collection known by the current node, but it's not local", "collection_id", collectionId, "consistency_clock", consistencyClock, "collection", fmt.Sprintf("%+v", collection))
 		return false, collection, nil
-	}
-
-	if collection.IsStrong() {
+	} else if collection.IsStrong() {
 		strongCollection := collection.(*shared.StrongCollection)
 		if strongCollection.ConsistencyClock < consistencyClock {
 			c.log.Warn("Outdated strong collection replica", "collection_id", collectionId, "provided_consistency_clock", consistencyClock, "collection", fmt.Sprintf("%+v", collection), "local_consistency_clock", strongCollection.ConsistencyClock)
@@ -105,7 +105,12 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 		} else if strongCollection.HasPostponedDecisionBehaviour() {
 			return true, collection, &ToMigrateError{Code: 423, Message: "Strong collection has postponed migration behaviour to execute, can't be used until migration is completed"}
 		}
-		collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
+		localState.CollectionLock.RLock()
+		if !collection.IsLocal() {
+			localState.CollectionLock.RUnlock()
+			c.log.Info("Collection became non-local while acquiring the lock", "collection_id", collectionId)
+			return false, collection, nil
+		}
 		c.log.Debug("LOCK: Locked in READ the sequential collection", "collection_id", collectionId)
 	}
 
@@ -144,48 +149,59 @@ func (c *CollectionsDiscovererImp) WeakCollectionRemoteRecordsAccess(hostId stri
 	return res, nil
 }
 
-// use generics to preserve type-safety, unfortunately generics are not supported for methods.
 func (c *CollectionsDiscovererImp) AccessRecords(
 	collectionId string,
 	dbFn func() (any, error),
 	remoteFn func(addr string) (any, error),
 ) (any, error) {
 	//sync
-	c.collectionsPartialView.Mutex.Lock()
+	//c.collectionsPartialView.Mutex.Lock()
 	c.log.Info("AccessRecords called", "collection_id", collectionId)
 	//imp
 
 	var zero any
-	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
+	collection, exists := c.collectionsPartialView.GetCollection(collectionId)
 	if !exists || (!collection.IsLocal() && len(collection.HostsId()) == 0) {
 		if c.serverInfo.Father == nil {
 			c.log.Warn("AccessRecords: Collection not known locally, no father to query. Collection DOES NOT exists", "collection_id", collectionId)
-			c.collectionsPartialView.Mutex.Unlock() // lock release
+			//c.collectionsPartialView.Mutex.Unlock() // lock release
 			return zero, errors.New("collection not found")
 		}
 		addr := c.serverInfo.Father.HostName
 
 		c.log.Debug("AccessRecords: delegating record access to father node", "collection_id", collectionId)
-		c.collectionsPartialView.Mutex.Unlock() // lock release
+		//c.collectionsPartialView.Mutex.Unlock() // lock release
 		return remoteFn(addr)
 	}
-	if collection.IsLocal() {
+	if localState, ok := collection.GetCollectionState().(*shared.LocalCollection); ok {
 		if !collection.IsStrong() {
-			collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-			defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
+			localState.CollectionLock.RLock()
+			defer localState.CollectionLock.RUnlock()
+
+			if !collection.IsLocal() {
+				c.log.Debug("AccessRecords: Collection became non-local while acquiring the lock", "collection_id", collectionId)
+				child := c.collectionsPartialView.GetClosestChild(collection.HostsId(), c.serverInfo)
+				//c.collectionsPartialView.Mutex.Unlock() // lock release
+				c.log.Debug("AccessRecords: Accessing remote child for eventual collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "child", child)
+				return remoteFn(child)
+			} else {
+				c.log.Debug("AccessRecords: Accessing local collection records", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+				//c.collectionsPartialView.Mutex.Unlock() // lock release
+				return dbFn()
+			}
 		}
 
 		c.log.Debug("AccessRecords: Accessing local collection records", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-		c.collectionsPartialView.Mutex.Unlock() // lock release
+		//c.collectionsPartialView.Mutex.Unlock() // lock release
 		return dbFn()
 	}
 	if collection.IsStrong() {
 		c.log.Error("AccessRecords: Attempted remote access to strong collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-		c.collectionsPartialView.Mutex.Unlock() // lock release
+		//c.collectionsPartialView.Mutex.Unlock() // lock release
 		return zero, errors.New("strong collection can't be accessed remotely")
 	}
 	child := c.collectionsPartialView.GetClosestChild(collection.HostsId(), c.serverInfo)
-	c.collectionsPartialView.Mutex.Unlock() // lock release
+	//c.collectionsPartialView.Mutex.Unlock() // lock release
 	c.log.Debug("AccessRecords: Accessing remote child for eventual collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "child", child)
 	return remoteFn(child)
 }
@@ -198,7 +214,7 @@ func (c *CollectionsDiscovererImp) updateRecord(
 ) (map[string]struct{}, error, bool) { //host, error, is collection locally stored
 	c.log.Info("UpdateRecord called", "collection_id", collectionId)
 
-	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
+	collection, exists := c.collectionsPartialView.GetCollection(collectionId)
 	var isStrong = false
 	if !exists {
 		//can't verify if collection is strong or weak, so just notify father
@@ -215,7 +231,8 @@ func (c *CollectionsDiscovererImp) updateRecord(
 		c.log.Info("UpdateRecord: Added father to collection hosts", "collection_id", collectionId, "father_hostname", addr)
 		return hosts, nil, false
 	}
-	if !collection.IsLocal() {
+	localState, ok := collection.GetCollectionState().(*shared.LocalCollection)
+	if !ok {
 		c.log.Debug("Collection to be updated is not local", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 		if collection.IsStrong() && isInitiator { //safety check
 			c.log.Error("UpdateRecord: Attempted remote update to strong collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
@@ -267,9 +284,14 @@ func (c *CollectionsDiscovererImp) updateRecord(
 	}
 
 	if !collection.IsStrong() {
-		collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
+		localState.CollectionLock.RLock()
 		c.log.Debug("LOCK: Eventual consistent collection locked in READ", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-		defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
+		defer localState.CollectionLock.RUnlock()
+
+		if !collection.IsLocal() {
+			c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+			return hosts, nil, false
+		}
 	}
 
 	memUsage, err := dbFn(isStrong) // update in local db
@@ -299,12 +321,16 @@ func (c *CollectionsDiscovererImp) updateRecord(
 func (c *CollectionsDiscovererImp) popolateUpdateSafetyCheck(saftyQueue shared.FunctionQueue, dbFn func(isStrong bool) (int64, error), update messages.UpdateMessage, hosts map[string]struct{}, collectionId string) {
 	saftyQueue.(*shared.FunctionQueueWithCounter).SetCounter(uint32(len(hosts)))
 	saftyQueue.AddFunction(func() {
-		c.collectionsPartialView.Mutex.Lock()
-		defer c.collectionsPartialView.Mutex.Unlock()
+		//c.collectionsPartialView.Mutex.Lock()
+		//defer c.collectionsPartialView.Mutex.Unlock()
 
-		collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
+		collection, exists := c.collectionsPartialView.GetCollection(collectionId)
 		//if I receive the collection during the update
 		if exists && collection.IsLocal() {
+			localState, ok := collection.GetCollectionState().(*shared.LocalCollection)
+			if !ok {
+				return
+			}
 			c.log.Debug("UpdateRecord: Executing postponed update for collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 			//if update older than the collection strong
 			var isStrong = false
@@ -315,8 +341,13 @@ func (c *CollectionsDiscovererImp) popolateUpdateSafetyCheck(saftyQueue shared.F
 				}
 			}
 			if !collection.IsStrong() {
-				collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-				defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
+				localState.CollectionLock.RLock()
+				defer localState.CollectionLock.RUnlock()
+
+				if !collection.IsLocal() {
+					c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+					return
+				}
 			}
 			memUsage, err := dbFn(isStrong) // update in local db
 			if err != nil {
@@ -343,7 +374,8 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 	var msgs = make(map[string]messages.CollectionUpdateMessages) // host -> message
 	var safetymap = make(map[string][]shared.FunctionQueue)       // host -> safetyQueue
 	//sync
-	c.collectionsPartialView.Mutex.Lock()
+	//c.collectionsPartialView.Mutex.Lock()
+	c.mutex.Lock()
 	//imp
 
 	//write or delete in db and prepare messages for future propagation on other hosts
@@ -456,7 +488,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 		}
 
 		// for each host that has the collection prepare the message
-		collection, exists := c.collectionsPartialView.KnownCollections[update.CollectionId]
+		collection, exists := c.collectionsPartialView.GetCollection(update.CollectionId)
 		for host := range hosts {
 			if exists && collection.GetCollectionState().IsCollectionBeingMigrated() && collection.GetCollectionState().IsCollectionBeingMigratedTo(host) {
 				copyMsg := update.Copy()
@@ -472,9 +504,14 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 					},
 					func() {
 						//TODO: refactor
-						collection, exists := c.collectionsPartialView.KnownCollections[update.CollectionId]
+						collection, exists := c.collectionsPartialView.GetCollection(update.CollectionId)
 						//if I receive the collection during the update
 						if exists && collection.IsLocal() {
+							localState, ok := collection.GetCollectionState().(*shared.LocalCollection)
+							if !ok {
+								return
+							}
+
 							c.log.Debug("UpdateRecord: Executing postponed update for collection", "collection_id", update.CollectionId, "collection", fmt.Sprintf("%+v", collection))
 							//if update older than the collection strong
 							var isStrong = false
@@ -485,8 +522,12 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 								}
 							}
 							if !collection.IsStrong() {
-								collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-								defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
+								localState.CollectionLock.RLock()
+								defer localState.CollectionLock.RUnlock()
+								if !collection.IsLocal() {
+									c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", update.CollectionId, "collection", fmt.Sprintf("%+v", collection))
+									return
+								}
 							}
 							memUsage, err := dbFn(isStrong) // update in local db
 							if err != nil {
@@ -521,7 +562,8 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 			}
 		}
 	}
-	c.collectionsPartialView.Mutex.Unlock() // lock release
+	//c.collectionsPartialView.Mutex.Unlock() // lock release
+	c.mutex.Unlock()
 
 	//propagate update to other hosts
 	for host, msg := range msgs {
@@ -538,7 +580,8 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 	var msgs = make(map[string]messages.CollectionGroupUpdateMessages) // host -> message
 	var safetymap = make(map[string][]shared.FunctionQueue)            // host -> safetyQueue
 	//sync
-	c.collectionsPartialView.Mutex.Lock()
+	//c.collectionsPartialView.Mutex.Lock()
+	c.mutex.Lock()
 
 	for _, update := range updates {
 		dbFn := func(isStrong bool) (int64, error) {
@@ -554,7 +597,8 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 		//write or delete in db
 		hosts, err, wasCollectionLocal := c.updateRecord(update.CollectionId, dbFn, isInitiator, &update)
 		if err != nil {
-			c.collectionsPartialView.Mutex.Unlock() // lock release
+			//c.collectionsPartialView.Mutex.Unlock() // lock release
+			c.mutex.Unlock()
 			c.log.Error("UpdateCollectionsGroupsAndPropagate: groups update failed", "collection_id", update.CollectionId, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
 			return err
 		}
@@ -568,7 +612,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 		}
 
 		// for each host that has the collection prepare the message
-		collection, exists := c.collectionsPartialView.KnownCollections[update.CollectionId]
+		collection, exists := c.collectionsPartialView.GetCollection(update.CollectionId)
 		for host := range hosts {
 			if exists && collection.GetCollectionState().IsCollectionBeingMigrated() && collection.GetCollectionState().IsCollectionBeingMigratedTo(host) {
 				copyMsg := update.Copy()
@@ -585,9 +629,14 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 					},
 					func() {
 						//TODO: refactor
-						collection, exists := c.collectionsPartialView.KnownCollections[update.CollectionId]
+						collection, exists := c.collectionsPartialView.GetCollection(update.CollectionId)
 						//if I receive the collection during the update
 						if exists && collection.IsLocal() {
+							localState, ok := collection.GetCollectionState().(*shared.LocalCollection)
+							if !ok {
+								return
+							}
+
 							c.log.Debug("UpdateRecord: Executing postponed update for collection", "collection_id", update.CollectionId, "collection", fmt.Sprintf("%+v", collection))
 							//if update older than the collection strong
 							var isStrong = false
@@ -598,8 +647,12 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 								}
 							}
 							if !collection.IsStrong() {
-								collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-								defer collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
+								localState.CollectionLock.RLock()
+								defer localState.CollectionLock.RUnlock()
+								if !collection.IsLocal() {
+									c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", update.CollectionId, "collection", fmt.Sprintf("%+v", collection))
+									return
+								}
 							}
 							memUsage, err := dbFn(isStrong) // update in local db
 							if err != nil {
@@ -635,7 +688,8 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 			}
 		}
 	}
-	c.collectionsPartialView.Mutex.Unlock() // lock release
+	//c.collectionsPartialView.Mutex.Unlock() // lock release
+	c.mutex.Unlock()
 
 	//propagate update to other hosts
 	for host, msg := range msgs {
@@ -650,12 +704,14 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong bool, skipUniquenessCheck bool) error {
 	c.log.Info("SetCollectionAndPropagate called. Processing collection creation", "collection_id", collectionId, "collection_name", collectionName, "records", fmt.Sprintf("%+v", records), "executing_user", userId, "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck)
 	//sync
-	c.collectionsPartialView.Mutex.Lock()
-	defer c.collectionsPartialView.Mutex.Unlock()
+	//c.collectionsPartialView.Mutex.Lock()
+	//defer c.collectionsPartialView.Mutex.Unlock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	//imp
 
 	//if collection  already exists return error
-	_, exists := c.collectionsPartialView.KnownCollections[collectionId]
+	_, exists := c.collectionsPartialView.GetCollection(collectionId)
 	if exists {
 		c.log.Error("Duplicate collection ID detected. A collection with the same UUID already exists", "collection_id", collectionId, "collection_name", collectionName, "records", fmt.Sprintf("%+v", records), "executing_user", userId, "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck)
 		return errors.New("collection already exists")
@@ -666,7 +722,7 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 	for _, group := range groups {
 		size += uint(len(group))
 	}
-	//frea space for collection
+	//free space for collection
 	if err := migrationManager.FreeSpaceToCreateCollection(size); err != nil {
 		c.log.Error("Failed to free space for the new collection", "collection_id", collectionId, "collection_name", collectionName, "records", fmt.Sprintf("%+v", records), "executing_user", userId, "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck, "error", err)
 		return err
@@ -732,10 +788,11 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 func (c *CollectionsDiscovererImp) RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, userId string, isInitiator bool, ignoredHostName string) error {
 	c.log.Info("RemoveCollectionAndPropagate called. Processing collection deletion", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
 	//sync
-	c.collectionsPartialView.Mutex.Lock()
+	//c.collectionsPartialView.Mutex.Lock()
+	c.mutex.Lock()
 	//imp
 
-	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
+	collection, exists := c.collectionsPartialView.GetCollection(collectionId)
 	if !exists {
 		if c.serverInfo.Father != nil && c.serverInfo.Father.HostName != ignoredHostName {
 			c.log.Debug("Propagating collection removal to father", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
@@ -749,12 +806,14 @@ func (c *CollectionsDiscovererImp) RemoveCollectionAndPropagate(collectionId str
 
 	if !collection.IsLocal() {
 		if collection.IsStrong() {
-			c.collectionsPartialView.Mutex.Unlock() // lock release
+			//c.collectionsPartialView.Mutex.Unlock() // lock release
+			c.mutex.Unlock()
 			c.log.Error("Cannot delete strong collection remotely", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
 			return errors.New("strong collection can't be removed remotely")
 		}
 
-		c.collectionsPartialView.Mutex.Unlock() // lock release
+		//c.collectionsPartialView.Mutex.Unlock() // lock release
+		c.mutex.Unlock()
 		c.log.Debug("Collection is known locally, but it is not stored locally. Propagating the deletion towards the direction where other replicas are stored", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups)
 		c.propagateRemoveCollection(collection, collectionId, groups, userId, ignoredHostName) //propagate to other hosts
 		return nil
@@ -770,14 +829,15 @@ func (c *CollectionsDiscovererImp) RemoveCollectionAndPropagate(collectionId str
 		return &shared.UnauthorizedError{}
 	}
 
-	delete(c.collectionsPartialView.KnownCollections, collectionId) //remove from local view
-	err = c.dbInterface.DeleteCollection(collectionId)              //remove from local db
+	c.collectionsPartialView.RemoveCollection(collectionId)
+	err = c.dbInterface.DeleteCollection(collectionId) //remove from local db
 	if err != nil {
 		c.log.Error("Failed to delete the local collection from DB", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
 	}
 	migrationManager.RemoveCollectionFromLru(collectionId) //remove from lru
 
-	c.collectionsPartialView.Mutex.Unlock() // lock release
+	//c.collectionsPartialView.Mutex.Unlock() // lock release
+	c.mutex.Unlock()
 	c.log.Debug("Collection has been removed locally. Propagating the deletion towards the direction where other replicas are stored", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups)
 	c.propagateRemoveCollection(collection, collectionId, groups, userId, ignoredHostName) //propagate to other hosts
 
@@ -803,11 +863,11 @@ func (c *CollectionsDiscovererImp) propagateRemoveCollection(collection shared.C
 
 func (c *CollectionsDiscovererImp) GetCollectionVectorClockValue(collectionId string) (uint64, error) {
 	//sync
-	c.collectionsPartialView.Mutex.Lock()
-	defer c.collectionsPartialView.Mutex.Unlock()
+	//c.collectionsPartialView.Mutex.Lock()
+	//defer c.collectionsPartialView.Mutex.Unlock()
 
 	//imp
-	collection, exists := c.collectionsPartialView.KnownCollections[collectionId]
+	collection, exists := c.collectionsPartialView.GetCollection(collectionId)
 	if !exists {
 		return 0, errors.New("collection not found")
 	}

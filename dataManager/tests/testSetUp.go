@@ -15,6 +15,7 @@ import (
 	"net/http"
 	info "server"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -67,10 +68,7 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
 	server.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-new-collection", mock.Anything).Return(&http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("response"))}, nil).Maybe()
 
-	collections := &shared.CollectionPartialView{
-		KnownCollections:  make(map[string]shared.Collection),
-		NodeResourceUsage: make(map[string]shared.NodeStateInfo),
-	}
+	collections := shared.NewCollectionPartialView()
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{
 		HostName:       "localhost:0000",
@@ -90,7 +88,7 @@ func DataManagerTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.L
 	return migrationManagerConfig, lurConfig, collections, serverInfo, &lruCache, db, server
 }
 
-func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
+func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType, *sync.Mutex) {
 	migrationManagerConfig := config.MigrationManagerConfig{
 		IdleTimeoutMs:                  1000000000000000000,
 		LeaderThreshold:                0,
@@ -114,10 +112,7 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
 	server.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), mock.AnythingOfType("string"), mock.Anything).Return(200, nil).Maybe()
 
-	collections := &shared.CollectionPartialView{
-		KnownCollections:  make(map[string]shared.Collection),
-		NodeResourceUsage: make(map[string]shared.NodeStateInfo),
-	}
+	collections := shared.NewCollectionPartialView()
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{
 		HostName:       "localhost:0000",
@@ -134,10 +129,10 @@ func TestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *
 	}
 
 	SetupGetMemoryStatsMock(db, server)
-	return migrationManagerConfig, lurConfig, collections, serverInfo, &lruCache, db, server
+	return migrationManagerConfig, lurConfig, collections, serverInfo, &lruCache, db, server, &sync.Mutex{}
 }
 
-func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType) {
+func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConfig, *shared.CollectionPartialView, info.ServerInfo, *lru.LRUCache[shared.Collection], *mockDb.GenericDB, *mockServer.ServerType, *sync.Mutex) {
 	migrationManagerConfig := config.MigrationManagerConfig{
 		IdleTimeoutMs:                  1000000000000000000,
 		LeaderThreshold:                0,
@@ -170,10 +165,7 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	server := mockServer.NewServerType(t)
 	server.On("AddCustomRoute", mock.AnythingOfType("string"), mock.AnythingOfType("bool"), mock.AnythingOfType("http.HandlerFunc")).Return(nil).Maybe()
 
-	collections := &shared.CollectionPartialView{
-		KnownCollections:  make(map[string]shared.Collection),
-		NodeResourceUsage: make(map[string]shared.NodeStateInfo),
-	}
+	collections := shared.NewCollectionPartialView()
 	lruCache := lru.LRUCacheConstructor[shared.Collection](lurConfig.Size)
 	serverInfo := info.ServerInfo{
 		HostName:       "localhost:0000",
@@ -190,5 +182,5 @@ func CycleTestSetUp(t *testing.T) (config.MigrationManagerConfig, config.LruConf
 	}
 
 	SetupGetMemoryStatsMock(db, server)
-	return migrationManagerConfig, lurConfig, collections, serverInfo, &lruCache, db, server
+	return migrationManagerConfig, lurConfig, collections, serverInfo, &lruCache, db, server, &sync.Mutex{}
 }

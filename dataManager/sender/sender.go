@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"server"
+	"sync"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 )
@@ -47,9 +48,10 @@ type MigrationManagerSenderImpl struct {
 	log         logger.Logger
 	dbInterface db.GenericDB
 	lruCache    *lru.LRUCache[shared.Collection]
+	mutex       *sync.Mutex
 }
 
-func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo, partialView *shared.CollectionPartialView, dbInterface db.GenericDB, lruCache *lru.LRUCache[shared.Collection]) MigrationManagerSender {
+func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo, partialView *shared.CollectionPartialView, dbInterface db.GenericDB, lruCache *lru.LRUCache[shared.Collection], mutex *sync.Mutex) MigrationManagerSender {
 	return &MigrationManagerSenderImpl{
 		server:      server,
 		log:         logger,
@@ -57,6 +59,7 @@ func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, s
 		partialView: partialView,
 		dbInterface: dbInterface,
 		lruCache:    lruCache,
+		mutex:       mutex,
 	}
 }
 
@@ -92,8 +95,8 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		code, err := s.server.SendGenericHTTPRequest(destination, repoPath, msg)
 
 		//sync
-		s.partialView.Mutex.Lock()
-		defer s.partialView.Mutex.Unlock()
+		s.mutex.Lock()
+		defer s.mutex.Unlock()
 
 		//handle errors
 		if err != nil || code != http.StatusOK {
@@ -101,10 +104,10 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 				s.log.Warnf("SENDER , Collection refused from %s (%d), for collection %s", destination, code, collection.CollectionId())
 
 				//stop sending to this node, at least until next gossip
-				nodeInfo, ok := s.partialView.NodeResourceUsage[destination]
-				if ok {
+				nodeInfo, exists := s.partialView.GetNodeResourceUsage(destination)
+				if exists {
 					nodeInfo.FreeRedisMemory = 0.0
-					s.partialView.NodeResourceUsage[destination] = nodeInfo
+					s.partialView.SetNodeResourceUsage(destination, nodeInfo)
 				}
 
 				s.sendRemoteCollectionErrorHandler(destination, collection, sendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
@@ -123,7 +126,7 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		//if collection not present in subtree and no more postponed updates
 		if isMigration && len(collection.HostsId()) == 0 && !collection.IsLocal() /* && !collection.GetCollectionState().IsCollectionBeingMigrated() */ {
 			//remove collection from partial view
-			delete(s.partialView.KnownCollections, collection.CollectionId())
+			s.partialView.RemoveCollection(collection.CollectionId())
 		}
 	}()
 }
@@ -164,8 +167,8 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 			}
 		}
 
-		collection.SetToLocal(collectionSize)                                  // set collection back to local
-		s.partialView.KnownCollections[collection.CollectionId()] = collection // add back to known collections
+		collection.SetToLocal(collectionSize)                              // set collection back to local
+		s.partialView.SetCollection(collection.CollectionId(), collection) // add back to known collections
 		s.log.Info("SENDER: Migration failed, set collection back to local", "collectionId", collection.CollectionId())
 
 	}

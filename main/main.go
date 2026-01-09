@@ -60,10 +60,7 @@ func run(ctx context.Context, configPath string) error {
 	}
 
 	//node set up
-	collections := &dataManagerShared.CollectionPartialView{
-		KnownCollections:  make(map[string]dataManagerShared.Collection),
-		NodeResourceUsage: make(map[string]dataManagerShared.NodeStateInfo),
-	}
+	collections := dataManagerShared.NewCollectionPartialView()
 	err = collections.RestoreInfoFromSettings(cfg.Collections, *serverInfo)
 	if err != nil {
 		return fmt.Errorf("error restoring collections from settings: %w", err)

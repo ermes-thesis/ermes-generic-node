@@ -9,6 +9,7 @@ import (
 	"db"
 	"errors"
 	"server"
+	"sync"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 )
@@ -27,7 +28,7 @@ func GetCollectionsDiscovererStatelessGenericNodeInstance() CollectionsDiscovere
 	return collectionsDiscovererInstance
 }
 
-func (c *CollectionsDiscovererStatelessGenericNode) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection]) {
+func (c *CollectionsDiscovererStatelessGenericNode) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection], mutex *sync.Mutex) {
 	initOnce.Do(func() {
 		c.log = logger
 		c.serverInfo = serverInfo

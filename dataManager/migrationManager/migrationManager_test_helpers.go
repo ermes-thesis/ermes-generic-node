@@ -28,16 +28,16 @@ func (m *MigrationManagerImp) GetLru() *lru.LRUCache[shared.Collection] {
 	return m.lruCache
 }
 
-func NewMigrationManagerForTest(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger logger.Logger) MigrationManager {
+func NewMigrationManagerForTest(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger logger.Logger, mutex *sync.Mutex) MigrationManager {
 	m := &MigrationManagerImp{
 		config:                 config,
 		serverInfo:             serverInfo,
 		log:                    logger,
 		collectionsPartialView: collections,
-		collectionsLock:        &collections.Mutex,
+		mutex:                  mutex,
 		lruCache:               lruCache,
 		dbInterface:            dbInterface,
-		sender:                 sender.NewMigrationManagerSender(logger, server, serverInfo, collections, dbInterface, lruCache),
+		sender:                 sender.NewMigrationManagerSender(logger, server, serverInfo, collections, dbInterface, lruCache, mutex),
 	}
 	server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages().ServeHTTP)
 	server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection().ServeHTTP)
@@ -49,7 +49,7 @@ func NewMigrationManagerForTest(collections *shared.CollectionPartialView, penal
 	if strongPolicy.GetPolicy(config.StrongPolicy) == strongPolicy.DONOTHINGPOLICY {
 		m.StrongCollectionPolicy = strongPolicy.NewDoNothingPolicy()
 	} else {
-		m.StrongCollectionPolicy = strongPolicy.NewDefaultPolicy(config, lruConfig, collections, penalityFunc, dbInterface, serverInfo, m.sender, m.lruCache, m.log)
+		m.StrongCollectionPolicy = strongPolicy.NewDefaultPolicy(config, lruConfig, collections, penalityFunc, dbInterface, serverInfo, m.sender, m.lruCache, m.log, mutex)
 	}
 
 	if weakpolicy.GetPolicy(config.WeakPolicy) == weakpolicy.DONOTHINGPOLICY {

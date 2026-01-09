@@ -20,7 +20,7 @@ func ResetSingleton() {
 	initOnce = sync.Once{}
 }
 
-func NewCollectionsDiscovererForTest(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection]) CollectionsDiscoverer {
+func NewCollectionsDiscovererForTest(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection], mutex *sync.Mutex) CollectionsDiscoverer {
 	c := &CollectionsDiscovererImp{
 		collectionsPartialView: collections,
 		serverInfo:             serverInfo,
@@ -28,6 +28,7 @@ func NewCollectionsDiscovererForTest(collections *shared.CollectionPartialView, 
 		log:                    logger,
 		dbInterface:            dbInterface,
 		lruCache:               lruCache,
+		mutex:                  mutex,
 	}
 
 	server.AddCustomRoute(c.sender.RemoteAccessPath(), true, c.handleIncomingRemoteAccess().ServeHTTP)

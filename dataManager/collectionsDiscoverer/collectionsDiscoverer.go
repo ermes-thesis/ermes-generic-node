@@ -361,26 +361,26 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 					return 0, &shared.UnauthorizedError{}
 				}
 
-				if isStrong {
-					err = c.dbInterface.DeleteRecords(update.CollectionId, "", update.RecordNames...)
-					if err != nil {
-						c.log.Error("Failed to delete strong collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
-						return 0, err
-					}
-					return 0, nil
-				}
-
 				memUsage, err := c.dbInterface.GetRecordsMemoryUsage(update.CollectionId, update.RecordNames...)
 				if err != nil {
 					c.log.Error("Failed to get records memory usage after update", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
 					return 0, err
 				}
 
-				err = c.dbInterface.DeleteRecords(update.CollectionId, strconv.FormatInt(update.Time, 10)+update.UpdateHostIp, update.RecordNames...)
-				if err != nil {
-					c.log.Error("Failed to delete eventual collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
-					return 0, err
+				if isStrong {
+					err = c.dbInterface.DeleteRecords(update.CollectionId, "", update.RecordNames...)
+					if err != nil {
+						c.log.Error("Failed to delete strong collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						return 0, err
+					}
+				} else {
+					err = c.dbInterface.DeleteRecords(update.CollectionId, strconv.FormatInt(update.Time, 10)+update.UpdateHostIp, update.RecordNames...)
+					if err != nil {
+						c.log.Error("Failed to delete eventual collection's records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						return 0, err
+					}
 				}
+
 				return -int64(memUsage), nil
 			}
 		} else {

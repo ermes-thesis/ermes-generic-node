@@ -3,7 +3,7 @@ package scheduler
 import (
 	"fmt"
 
-	"github.com/bytecodealliance/wasmtime-go/v37"
+	"github.com/bytecodealliance/wasmtime-go/v40"
 	"github.com/ermes-thesis/ermes-common/wasm-pool"
 	"github.com/ermes-thesis/ermes-common/wasm-pool/adapter"
 )

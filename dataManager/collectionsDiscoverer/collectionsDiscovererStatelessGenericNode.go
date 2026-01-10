@@ -1,6 +1,7 @@
 package collectionsDiscoverer
 
 import (
+	"dataManager/lru"
 	"dataManager/messages"
 	"dataManager/migrationManager"
 	"dataManager/sender"
@@ -26,7 +27,7 @@ func GetCollectionsDiscovererStatelessGenericNodeInstance() CollectionsDiscovere
 	return collectionsDiscovererInstance
 }
 
-func (c *CollectionsDiscovererStatelessGenericNode) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger) {
+func (c *CollectionsDiscovererStatelessGenericNode) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection]) {
 	initOnce.Do(func() {
 		c.log = logger
 		c.serverInfo = serverInfo
@@ -77,12 +78,12 @@ func (c *CollectionsDiscovererStatelessGenericNode) UpdateCollectionsRecordsAndP
 		UserId:   userId,
 	}
 
-	c.sender.PropagateUpdate(c.centralizedDBAddress, msg)
+	c.sender.SyncPropagateUpdate(c.centralizedDBAddress, msg, make([]shared.FunctionQueue, 0))
 	return nil
 }
 
 func (c *CollectionsDiscovererStatelessGenericNode) UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdateMessage, isInitiator bool, ignoredHostName string) error {
-	c.sender.PropagateGroupUpdate(c.centralizedDBAddress, updates)
+	c.sender.SyncPropagateGroupUpdate(c.centralizedDBAddress, updates, make([]shared.FunctionQueue, 0))
 	return nil
 }
 

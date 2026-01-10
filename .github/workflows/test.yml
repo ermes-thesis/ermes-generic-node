@@ -14,12 +14,12 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: 'ermes-generic-node'
 
       - name: Checkout ermes-common
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: 'ermes-thesis/ermes-common'
           token: '${{ secrets.READ_TOKEN }}'
@@ -32,9 +32,9 @@ jobs:
         run: wasmedge --version
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: "1.24.4"
+          go-version: "1.25.5"
           cache-dependency-path: "**/go.sum"
 
       - name: Install mockery

@@ -3,11 +3,12 @@ package caches
 import (
 	"config"
 	"fmt"
+	"slices"
+
 	"github.com/ermes-thesis/ermes-common/caches"
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 	"golang.org/x/sync/singleflight"
-	"slices"
 )
 
 type FunctionCache interface {
@@ -20,40 +21,18 @@ type FunctionCacheImpl struct {
 	Templates        *TemplatesCache
 	MetadataBinaries *caches.MetadataBinaryCache
 	LatestVersions   *caches.BaseCache[string]
-	fetcher          caches.Fetcher[*FunctionBundle]
+	fetcher          caches.Fetcher[*caches.FunctionBundle]
 	group            singleflight.Group
 	log              logger.Logger
 }
 
-type FunctionBundle struct {
-	Binary    []byte
-	Metadata  model.FunctionMetadata
-	Templates map[string]model.QueryTemplate
-}
-
-func (f FunctionBundle) String() string {
-	displayBytes := f.Binary
-	truncated := false
-	if len(displayBytes) > 30 {
-		displayBytes = displayBytes[:30]
-		truncated = true
-	}
-
-	binStr := fmt.Sprintf("%v", displayBytes)
-	if truncated {
-		binStr = fmt.Sprintf("%s...(truncated, total %d bytes)", binStr, len(f.Binary))
-	}
-
-	return fmt.Sprintf("{Binary:%s Metadata:%+v Templates:%+v}", binStr, f.Metadata, f.Templates)
-}
-
-func NewFunctionCache(config config.FunctionsCacheConfig, fetcher caches.Fetcher[*FunctionBundle], log logger.Logger) (*FunctionCacheImpl, error) {
+func NewFunctionCache(config config.FunctionsCacheConfig, fetcher caches.Fetcher[*caches.FunctionBundle], log logger.Logger) (*FunctionCacheImpl, error) {
 	tmplCache, err := NewTemplatesCache(config.TemplateCache)
 	if err != nil {
 		log.Error("Failed to create template cache", "config", fmt.Sprintf("%+v", config), "fetcher", fmt.Sprintf("%+v", fetcher), "error", err)
 		return nil, fmt.Errorf("error creating template cache: %v", err)
 	}
-	binCache, err := caches.NewMetadataBinaryCache(config.BinaryCache)
+	binCache, err := caches.NewMetadataBinaryCache(config.BinaryCache, log)
 	if err != nil {
 		log.Error("Failed to create metadata&binary cache", "config", fmt.Sprintf("%+v", config), "fetcher", fmt.Sprintf("%+v", fetcher), "error", err)
 		return nil, fmt.Errorf("error creating binary cache: %v", err)
@@ -81,7 +60,7 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret str
 		log.Error("Failed to create template cache", "config", fmt.Sprintf("%+v", config), "ermes_secret", ermesSecret, "function_registry_address", config.FunctionRegistry.Address, "function_registry_port", "error", err)
 		return nil, fmt.Errorf("error creating template cache: %v", err)
 	}
-	binCache, err := caches.NewMetadataBinaryCache(config.BinaryCache)
+	binCache, err := caches.NewMetadataBinaryCache(config.BinaryCache, log)
 	if err != nil {
 		log.Error("Failed to create metadata&binary cache", "config", fmt.Sprintf("%+v", config), "ermes_secret", ermesSecret, "function_registry_address", config.FunctionRegistry.Address, "function_registry_port", "error", err)
 		return nil, fmt.Errorf("error creating binary cache: %v", err)
@@ -96,7 +75,7 @@ func NewDefaultFunctionCache(config config.FunctionsCacheConfig, ermesSecret str
 		Templates:        tmplCache,
 		MetadataBinaries: binCache,
 		LatestVersions:   latest,
-		fetcher:          caches.NewRemoteBundleFetcher[FunctionBundle](fmt.Sprintf("http://%s:%s/retrieve-function", config.FunctionRegistry.Address, config.FunctionRegistry.Port), ermesSecret),
+		fetcher:          caches.NewRemoteBundleFetcher[caches.FunctionBundle](fmt.Sprintf("http://%s:%s/retrieve-function", config.FunctionRegistry.Address, config.FunctionRegistry.Port), ermesSecret),
 		group:            singleflight.Group{},
 		log:              log,
 	}, nil
@@ -242,20 +221,24 @@ func (f *FunctionCacheImpl) GetMetadata(functionName string, functionVersion str
 	return &fnBundle.Metadata, err
 }
 
-func (f *FunctionCacheImpl) getSnapshot(functionName string, functionVersion string, want string) (*FunctionBundle, error) {
+func (f *FunctionCacheImpl) getSnapshot(functionName string, functionVersion string, want string) (*caches.FunctionBundle, error) {
 	f.log.Debug("Creating cache snapshot", "fn_name", functionName, "fn_version", functionVersion, "part_wanted", want)
 
 	switch want {
 	case "metadata":
 		if meta, ok := f.MetadataBinaries.Get(functionName, functionVersion); ok {
-			f.log.Debug("Returning metadata snapshot", "fn_name", functionName, "fn_version", functionVersion, "metadata", fmt.Sprintf("%+v", meta))
-			return &FunctionBundle{Metadata: meta}, nil
+			if f.log.Enabled(logger.DebugLevel) {
+				f.log.Debug("Returning metadata snapshot", "fn_name", functionName, "fn_version", functionVersion, "metadata", fmt.Sprintf("%+v", meta))
+			}
+			return &caches.FunctionBundle{Metadata: meta}, nil
 		}
 
 	case "binary":
-		if bin, _, okBin, err := f.MetadataBinaries.GetWithBinary(functionName, functionVersion); okBin && len(bin) > 0 {
-			f.log.Debug("Returning binary snapshot", "fn_name", functionName, "fn_version", functionVersion, "binary", slices.Clone(bin[:min(len(bin), 30)]))
-			return &FunctionBundle{Binary: bin}, err
+		if bin, _, okBin, err := f.MetadataBinaries.GetWithBinary(functionName, functionVersion); okBin && bin != nil {
+			if f.log.Enabled(logger.DebugLevel) {
+				f.log.Debug("Returning binary snapshot", "fn_name", functionName, "fn_version", functionVersion, "binary", slices.Clone(bin[:min(len(bin), 30)]))
+			}
+			return &caches.FunctionBundle{Binary: bin}, err
 		}
 
 	case "template":
@@ -271,8 +254,10 @@ func (f *FunctionCacheImpl) getSnapshot(functionName string, functionVersion str
 				}
 			}
 			if all {
-				f.log.Debug("Returning templates snapshot", "fn_name", functionName, "fn_version", functionVersion, "templates", fmt.Sprintf("%+v", tmpls))
-				return &FunctionBundle{Templates: tmpls}, nil
+				if f.log.Enabled(logger.DebugLevel) {
+					f.log.Debug("Returning templates snapshot", "fn_name", functionName, "fn_version", functionVersion, "templates", fmt.Sprintf("%+v", tmpls))
+				}
+				return &caches.FunctionBundle{Templates: tmpls}, nil
 			}
 		}
 	default:
@@ -284,43 +269,73 @@ func (f *FunctionCacheImpl) getSnapshot(functionName string, functionVersion str
 	return nil, nil
 }
 
-func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*FunctionBundle, error) {
+func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*caches.FunctionBundle, error) {
 	f.log.Debug("Resolving latest", "fn_name", functionName, "part_wanted", want)
 
 	cachedVersion, found, expired := f.LatestVersions.GetWithStatus(functionName)
 	f.log.Debug("Search in latest versions cache results", "fn_name", functionName, "retrieved_cached_version", cachedVersion, "expired", expired)
-	bundle, err := f.getSnapshot(functionName, cachedVersion, want)
-	if err != nil {
-		f.log.Error("Failed to get snapshot", "fn_name", functionName, "part_wanted", want, "error", err)
-		return nil, err
+
+	var bundle *caches.FunctionBundle
+	var err error
+	if found {
+		bundle, err = f.getSnapshot(functionName, cachedVersion, want)
+		if err != nil {
+			f.log.Error("Failed to get snapshot", "fn_name", functionName, "part_wanted", want, "error", err)
+			return nil, err
+		}
 	}
 
-	if bundle == nil {
+	// Cache Hit (Fast Path)
+	// We found the latest version mapping, the data exists in the cache, and it's NOT expired
+	if found && bundle != nil && !expired {
+		f.log.Debug("Latest version found in cache, and it's NOT expired", "fn_name", functionName, "part_wanted", want)
+		return bundle, nil
+	}
+
+	// From this point onwards, the possible variable relevant values combinations are:
+	// - (found, expired, bundle) == (true, true, != nil)	-> Latest ver. mapping found, it's expired, and we have cached data
+	// - (found, expired, bundle) == (true, true, nil)		-> Latest ver. mapping found, it's expired but data was evicted (only possible if TTL is active for MetadataBinaries cache)
+	// - (found, expired, bundle) == (true, false, nil)		-> Latest ver. mapping found, NOT expired but data was evicted
+	// - (found, expired, bundle) == (false, false, nil)	-> Latest ver. mapping NOT found, we cannot possibly have cached data
+
+	key := functionName + "@latest"
+	fetched, err, _ := f.group.Do(key, func() (interface{}, error) {
 		f.log.Debug("Cache miss: Missing latest version function bundle", "fn_name", functionName, "part_wanted", want)
-		fetchedBundle, err := f.fetcher.Fetch(functionName, "latest")
+
+		// Cold Start (If found == false, we reach this branch) OR Data Evicted
+		// We have no valid data in the cache, so we must perform a fetch
+		if bundle == nil {
+			// From this point onwards, the possible variable relevant values combinations are:
+			// - (found, expired, bundle) == (true, true, nil)		-> Latest ver. mapping found, it's expired but data was evicted (only possible if TTL is active for MetadataBinaries cache)
+			// - (found, expired, bundle) == (true, false, nil)		-> Latest ver. mapping found, NOT expired but data was evicted
+			// - (found, expired, bundle) == (false, false, nil)	-> Latest ver. mapping NOT found, we cannot possibly have cached data
+			fetchedBundle, err := f.fetcher.Fetch(functionName, "latest")
+			if err != nil {
+				f.log.Error("Failed to fetch latest bundle", "fn_name", functionName, "part_wanted", want, "error", err)
+				return nil, err
+			}
+
+			f.log.Debug("Function bundle fetched correctly, proceeding to store it in the caches", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+			f.LatestVersions.Set(functionName, fetchedBundle.Metadata.Version)
+			err = f.store(fetchedBundle)
+			if err != nil {
+				f.log.Error("Failed to store function bundle", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle), "error", err)
+				return nil, err
+			}
+
+			f.log.Debug("Function bundle stored successfully", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+			return fetchedBundle, nil
+		}
+
+		// From this point onwards, the possible variable relevant values combinations are:
+		// - (found, expired, bundle) == (true, true, != nil)	-> Latest ver. mapping found, it's expired, and we have cached data
+
+		// We have a candidate version, but it is expired. We try a "Conditional Fetch" to see if it's still current
+		fetchedBundle, err := f.fetcher.FetchLatest(functionName, cachedVersion)
 		if err != nil {
 			f.log.Error("Failed to fetch latest bundle", "fn_name", functionName, "part_wanted", want, "error", err)
 			return nil, err
 		}
-
-		f.log.Debug("Function bundle fetched correctly, proceeding to store it in the caches", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
-		f.LatestVersions.Set(functionName, fetchedBundle.Metadata.Version)
-		err = f.store(fetchedBundle)
-		if err != nil {
-			f.log.Error("Failed to store function bundle", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle), "error", err)
-			return nil, err
-		}
-
-		f.log.Debug("Function bundle stored successfully", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
-		return fetchedBundle, nil
-	} else {
-		if found && !expired {
-			f.log.Debug("Latest version found in cache, and it's NOT expired", "fn_name", functionName, "part_wanted", want)
-			return bundle, nil
-		}
-
-		f.log.Debug("Latest version found in cache but it's expired. Refreshing it in the cache", "fn_name", functionName, "part_wanted", want)
-		fetchedBundle, err := f.fetcher.FetchLatest(functionName, cachedVersion)
 
 		if fetchedBundle != nil {
 			f.log.Debug("Function bundle fetched correctly, proceeding to store it in the caches", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
@@ -335,13 +350,20 @@ func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*FunctionB
 			return fetchedBundle, nil
 		}
 
-		// refresh latest cache
+		// Latest version hasn't changed. Refresh TTL and return existing bundle
+		f.log.Debug("Version not changed, refreshing TTL", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
 		f.LatestVersions.Set(functionName, cachedVersion)
 		return bundle, err
+	})
+
+	if err != nil {
+		f.log.Error("Failed to fetch bundle", "fn_name", functionName, "fn_version", "latest", "want", want, "error", err)
+		return nil, err
 	}
+	return fetched.(*caches.FunctionBundle), nil
 }
 
-func (f *FunctionCacheImpl) store(bundle *FunctionBundle) error {
+func (f *FunctionCacheImpl) store(bundle *caches.FunctionBundle) error {
 	f.log.Debug("Storing bundle in caches", "fn_bundle", fmt.Sprintf("%+v", bundle))
 	for name, template := range bundle.Templates {
 		f.Templates.Set(name, template)
@@ -353,7 +375,7 @@ func (f *FunctionCacheImpl) store(bundle *FunctionBundle) error {
 	return nil
 }
 
-func (f *FunctionCacheImpl) fetchAndStore(functionName string, functionVersion string) (*FunctionBundle, error) {
+func (f *FunctionCacheImpl) fetchAndStore(functionName string, functionVersion string) (*caches.FunctionBundle, error) {
 	f.log.Debug("Fetching bundle and storing function bundle", "fn_name", functionName, "fn_version", functionVersion)
 
 	if functionVersion == "latest" {
@@ -388,5 +410,5 @@ func (f *FunctionCacheImpl) fetchAndStore(functionName string, functionVersion s
 		f.log.Error("Failed to fetch bundle", "fn_name", functionName, "fn_version", functionVersion, "error", err)
 		return nil, err
 	}
-	return fetchedValue.(*FunctionBundle), nil
+	return fetchedValue.(*caches.FunctionBundle), nil
 }

@@ -2,7 +2,6 @@ package migrationManager
 
 import (
 	"dataManager/messages"
-	shared "dataManager/shared"
 )
 
 type policyUpdateStrategy interface {
@@ -12,7 +11,7 @@ type policyUpdateStrategy interface {
 
 type noUpdateStrategy struct{}
 
-func NewNoUpdateStrategy() policyUpdateStrategy {
+func newNoUpdateStrategy() policyUpdateStrategy {
 	return &noUpdateStrategy{}
 }
 
@@ -23,7 +22,7 @@ func (n noUpdateStrategy) updateCollectionsLatestUsage(collections []string, m *
 
 type ermesPolicyUpdateStrategy struct{}
 
-func NewErmesPolicyUpdateStrategy() policyUpdateStrategy {
+func newErmesPolicyUpdateStrategy() policyUpdateStrategy {
 	return &ermesPolicyUpdateStrategy{}
 }
 
@@ -38,7 +37,10 @@ func (e ermesPolicyUpdateStrategy) updateCollectionsLatestUsage(collections []st
 	for _, c := range collections {
 		collection := m.collectionsPartialView.KnownCollections[c]
 		if collection != nil && collection.IsLocal() {
-			m.updateLru(c, uint(collection.GetCollectionState().(*shared.LocalCollection).Size()))
+			err := m.lruCache.MoveToFront(c)
+			if err != nil {
+				m.log.Warn("Error moving to front in LRU cache", "collection_id", c, "error", err)
+			}
 		}
 	}
 }

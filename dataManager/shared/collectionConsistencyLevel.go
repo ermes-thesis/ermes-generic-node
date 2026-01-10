@@ -19,6 +19,11 @@ type Collection interface {
 	GetCollectionState() CollectionState
 }
 
+type PostponedDecision struct {
+	SendFunc   func()
+	DeleteFunc func()
+}
+
 // consistency levels
 
 // StrongCollection strong collection
@@ -29,7 +34,7 @@ type StrongCollection struct {
 	LeaderId                   string
 	WriteMutex                 *sync.Mutex
 	ConsistencyClock           uint64
-	postponedDecisionBehaviour func()
+	postponedDecisionBehaviour PostponedDecision
 }
 
 func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLeader bool, leaderId string) Collection {
@@ -41,7 +46,7 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 			IsLeader:                   false,
 			LeaderId:                   leaderId,
 			WriteMutex:                 &sync.Mutex{},
-			postponedDecisionBehaviour: nil,
+			postponedDecisionBehaviour: PostponedDecision{},
 		}
 	}
 	c := &StrongCollection{
@@ -49,7 +54,7 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 		collectionState:            NewLocalCollection(size, hosts),
 		IsLeader:                   isLeader,
 		WriteMutex:                 &sync.Mutex{},
-		postponedDecisionBehaviour: nil,
+		postponedDecisionBehaviour: PostponedDecision{},
 	}
 	if isLeader {
 		c.LeaderId = leaderId
@@ -57,28 +62,33 @@ func NewStrongCollection(collectionId string, size uint64, isRemote bool, isLead
 	return c
 }
 
-func (s *StrongCollection) AddPostponedDecisionBehaviour(f func()) {
-	oldBehaviour := s.postponedDecisionBehaviour
-	if oldBehaviour == nil {
-		s.postponedDecisionBehaviour = f
-	} else {
-		s.postponedDecisionBehaviour = func() {
-			oldBehaviour()
-			f()
-		}
-	}
+func (s *StrongCollection) AddPostponedSendBehaviour(f func()) {
+	s.postponedDecisionBehaviour.SendFunc = f
+}
+
+func (s *StrongCollection) AddPostponedDeleteBehaviour(f func()) {
+	s.postponedDecisionBehaviour.DeleteFunc = f
 }
 
 func (s *StrongCollection) ExecutePostponedDecisionBehaviour(log logger.Logger) {
-	if s.postponedDecisionBehaviour != nil {
-		log.Info("ExecutePostponedDecisionBehaviour called", "collectionId", s.collectionId)
-		s.postponedDecisionBehaviour()
-		s.postponedDecisionBehaviour = nil
+	log.Info("ExecutePostponedDecisionBehaviour called", "collectionId", s.collectionId)
+	if s.postponedDecisionBehaviour.SendFunc != nil {
+		log.Info("Executing postponed send behaviour", "collectionId", s.collectionId)
+		s.postponedDecisionBehaviour.SendFunc()
 	}
+	if s.postponedDecisionBehaviour.DeleteFunc != nil {
+		log.Info("Executing postponed delete behaviour", "collectionId", s.collectionId)
+		s.postponedDecisionBehaviour.DeleteFunc()
+	}
+	s.postponedDecisionBehaviour = PostponedDecision{}
 }
 
 func (s *StrongCollection) HasPostponedDecisionBehaviour() bool {
-	return s.postponedDecisionBehaviour != nil
+	return s.postponedDecisionBehaviour.SendFunc != nil || s.postponedDecisionBehaviour.DeleteFunc != nil
+}
+
+func (s *StrongCollection) RemovePostponedDeleteBehaviour() {
+	s.postponedDecisionBehaviour.DeleteFunc = nil
 }
 
 func (s *StrongCollection) GetCollectionState() CollectionState {
@@ -90,6 +100,7 @@ func (s *StrongCollection) SetToLocal(size uint64) {
 		return
 	}
 	collectionState := NewLocalCollection(size, s.collectionState.HostsId())
+	collectionState.setCollectionSendingTo(s.GetCollectionState().getCollectionSendingTo())
 	s.collectionState = collectionState
 }
 
@@ -99,6 +110,7 @@ func (s *StrongCollection) SetToRemote() {
 	}
 	s.IsLeader = false
 	collectionState := NewRemoteCollection(s.collectionState.HostsId())
+	collectionState.setCollectionSendingTo(s.GetCollectionState().getCollectionSendingTo())
 	s.collectionState = collectionState
 }
 
@@ -151,6 +163,7 @@ func (w *WeakCollection) SetToLocal(size uint64) {
 		return
 	}
 	collectionState := NewLocalCollection(size, w.collectionState.HostsId())
+	collectionState.setCollectionSendingTo(w.GetCollectionState().getCollectionSendingTo())
 	w.collectionState = collectionState
 }
 
@@ -159,6 +172,7 @@ func (w *WeakCollection) SetToRemote() {
 		return
 	}
 	collectionState := NewRemoteCollection(w.collectionState.HostsId())
+	collectionState.setCollectionSendingTo(w.GetCollectionState().getCollectionSendingTo())
 	w.collectionState = collectionState
 }
 

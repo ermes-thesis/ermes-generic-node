@@ -2,7 +2,7 @@ package weakpolicy
 
 import (
 	"config"
-	sender "dataManager/sender"
+	"dataManager/sender"
 	shared "dataManager/shared"
 	"db"
 	"server"
@@ -33,7 +33,7 @@ func GetPolicy(policyName string) CurrentPolicy {
 	}
 }
 
-// default policy
+// AlwaysCopyPolicy default policy for weak collections
 type AlwaysCopyPolicy struct {
 	//config
 	log logger.Logger
@@ -44,15 +44,18 @@ type AlwaysCopyPolicy struct {
 	dbInterface db.GenericDB
 	sender      sender.MigrationManagerSender
 	serverInfo  server.ServerInfo
+
+	sendingThreshold float64
 }
 
 func NewAlwaysCopyPolicy(config config.MigrationManagerConfig, sender sender.MigrationManagerSender, logger logger.Logger, partialView *shared.CollectionPartialView, dbInterface db.GenericDB, serverInfo server.ServerInfo) WeakCollectionPolicy {
 	policy := &AlwaysCopyPolicy{
-		dbInterface: dbInterface,
-		partialView: partialView,
-		sender:      sender,
-		serverInfo:  serverInfo,
-		log:         logger,
+		dbInterface:      dbInterface,
+		partialView:      partialView,
+		sender:           sender,
+		serverInfo:       serverInfo,
+		log:              logger,
+		sendingThreshold: config.WeakCollectionSendingThreshold,
 	}
 
 	return policy
@@ -63,16 +66,20 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 	if childName == "user" {
 		return nil
 	}
+	//verify threshold
+	lruFreeMemory, ok := a.partialView.NodeResourceUsage[childName]
+	if ok && lruFreeMemory.FreeRedisMemory <= a.sendingThreshold { //if not known, we assume we can send
+		a.log.Warnf("WEAK-POLICY, not sending weak collection %s to node %s due to memory threshold. Free redis memory: %f", collectionId, childName, lruFreeMemory.FreeRedisMemory)
+		return nil
+	}
 
-	a.log.Info("WEAK-POLICY, handle request for a weak collection")
+	//send collection
+	a.log.Info("WEAK-POLICY, handle request for a weak collection", "collection_id", collectionId, "to_node", childName)
 	weakCollection := a.partialView.KnownCollections[collectionId]
-
-	weakCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
-	defer weakCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 
 	res, groups, owner, groupsSequence, err := a.dbInterface.GetCollection(collectionId)
 	if err != nil {
-		a.log.Error("WEAK-POLICY, got an error getting the collection from redis")
+		a.log.Error("WEAK-POLICY, got an error getting the collection from redis", "error", err)
 		return err
 	}
 	collectionSize, sizeError := a.dbInterface.GetCollectionMemoryUsage(collectionId)
@@ -81,15 +88,13 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 		return sizeError
 	}
 
-	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
-	a.log.Infof("WEAK-POLICY, send weak collection%s to node %s", collectionId, childName)
-
+	weakCollection.GetCollectionState().AddCollectionMigrationHost(childName)
 	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups, owner, groupsSequence, collectionSize, false)
 
 	return nil
 }
 
-// dumb policy for comparison in evaluation
+// DoNothingPolicy dumb policy for comparison in evaluation
 type DoNothingPolicy struct{}
 
 func NewDoNothingPolicy() DoNothingPolicy {

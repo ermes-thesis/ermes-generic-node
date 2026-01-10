@@ -98,7 +98,7 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 
 			// Do nothing
 
-			return errors.New("not enough space in the list")
+			return errors.New("not enough space in the list (new item case), current: " + fmt.Sprint(this.current) + ", capacity: " + fmt.Sprint(this.capacity) + ", new size: " + fmt.Sprint(size))
 		}
 
 		// Update the size
@@ -117,7 +117,7 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 	el := get.Value.(lruCacheType[T])
 
 	if this.current-el.size+size > this.capacity {
-		return errors.New("not enough space in the list")
+		return errors.New("not enough space in the list (update case), current: " + fmt.Sprint(this.current) + ", capacity: " + fmt.Sprint(this.capacity) + ", old size: " + fmt.Sprint(el.size) + ", new size: " + fmt.Sprint(size))
 	}
 
 	this.current -= el.size
@@ -128,6 +128,65 @@ func (this *LRUCache[T]) Put(key string, value T, size uint) error {
 
 	this.linkedlist.MoveToFront(get)
 
+	return nil
+}
+
+// ForcePut update the value of the key if the key exists. Otherwise, add the key-value pair to the cache.
+// The element is marked as most recently used.
+// If the number of keys exceeds the capacity from this operation, it will still add the element.
+// This operation is thread safe.
+func (this *LRUCache[T]) ForcePut(key string, value T, size uint) {
+
+	this.mux.Lock()
+
+	defer this.mux.Unlock()
+
+	get := this.cache[key]
+
+	// If the item is not present then create it, else update it
+	if get == nil {
+
+		lruCacheTypeObj := lruCacheType[T]{
+			key:  key,
+			obj:  value,
+			size: size,
+		}
+
+		// Update the size
+		this.current += size
+
+		// Add the item on top
+		elem := this.linkedlist.PushFront(lruCacheTypeObj)
+
+		// Add the list element to the map
+		this.cache[key] = elem
+
+		return
+	}
+
+	// Else update and put on top of LRU
+	el := get.Value.(lruCacheType[T])
+
+	this.current -= el.size
+	el.size = size
+	this.current += size
+
+	get.Value = el
+
+	this.linkedlist.MoveToFront(get)
+}
+
+func (this *LRUCache[T]) MoveToFront(key string) error {
+
+	this.mux.Lock()
+	defer this.mux.Unlock()
+
+	get := this.cache[key]
+	if get == nil {
+		return errors.New("key not present in the cache")
+	}
+
+	this.linkedlist.MoveToFront(get)
 	return nil
 }
 
@@ -146,9 +205,9 @@ func (this *LRUCache[T]) UpdateSize(key string, size uint) error {
 
 	el := get.Value.(lruCacheType[T])
 
-	if this.current-el.size+size > this.capacity {
-		return errors.New("not enough space in the list")
-	}
+	//if this.current-el.size+size > this.capacity {
+	//	return errors.New("not enough space in the list")
+	//}
 
 	this.current -= el.size
 	el.size = size
@@ -170,7 +229,7 @@ func (this *LRUCache[T]) FreeToAchieveSize(sizeGoal uint) *list.List {
 	returnList := list.New()
 
 	// Start removing elements from the back until the condition is satisfied
-	for this.capacity-this.current <= sizeGoal {
+	for this.GetAvailableSize() <= sizeGoal {
 		backElement := this.linkedlist.Back()
 		if backElement == nil {
 			// Lista vuota, non possiamo liberare più spazio
@@ -205,6 +264,73 @@ func (this *LRUCache[T]) FreeToAchieveSize(sizeGoal uint) *list.List {
 	return returnList
 }
 
+func (this *LRUCache[T]) PeekFreeToAchieveSize(sizeGoal uint) *list.List {
+
+	this.mux.Lock()
+	defer this.mux.Unlock()
+
+	returnList := list.New()
+
+	simulatedAvailable := this.GetAvailableSize()
+	backElement := this.linkedlist.Back()
+
+	for simulatedAvailable <= sizeGoal {
+
+		if backElement == nil {
+			break
+		}
+
+		converted, ok := backElement.Value.(lruCacheType[T])
+		if !ok {
+			return returnList
+		}
+
+		returnList.PushFront(converted.obj)
+
+		simulatedAvailable += converted.size
+
+		backElement = backElement.Prev()
+	}
+
+	return returnList
+}
+
+func (this *LRUCache[T]) PeekFreeToAchieveSizeWithFreed(
+	sizeGoal uint64,
+	freedSize uint64,
+	alreadyFreed map[string]struct{},
+) *list.List {
+
+	this.mux.Lock()
+	defer this.mux.Unlock()
+
+	result := list.New()
+
+	simulatedAvailable := uint64(this.GetAvailableSize()) + freedSize
+
+	backElement := this.linkedlist.Back()
+
+	for simulatedAvailable <= sizeGoal && backElement != nil {
+
+		entry, ok := backElement.Value.(lruCacheType[T])
+		if !ok {
+			break
+		}
+
+		if _, exists := alreadyFreed[entry.key]; exists {
+			backElement = backElement.Prev()
+			continue
+		}
+
+		result.PushFront(entry.obj)
+		simulatedAvailable += uint64(entry.size)
+
+		backElement = backElement.Prev()
+	}
+
+	return result
+}
+
 // Remove Function to remove a value given its key.
 // This operation is thread safe and O(1)
 func (this *LRUCache[T]) Remove(key string) error {
@@ -216,7 +342,7 @@ func (this *LRUCache[T]) Remove(key string) error {
 	get := this.cache[key]
 
 	if get == nil {
-		return errors.New("Trying to remove a non existing key")
+		return errors.New("trying to remove a non existing key")
 	}
 
 	// The returned element will be garbage collected (brrrr)
@@ -249,7 +375,11 @@ func (this *LRUCache[T]) GetTotalSize() uint {
 }
 
 func (this *LRUCache[T]) GetAvailableSize() uint {
-	return this.GetTotalSize() - this.GetCurrentSize()
+	diff := int(this.GetTotalSize()) - int(this.GetCurrentSize())
+	if diff < 0 {
+		return 0
+	}
+	return uint(diff)
 }
 
 // Potentially useful for debug, but tricky to manage with generics

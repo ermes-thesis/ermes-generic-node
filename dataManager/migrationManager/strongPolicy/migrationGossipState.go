@@ -2,6 +2,7 @@ package strongPolicy
 
 import (
 	gossip "dataManager/messages"
+	shared "dataManager/shared"
 	"db"
 	"fmt"
 )
@@ -12,7 +13,6 @@ type MigrationManagerGossipState struct {
 	policy                *ErmesStrongCollectionPolicy
 	dbInterface           db.GenericDB
 	MissingMessageCounter int
-	NodeResourceUsage     map[string]NodeStateInfo
 }
 
 func (m *MigrationManagerGossipState) Setup(args ...any) {
@@ -24,7 +24,6 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 		panic("expected int for counter")
 	}
 	m.MissingMessageCounter = counter
-	m.NodeResourceUsage = make(map[string]NodeStateInfo)
 
 	go m.SendGossipMessages()
 }
@@ -35,20 +34,26 @@ func (m *MigrationManagerGossipState) ManageNewStrongRequest(collectionId string
 }
 
 func (m *MigrationManagerGossipState) SendGossipMessages() {
-	memStats, err := m.dbInterface.GetMemoryStats()
-	if err != nil {
-		m.policy.log.Errorf("GOSSIP-STATE, failed to get memory stats: %v", err)
-	}
-	redisFreeSize := 1.0 - memStats.UsedMemoryDatasetPercentage
-	m.policy.log.Infof("GOSSIP-STATE, sending gossip messages with free redis size: %f", redisFreeSize)
+	//memStats, err := m.dbInterface.GetMemoryStats()
+	//if err != nil {
+	//	m.policy.log.Errorf("GOSSIP-STATE, failed to get memory stats: %v", err)
+	//}
+	//redisFreeSize := 1.0 - memStats.UsedMemoryDatasetPercentage
+	//m.policy.log.Infof("GOSSIP-STATE, sending gossip messages with free redis size: %f", redisFreeSize)
 
+	// If lru has the same dimension of redis, use redis size
+	// for testing purposes lru size << redis size
+	freeLruSize := 1 - (float64(m.policy.lruCache.GetCurrentSize()) / float64(m.policy.lruCache.GetTotalSize()))
+	if freeLruSize < 0 {
+		freeLruSize = 0
+	}
 	for value := range m.policy.serverInfo.Children {
-		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.HostName, redisFreeSize)
+		msgToChild := gossip.NewLeaderDelegaMessage(m.policy.serverInfo.HostName, freeLruSize)
 		m.policy.sender.SendGossipMessages(msgToChild, m.policy.serverInfo.Children[value].HostName)
 	}
 
 	if m.policy.serverInfo.Father != nil {
-		msgToFather := gossip.NewChildStateMessage(m.policy.serverInfo.HostName, redisFreeSize)
+		msgToFather := gossip.NewChildStateMessage(m.policy.serverInfo.HostName, freeLruSize)
 		m.policy.sender.SendGossipMessages(msgToFather, m.policy.serverInfo.Father.HostName)
 	}
 }
@@ -71,25 +76,29 @@ func (m *MigrationManagerGossipState) ManageGossipMessage(msg gossip.GossipMessa
 
 	m.MissingMessageCounter -= 1
 	if m.MissingMessageCounter <= 0 {
-		m.policy.transitionToDecision(m.NodeResourceUsage)
+		m.policy.transitionToDecision()
 	}
 }
 
 // save memory and state info from the child in order to take further decisions
 func (m *MigrationManagerGossipState) manageChildGossipMessage(msg gossip.ChildStateMessage) {
 	m.policy.log.Info("GOSSIP-STATE, received child gossip message from:", "sender", msg.GetSenderID(), "free redis memory", msg.FreeRedisMemory)
-	childStateInfo := NodeStateInfo{
+	childStateInfo := shared.NodeStateInfo{
 		//childName:   msg.GetSenderID(),
 		FreeRedisMemory: msg.FreeRedisMemory,
 	}
-	m.NodeResourceUsage[msg.GetSenderID()] = childStateInfo
+	m.policy.partialView.Mutex.Lock()
+	m.policy.partialView.NodeResourceUsage[msg.GetSenderID()] = childStateInfo
+	m.policy.partialView.Mutex.Unlock()
 }
 
 func (m *MigrationManagerGossipState) manageAncestorGossipMessage(msg gossip.LeaderDelegaMessage) {
 	m.policy.log.Info("GOSSIP-STATE, received ancestor gossip message from:", "sender", msg.GetSenderID(), "free redis memory", msg.FreeRedisMemory)
-	childStateInfo := NodeStateInfo{
+	childStateInfo := shared.NodeStateInfo{
 		//childName:   msg.GetSenderID(),
 		FreeRedisMemory: msg.FreeRedisMemory,
 	}
-	m.NodeResourceUsage[msg.GetSenderID()] = childStateInfo
+	m.policy.partialView.Mutex.Lock()
+	m.policy.partialView.NodeResourceUsage[msg.GetSenderID()] = childStateInfo
+	m.policy.partialView.Mutex.Unlock()
 }

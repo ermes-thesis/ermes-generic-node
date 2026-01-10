@@ -16,54 +16,14 @@ import (
 )
 
 func TestExecuteQueries(t *testing.T) {
+	log := createNewLogger(t)
+	defer log.Close()
 
-	redisClient, shutdownFun := startRedisContainer(t, false)
+	redisClient, shutdownFun := setupRedis(t, log.Component("redis"), false)
 	defer shutdownFun()
-	defer redisClient.Close()
 
 	srvInfo := &server.ServerInfo{
 		MetadataDomain: "IT",
-	}
-
-	requestedFnName := "test_function"
-	requestedFnVersion := "1.0.0"
-	queryTemplates := map[string]model.QueryTemplate{
-		"private_data_query": {
-			Select: "ALL",
-			As:     "private_data",
-			Where: &model.ConditionWrapper{Condition: &model.AndCondition{
-				Conditions: []model.Condition{
-					&model.EqCondition{
-						Field: "owner",
-						Value: "12345",
-					},
-					&model.EqCondition{
-						Field: "name",
-						Value: "<name>",
-					},
-				},
-			}},
-		},
-		"gt_data_query": {
-			Select: "ALL",
-			As:     "gt_data",
-			Where: &model.ConditionWrapper{Condition: &model.AndCondition{
-				Conditions: []model.Condition{
-					&model.EqCondition{
-						Field: "owner",
-						Value: "12345",
-					},
-					&model.EqCondition{
-						Field: "name",
-						Value: "DATI_PRIVATE",
-					},
-					&model.GtCondition{
-						Field: "created_at",
-						Value: 1745747999,
-					},
-				},
-			}},
-		},
 	}
 
 	queryParams, _ := json.Marshal(map[string]map[string]any{
@@ -73,19 +33,18 @@ func TestExecuteQueries(t *testing.T) {
 		"gt_data_query": {},
 	})
 
-	fnCache := &caches_mock.FunctionCache{}
-	q := queryTemplates["private_data_query"]
-	q2 := queryTemplates["gt_data_query"]
-	fnCache.EXPECT().GetTemplate(requestedFnName, requestedFnVersion, "private_data_query").Return(&q, nil)
-	fnCache.EXPECT().GetTemplate(requestedFnName, requestedFnVersion, "gt_data_query").Return(&q2, nil)
+	fnCache := caches_mock.NewFunctionCache(t)
+	q := templates["private_data_query"]
+	q2 := templates["gt_data_query"]
+	fnCache.EXPECT().GetTemplate(testFnName, testFnVer, "private_data_query").Return(&q, nil)
+	fnCache.EXPECT().GetTemplate(testFnName, testFnVer, "gt_data_query").Return(&q2, nil)
 
 	// Create a new MetadataManager instance
-	metadataLog := createNewLogger(t)
-	manager, err := metadataManager.NewMetadataManager(redisClient, srvInfo, metadataLog, fnCache)
+	manager, err := metadataManager.NewMetadataManager(redisClient, srvInfo, log.Component("metadata_manager"), fnCache)
 	assert.NoError(t, err, "Expected no error when creating metadata manager")
 
 	// Execute the query
-	result, err := manager.ExecuteQueries(requestedFnName, requestedFnVersion, string(queryParams), []string{"groupC"}, "12345", "boh", "IT/Milan")
+	result, err := manager.ExecuteQueries(testFnName, testFnVer, string(queryParams), []string{"groupC"}, "12345", "boh", "IT/Milan")
 	assert.NoError(t, err, "Expected no error when executing queries")
 
 	assert.Len(t, result, 1, "Expected result to be non-empty")
@@ -105,9 +64,11 @@ func TestExecuteQueries(t *testing.T) {
 }
 
 func TestCreateMetadata(t *testing.T) {
-	redisClient, shutdownFun := startRedisContainer(t, false)
+	log := createNewLogger(t)
+	defer log.Close()
+
+	redisClient, shutdownFun := setupRedis(t, log.Component("redis"), false)
 	defer shutdownFun()
-	defer redisClient.Close()
 
 	srvInfo := &server.ServerInfo{
 		MetadataDomain: "IT",
@@ -126,12 +87,11 @@ func TestCreateMetadata(t *testing.T) {
 		},
 	}
 
-	mPropagator := &propagation_mock.CreateMetadataPropagator{}
+	mPropagator := propagation_mock.NewCreateMetadataPropagator(t)
 	mPropagator.EXPECT().Propagate("collection_id_test", metadata, propagation.FROM_LOCAL).Return(nil).Once()
 
-	fnCache := &caches_mock.FunctionCache{}
-	log := createNewLogger(t)
-	manager := metadataManager.CreateMetadataManagerWithMocks(redisClient, srvInfo, log, nil, mPropagator, fnCache)
+	fnCache := caches_mock.NewFunctionCache(t)
+	manager := metadataManager.CreateMetadataManagerWithMocks(redisClient, srvInfo, log.Component("metadata_manager"), nil, mPropagator, fnCache)
 
 	// Execute the query
 	err := manager.CreateMetadata("collection_id_test", metadata, propagation.FROM_LOCAL)

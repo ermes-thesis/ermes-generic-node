@@ -1,6 +1,7 @@
 package sender
 
 import (
+	"dataManager/lru"
 	gossip "dataManager/messages"
 	shared "dataManager/shared"
 	"db"
@@ -16,14 +17,14 @@ import (
 const (
 	gossipPath                      = "/pvt-gossip"
 	repoPath                        = "/pvt-repo"
-	requestInfoPath                 = "/pvt-collectionRequestInfo"
-	remoteAccessPath                = "/pvt-dataRemoteAccess"
-	remoteUpdatePath                = "/pvt-dataRemoteUpdate"
-	updatePropagationPath           = "/pvt-dataUpdatePropagation"
-	updateGroupPropagationPath      = "/pvt-dataGroupUpdatePropagation"
-	createCollectionPropagationPath = "/pvt-newCollection"
-	removeCollectionPropagationPath = "/pvt-removeCollection"
-	remoteCollectionSet             = "/pvt-remoteCollectionSet"
+	requestInfoPath                 = "/pvt-collection-request-info"
+	remoteAccessPath                = "/pvt-data-remote-access"
+	remoteUpdatePath                = "/pvt-data-remote-update"
+	updatePropagationPath           = "/pvt-data-update-propagation"
+	updateGroupPropagationPath      = "/pvt-data-group-update-propagation"
+	createCollectionPropagationPath = "/pvt-new-collection"
+	removeCollectionPropagationPath = "/pvt-remove-collection"
+	remoteCollectionSet             = "/pvt-remote-collection-set"
 )
 
 //###############################################################
@@ -40,23 +41,28 @@ type MigrationManagerSender interface {
 }
 
 type MigrationManagerSenderImpl struct {
-	serverInfo server.ServerInfo
-	server     server.ServerType
-	log        logger.Logger
+	serverInfo  server.ServerInfo
+	partialView *shared.CollectionPartialView
+	server      server.ServerType
+	log         logger.Logger
+	dbInterface db.GenericDB
+	lruCache    *lru.LRUCache[shared.Collection]
 }
 
-func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo) MigrationManagerSender {
+func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo, partialView *shared.CollectionPartialView, dbInterface db.GenericDB, lruCache *lru.LRUCache[shared.Collection]) MigrationManagerSender {
 	return &MigrationManagerSenderImpl{
-		server:     server,
-		log:        logger,
-		serverInfo: serverInfo,
+		server:      server,
+		log:         logger,
+		serverInfo:  serverInfo,
+		partialView: partialView,
+		dbInterface: dbInterface,
+		lruCache:    lruCache,
 	}
 }
 
 func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool) {
 	//imp
 	s.log.Info("SENDER: Preparing to send collection", "collectionId", collection.CollectionId(), "destination", destination, "isMigration", isMigration, "sendAsLeader", sendAsLeader, "collectionSize", collectionSize)
-	s.log.Infof("[SENDER] send collection %s to %s", collection.CollectionId(), destination)
 	if s.serverInfo.Father == nil || destination != s.serverInfo.Father.HostName {
 		s.log.Debug("Adding host to collection", "hostname", s.serverInfo.HostName, "destination", destination, "known_host_ids", collection.HostsId())
 		collection.AddHost(destination)
@@ -76,15 +82,99 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		SenderIp:       s.serverInfo.HostName,
 	}
 	if collection.IsStrong() {
-		msg.IsLeader = collection.(*shared.StrongCollection).IsLeader && sendAsLeader
+		msg.IsLeader = sendAsLeader
 		msg.SequenceNumber = collection.(*shared.StrongCollection).ConsistencyClock
 	} else {
 		msg.IsLeader = false
 	}
 
-	s.log.Info("Sending GossipMessage", "msg", fmt.Sprintf("%+v", msg))
+	go func() {
+		code, err := s.server.SendGenericHTTPRequest(destination, repoPath, msg)
 
-	go s.server.SendGenericHTTPRequest(destination, repoPath, msg)
+		//sync
+		s.partialView.Mutex.Lock()
+		defer s.partialView.Mutex.Unlock()
+
+		//handle errors
+		if err != nil || code != http.StatusOK {
+			if code == http.StatusInternalServerError {
+				s.log.Warnf("SENDER , Collection refused from %s (%d), for collection %s", destination, code, collection.CollectionId())
+
+				//stop sending to this node, at least until next gossip
+				nodeInfo, ok := s.partialView.NodeResourceUsage[destination]
+				if ok {
+					nodeInfo.FreeRedisMemory = 0.0
+					s.partialView.NodeResourceUsage[destination] = nodeInfo
+				}
+
+				s.sendRemoteCollectionErrorHandler(destination, collection, sendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
+			} else {
+				s.log.Errorf("SENDER, Error sending collection to %s: %v", destination, err)
+			}
+			return
+		}
+
+		//stop postpone updates for this destination + apply eventually postponed updates
+		err = collection.GetCollectionState().RemoveCollectionMigrationHostAndExecutePostponedUpdates(destination)
+		if err != nil {
+			s.log.Warn("SENDER: try to remove non present migration host from collection", "collectionId", collection.CollectionId(), "destination", destination, "err", err)
+		}
+
+		//if collection not present in subtree and no more postponed updates
+		if isMigration && len(collection.HostsId()) == 0 && !collection.IsLocal() /* && !collection.GetCollectionState().IsCollectionBeingMigrated() */ {
+			//remove collection from partial view
+			delete(s.partialView.KnownCollections, collection.CollectionId())
+		}
+	}()
+}
+
+func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool) {
+	collection.GetCollectionState().RemoveHost(destination) // remove host from known hosts
+
+	//remove postponed delete behaviour
+	if collection.IsStrong() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() && isMigration {
+		collection.(*shared.StrongCollection).RemovePostponedDeleteBehaviour()
+	}
+
+	if !collection.IsLocal() {
+		//set collection back in redis
+		availableMem, memErr := s.dbInterface.GetAvailableMemory()
+		if memErr != nil {
+			s.log.Error("SENDER, get memory usage fails", "collectionId", collection.CollectionId(), "err", memErr)
+			return
+		}
+		if availableMem < collectionSize { //fails to rollback, only if 2 adjacent nodes has full memory and try to migrate between them
+			s.log.Error("SENDER, IRREVERSIBLE ERROR, not enough memory to rollback collection after migration fails", "collectionId", collection.CollectionId())
+			return
+		}
+		err := s.dbInterface.SetCollection(collection.CollectionId(), res, groups, owner, groupsSequence)
+		if err != nil {
+			s.log.Error("SENDER, add collection in redis fails", "collectionId", collection.CollectionId(), "err", err)
+			return
+		}
+
+		//place back in LRU
+		s.lruCache.ForcePut(collection.CollectionId(), collection, uint(collectionSize))
+
+		if collection.GetCollectionState().HasPostponedUpdate(destination) {
+			err = collection.GetCollectionState().RemoveCollectionMigrationHostExecutingPostponedUpdatesLocally(destination)
+			if err != nil {
+				s.log.Error("SENDER, IRREVERSIBLE ERROR, some postponed updates were lost during migration error handling", "collectionId", collection.CollectionId())
+				return
+			}
+		}
+
+		collection.SetToLocal(collectionSize)                                  // set collection back to local
+		s.partialView.KnownCollections[collection.CollectionId()] = collection // add back to known collections
+		s.log.Info("SENDER: Migration failed, set collection back to local", "collectionId", collection.CollectionId())
+
+	}
+
+	if sendAsLeader && collection.IsStrong() {
+		collection.(*shared.StrongCollection).IsLeader = true                  // set back as leader
+		collection.(*shared.StrongCollection).LeaderId = s.serverInfo.HostName // set back as leader
+		s.log.Info("SENDER: Leader migration failed, set collection back as leader", "collectionId", collection.CollectionId())
+	}
 }
 
 func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage, destination string) {
@@ -121,8 +211,10 @@ func (s *MigrationManagerSenderImpl) RequestInfoPath() string {
 type CollectionDiscovererSender interface {
 	RemoteSetCollectionAndPropagate(hostId string, collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong, skipUniquenessCheck bool) error
 	WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error)
-	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages)
-	PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages)
+	PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages, saftyQueues []shared.FunctionQueue)
+	SyncPropagateUpdate(hostId string, update gossip.CollectionUpdateMessages, saftyQueues []shared.FunctionQueue)
+	PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages, saftyQueues []shared.FunctionQueue)
+	SyncPropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages, saftyQueues []shared.FunctionQueue)
 	NewCollectionCreated(hostId string, newCollection gossip.NewCollectionMessage) error
 	RemoveCollection(hostId string, collectionId string, senderIp string, groups []string, userId string)
 
@@ -239,16 +331,39 @@ func (s *CollectionDiscovererSenderImpl) RemoteSetCollectionAndPropagate(hostId 
 	return nil
 }
 
-func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages) {
+func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages, saftyQueues []shared.FunctionQueue) {
 	s.log.Infof("SENDER: request collection update propagation to %s", hostId)
 
-	go s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)
+	go func() {
+		s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)
+		s.executeUpdateSaftyCheck(saftyQueues)
+	}()
 }
 
-func (s *CollectionDiscovererSenderImpl) PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages) {
+func (s *CollectionDiscovererSenderImpl) SyncPropagateUpdate(hostId string, update gossip.CollectionUpdateMessages, saftyQueues []shared.FunctionQueue) {
+	s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)
+	s.executeUpdateSaftyCheck(saftyQueues)
+}
+
+func (s *CollectionDiscovererSenderImpl) PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages, saftyQueues []shared.FunctionQueue) {
 	s.log.Infof("SENDER: request collection group update propagation to %s", hostId)
 
-	go s.server.SendGenericHTTPRequest(hostId, updateGroupPropagationPath, update)
+	go func() {
+		s.server.SendGenericHTTPRequest(hostId, updateGroupPropagationPath, update)
+		s.executeUpdateSaftyCheck(saftyQueues)
+	}()
+}
+
+func (s *CollectionDiscovererSenderImpl) SyncPropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages, saftyQueues []shared.FunctionQueue) {
+	s.server.SendGenericHTTPRequest(hostId, updateGroupPropagationPath, update)
+	s.executeUpdateSaftyCheck(saftyQueues)
+}
+
+// execute order 66
+func (s *CollectionDiscovererSenderImpl) executeUpdateSaftyCheck(saftyQueues []shared.FunctionQueue) {
+	for _, saftyQueue := range saftyQueues {
+		saftyQueue.ExecuteFunctions()
+	}
 }
 
 func (s *CollectionDiscovererSenderImpl) RemoteAccessPath() string {

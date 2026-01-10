@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
+	"slices"
 	"tokenDecoder"
 
 	"github.com/ermes-thesis/ermes-common/model"
@@ -12,7 +14,10 @@ import (
 
 func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
 
 		fnName := r.PathValue("name")
 		fnVersion := r.PathValue("version")
@@ -20,7 +25,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			fnVersion = "latest"
 		}
 
-		s.log.Info("Received function invocation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion)
+		s.log.Eval("Received function invocation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion)
 
 		queryParams := r.Header.Get("X-ERMES-QUERY")
 		cachedQuery := r.Header.Get("X-ERMES-CACHED-QUERY")
@@ -69,6 +74,13 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			}
 			for _, v := range res {
 				collections[v.As] = append(collections[v.As], v.Collections...)
+
+				tmpMap := make(map[string]model.CollectionInfo)
+				for _, coll := range collections[v.As] {
+					tmpMap[coll.Id] = coll
+				}
+
+				collections[v.As] = slices.Collect(maps.Values(tmpMap))
 			}
 		}
 
@@ -104,10 +116,13 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 		}, "user", groups, userId)
 		if err != nil {
 			statusCode := http.StatusInternalServerError
+			executionHostName := ""
 			if functionResponse != nil {
 				statusCode = functionResponse.StatusCode
+				executionHostName = functionResponse.Hostname
 			}
 			s.log.Error("Error during function scheduling", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "executing_user", userId, "user_access_groups", groups, "query_parameters", queryParams, "cached_collections", cachedQuery, "sequential_seq_number_parsed", sequentialSeqNumber, "queries_geolocation", geolocation, "error", err)
+			w.Header().Set("X-ERMES-EXECUTION-HOST", executionHostName)
 			http.Error(w, fmt.Sprintf("error executing function: %v", err), statusCode)
 			return
 		}

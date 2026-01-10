@@ -6,6 +6,7 @@ import (
 	"db/redis"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/stretchr/testify/require"
@@ -48,29 +49,16 @@ import (
 //	return "172.17.0.1"
 //}
 
-func createNewLogger(t *testing.T) logger.Logger {
-	log, err := logger.NewLogger(logger.Config{
-		Level:     logger.DebugLevel,
-		Format:    "text",
-		AddSource: false,
-		Muted:     true,
-	})
-	require.NoError(t, err)
-	return log
-}
-
-func StartRedisTestContainer(t *testing.T) (*redis.RedisClient, func()) {
+func StartRedisTestContainer(t *testing.T, log logger.Logger) (*redis.RedisClient, func()) {
 	//if !IsWSL() {
 	//	t.Setenv("TESTCONTAINERS_HOST_OVERRIDE", GetDockerHost())
 	//}
 	ctx := context.Background()
 	redisContainer, err := tcredis.Run(ctx,
 		"redis/redis-stack:latest",
-		tcredis.WithSnapshotting(10, 1),
-		tcredis.WithLogLevel(tcredis.LogLevelVerbose),
+		tcredis.WithLogLevel(tcredis.LogLevelWarning),
 		testcontainers.WithCmd("redis-stack-server"),
 		testcontainers.WithCmdArgs("--maxmemory", "500mb"),
-		//tcredis.WithConfigFile(filepath.Join("testdata", "redis7.conf")),
 	)
 
 	if err != nil {
@@ -81,7 +69,6 @@ func StartRedisTestContainer(t *testing.T) (*redis.RedisClient, func()) {
 	connectionString, _ := redisContainer.ConnectionString(ctx)
 	parsedUrl, _ := url.Parse(connectionString)
 
-	log := createNewLogger(t)
 	client, err := redis.NewRedisClient(config.RedisConfig{
 		Address:    parsedUrl.Hostname(),
 		Port:       parsedUrl.Port(),
@@ -93,7 +80,10 @@ func StartRedisTestContainer(t *testing.T) (*redis.RedisClient, func()) {
 	require.NoError(t, err, "failed to create redis client")
 
 	return client, func() {
-		if err := redisContainer.Terminate(ctx); err != nil {
+		if err := client.Close(); err != nil {
+			t.Fatalf("failed to close redis client: %s", err)
+		}
+		if err := redisContainer.Terminate(ctx, testcontainers.StopTimeout(100*time.Millisecond)); err != nil {
 			t.Fatalf("failed to terminate container: %s", err)
 		}
 	}

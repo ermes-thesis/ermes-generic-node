@@ -69,7 +69,7 @@ func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalit
 			dataManagerInstance.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererStatelessGenericNode).SetCentralizedDBAddress(config.CentralizedDBName)
 			m.migrationManager.StatelessInit(collections, config, lruConfig, serverInfo, lruCache, logger.Component("migration_manager"))
 		}
-		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger.Component("collections_discoverer"))
+		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger.Component("collections_discoverer"), lruCache)
 
 		m.dbInterface = dbInterface
 		m.serverInfo = serverInfo

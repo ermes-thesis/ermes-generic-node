@@ -9,13 +9,14 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/rand"
+	"math/rand/v2"
 	"net/http"
 	"server"
 	"strconv"
 	"time"
 	"tokenDecoder"
 
+	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 )
@@ -59,9 +60,9 @@ func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum ui
 		var toMigrateErr *collectionsDiscoverer.ToMigrateError
 		if err == nil {
 			if collection != nil {
-				s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection))
+				s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection), "is_locally_present", found)
 			} else {
-				s.log.Info("Collection found locally", "collection_id", colId, "seq_num", seqNum, "is_locally_present", found)
+				s.log.Info("Collection not known locally", "collection_id", colId, "seq_num", seqNum, "is_locally_present", found)
 			}
 			return found, collection, nil
 		} else if errors.As(err, &toMigrateErr) {
@@ -69,7 +70,7 @@ func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum ui
 		}
 		s.log.Debug("Retry collection presence check", "collection_id", colId, "seq_num", seqNum, "current_attempt", i, "error", err)
 		if i < s.cfg.MaxOutdatedDataRetries-1 {
-			jitter := time.Duration(rand.Int63n(int64(backoff / 2)))
+			jitter := time.Duration(rand.Int64N(int64(backoff / 2)))
 			time.Sleep(backoff + jitter)
 
 			backoff *= 2
@@ -84,11 +85,16 @@ func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum ui
 
 func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string) (*FunctionResult, uint64, error) {
 	s.log.Info("Scheduling function", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-	s.log.Debug("Scheduling function", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname)
+
+	if s.log.Enabled(logger.DebugLevel) {
+		s.log.Debug("Scheduling function", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname)
+	}
 
 	if len(scheduleRequest.Collections) == 0 {
 		s.log.Info("No collections specified, executing locally", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-		s.log.Debug("No collections specified, executing locally", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload))
+		if s.log.Enabled(logger.DebugLevel) {
+			s.log.Debug("No collections specified, executing locally", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload))
+		}
 		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false)
 	}
 
@@ -96,6 +102,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 	// Initializing vars for function returned collections analysis
 	var sequentialCollection *shared.StrongCollection
 	sequentialCollectionNeeded := false
+	hasSequentialLocal := false
 	hasEventualLocal := false
 	eventualHostCounts := make(map[string]uint)
 	maxEventualCount := uint(0)
@@ -131,6 +138,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 				}
 				// If collection is NIL, it means that the current node does not know its existence
 				if collection != nil {
+					hasSequentialLocal = found
 					sequentialCollection = collection.(*shared.StrongCollection)
 				}
 			} else {
@@ -163,7 +171,9 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 	// Route based on collection analysis
 	// Priority: Sequential > Local Eventual > Remote Eventual
 	if sequentialCollectionNeeded {
-		s.log.Debug("Sequential collection requested for execution. Scheduling accordingly", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", scheduleRequest.Payload, "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname)
+		if s.log.Enabled(logger.DebugLevel) {
+			s.log.Debug("Sequential collection requested for execution. Scheduling accordingly", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", scheduleRequest.Payload, "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname)
+		}
 
 		if sequentialCollection == nil {
 			if s.serverInfo.Father == nil {
@@ -181,7 +191,11 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 			return nil, 0, fmt.Errorf("error retrieving function metadata: %v", err)
 		}
 
-		if sequentialCollection.IsLocal() {
+		if hasSequentialLocal != sequentialCollection.IsLocal() {
+			s.log.Warn("Sequential collection local presence changed during scheduling.", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "was_local", hasSequentialLocal, "is_local_now", sequentialCollection.IsLocal())
+		}
+
+		if hasSequentialLocal {
 			// Re-check if the collection is still local, after acquiring the lock
 			// This is needed because the collection could be migrated while we were waiting for the lock
 			// If the collection is not local anymore, we need to forward the request
@@ -197,7 +211,10 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 					defer sequentialCollection.WriteMutex.Unlock()
 				}
 				s.log.Info("Executing function locally with sequential collection", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-				s.log.Debug("Executing function locally with sequential collection", "seq_collection_id", sequentialCollection.CollectionId(), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "is_leader", sequentialCollection.IsLeader, "write_access_requested", functionMetadata.StrongCollWriteAccess)
+
+				if s.log.Enabled(logger.DebugLevel) {
+					s.log.Debug("Executing function locally with sequential collection", "seq_collection_id", sequentialCollection.CollectionId(), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "is_leader", sequentialCollection.IsLeader, "write_access_requested", functionMetadata.StrongCollWriteAccess)
+				}
 				return s.executeLocally(scheduleRequest, reqHostname, groups, userId, sequentialCollection.CollectionId(), &sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock, functionMetadata.StrongCollWriteAccess)
 			}
 
@@ -224,8 +241,17 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 	// requested, we execute the function locally
 	if hasEventualLocal {
 		s.log.Info("Executing function locally with eventual", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId)
-		s.log.Debug("Executing function locally with eventual", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "user_access_groups", groups, "request_hostname", reqHostname)
+
+		if s.log.Enabled(logger.DebugLevel) {
+			s.log.Debug("Executing function locally with eventual", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "user_access_groups", groups, "request_hostname", reqHostname)
+		}
 		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false)
+	}
+
+	// If hostWithMoreEventual is empty, it means that none of the eventual collections requested exists in the architecture
+	if hostWithMoreEventual == "" {
+		s.log.Error("No host found with eventual collections for forwarding", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "eventual_host_counts", fmt.Sprintf("%+v", eventualHostCounts))
+		return &FunctionResult{StatusCode: http.StatusNotFound}, 0, errors.New("no host found with eventual collections for forwarding")
 	}
 
 	// We have only Eventual Collection requested, and no one of them is local, we forward the scheduling request
@@ -277,13 +303,15 @@ func (s *statefulPolicy) forwardRequestWithSequential(scheduleRequest ScheduleRe
 
 	// If we are here, it means that something wrong has happened in the scheduling process, and we are in the Cloud Node
 	s.log.Error("No available host for sequential collection (unexpected)", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "collection_id", sequentialCollection.CollectionId())
-	return nil, 0, errors.New("no available host for sequential collection")
+	return &FunctionResult{StatusCode: http.StatusNotFound}, 0, errors.New("no available host for sequential collection")
 }
 
 func (s *statefulPolicy) forwardRequest(dest string, scheduleRequest ScheduleRequest) (*FunctionResult, uint64, error) {
-	s.log.Debug("Preparing request to offload scheduling", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "destination", dest, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency)
+	if s.log.Enabled(logger.DebugLevel) {
+		s.log.Debug("Preparing request to offload scheduling", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "destination", dest, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency)
+	}
 
-	url := fmt.Sprintf("http://%s/pvt-offload-function/%s/%s", dest, scheduleRequest.FunctionName, scheduleRequest.FunctionVersion)
+	url := "http://" + dest + "/pvt-offload-function/" + scheduleRequest.FunctionName + "/" + scheduleRequest.FunctionVersion
 	req, err := http.NewRequest(scheduleRequest.HTTPMethod, url, bytes.NewReader(scheduleRequest.Payload))
 	if err != nil {
 		s.log.Error("Error creating offloading request", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency, "error", err)
@@ -297,12 +325,16 @@ func (s *statefulPolicy) forwardRequest(dest string, scheduleRequest ScheduleReq
 	}
 	req.Header.Set("X-ERMES-COLLECTIONS", string(collectionsJson))
 	req.Header.Set("X-ERMES-SECRET", s.serverInfo.Secret)
-	req.Header.Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", scheduleRequest.SequentialSeqNumber))
+	req.Header.Set("X-ERMES-SEQUENTIAL-NUMBER", strconv.FormatUint(scheduleRequest.SequentialSeqNumber, 10))
 	req.Header.Set("X-ERMES-HOSTNAME", s.serverInfo.HostName)
 	req.Header.Set("X-ERMES-LATENCY", strconv.Itoa(scheduleRequest.CumulativeLatency+s.serverInfo.GetLatencyFor(dest)))
 	req.Header.Set("X-ERMES-REDIRECTS", strconv.Itoa(scheduleRequest.NumRedirects+1))
+	req.Header.Set("X-ERMES-NODES", scheduleRequest.Nodes)
 
-	s.log.Debug("Forward request prepared with headers", "headers", fmt.Sprintf("%v", req.Header))
+	if s.log.Enabled(logger.DebugLevel) {
+		s.log.Debug("Forward request prepared with headers", "headers", fmt.Sprintf("%v", req.Header))
+	}
+
 	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {
 		s.log.Error("Error forwarding request", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency, "error", err)
@@ -322,7 +354,7 @@ func (s *statefulPolicy) forwardRequest(dest string, scheduleRequest ScheduleReq
 	sequentialSeqNumberStr := resp.Header.Get("X-ERMES-SEQUENTIAL-NUMBER")
 	var sequentialSeqNumber uint64
 	if sequentialSeqNumberStr != "" {
-		_, err = fmt.Sscanf(sequentialSeqNumberStr, "%d", &sequentialSeqNumber)
+		sequentialSeqNumber, err = strconv.ParseUint(sequentialSeqNumberStr, 10, 64)
 		if err != nil {
 			s.log.Error("Error parsing sequential sequence number", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "url", url, "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "sequential_coll_seq_num", scheduleRequest.SequentialSeqNumber, "cumulative_latency", scheduleRequest.CumulativeLatency, "error", err)
 			return nil, 0, fmt.Errorf("error parsing sequential sequence number: %v", err)
@@ -340,6 +372,8 @@ func (s *statefulPolicy) forwardRequest(dest string, scheduleRequest ScheduleReq
 		Hostname:   resp.Header.Get("X-ERMES-EXECUTION-HOST"),
 		Body:       body,
 	}
-	s.log.Debug("Received response from offloaded scheduling", "fn_response", fmt.Sprintf("%+v", fnRes), "new_sequential_number", sequentialSeqNumber, "old_sequential_number", scheduleRequest.SequentialSeqNumber)
+	if s.log.Enabled(logger.DebugLevel) {
+		s.log.Debug("Received response from offloaded scheduling", "fn_response", fmt.Sprintf("%+v", fnRes), "new_sequential_number", sequentialSeqNumber, "old_sequential_number", scheduleRequest.SequentialSeqNumber)
+	}
 	return &fnRes, sequentialSeqNumber, nil
 }

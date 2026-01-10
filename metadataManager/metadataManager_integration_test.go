@@ -3,9 +3,7 @@ package metadataManager_test
 import (
 	"bytes"
 	"db"
-	"db/test_utils"
 	"encoding/json"
-	"fmt"
 	"io"
 	"metadataManager"
 	"metadataManager/propagation"
@@ -20,999 +18,412 @@ import (
 
 	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
-	"github.com/stretchr/testify/require"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-var templates = map[string]model.QueryTemplate{
-	"private_data_query": {
-		Select: "ALL",
-		As:     "private_data",
-		Where: &model.ConditionWrapper{Condition: &model.AndCondition{
-			Conditions: []model.Condition{
-				&model.EqCondition{
-					Field: "owner",
-					Value: "12345",
-				},
-				&model.EqCondition{
-					Field: "name",
-					Value: "<name>",
-				},
-			},
-		}},
-	},
-	"gt_data_query": {
-		Select: "ALL",
-		As:     "gt_data",
-		Where: &model.ConditionWrapper{Condition: &model.AndCondition{
-			Conditions: []model.Condition{
-				&model.EqCondition{
-					Field: "owner",
-					Value: 12345,
-				},
-				&model.EqCondition{
-					Field: "name",
-					Value: "DATI_PRIVATE",
-				},
-				&model.GtCondition{
-					Field: "created_at",
-					Value: 1745747999,
-				},
-			},
-		}},
-	},
+// TestMetadataNode encapsulates all components of a test metadata node
+type TestMetadataNode struct {
+	Server          *server.Server
+	HttpServer      *httptest.Server
+	Host            string
+	MetadataManager metadataManager.MetadataManager
+	Db              db.GenericDB
+
+	FnCache      *caches_mock.FunctionCache
+	TokenDecoder *tokenDecoder_mock.TokenDecoder
 }
 
-func createNewLogger(t *testing.T) logger.Logger {
-	log, err := logger.NewLogger(logger.Config{
-		Level:     logger.DebugLevel,
-		Format:    "text",
-		AddSource: false,
-	})
-	require.NoError(t, err)
-	return log
+// Close shuts down the test metadata node
+func (n *TestMetadataNode) Close() {
+	n.HttpServer.Close()
 }
 
-func TestMetadataLookupIntegration(t *testing.T) {
-	redisClient1, shutdownFunc1 := startRedisContainer(t, false)
-	defer shutdownFunc1()
-	defer redisClient1.Close()
+// setupMetadataNode sets up a test metadata node with optional parent node
+func setupMetadataNode(t *testing.T, log logger.Logger, domain string, parent *TestMetadataNode) (*TestMetadataNode, func()) {
+	// 1. Setup Redis
+	redisClient, shutdownRedis := setupRedis(t, log.Component("redis"), parent != nil)
 
-	redisClient2, shutdownFunc2 := startRedisContainer(t, true)
-	defer shutdownFunc2()
-	defer redisClient2.Close()
+	// 2. Create Mocks
+	fnCache := caches_mock.NewFunctionCache(t)
+	tknDecoder := tokenDecoder_mock.NewTokenDecoder(t)
 
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
-	}
-	invokedFnName := "test_function"
-	invokedFnVer := "1.0.0"
-	tokenString := "JWTToken"
-
-	fnCache := &caches_mock.FunctionCache{}
-	q := templates["private_data_query"]
-	q2 := templates["gt_data_query"]
-	fnCache.EXPECT().GetTemplate(invokedFnName, invokedFnVer, "private_data_query").Return(&q, nil)
-	fnCache.EXPECT().GetTemplate(invokedFnName, invokedFnVer, "gt_data_query").Return(&q2, nil)
-
-	tknDecoder := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClient1, serverInfoFather, metadataFatherLog, fnCache)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoder)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	urlFather, err := url.Parse(httpServerFather.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName: urlFather.Host,
-		},
+	// 3. Setup Server Info
+	serverInfo := &server.ServerInfo{
+		MetadataDomain: domain,
+		Secret:         secret,
 		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-
-		Secret: "secret",
-	}
-	fnCache2 := &caches_mock.FunctionCache{}
-
-	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClient2, serverInfoChild, metadataChildLog, fnCache2)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	urlChild, err := url.Parse(httpServerChild.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	serverInfoFather.Children = []server.Node{
-		{
-			HostName: urlChild.Host,
-		},
 	}
 
-	req, err := http.NewRequest(http.MethodPost, httpServerChild.URL+"/pvt-lookup", nil)
-	assert.NoError(t, err, "Expected no error when creating request")
+	// 4. Setup Metadata Manager & Server
+	mm, err := metadataManager.NewMetadataManager(redisClient, serverInfo, log.Component("metadata_manager"), fnCache)
+	require.NoError(t, err)
+
+	srv, err := server.NewServer(log.Component("server"), serverInfo)
+	require.NoError(t, err)
+
+	err = mm.RegisterRoutes(srv, tknDecoder)
+	require.NoError(t, err)
+
+	// 5. Start HTTP Server
+	httpServer := httptest.NewServer(srv.Handler)
+	parsedURL, _ := url.Parse(httpServer.URL)
+	serverInfo.HostName = parsedURL.Host
+
+	// 6. Link with Parent if provided
+	if parent != nil {
+		serverInfo.Father = &server.Node{HostName: parent.Host, MetadataDomain: parent.Server.ServerInfo.MetadataDomain}
+		parent.Server.ServerInfo.Children = append(parent.Server.ServerInfo.Children, server.Node{
+			HostName:       parsedURL.Host,
+			MetadataDomain: domain,
+		})
+	}
+
+	node := &TestMetadataNode{
+		Server:          srv,
+		HttpServer:      httpServer,
+		Host:            parsedURL.Host,
+		MetadataManager: mm,
+		Db:              redisClient,
+		FnCache:         fnCache,
+		TokenDecoder:    tknDecoder,
+	}
+
+	cleanup := func() {
+		httpServer.Close()
+		shutdownRedis()
+	}
+
+	return node, cleanup
+}
+
+func getTestMetadata(name string, geolocation string) model.Metadata {
+	return model.Metadata{
+		Name:           name,
+		Owner:          "test",
+		CreatedAt:      time.Now().Truncate(time.Millisecond),
+		Groups:         []string{groupC},
+		Consistency:    model.EventualConsistent,
+		Geolocation:    geolocation,
+		CustomMetadata: map[string]string{},
+	}
+}
+
+// --- Test Cases ---
+
+// TestMetadataLookupIntegration tests metadata lookup propagation from child to father
+func TestMetadataLookupIntegration(t *testing.T) {
+	log := createNewLogger(t)
+	defer log.Close()
+
+	father, cleanupFather := setupMetadataNode(t, log.With("node", "father"), "IT", nil)
+	defer cleanupFather()
+
+	child, cleanupChild := setupMetadataNode(t, log.With("node", "child"), "IT/Milan", father)
+	defer cleanupChild()
+
+	q := templates["private_data_query"]
+	father.FnCache.EXPECT().GetTemplate(testFnName, testFnVer, "private_data_query").Return(&q, nil)
+	father.TokenDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{groupC}, userID, nil)
+
+	child.TokenDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{groupC}, userID, nil)
+
+	req, err := http.NewRequest(http.MethodPost, child.HttpServer.URL+"/pvt-lookup", nil)
+	require.NoError(t, err, "Expected no error creating HTTP request")
 
 	queryParams, _ := json.Marshal(map[string]map[string]any{
 		"private_data_query": {
 			"name": "collectionNameFather",
 		},
 	})
-	req.Header.Set("X-ERMES-SECRET", "secret")
+	req.Header.Set("X-ERMES-SECRET", secret)
 	req.Header.Set("X-ERMES-QUERY", string(queryParams))
 	req.Header.Set("X-ERMES-GROUPS", tokenString)
-	// These headers are needed only for testing purposes. Since we don't have a way to simulate a function
-	// invocation request, we have to pass manually the invoked function name and version as headers to make the
-	// metadataManager work properly.
-	req.Header.Set("X-ERMES-REQ-FUNCTION", invokedFnName)
-	req.Header.Set("X-ERMES-REQ-FUNCTION-VERSION", invokedFnVer)
+	req.Header.Set("X-ERMES-REQ-FUNCTION", testFnName)
+	req.Header.Set("X-ERMES-REQ-FUNCTION-VERSION", testFnVer)
 
 	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
+	require.NoError(t, err, "Expected no error on HTTP request")
 	defer res.Body.Close()
 
-	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status code 200 OK")
+	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected HTTP 200 OK response")
 	bodyResp, err := io.ReadAll(res.Body)
+	require.NoError(t, err, "Expected no error reading response body")
 
-	fmt.Println("Response: " + string(bodyResp))
-
-	assert.NoError(t, err, "Expected no error when reading response body")
 	var response map[uint64]model.QueryResult
 	err = json.Unmarshal(bodyResp, &response)
-	assert.NoError(t, err, "Expected valid JSON response, got error: %v", err)
-
-	assert.Len(t, response, 1, "Expected one collection in response")
+	require.NoError(t, err, "Expected no error unmarshaling response body")
+	assert.Len(t, response, 1, "Expected one query result in response")
 
 	hash := model.NewQueryIdentifier("private_data_query", map[string]string{
 		"name": "collectionNameFather",
 	}).Hash()
-	assert.Contains(t, response, hash, "Expected result to contain 'private_data' key")
 
-	assert.Equal(t, response[hash].As, "private_data", "Expected 'As' field to be 'private_data'")
-	assert.Len(t, response[hash].Collections, 1, "Expected 'private_data' to have one collection")
+	assert.Contains(t, response, hash, "Expected response to contain result for the private_data_query")
 	collection := response[hash].Collections[0]
-
-	assert.Equal(t, "1111", collection.Id, "Expected collection ID to be 1111")
-	assert.Equal(t, "12345", collection.Metadata.Owner, "Expected owner to match query parameter")
-	assert.Equal(t, "collectionNameFather", collection.Metadata.Name, "Expected name to be 'collectionNameFather'")
-	assert.Contains(t, collection.Metadata.Groups, "groupC", "Expected groups to be 'groupC'")
-
-	fmt.Println(response)
+	assert.Equal(t, "1111", collection.Id, "Expected collection ID to match")
+	assert.Equal(t, "collectionNameFather", collection.Metadata.Name, "Expected collection name to match")
+	assert.Contains(t, collection.Metadata.Groups, groupC, "Expected groups to be 'groupC'")
 }
 
+// TestMetadataCreationFromChildIntegration tests metadata creation propagation from child to father
 func TestMetadataCreationFromChildIntegration(t *testing.T) {
-	redisClientFather, shutdownFuncFather := startRedisContainer(t, false)
-	defer shutdownFuncFather()
-	defer redisClientFather.Close()
+	log := createNewLogger(t)
+	defer log.Close()
 
-	redisClientChild, shutdownFuncChild := startRedisContainer(t, true)
-	defer shutdownFuncChild()
-	defer redisClientChild.Close()
+	father, cleanupFather := setupMetadataNode(t, log.With("node", "father"), "IT", nil)
+	defer cleanupFather()
 
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
-	}
-	tokenString := "JWTToken"
+	child, cleanupChild := setupMetadataNode(t, log.With("node", "child"), "IT/Milan", father)
+	defer cleanupChild()
 
-	fnCache := &caches_mock.FunctionCache{}
-	tknDecoder := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
+	metadata := getTestMetadata("test", "IT/Milan")
 
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCache)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoder)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	urlFather, err := url.Parse(httpServerFather.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName:       urlFather.Host,
-			MetadataDomain: "IT",
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-	}
-	fnCacheChild := &caches_mock.FunctionCache{}
-	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
-
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	urlChild, err := url.Parse(httpServerChild.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	serverInfoFather.Children = []server.Node{
-		{
-			HostName:       urlChild.Host,
-			MetadataDomain: "IT/Milan",
-		},
-	}
-
-	metadata := model.Metadata{
-		Name:           "test",
-		Owner:          "test",
-		CreatedAt:      time.Now().Truncate(time.Millisecond),
-		Groups:         []string{"groupC"},
-		Consistency:    model.EventualConsistent,
-		Geolocation:    "IT/Milan",
-		CustomMetadata: map[string]string{},
-	}
 	jsonMetadata, err := json.Marshal(metadata)
-	assert.NoError(t, err, "Expected no error when marshalling metadata")
+	require.NoError(t, err, "Expected no error marshaling metadata to JSON")
 
-	req, err := http.NewRequest(http.MethodPost, httpServerChild.URL+"/pvt-create-metadata/12345678", bytes.NewBuffer(jsonMetadata))
-	assert.NoError(t, err, "Expected no error when creating request")
-	req.Header.Set("X-ERMES-SECRET", "secret")
+	req, err := http.NewRequest(http.MethodPost, child.HttpServer.URL+"/pvt-create-metadata/"+collectionId1, bytes.NewReader(jsonMetadata))
+	require.NoError(t, err, "Expected no error creating HTTP request")
+	req.Header.Set("X-ERMES-SECRET", secret)
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", "IT/Milan/test")
 	req.Header.Set("Content-Type", "application/json")
 
 	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
+	require.NoError(t, err, "Expected no error on HTTP request")
 	res.Body.Close()
 
-	assert.Equal(t, http.StatusCreated, res.StatusCode, "Expected status code 200 OK")
-
-	bodyResp, err := io.ReadAll(res.Body)
-	assert.NoError(t, err, "Expected no error when reading response body")
-	assert.Empty(t, bodyResp, "Expected empty response body")
+	assert.Equal(t, http.StatusCreated, res.StatusCode, "Expected HTTP 201 Created response")
 
 	// Verify that the metadata was created in both father and child
-	metaChild, err := redisClientChild.GetMetadata("12345678")
+	metaChild, err := child.Db.GetMetadata(collectionId1)
 	assert.NoError(t, err, "Expected no error when getting metadata from child")
-	assert.Equal(t, metadata, *metaChild, "Expected metadata to match")
+	assert.Equal(t, metadata, *metaChild, "Metadata in child does not match expected")
 
-	metaFather, err := redisClientFather.GetMetadata("12345678")
+	metaFather, err := father.Db.GetMetadata(collectionId1)
 	assert.NoError(t, err, "Expected no error when getting metadata from father")
-	assert.Equal(t, metadata, *metaFather, "Expected metadata to match")
+	assert.Equal(t, metadata, *metaFather, "Metadata in father does not match expected")
 }
 
+// TestMetadataCreationFromFatherIntegration tests metadata creation propagation from father to child
 func TestMetadataCreationFromFatherIntegration(t *testing.T) {
-	redisClientFather, shutdownFuncFather := startRedisContainer(t, false)
-	defer shutdownFuncFather()
-	defer redisClientFather.Close()
+	log := createNewLogger(t)
+	defer log.Close()
 
-	redisClientChild, shutdownFuncChild := startRedisContainer(t, true)
-	defer shutdownFuncChild()
-	defer redisClientChild.Close()
-
-	serverInfoFather := &server.ServerInfo{
-		Father: &server.Node{
-			//root node, so that the father can think that the message arrive from top
-		},
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
+	father, cleanupFather := setupMetadataNode(t, log.With("node", "father"), "IT", nil)
+	father.Server.ServerInfo.Father = &server.Node{
+		//root node, so that the father can think that the message arrive from top
 	}
-	tokenString := "JWTToken"
+	defer cleanupFather()
 
-	fnCache := &caches_mock.FunctionCache{}
-	tknDecoderFather := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
+	child, cleanupChild := setupMetadataNode(t, log.With("node", "child"), "IT/Milan", father)
+	defer cleanupChild()
 
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCache)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
+	metadata := getTestMetadata("test", "IT/Milan")
 
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoderFather)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	urlFather, err := url.Parse(httpServerFather.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName:       urlFather.Host,
-			MetadataDomain: "IT",
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-	}
-	fnCacheChild := &caches_mock.FunctionCache{}
-	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
-
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	urlChild, err := url.Parse(httpServerChild.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	serverInfoFather.Children = []server.Node{
-		{
-			HostName:       urlChild.Host,
-			MetadataDomain: "IT/Milan",
-		},
-	}
-
-	metadata := model.Metadata{
-		Name:           "test",
-		Owner:          "test",
-		CreatedAt:      time.Now().Truncate(time.Millisecond),
-		Groups:         []string{"groupC"},
-		Consistency:    model.EventualConsistent,
-		Geolocation:    "IT/Milan",
-		CustomMetadata: map[string]string{},
-	}
 	jsonMetadata, err := json.Marshal(metadata)
-	assert.NoError(t, err, "Expected no error when marshalling metadata")
+	require.NoError(t, err, "Expected no error marshaling metadata to JSON")
 
-	req, err := http.NewRequest(http.MethodPost, httpServerFather.URL+"/pvt-create-metadata/12345678", bytes.NewBuffer(jsonMetadata))
-	assert.NoError(t, err, "Expected no error when creating request")
-	req.Header.Set("X-ERMES-SECRET", "secret")
+	req, err := http.NewRequest(http.MethodPost, father.HttpServer.URL+"/pvt-create-metadata/"+collectionId1, bytes.NewReader(jsonMetadata))
+	require.NoError(t, err, "Expected no error creating HTTP request")
+	req.Header.Set("X-ERMES-SECRET", secret)
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", "")
 	req.Header.Set("Content-Type", "application/json")
 
 	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
+	require.NoError(t, err, "Expected no error on HTTP request")
 	res.Body.Close()
 
-	assert.Equal(t, http.StatusCreated, res.StatusCode, "Expected status code 200 OK")
-
-	bodyResp, err := io.ReadAll(res.Body)
-	assert.NoError(t, err, "Expected no error when reading response body")
-	assert.Empty(t, bodyResp, "Expected empty response body")
+	assert.Equal(t, http.StatusCreated, res.StatusCode)
 
 	// Verify that the metadata was created in both father and child
-	metaChild, err := redisClientChild.GetMetadata("12345678")
+	metaChild, err := child.Db.GetMetadata(collectionId1)
 	assert.NoError(t, err, "Expected no error when getting metadata from child")
-	assert.Equal(t, metadata, *metaChild, "Expected metadata to match")
+	assert.Equal(t, metadata, *metaChild, "Metadata in child does not match expected")
 
-	metaFather, err := redisClientFather.GetMetadata("12345678")
+	metaFather, err := father.Db.GetMetadata(collectionId1)
 	assert.NoError(t, err, "Expected no error when getting metadata from father")
-	assert.Equal(t, metadata, *metaFather, "Expected metadata to match")
+	assert.Equal(t, metadata, *metaFather, "Metadata in father does not match expected")
 }
 
+// TestMetadataCreationFromLocalIntegration tests metadata creation propagation from local node to both father and child
 func TestMetadataCreationFromLocalIntegration(t *testing.T) {
-	redisClientFather, shutdownFuncFather := startRedisContainer(t, false)
-	defer shutdownFuncFather()
-	defer redisClientFather.Close()
+	log := createNewLogger(t)
+	defer log.Close()
 
-	redisClientLocal, shutdownFuncLocal := startRedisContainer(t, true)
-	defer shutdownFuncLocal()
-	defer redisClientLocal.Close()
+	// Topology: Father -> Local -> Child
+	father, cleanupFather := setupMetadataNode(t, log.With("node", "father"), "IT", nil)
+	defer cleanupFather()
 
-	redisClientChild, shutdownFuncChild := startRedisContainer(t, true)
-	defer shutdownFuncChild()
-	defer redisClientChild.Close()
+	local, cleanupLocal := setupMetadataNode(t, log.With("node", "local"), "IT/Milan", father)
+	defer cleanupLocal()
 
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Children: []server.Node{
-			{
-				MetadataDomain: "IT/Milan",
-			},
-		},
-		Secret: "secret",
-	}
-	tokenString := "JWTToken"
+	child, cleanupChild := setupMetadataNode(t, log.With("node", "child"), "IT/Milan/Polimi", local)
+	defer cleanupChild()
 
-	fnCacheFather := &caches_mock.FunctionCache{}
-	tknDecoderFather := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
+	// Test 1: Create metadata with geolocation of local node
+	metadata := getTestMetadata("test", "IT/Milan")
+	err := local.MetadataManager.CreateMetadata(collectionId1, metadata, propagation.FROM_LOCAL)
+	require.NoError(t, err, "Expected no error creating metadata from local node")
 
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCacheFather)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
+	// Verify that the metadata was created only in father and local, not in child
+	metaChild, err := child.Db.GetMetadata(collectionId1)
+	assert.Error(t, err, "Metadata should not exist in child node")
+	assert.Nil(t, metaChild, "Metadata in child should be nil")
 
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoderFather)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			MetadataDomain: "IT/Milan",
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan/Polimi",
-		Secret:         "secret",
-	}
-	fnCacheChild := &caches_mock.FunctionCache{}
-	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
-
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	urlFather, err := url.Parse(httpServerFather.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	urlChild, err := url.Parse(httpServerChild.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	serverInfoLocal := &server.ServerInfo{
-		Father: &server.Node{
-			HostName:       urlFather.Host,
-			MetadataDomain: "IT",
-		},
-		Children: []server.Node{
-			{
-				HostName:       urlChild.Host,
-				MetadataDomain: "IT/Milan/Polimi",
-			},
-		},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-	}
-	fnCacheLocal := &caches_mock.FunctionCache{}
-
-	metadataLocalLog := createNewLogger(t)
-	metadataManagerLocal, err := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, metadataLocalLog, fnCacheLocal)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	metadata := model.Metadata{
-		Name:           "test",
-		Owner:          "test",
-		CreatedAt:      time.Now().Truncate(time.Millisecond),
-		Groups:         []string{"groupC"},
-		Consistency:    model.EventualConsistent,
-		Geolocation:    "IT/Milan",
-		CustomMetadata: map[string]string{},
-	}
-
-	err = metadataManagerLocal.CreateMetadata("12345678", metadata, propagation.FROM_LOCAL)
-	assert.NoError(t, err, "Expected no error when creating metadata from local")
-
-	// Verify that the metadata was created in both father and child
-	metaChild, err := redisClientChild.GetMetadata("12345678")
-	assert.Error(t, err, "Expected error because metadata does not exists")
-	assert.Nil(t, metaChild, "Expected metadata to be nil in child")
-
-	metaFather, err := redisClientFather.GetMetadata("12345678")
+	metaFather, err := father.Db.GetMetadata(collectionId1)
 	assert.NoError(t, err, "Expected no error when getting metadata from father")
-	assert.Equal(t, metadata, *metaFather, "Expected metadata to match")
+	assert.Equal(t, metadata, *metaFather, "Metadata in father does not match expected")
 
-	metaLocal, err := redisClientLocal.GetMetadata("12345678")
+	metaLocal, err := local.Db.GetMetadata(collectionId1)
 	assert.NoError(t, err, "Expected no error when getting metadata from local")
-	assert.Equal(t, metadata, *metaLocal, "Expected metadata to match")
+	assert.Equal(t, metadata, *metaLocal, "Metadata in local does not match expected")
 
-	metadata2 := model.Metadata{
-		Name:           "test2",
-		Owner:          "test",
-		CreatedAt:      time.Now().Truncate(time.Millisecond),
-		Groups:         []string{"groupC"},
-		Consistency:    model.EventualConsistent,
-		Geolocation:    "IT/Milan/Polimi",
-		CustomMetadata: map[string]string{},
-	}
-
-	err = metadataManagerLocal.CreateMetadata("test2", metadata2, propagation.FROM_LOCAL)
-	assert.NoError(t, err, "Expected no error when creating metadata from local")
+	// Test 2: Create metadata with geolocation of child node
+	metadata2 := getTestMetadata("test2", "IT/Milan/Polimi")
+	err = local.MetadataManager.CreateMetadata("test2", metadata2, propagation.FROM_LOCAL)
+	assert.NoError(t, err, "Expected no error creating metadata from local node")
 
 	// Verify that the metadata was created in both father and child
-	metaChild2, err := redisClientChild.GetMetadata("test2")
+	metaChild2, err := child.Db.GetMetadata("test2")
 	assert.NoError(t, err, "Expected no error when getting metadata from child")
-	assert.Equal(t, metadata2, *metaChild2, "Expected metadata to match")
+	assert.Equal(t, metadata2, *metaChild2, "Metadata in child does not match expected")
 
-	metaFather2, err := redisClientFather.GetMetadata("test2")
+	metaFather2, err := father.Db.GetMetadata("test2")
 	assert.NoError(t, err, "Expected no error when getting metadata from father")
-	assert.Equal(t, metadata2, *metaFather2, "Expected metadata to match")
+	assert.Equal(t, metadata2, *metaFather2, "Metadata in father does not match expected")
 
-	metaLocal2, err := redisClientLocal.GetMetadata("test2")
+	metaLocal2, err := local.Db.GetMetadata("test2")
 	assert.NoError(t, err, "Expected no error when getting metadata from local")
-	assert.Equal(t, metadata2, *metaLocal2, "Expected metadata to match")
+	assert.Equal(t, metadata2, *metaLocal2, "Metadata in local does not match expected")
 }
 
+// TestMetadataDeletionFromChildIntegration tests metadata deletion propagation from child to father
 func TestMetadataDeletionFromChildIntegration(t *testing.T) {
-	redisClientFather, shutdownFuncFather := startRedisContainer(t, false)
-	defer shutdownFuncFather()
-	defer redisClientFather.Close()
+	log := createNewLogger(t)
+	defer log.Close()
 
-	redisClientChild, shutdownFuncChild := startRedisContainer(t, true)
-	defer shutdownFuncChild()
-	defer redisClientChild.Close()
+	father, cleanupFather := setupMetadataNode(t, log.With("node", "father"), "IT", nil)
+	defer cleanupFather()
 
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
-	}
-	tokenString := "JWTToken"
-
-	fnCache := &caches_mock.FunctionCache{}
-	tknDecoder := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoder.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
-
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCache)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoder)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	urlFather, err := url.Parse(httpServerFather.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName:       urlFather.Host,
-			MetadataDomain: "IT",
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-	}
-	fnCacheChild := &caches_mock.FunctionCache{}
-	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
-
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	urlChild, err := url.Parse(httpServerChild.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	serverInfoFather.Children = []server.Node{
-		{
-			HostName:       urlChild.Host,
-			MetadataDomain: "IT/Milan",
-		},
-	}
+	child, cleanupChild := setupMetadataNode(t, log.With("node", "child"), "IT/Milan", father)
+	defer cleanupChild()
 
 	geolocation := "IT/Milan"
 	payload, err := json.Marshal(geolocation)
-	assert.NoError(t, err, "Expected no error when marshaling geolocation")
-	req, err := http.NewRequest(http.MethodDelete, httpServerChild.URL+"/pvt-delete-metadata/54321", bytes.NewBuffer(payload))
-	assert.NoError(t, err, "Expected no error when creating request")
-	req.Header.Set("X-ERMES-SECRET", "secret")
+	require.NoError(t, err, "Expected no error marshaling geolocation to JSON")
+
+	req, err := http.NewRequest(http.MethodDelete, child.HttpServer.URL+"/pvt-delete-metadata/"+collectionId2, bytes.NewBuffer(payload))
+	require.NoError(t, err, "Expected no error creating HTTP request")
+	req.Header.Set("X-ERMES-SECRET", secret)
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", "IT/Milan/test")
 	req.Header.Set("Content-Type", "application/json")
 
 	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
+	require.NoError(t, err, "Expected no error on HTTP request")
 	res.Body.Close()
 
-	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status code 200 OK")
-
-	bodyResp, err := io.ReadAll(res.Body)
-	assert.NoError(t, err, "Expected no error when reading response body")
-	assert.Empty(t, bodyResp, "Expected empty response body")
+	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected HTTP 200 OK response")
 
 	// Verify that the metadata was deleted in both father and child
-	metaChild, err := redisClientChild.GetMetadata("54321")
-	assert.Error(t, err, "Expected error when trying to get metadata from child")
-	assert.Zero(t, metaChild)
+	metaChild, err := child.Db.GetMetadata(collectionId2)
+	assert.Error(t, err, "Expected error when getting deleted metadata from child")
+	assert.Nil(t, metaChild, "Metadata in child should be nil")
 
-	metaFather, err := redisClientFather.GetMetadata("54321")
-	assert.Error(t, err, "Expected error when trying to get metadata from father")
-	assert.Zero(t, metaFather)
+	metaFather, err := father.Db.GetMetadata(collectionId2)
+	assert.Error(t, err, "Expected error when getting deleted metadata from father")
+	assert.Nil(t, metaFather, "Metadata in father should be nil")
 }
 
+// TestMetadataDeletionFromFatherIntegration tests metadata deletion propagation from father to child
 func TestMetadataDeletionFromFatherIntegration(t *testing.T) {
-	redisClientFather, shutdownFuncFather := startRedisContainer(t, false)
-	defer shutdownFuncFather()
-	defer redisClientFather.Close()
+	log := createNewLogger(t)
+	defer log.Close()
 
-	redisClientChild, shutdownFuncChild := startRedisContainer(t, true)
-	defer shutdownFuncChild()
-	defer redisClientChild.Close()
-
-	serverInfoFather := &server.ServerInfo{
-		Father: &server.Node{
-			//root node, so that the father can think that the message arrive from top
-		},
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
+	father, cleanupFather := setupMetadataNode(t, log.With("node", "father"), "IT", nil)
+	father.Server.ServerInfo.Father = &server.Node{
+		//root node, so that the father can think that the message arrive from top
 	}
-	tokenString := "JWTToken"
+	defer cleanupFather()
 
-	fnCache := &caches_mock.FunctionCache{}
-	tknDecoderFather := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
-
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCache)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoderFather)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	urlFather, err := url.Parse(httpServerFather.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName:       urlFather.Host,
-			MetadataDomain: "IT",
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-	}
-	fnCacheChild := &caches_mock.FunctionCache{}
-	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
-
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	urlChild, err := url.Parse(httpServerChild.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	serverInfoFather.Children = []server.Node{
-		{
-			HostName:       urlChild.Host,
-			MetadataDomain: "IT/Milan",
-		},
-	}
+	child, cleanupChild := setupMetadataNode(t, log.With("node", "child"), "IT/Milan", father)
+	defer cleanupChild()
 
 	geolocation := "IT/Milan"
 	jsonMetadata, err := json.Marshal(geolocation)
-	assert.NoError(t, err, "Expected no error when marshalling metadata")
+	require.NoError(t, err, "Expected no error marshaling geolocation to JSON")
 
-	req, err := http.NewRequest(http.MethodDelete, httpServerFather.URL+"/pvt-delete-metadata/54321", bytes.NewBuffer(jsonMetadata))
-	assert.NoError(t, err, "Expected no error when creating request")
-	req.Header.Set("X-ERMES-SECRET", "secret")
+	req, err := http.NewRequest(http.MethodDelete, father.HttpServer.URL+"/pvt-delete-metadata/"+collectionId2, bytes.NewBuffer(jsonMetadata))
+	require.NoError(t, err, "Expected no error creating HTTP request")
+	req.Header.Set("X-ERMES-SECRET", secret)
 	req.Header.Set("X-ERMES-METADATA-DOMAIN", "")
 	req.Header.Set("Content-Type", "application/json")
 
 	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
+	require.NoError(t, err, "Expected no error on HTTP request")
 	res.Body.Close()
 
-	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status code 200 OK")
-
-	bodyResp, err := io.ReadAll(res.Body)
-	assert.NoError(t, err, "Expected no error when reading response body")
-	assert.Empty(t, bodyResp, "Expected empty response body")
+	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected HTTP 200 OK response")
 
 	// Verify that the metadata was created in both father and child
-	metaChild, err := redisClientChild.GetMetadata("54321")
-	assert.Error(t, err, "Expected error when trying to get metadata from child")
-	assert.Zero(t, metaChild, "Expected no metadata found for child node")
+	metaChild, err := child.Db.GetMetadata(collectionId2)
+	assert.Error(t, err, "Expected error when getting deleted metadata from child")
+	assert.Nil(t, metaChild, "Metadata in child should be nil")
 
-	metaFather, err := redisClientFather.GetMetadata("54321")
-	assert.Error(t, err, "Expected error when trying to get metadata from father")
-	assert.Zero(t, metaFather, "Expected father metadata to be empty")
+	metaFather, err := father.Db.GetMetadata(collectionId2)
+	assert.Error(t, err, "Expected error when getting deleted metadata from father")
+	assert.Nil(t, metaFather, "Metadata in father should be nil")
 }
 
+// TestMetadataDeletionFromLocalIntegration tests metadata deletion propagation from local node to both father and child
 func TestMetadataDeletionFromLocalIntegration(t *testing.T) {
-	redisClientFather, shutdownFuncFather := startRedisContainer(t, false)
-	defer shutdownFuncFather()
-	defer redisClientFather.Close()
+	log := createNewLogger(t)
+	defer log.Close()
 
-	redisClientLocal, shutdownFuncLocal := startRedisContainer(t, true)
-	defer shutdownFuncLocal()
-	defer redisClientLocal.Close()
+	// Topology: Father -> Local -> Child
+	father, cleanupFather := setupMetadataNode(t, log.With("node", "father"), "IT", nil)
+	defer cleanupFather()
 
-	redisClientChild, shutdownFuncChild := startRedisContainer(t, true)
-	defer shutdownFuncChild()
-	defer redisClientChild.Close()
+	local, cleanupLocal := setupMetadataNode(t, log.With("node", "local"), "IT/Milan", father)
+	defer cleanupLocal()
 
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Children: []server.Node{
-			{
-				MetadataDomain: "IT/Milan",
-			},
-		},
-		Secret: "secret",
-	}
-	tokenString := "JWTToken"
+	child, cleanupChild := setupMetadataNode(t, log.With("node", "child"), "IT/Milan/Polimi", local)
+	defer cleanupChild()
 
-	fnCacheFather := &caches_mock.FunctionCache{}
-	tknDecoderFather := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
+	// Test 1: Delete metadata with geolocation of local node
+	metadata := getTestMetadata("test", "IT/Milan")
+	err := local.MetadataManager.CreateMetadata(collectionId1, metadata, propagation.FROM_LOCAL)
+	require.NoError(t, err, "Expected no error creating metadata from local node")
 
-	metadataFatherLog := createNewLogger(t)
-	metadataManagerFather, err := metadataManager.NewMetadataManager(redisClientFather, serverInfoFather, metadataFatherLog, fnCacheFather)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	err = metadataManagerFather.RegisterRoutes(serverFather, tknDecoderFather)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			MetadataDomain: "IT/Milan",
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan/Polimi",
-		Secret:         "secret",
-	}
-	fnCacheChild := &caches_mock.FunctionCache{}
-	tknDecoderChild := &tokenDecoder_mock.TokenDecoder{}
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "", nil)
-
-	metadataChildLog := createNewLogger(t)
-	metadataManagerChild, err := metadataManager.NewMetadataManager(redisClientChild, serverInfoChild, metadataChildLog, fnCacheChild)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = metadataManagerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	urlFather, err := url.Parse(httpServerFather.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	urlChild, err := url.Parse(httpServerChild.URL)
-	assert.NoError(t, err, "Expected no error when parsing URL")
-
-	serverInfoLocal := &server.ServerInfo{
-		Father: &server.Node{
-			HostName:       urlFather.Host,
-			MetadataDomain: "IT",
-		},
-		Children: []server.Node{
-			{
-				HostName:       urlChild.Host,
-				MetadataDomain: "IT/Milan/Polimi",
-			},
-		},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-	}
-	fnCacheLocal := &caches_mock.FunctionCache{}
-
-	metadataLocalLog := createNewLogger(t)
-	metadataManagerLocal, err := metadataManager.NewMetadataManager(redisClientLocal, serverInfoLocal, metadataLocalLog, fnCacheLocal)
-	assert.NoError(t, err, "Expected no error when creating metadata manager")
-
-	metadata := model.Metadata{
-		Name:           "test",
-		Owner:          "test",
-		CreatedAt:      time.Now().Truncate(time.Millisecond),
-		Groups:         []string{"groupC"},
-		Consistency:    model.EventualConsistent,
-		Geolocation:    "IT/Milan",
-		CustomMetadata: map[string]string{},
-	}
-
-	err = metadataManagerLocal.CreateMetadata("12345678", metadata, propagation.FROM_LOCAL)
-	require.NoError(t, err, "Expected no error when creating metadata")
+	err = local.MetadataManager.DeleteMetadata(collectionId1, metadata.Geolocation, propagation.FROM_LOCAL, false)
+	assert.NoError(t, err, "Expected no error deleting metadata from local node")
 
 	// Verify that the metadata was created in both father and child
-	metaChild, err := redisClientChild.GetMetadata("12345678")
-	assert.Error(t, err, "Expected error when trying to get metadata from child")
-	assert.Nil(t, metaChild, "Expected metadataChild to be nil")
+	metaChild, err := child.Db.GetMetadata(collectionId1)
+	assert.Error(t, err, "Expected error when getting deleted metadata from child")
+	assert.Nil(t, metaChild, "Metadata in child should be nil")
+	metaFather, err := father.Db.GetMetadata(collectionId1)
+	assert.Error(t, err, "Expected error when getting deleted metadata from father")
+	assert.Nil(t, metaFather, "Metadata in father should be nil")
+	metaLocal, err := local.Db.GetMetadata(collectionId1)
+	assert.Error(t, err, "Expected error when getting deleted metadata from local node")
+	assert.Nil(t, metaLocal, "Metadata in local should be nil")
 
-	metaFather, err := redisClientFather.GetMetadata("12345678")
-	assert.NoError(t, err, "Expected no error when getting metadata from father")
-	assert.Equal(t, metadata, *metaFather, "Expected metadata to match")
+	// Test 2: Delete metadata with geolocation of child node
+	metadata2 := getTestMetadata("test2", "IT/Milan/Polimi")
+	err = local.MetadataManager.CreateMetadata("test2", metadata2, propagation.FROM_LOCAL)
+	require.NoError(t, err, "Expected no error creating metadata from local node")
 
-	metaLocal, err := redisClientLocal.GetMetadata("12345678")
-	assert.NoError(t, err, "Expected no error when getting metadata from local")
-	assert.Equal(t, metadata, *metaLocal, "Expected metadata to match")
+	err = local.MetadataManager.DeleteMetadata("test2", metadata2.Geolocation, propagation.FROM_LOCAL, false)
+	assert.NoError(t, err, "Expected no error deleting metadata from local node")
 
-	err = metadataManagerLocal.DeleteMetadata("12345678", metadata.Geolocation, propagation.FROM_LOCAL, false)
-	assert.NoError(t, err, "Expected no error when creating metadata from local")
-
-	// Verify that the metadata was deleted in both father and child
-	metaChild, err = redisClientChild.GetMetadata("12345678")
-	assert.Error(t, err, "Expected error when trying to get metadata from child")
-	assert.Zero(t, metaChild, "Expected no metadata found for metadata")
-
-	metaFather, err = redisClientFather.GetMetadata("12345678")
-	assert.Error(t, err, "Expected error when trying to get metadata from father")
-	assert.Zero(t, metaFather, "Expected no metadata found for father")
-
-	metaLocal, err = redisClientLocal.GetMetadata("12345678")
-	assert.Error(t, err, "Expected error when trying to get metadata from local")
-	assert.Zero(t, metaLocal, "Expected no metadata found for local")
-
-	metadata2 := model.Metadata{
-		Name:           "test2",
-		Owner:          "test",
-		CreatedAt:      time.Now().Truncate(time.Millisecond),
-		Groups:         []string{"groupC"},
-		Consistency:    model.EventualConsistent,
-		Geolocation:    "IT/Milan/Polimi",
-		CustomMetadata: map[string]string{},
-	}
-
-	err = metadataManagerLocal.CreateMetadata("test2", metadata2, propagation.FROM_LOCAL)
-	assert.NoError(t, err, "Expected no error when creating metadata from local")
-
-	// Verify that the metadata was created in both father and child
-	metaChild2, err := redisClientChild.GetMetadata("test2")
-	assert.NoError(t, err, "Expected no error when getting metadata from child")
-	assert.Equal(t, metadata2, *metaChild2, "Expected metadata to match")
-
-	metaFather2, err := redisClientFather.GetMetadata("test2")
-	assert.NoError(t, err, "Expected no error when getting metadata from father")
-	assert.Equal(t, metadata2, *metaFather2, "Expected metadata to match")
-
-	metaLocal2, err := redisClientLocal.GetMetadata("test2")
-	assert.NoError(t, err, "Expected no error when getting metadata from local")
-	assert.Equal(t, metadata2, *metaLocal2, "Expected metadata to match")
-
-	err = metadataManagerLocal.DeleteMetadata("test2", metadata2.Geolocation, propagation.FROM_LOCAL, false)
-	assert.NoError(t, err, "Expected no error when creating metadata from local")
-
-	// Verify that the metadata was deleted in both father and child
-	metaChild2, err = redisClientChild.GetMetadata("test2")
-	assert.Error(t, err, "Expected error when trying to get metadata from child")
-	assert.Zero(t, metaChild2, "Expected no metadata found for child")
-
-	metaFather2, err = redisClientFather.GetMetadata("test2")
-	assert.Error(t, err, "Expected error when trying to get from father")
-	assert.Zero(t, metaFather2, "Expected no metadata found for father")
-
-	metaLocal2, err = redisClientLocal.GetMetadata("test2")
-	assert.Error(t, err, "Expected error when trying to get from local")
-	assert.Zero(t, metaLocal2, "Expected no metadata found for local")
-}
-
-func startRedisContainer(t *testing.T, child bool) (db.GenericDB, func()) {
-	client, shutdownFunc := test_utils.StartRedisTestContainer(t)
-
-	//https://redis.io/docs/latest/develop/ai/search-and-query/indexing/#index-limitations:~:text=After%20you%20create,modify%20command%20finishes
-	err := client.CreateIndex()
-	assert.NoError(t, err, "Expected no error when creating index")
-
-	err = client.SetMetadata("12345", model.Metadata{
-		Name:        "collectionName",
-		Owner:       "12345",
-		CreatedAt:   time.Unix(1745748000, 0),
-		Groups:      []string{"groupA", "groupB", "groupC"},
-		Consistency: model.EventualConsistent,
-		Geolocation: "IT/Como",
-	})
-	assert.NoError(t, err, "Expected no error when setting metadata for collection 12345")
-
-	err = client.SetMetadata("54321", model.Metadata{
-		Name:        "collectionName2",
-		Owner:       "12345",
-		CreatedAt:   time.Unix(745748000, 0),
-		Groups:      []string{"groupC"},
-		Consistency: model.EventualConsistent,
-		Geolocation: "IT/Milan",
-	})
-	assert.NoError(t, err, "Expected no error when setting metadata for collection 54321")
-
-	if !child {
-		err = client.SetMetadata("1111", model.Metadata{
-			Name:        "collectionNameFather",
-			Owner:       "12345",
-			CreatedAt:   time.Unix(1745749000, 0),
-			Groups:      []string{"groupC"},
-			Consistency: model.EventualConsistent,
-			Geolocation: "IT",
-		})
-		assert.NoError(t, err, "Expected no error when setting metadata for collection 1111")
-	}
-
-	return client, shutdownFunc
+	// Verify deletion everywhere
+	metaChild, err = child.Db.GetMetadata("test2")
+	assert.Error(t, err, err, "Expected error when getting deleted metadata from child")
+	assert.Nil(t, metaChild, "Metadata in child should be nil")
+	metaFather, err = father.Db.GetMetadata("test2")
+	assert.Error(t, err, "Expected error when getting deleted metadata from father")
+	assert.Nil(t, metaFather, "Metadata in father should be nil")
+	metaLocal, err = local.Db.GetMetadata("test2")
+	assert.Error(t, err, "Expected error when getting deleted metadata from local node")
+	assert.Nil(t, metaLocal, "Metadata in local should be nil")
 }

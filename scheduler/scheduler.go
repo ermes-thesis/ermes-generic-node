@@ -36,6 +36,7 @@ type ScheduleRequest struct {
 	Payload           []byte
 	CumulativeLatency int
 	NumRedirects      int
+	Nodes             string
 }
 
 type fnResBody []byte
@@ -140,7 +141,7 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 
 	s.log.Info("Invoking function locally", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 	startTime := time.Now()
-	resp := s.wasmExecutorPool.Invoke(wasmBinary, "entry", scheduleRequest.Payload, ctxJson)
+	resp := s.wasmExecutorPool.Invoke(scheduleRequest.FunctionName+"@"+scheduleRequest.FunctionVersion, wasmBinary, "entry", scheduleRequest.Payload, ctxJson)
 	s.log.Eval("Function executed successfully", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_duration", time.Since(startTime).Nanoseconds())
 	s.log.Debug("Function executed successfully", "fn_response", fmt.Sprintf("%+v", resp))
 
@@ -148,8 +149,6 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 		if seqColLock != nil {
 			s.log.Info("Releasing sequential collection lock after function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 			seqColLock.RUnlock()
-		} else {
-			s.log.Warn("No sequential collection lock to release after function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 		}
 
 		var collRequestInfo []messages.CollectionRequestInfo

@@ -101,7 +101,7 @@ func TestGetRecordRemotelyToFather(t *testing.T) {
 		t.Fatalf("failed to marshal response: %v", err)
 	}
 
-	ser.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-dataRemoteAccess", mock.Anything).Return(&http.Response{
+	ser.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-data-remote-access", mock.Anything).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(strings.NewReader(string(respJSON))),
 	}, nil).Times(1)
@@ -113,7 +113,7 @@ func TestGetRecordRemotelyToFather(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to marshal response: %v", err)
 	}
-	ser.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-dataRemoteAccess", mock.Anything).Return(&http.Response{
+	ser.On("SendGenericHTTPRequestReturnResponse", mock.AnythingOfType("string"), "/pvt-data-remote-access", mock.Anything).Return(&http.Response{
 		StatusCode: 200,
 		Body:       io.NopCloser(strings.NewReader(string(respJSON))),
 	}, nil).Times(1)
@@ -272,11 +272,11 @@ func TestPostponedDecisionBehaviour(t *testing.T) {
 	strongCollection := shared.NewStrongCollection("collectionId", 10, false, true, "leaderId").(*shared.StrongCollection)
 	strongCollection.ConsistencyClock = 5
 
-	strongCollection.AddPostponedDecisionBehaviour(func() {
+	strongCollection.AddPostponedSendBehaviour(func() {
 		strongCollection.ConsistencyClock += 10
 		print(" First behaviour executed. ", strongCollection.ConsistencyClock, "\n")
 	})
-	strongCollection.AddPostponedDecisionBehaviour(func() {
+	strongCollection.AddPostponedDeleteBehaviour(func() {
 		strongCollection.ConsistencyClock *= 2
 		print(" Second behaviour executed. ", strongCollection.ConsistencyClock, "\n")
 	})
@@ -287,6 +287,9 @@ func TestPostponedDecisionBehaviour(t *testing.T) {
 
 	strongCollection.ExecutePostponedDecisionBehaviour(log)
 
+	if strongCollection.HasPostponedDecisionBehaviour() {
+		t.Error("Expected no postponed behaviours to be present")
+	}
 	if strongCollection.ConsistencyClock != 30 {
 		t.Error("Expected ConsistencyClock to be 30 after executing postponed behaviours, got", strongCollection.ConsistencyClock)
 	}
@@ -295,5 +298,9 @@ func TestPostponedDecisionBehaviour(t *testing.T) {
 
 	if strongCollection.ConsistencyClock != 30 {
 		t.Error("Expected ConsistencyClock to remain 30 after executing postponed behaviours again, got", strongCollection.ConsistencyClock)
+	}
+
+	if strongCollection.HasPostponedDecisionBehaviour() {
+		t.Error("Expected no postponed behaviours to be present")
 	}
 }

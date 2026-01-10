@@ -7,13 +7,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 )
 
 func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
-		c.log.Info("Received remote access request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
+
+		c.log.Eval("Received remote access request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
 		var msg gossip.RemoteAccessRequest
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
@@ -133,8 +138,12 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 
 func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
-		c.log.Info("Received update propagation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
+
+		c.log.Eval("Received update propagation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
 		var msg gossip.CollectionUpdateMessages
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
@@ -158,7 +167,7 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation() http.Handle
 func (c *CollectionsDiscovererImp) handleIncomingUpdateGroupPropagation() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
-		c.log.Info("Received group update propagation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
+		c.log.Eval("Received group update propagation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
 		var msg gossip.CollectionGroupUpdateMessages
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
@@ -181,8 +190,12 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdateGroupPropagation() http.H
 
 func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
-		c.log.Info("Received new collection creation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
+
+		c.log.Eval("Received new collection creation request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
 		var msg gossip.NewCollectionMessage
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
@@ -255,8 +268,12 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 
 func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer r.Body.Close()
-		c.log.Info("Received collection removal request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
+
+		c.log.Eval("Received collection removal request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
 		var msg gossip.RemoveCollectionMessage
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {
@@ -285,7 +302,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler
 func (c *CollectionsDiscovererImp) handleIncomingRemoteCollectionSet(migrationManager migrationManager.MigrationManager) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
-		c.log.Info("Received remote collection set request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
+		c.log.Eval("Received remote collection set request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
 		var msg gossip.SetCollectionMessage
 		if err := json.NewDecoder(r.Body).Decode(&msg); err != nil {

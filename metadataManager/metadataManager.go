@@ -88,9 +88,9 @@ func (m *MetadataManagerImpl) RegisterRoutes(server server.ServerType, tokenDeco
 		m.log.Error("Failed to register custom routes", "path", "/pvt-delete-metadata/{collection_id}", "error", err)
 		return fmt.Errorf("Error while registering /pvt-delete-metadata/{collection_id} route: %v\n", err)
 	}
-	err = server.AddCustomRoute("/pvt-request-update-group/{collection_id}", true, m.handleRouteRequestUpdateGroups())
+	err = server.AddCustomRoute("/pvt-request-update-groups/{collection_id}", true, m.handleRouteRequestUpdateGroups())
 	if err != nil {
-		m.log.Error("Failed to register custom routes", "path", "/pvt-request-update-group/{collection_id}", "error", err)
+		m.log.Error("Failed to register custom routes", "path", "/pvt-request-update-groups/{collection_id}", "error", err)
 		return fmt.Errorf("Error while registering /pvt-request-update-group/{collection_id} route: %v\n", err)
 	}
 	err = server.AddCustomRoute("/pvt-propagate-groups/{collection_id}", true, m.handleRoutePropagateGroups())
@@ -286,8 +286,9 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 				}
 
 				m.log.InfofWith("Query template '%s' executed successfully", []any{templateName}, "fn_name", functionName, "fn_version", functionVersion)
-				m.log.DebugfWith("Query template '%s' executed successfully", []any{templateName}, "query_AS", query.As, "retrieved_collections", fmt.Sprintf("%+v", collInfo))
-
+				if m.log.Enabled(logger.DebugLevel) {
+					m.log.DebugfWith("Query template '%s' executed successfully", []any{templateName}, "query_AS", query.As, "retrieved_collections", fmt.Sprintf("%+v", collInfo))
+				}
 				if len(collInfo) > 0 {
 					hash := model.NewQueryIdentifier(templateName, params).Hash()
 					result[hash] = model.QueryResult{
@@ -302,8 +303,9 @@ func (m *MetadataManagerImpl) ExecuteQueries(functionName string, functionVersio
 		}
 
 		m.log.Info("Query templates execution completed successfully", "fn_name", functionName, "fn_version", functionVersion)
-		m.log.Debug("Query templates execution completed successfully", "queries_results", fmt.Sprintf("%+v", result))
-
+		if m.log.Enabled(logger.DebugLevel) {
+			m.log.Debug("Query templates execution completed successfully", "queries_results", fmt.Sprintf("%+v", result))
+		}
 		return result, nil
 	}
 

@@ -50,6 +50,7 @@ type CollectionUpdateMessage struct {
 	UpdateHostIp string   `json:"updateHostIp"`
 	SenderIp     string   `json:"senderIp"`
 	IsDelete     bool     `json:"isDelete"`
+	ToForward    bool     `json:"toForward"`
 	Sequence     uint64   `json:"sequence"`
 }
 
@@ -84,11 +85,32 @@ func ToCollectionUpdateMessages(
 			UpdateHostIp: updateHostIp,
 			SenderIp:     senderIp,
 			IsDelete:     u.IsDelete,
+			ToForward:    true,
 		}
 		result = append(result, msg)
 	}
 
 	return result
+}
+
+func (m CollectionUpdateMessage) Copy() CollectionUpdateMessage {
+	newNames := make([]string, len(m.RecordNames))
+	copy(newNames, m.RecordNames)
+
+	newValues := make([]string, len(m.RecordValues))
+	copy(newValues, m.RecordValues)
+
+	return CollectionUpdateMessage{
+		CollectionId: m.CollectionId,
+		RecordNames:  newNames,
+		RecordValues: newValues,
+		Time:         m.Time,
+		UpdateHostIp: m.UpdateHostIp,
+		SenderIp:     m.SenderIp,
+		IsDelete:     m.IsDelete,
+		ToForward:    m.ToForward,
+		Sequence:     m.Sequence,
+	}
 }
 
 // put and delete groups
@@ -104,6 +126,7 @@ type CollectionGroupUpdateMessage struct {
 	GroupNames   []string `json:"recordNames"`
 	Sequence     uint64   `json:"sequence"`
 	SenderIp     string   `json:"senderIp"`
+	ToForward    bool     `json:"toForward"`
 }
 
 func ToCollectionGroupUpdateMessages(updates []CollectionGroupUpdate, senderIp string) []CollectionGroupUpdateMessage {
@@ -115,11 +138,25 @@ func ToCollectionGroupUpdateMessages(updates []CollectionGroupUpdate, senderIp s
 			GroupNames:   u.GroupNames,
 			Sequence:     u.Sequence,
 			SenderIp:     senderIp,
+			ToForward:    true,
 		}
 		result = append(result, msg)
 	}
 
 	return result
+}
+
+func (m CollectionGroupUpdateMessage) Copy() CollectionGroupUpdateMessage {
+	newSlice := make([]string, len(m.GroupNames))
+	copy(newSlice, m.GroupNames)
+
+	return CollectionGroupUpdateMessage{
+		CollectionId: m.CollectionId,
+		GroupNames:   newSlice,
+		Sequence:     m.Sequence,
+		SenderIp:     m.SenderIp,
+		ToForward:    m.ToForward,
+	}
 }
 
 func (c *CollectionGroupUpdateMessage) GetSequence() uint64 {

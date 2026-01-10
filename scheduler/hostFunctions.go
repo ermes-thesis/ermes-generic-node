@@ -64,23 +64,19 @@ func (h *HostFunctions) hostGet(wasmComponent adapter.WasmRuntimeAdapter, collId
 	h.logger.Debugf("HostGet called with: collId=%s, recordName=%s, userId=%s, groups=%v", collId, recordName, userId, groups)
 
 	value, err := h.dataManager.GetRecord(collId, groups, userId, recordName)
-	var ret int32
 	if err != nil {
 		h.logger.Debug("HostGet error retrieving record", "collection_id", collId, "record_name", recordName, "groups", groups, "user_id", userId, "error", err)
 		var unAuthErr *shared.UnauthorizedError
 		if errors.As(err, &unAuthErr) {
-			ret = wasmComponent.WriteError(model.Unauthorized, err)
+			return wasmComponent.WriteError(model.Unauthorized, err)
 		} else if errors.Is(err, redis.Nil) {
-			ret = wasmComponent.WriteError(model.NotFound, err)
-		} else {
-			ret = wasmComponent.WriteError(model.RedisError, err)
+			return wasmComponent.WriteError(model.NotFound, err)
 		}
-	} else {
-		h.logger.Debug("HostGet record retrieved successfully", "collection_id", collId, "record_name", recordName, "groups", groups, "user_id", userId, "value", value)
-		ret = wasmComponent.WriteResult(value)
+		return wasmComponent.WriteError(model.RedisError, err)
 	}
 
-	return ret
+	h.logger.Debug("HostGet record retrieved successfully", "collection_id", collId, "record_name", recordName, "groups", groups, "user_id", userId, "value", value)
+	return wasmComponent.WriteResult(value)
 }
 
 func (h *HostFunctions) hostMultipleGet(wasmComponent adapter.WasmRuntimeAdapter, collIdPtr, collIdLength, recordNamesPtr, recordNamesLength, groupsPtr, groupsLength, userIdPtr, userIdLength int32) int32 {
@@ -115,22 +111,18 @@ func (h *HostFunctions) hostMultipleGet(wasmComponent adapter.WasmRuntimeAdapter
 	h.logger.Debugf("HostMultipleGet called with: collId=%s, recordNames=%s, userId=%s, groups=%v", collId, recordNames, userId, groups)
 
 	values, err := h.dataManager.GetRecords(collId, groups, userId, recordNames...)
-	var ret int32
 	if err != nil {
 		h.logger.Debug("HostMultipleGet error retrieving records", "collection_id", collId, "record_names", recordNames, "groups", groups, "user_id", userId, "error", err)
 		if errors.Is(err, &shared.UnauthorizedError{}) {
-			ret = wasmComponent.WriteError(model.Unauthorized, err)
+			return wasmComponent.WriteError(model.Unauthorized, err)
 		} else if errors.Is(err, redis.Nil) {
-			ret = wasmComponent.WriteError(model.NotFound, err)
-		} else {
-			ret = wasmComponent.WriteError(model.RedisError, err)
+			return wasmComponent.WriteError(model.NotFound, err)
 		}
-	} else {
-		h.logger.Debug("HostMultipleGet record retrieved successfully", "collection_id", collId, "record_names", recordNames, "groups", groups, "user_id", userId, "values", values)
-		ret = wasmComponent.WriteArrayResult(values)
+		return wasmComponent.WriteError(model.RedisError, err)
 	}
 
-	return ret
+	h.logger.Debug("HostMultipleGet record retrieved successfully", "collection_id", collId, "record_names", recordNames, "groups", groups, "user_id", userId, "values", values)
+	return wasmComponent.WriteArrayResult(values)
 }
 
 func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAdapter, metadataPointer, metadataLength, skipUniquenessCheck int32) int32 {

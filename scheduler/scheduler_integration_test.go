@@ -17,7 +17,6 @@ import (
 	"net/url"
 	"scheduler"
 	"server"
-	"strings"
 	"testing"
 	"time"
 
@@ -28,9 +27,82 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// --- Constants & Global Configuration ---
+
+const (
+	fnName       = "test_function"
+	fnVer        = "1.0.0"
+	token        = "JWTToken"
+	secret       = "secret"
+	clientSecret = "client-secret"
+	user         = "userId"
+	queryName    = "private_data_query"
+)
+
+var defaultSchedulerConfig = config.SchedulerConfig{
+	StartingOutdatedDataBackoff: time.Second,
+	MaxOutdatedDataRetries:      10,
+	MaxOutdatedDataBackoff:      time.Second * 5,
+}
+
+// --- WasmContext Builder ---
+
+type ContextOption func(*scheduler.WasmContext)
+
+// buildWasmContext creates a WasmContext with dynamic collections.
+func buildWasmContext(opts ...ContextOption) scheduler.WasmContext {
+	ctx := scheduler.WasmContext{
+		UserId:    user,
+		GroupList: []string{"groupC"},
+		Collections: map[string][]model.CollectionInfo{
+			queryName: {},
+		},
+	}
+	for _, opt := range opts {
+		opt(&ctx)
+	}
+	return ctx
+}
+
+// WithWeakCollection adds an eventual consistent collection to the context.
+func WithWeakCollection(id string) ContextOption {
+	return func(c *scheduler.WasmContext) {
+		c.Collections[queryName] = append(c.Collections[queryName], model.CollectionInfo{
+			Id: id,
+			Metadata: model.Metadata{
+				Name:        "collection_" + id,
+				Owner:       user,
+				Consistency: model.EventualConsistent,
+				Geolocation: "IT/Como",
+			},
+		})
+	}
+}
+
+// WithStrongCollection adds a sequential consistent collection to the context.
+func WithStrongCollection(id string) ContextOption {
+	return func(c *scheduler.WasmContext) {
+		c.Collections[queryName] = append(c.Collections[queryName], model.CollectionInfo{
+			Id: id,
+			Metadata: model.Metadata{
+				Name:        "collection_" + id,
+				Owner:       user,
+				Consistency: model.SequentialConsistent,
+				Geolocation: "IT",
+			},
+		})
+	}
+}
+
+// --- Test Infrastructure Helpers ---
+
 func createNewLogger(t *testing.T) logger.Logger {
+	lvl := logger.ErrorLevel
+	if testing.Verbose() {
+		lvl = logger.DebugLevel
+	}
 	log, err := logger.NewLogger(logger.Config{
-		Level:     logger.DebugLevel,
+		Level:     lvl,
 		Format:    "text",
 		AddSource: true,
 	})
@@ -38,1310 +110,497 @@ func createNewLogger(t *testing.T) logger.Logger {
 	return log
 }
 
+type TestNode struct {
+	Server     *server.Server
+	HttpServer *httptest.Server
+	Host       string
+	Scheduler  scheduler.Scheduler
+	Logger     logger.Logger
+
+	// Mocks
+	FnCache      *caches_mock.FunctionCache
+	DataManager  *datamanager_mock.DataManager
+	MetaManager  *metadataManager_mock.MetadataManager
+	TokenDecoder *tokenDecoder_mock.TokenDecoder
+	WasmPool     *wasm_mock.ExecutorPool
+	ColDisc      *collectionsDiscoverer_mock.CollectionsDiscoverer
+	MigManager   *migrationManager_mock.MigrationManager
+}
+
+func (n *TestNode) Close() {
+	n.HttpServer.Close()
+}
+
+// CollectionState defines how a collection exists on a node.
+type CollectionState struct {
+	IsPresent bool
+	IsStrong  bool
+	IsLeader  bool
+	LeaderID  string // Hostname of the leader (if Strong)
+}
+
+// SetupCollection configures the mock behavior for a specific collection on this node.
+// It returns the created internal shared.Collection object for further manipulation if needed.
+func (n *TestNode) SetupCollection(id string, state *CollectionState) shared.Collection {
+	if state == nil {
+		n.ColDisc.EXPECT().IsCollectionLocallyPresent(id, uint64(0)).Return(false, nil, nil)
+		return nil
+	}
+
+	var coll shared.Collection
+
+	// 1. Create the appropriate Collection object
+	if state.IsStrong {
+		coll = shared.NewStrongCollection(id, 40, !state.IsPresent, state.IsLeader, state.LeaderID)
+		coll.(*shared.StrongCollection).LeaderId = state.LeaderID
+	} else {
+		coll = shared.NewWeakCollection(id, 40, !state.IsPresent)
+	}
+
+	// 2. Configure Mock Expectations
+	if state.IsPresent {
+		// Simulate Read Lock which is often required by the scheduler when checking state
+		if localColl, ok := coll.GetCollectionState().(*shared.LocalCollection); state.IsStrong && ok {
+			localColl.CollectionLock.RLock()
+		}
+		n.ColDisc.EXPECT().IsCollectionLocallyPresent(id, uint64(0)).Return(true, coll, nil)
+	} else {
+		n.ColDisc.EXPECT().IsCollectionLocallyPresent(id, uint64(0)).Return(false, coll, nil)
+	}
+
+	return coll
+}
+
+func setupTestNode(t *testing.T, log logger.Logger) *TestNode {
+	fnCache := caches_mock.NewFunctionCache(t)
+	tokenDecoder := tokenDecoder_mock.NewTokenDecoder(t)
+	dataManager := datamanager_mock.NewDataManager(t)
+	colDisc := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
+	migManager := migrationManager_mock.NewMigrationManager(t)
+	metaManager := metadataManager_mock.NewMetadataManager(t)
+	wasmPool := wasm_mock.NewExecutorPool(t)
+
+	serverInfo := &server.ServerInfo{
+		MetadataDomain: "IT",
+		Secret:         secret,
+		ClientSecret:   clientSecret,
+		Children:       []server.Node{},
+	}
+
+	sched := scheduler.NewScheduler(true, dataManager, metaManager, fnCache, wasmPool, serverInfo, defaultSchedulerConfig, log)
+	srv, err := server.NewServer(log, serverInfo)
+	require.NoError(t, err)
+
+	err = sched.RegisterRoutes(srv, tokenDecoder)
+	require.NoError(t, err)
+
+	httpServer := httptest.NewServer(srv.Handler)
+	parsedURL, _ := url.Parse(httpServer.URL)
+	serverInfo.HostName = parsedURL.Host
+
+	// Default expectations for getting components
+	dataManager.EXPECT().GetCollectionsDiscoverer().Return(colDisc).Maybe()
+	dataManager.EXPECT().GetMigrationManager().Return(migManager).Maybe()
+
+	return &TestNode{
+		Server:       srv,
+		HttpServer:   httpServer,
+		Host:         parsedURL.Host,
+		Scheduler:    sched,
+		Logger:       log,
+		FnCache:      fnCache,
+		DataManager:  dataManager,
+		MetaManager:  metaManager,
+		TokenDecoder: tokenDecoder,
+		WasmPool:     wasmPool,
+		ColDisc:      colDisc,
+		MigManager:   migManager,
+	}
+}
+
+func connectNodes(father, child *TestNode) {
+	father.Server.ServerInfo.Children = append(father.Server.ServerInfo.Children, server.Node{HostName: child.Host})
+	child.Server.ServerInfo.Father = &server.Node{HostName: father.Host}
+}
+
+func executeInvokeRequest(t *testing.T, targetNode *TestNode, ctx scheduler.WasmContext) string {
+	reqUrl := targetNode.HttpServer.URL + "/invoke-function/" + fnName + "/" + fnVer
+	req, err := http.NewRequest(http.MethodPost, reqUrl, nil)
+	require.NoError(t, err)
+
+	cachedQueries, _ := json.Marshal(ctx.Collections)
+	req.Header.Set("X-CLIENT-SECRET", clientSecret)
+	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
+	req.Header.Set("X-ERMES-GROUPS", token)
+
+	res, err := http.DefaultClient.Do(req)
+	require.NoError(t, err)
+	defer res.Body.Close()
+
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+	bodyResp, err := io.ReadAll(res.Body)
+	require.NoError(t, err)
+
+	var result string
+	json.Unmarshal(bodyResp, &result)
+	return result
+}
+
+// --- Test Cases ---
+
+// TestScheduleOnChild_ReadStrong: Child has both collections locally,
+// request sent to Child and executed there.
 func TestScheduleOnChild_ReadStrong(t *testing.T) {
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	invokedFnName := "test_function"
-	invokedFnVer := "1.0.0"
-	wasmContext := scheduler.WasmContext{
-		UserId:    "userId",
-		GroupList: []string{"groupC"},
-		Collections: map[string][]model.CollectionInfo{
-			"private_data_query": {
-				{
-					Id: "12345",
-					Metadata: model.Metadata{
-						Name:        "collectionName",
-						Owner:       "12345",
-						CreatedAt:   time.Unix(1745748000, 0),
-						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: model.EventualConsistent,
-						Geolocation: "IT/Como",
-					},
-				},
-				{
-					Id: "1111",
-					Metadata: model.Metadata{
-						Name:        "collectionNameFather",
-						Owner:       "12345",
-						CreatedAt:   time.Unix(1745749000, 0),
-						Groups:      []string{"groupC"},
-						Consistency: model.SequentialConsistent,
-						Geolocation: "IT",
-					},
-				},
-			},
-		},
-	}
-	wasmContextJson, err := json.Marshal(wasmContext)
-	assert.NoError(t, err, "Expected no error when marshalling wasm context")
+	log := createNewLogger(t)
+	defer log.Close()
 
-	tokenString := "JWTToken"
+	father := setupTestNode(t, log.With("node", "father"))
+	defer father.Close()
+	child := setupTestNode(t, log.With("node", "child"))
+	defer child.Close()
+	connectNodes(father, child)
 
-	fnCacheFather := caches_mock.NewFunctionCache(t)
+	// 1. Build Context: Needs 1 Weak + 1 Strong
+	wasmCtx := buildWasmContext(
+		WithWeakCollection("12345"),
+		WithStrongCollection("1111"),
+	)
+	wasmCtxJson, _ := json.Marshal(wasmCtx)
 
-	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
+	// 2. Setup Node Data (Collections)
+	// Child has both collections locally
+	child.SetupCollection("12345", &CollectionState{IsPresent: true, IsStrong: false})
+	child.SetupCollection("1111", &CollectionState{IsPresent: true, IsStrong: true, IsLeader: false})
 
-	dataManagerFather := datamanager_mock.NewDataManager(t)
-
-	metadataManager := metadataManager_mock.NewMetadataManager(t)
-
-	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
-	schedulerFatherLog := createNewLogger(t)
-	cfg := config.SchedulerConfig{
-		StartingOutdatedDataBackoff: time.Second,
-		MaxOutdatedDataRetries:      10,
-		MaxOutdatedDataBackoff:      time.Second * 5,
-	}
-	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
-
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName: strings.Split(httpServerFather.URL, ":")[2],
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	fnCacheChild := caches_mock.NewFunctionCache(t)
-	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
-		Name:                  invokedFnName,
-		Version:               invokedFnVer,
-		TemplateNames:         nil,
-		DeployedOn:            nil,
-		StrongCollWriteAccess: false,
+	// 3. Setup Mocks
+	child.FnCache.EXPECT().GetMetadata(fnName, fnVer).Return(&model.FunctionMetadata{
+		Name: fnName, Version: fnVer, StrongCollWriteAccess: false,
 	}, nil)
-	fnCacheChild.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
+	child.FnCache.EXPECT().GetBinary(fnName, fnVer).Return([]byte("bin"), nil)
+	child.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
 
-	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild12345 := shared.NewWeakCollection("12345", 40, false)
-	collChild12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collChild1111 := shared.NewStrongCollection("1111", 40, false, false, "")
-	collChild1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
+	child.DataManager.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
-	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
-	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
+	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
+	child.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
 
-	dataManagerChild := datamanager_mock.NewDataManager(t)
-	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
-	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
-	dataManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
-
-	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
-		HttpCode: 200,
-		Response: "function executed correctly",
+	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+		HttpCode: 200, Response: "ok",
 	})
 
-	schedulerLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerLog)
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	serverInfoFather.Children = []server.Node{
-		{
-			HostName: httpServerChild.URL,
-		},
-	}
-
-	req, err := http.NewRequest(http.MethodPost, httpServerChild.URL+"/invoke-function/test_function/1.0.0", nil)
-	assert.NoError(t, err, "Expected no error when creating request")
-
-	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-CLIENT-SECRET", "client-secret")
-	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
-	req.Header.Set("X-ERMES-GROUPS", tokenString)
-
-	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
-	defer res.Body.Close()
-
-	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status code 200 OK")
-	bodyResp, err := io.ReadAll(res.Body)
-	assert.NoError(t, err, "Expected no error when reading response body")
-
-	var result string
-	err = json.Unmarshal(bodyResp, &result)
-	assert.NoError(t, err, "Expected no error when unmarshalling response body")
-	assert.Equal(t, "function executed correctly", result, "Expected response body to be 'function executed correctly'")
+	// 4. Execute
+	res := executeInvokeRequest(t, child, wasmCtx)
+	assert.Equal(t, "ok", res)
 }
 
+// TestScheduleOnFather_WriteStrong: Child has both collections locally,
+// request sent to Child and executed on the leader (Father).
 func TestScheduleOnFather_WriteStrong(t *testing.T) {
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	invokedFnName := "test_function"
-	invokedFnVer := "1.0.0"
-	wasmContext := scheduler.WasmContext{
-		UserId:    "userId",
-		GroupList: []string{"groupC"},
-		Collections: map[string][]model.CollectionInfo{
-			"private_data_query": {
-				{
-					Id: "12345",
-					Metadata: model.Metadata{
-						Name:        "collectionName",
-						Owner:       "12345",
-						CreatedAt:   time.Unix(1745748000, 0),
-						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: model.EventualConsistent,
-						Geolocation: "IT/Como",
-					},
-				},
-				{
-					Id: "1111",
-					Metadata: model.Metadata{
-						Name:        "collectionNameFather",
-						Owner:       "12345",
-						CreatedAt:   time.Unix(1745749000, 0),
-						Groups:      []string{"groupC"},
-						Consistency: model.SequentialConsistent,
-						Geolocation: "IT",
-					},
-				},
-			},
-		},
-	}
-	wasmContextJson, err := json.Marshal(wasmContext)
-	assert.NoError(t, err, "Expected no error when marshalling wasm context")
+	log := createNewLogger(t)
+	defer log.Close()
 
-	tokenString := "JWTToken"
+	father := setupTestNode(t, log.With("node", "father"))
+	defer father.Close()
+	child := setupTestNode(t, log.With("node", "child"))
+	defer child.Close()
+	connectNodes(father, child)
 
-	fnCacheFather := caches_mock.NewFunctionCache(t)
-	fnCacheFather.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
-		Name:                  invokedFnName,
-		Version:               invokedFnVer,
-		TemplateNames:         nil,
-		DeployedOn:            nil,
-		StrongCollWriteAccess: true,
+	// 1. Context
+	wasmCtx := buildWasmContext(
+		WithWeakCollection("12345"),
+		WithStrongCollection("1111"),
+	)
+	wasmCtxJson, _ := json.Marshal(wasmCtx)
+
+	// 2. Setup Father Data
+	// Father Missing Weak "12345"
+	collWeakFather := father.SetupCollection("12345", &CollectionState{IsPresent: false, IsStrong: false})
+	collWeakFather.AddHost(child.Host)
+	// Father is Leader of Strong "1111"
+	collStrongFather := father.SetupCollection("1111", &CollectionState{IsPresent: true, IsStrong: true, IsLeader: true})
+	collStrongFather.AddHost(child.Host)
+
+	// 3. Father Mocks
+	father.FnCache.EXPECT().GetMetadata(fnName, fnVer).Return(&model.FunctionMetadata{
+		Name: fnName, Version: fnVer, StrongCollWriteAccess: true,
 	}, nil)
-	fnCacheFather.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
+	father.FnCache.EXPECT().GetBinary(fnName, fnVer).Return([]byte("bin"), nil)
+	father.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
+	father.DataManager.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
+	father.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
+	father.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, child.Host).Return()
 
-	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collFather12345 := shared.NewWeakCollection("12345", 40, true)
-	collFather1111 := shared.NewStrongCollection("1111", 40, false, true, "")
-	collFather1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(false, collFather12345, nil)
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collFather1111, nil)
-
-	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerFather.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
-	migrationManagerFather.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
-
-	dataManagerFather := datamanager_mock.NewDataManager(t)
-	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
-	dataManagerFather.EXPECT().GetMigrationManager().Return(migrationManagerFather)
-	dataManagerFather.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
-
-	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	metadataManager := metadataManager_mock.NewMetadataManager(t)
-
-	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolFather.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
-		HttpCode: 200,
-		Response: "function executed correctly",
+	father.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+		HttpCode: 200, Response: "ok",
 	})
 
-	schedulerLog := createNewLogger(t)
-	cfg := config.SchedulerConfig{
-		StartingOutdatedDataBackoff: time.Second,
-		MaxOutdatedDataRetries:      10,
-		MaxOutdatedDataBackoff:      time.Second * 5,
-	}
-	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerLog)
+	// 4. Setup Child Data
+	// Child has Weak "12345"
+	child.SetupCollection("12345", &CollectionState{IsPresent: true, IsStrong: false})
+	// Child has Strong "1111" (Follower, pointing to Father)
+	collStrongChild := child.SetupCollection("1111", &CollectionState{IsPresent: true, IsStrong: true, IsLeader: false, LeaderID: father.Host})
 
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
+	// 5. Child Mocks
+	child.FnCache.EXPECT().GetMetadata(fnName, fnVer).Return(&model.FunctionMetadata{StrongCollWriteAccess: true}, nil)
+	child.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
+	child.MigManager.EXPECT().HandlePostponedDecisions(collStrongChild).Return()
 
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName: strings.Split(httpServerFather.URL, ":")[2],
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	fnCacheChild := caches_mock.NewFunctionCache(t)
-	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
-		Name:                  invokedFnName,
-		Version:               invokedFnVer,
-		TemplateNames:         nil,
-		DeployedOn:            nil,
-		StrongCollWriteAccess: true,
-	}, nil)
-
-	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-
-	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild12345 := shared.NewWeakCollection("12345", 40, false)
-	collChild12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collChild1111 := shared.NewStrongCollection("1111", 40, false, false, "")
-	collChild1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-
-	urlFather, err := url.Parse(httpServerFather.URL)
-	assert.NoError(t, err, "Expected no error when parsing url")
-	collChild1111.(*shared.StrongCollection).LeaderId = urlFather.Host
-
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
-
-	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild.EXPECT().HandlePostponedDecisions(mock.Anything).Return()
-
-	dataManagerChild := datamanager_mock.NewDataManager(t)
-	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
-	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
-
-	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	urlChild, err := url.Parse(httpServerChild.URL)
-	assert.NoError(t, err, "Expected no error when parsing url")
-	collFather12345.AddHost(urlChild.Host)
-	collFather1111.AddHost(urlChild.Host)
-	serverInfoFather.Children = []server.Node{
-		{
-			HostName: strings.Split(httpServerChild.URL, ":")[2],
-		},
-	}
-
-	req, err := http.NewRequest(http.MethodPost, httpServerChild.URL+"/invoke-function/test_function/1.0.0", nil)
-	assert.NoError(t, err, "Expected no error when creating request")
-
-	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-CLIENT-SECRET", "client-secret")
-	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
-	req.Header.Set("X-ERMES-GROUPS", tokenString)
-
-	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
-	defer res.Body.Close()
-
-	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status code 200 OK")
-	bodyResp, err := io.ReadAll(res.Body)
-
-	var result string
-	err = json.Unmarshal(bodyResp, &result)
-	assert.NoError(t, err, "Expected no error when unmarshalling response body")
-	assert.Equal(t, "function executed correctly", result, "Expected response body to be 'function executed correctly'")
+	// 6. Execute (Request to Child, handled via Father logic due to WriteStrong on Leader)
+	res := executeInvokeRequest(t, child, wasmCtx)
+	assert.Equal(t, "ok", res)
 }
 
+// TestScheduleOnChild_WeakReplicated: Child has the Weak collection locally,
+// request sent to Child and executed there.
 func TestScheduleOnChild_WeakReplicated(t *testing.T) {
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	invokedFnName := "test_function"
-	invokedFnVer := "1.0.0"
-	wasmContext := scheduler.WasmContext{
-		UserId:    "userId",
-		GroupList: []string{"groupC"},
-		Collections: map[string][]model.CollectionInfo{
-			"private_data_query": {
-				{
-					Id: "12345",
-					Metadata: model.Metadata{
-						Name:        "collectionName",
-						Owner:       "12345",
-						CreatedAt:   time.Unix(1745748000, 0),
-						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: model.EventualConsistent,
-						Geolocation: "IT/Como",
-					},
-				},
-			},
-		},
-	}
-	wasmContextJson, err := json.Marshal(wasmContext)
-	assert.NoError(t, err, "Expected no error when marshalling wasm context")
+	log := createNewLogger(t)
+	defer log.Close()
 
-	tokenString := "JWTToken"
+	father := setupTestNode(t, log.With("node", "father"))
+	defer father.Close()
+	child := setupTestNode(t, log.With("node", "child"))
+	defer child.Close()
+	connectNodes(father, child)
 
-	fnCacheFather := caches_mock.NewFunctionCache(t)
+	// 1. Context: Only Weak
+	wasmCtx := buildWasmContext(WithWeakCollection("12345"))
+	wasmCtxJson, _ := json.Marshal(wasmCtx)
 
-	dataManagerFather := datamanager_mock.NewDataManager(t)
+	// 2. Child Data
+	child.SetupCollection("12345", &CollectionState{IsPresent: true, IsStrong: false})
 
-	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
+	// 3. Child Mocks
+	child.FnCache.EXPECT().GetBinary(fnName, fnVer).Return([]byte("bin"), nil)
+	child.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
+	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+	child.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
 
-	metadataManager := metadataManager_mock.NewMetadataManager(t)
-
-	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
-
-	schedulerFatherLog := createNewLogger(t)
-	cfg := config.SchedulerConfig{
-		StartingOutdatedDataBackoff: time.Second,
-		MaxOutdatedDataRetries:      10,
-		MaxOutdatedDataBackoff:      time.Second * 5,
-	}
-	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
-
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName: strings.Split(httpServerFather.URL, ":")[2],
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	fnCacheChild := caches_mock.NewFunctionCache(t)
-	fnCacheChild.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
-
-	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
-		HttpCode: 200,
-		Response: "function executed correctly",
+	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+		HttpCode: 200, Response: "ok",
 	})
 
-	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild12345 := shared.NewWeakCollection("12345", 40, false)
-	collChild12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
-
-	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
-	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
-
-	dataManagerChild := datamanager_mock.NewDataManager(t)
-	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
-	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
-
-	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	serverInfoFather.Children = []server.Node{
-		{
-			HostName: strings.Split(httpServerChild.URL, ":")[2],
-		},
-	}
-
-	req, err := http.NewRequest(http.MethodPost, httpServerChild.URL+"/invoke-function/test_function/1.0.0", nil)
-	assert.NoError(t, err, "Expected no error when creating request")
-
-	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-CLIENT-SECRET", "client-secret")
-	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
-	req.Header.Set("X-ERMES-GROUPS", tokenString)
-
-	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
-	defer res.Body.Close()
-
-	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status code 200 OK")
-	bodyResp, err := io.ReadAll(res.Body)
-
-	var result string
-	err = json.Unmarshal(bodyResp, &result)
-	assert.NoError(t, err, "Expected no error when unmarshalling response body")
-	assert.Equal(t, "function executed correctly", result, "Expected response body to be 'function executed correctly'")
+	res := executeInvokeRequest(t, child, wasmCtx)
+	assert.Equal(t, "ok", res)
 }
 
-func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	invokedFnName := "test_function"
-	invokedFnVer := "1.0.0"
-	wasmContext := scheduler.WasmContext{
-		UserId:    "userId",
-		GroupList: []string{"groupC"},
-		Collections: map[string][]model.CollectionInfo{
-			"private_data_query": {
-				{
-					Id: "12345",
-					Metadata: model.Metadata{
-						Name:        "collectionName",
-						Owner:       "12345",
-						CreatedAt:   time.Unix(1745748000, 0),
-						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: model.EventualConsistent,
-						Geolocation: "IT/Como",
-					},
-				},
-			},
-		},
-	}
-
-	wasmContextJson, err := json.Marshal(wasmContext)
-	assert.NoError(t, err, "Expected no error when marshalling wasm context")
-
-	tokenString := "JWTToken"
-
-	fnCacheFather := caches_mock.NewFunctionCache(t)
-	fnCacheFather.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
-
-	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collFather12345 := shared.NewWeakCollection("12345", 40, false)
-	collFather12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collFather12345, nil)
-
-	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerFather.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
-	migrationManagerFather.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
-
-	dataManagerFather := datamanager_mock.NewDataManager(t)
-	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
-	dataManagerFather.EXPECT().GetMigrationManager().Return(migrationManagerFather)
-
-	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	metadataManager := metadataManager_mock.NewMetadataManager(t)
-
-	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolFather.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
-		HttpCode: 200,
-		Response: "function executed correctly",
-	})
-
-	schedulerFatherLog := createNewLogger(t)
-	cfg := config.SchedulerConfig{
-		StartingOutdatedDataBackoff: time.Second,
-		MaxOutdatedDataRetries:      10,
-		MaxOutdatedDataBackoff:      time.Second * 5,
-	}
-	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
-
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	urlFather, err := url.Parse(httpServerFather.URL)
-	assert.NoError(t, err, "Expected no error when parsing url")
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName: urlFather.Host,
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	fnCacheChild := caches_mock.NewFunctionCache(t)
-
-	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-
-	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(false, nil, nil)
-
-	dataManagerChild := datamanager_mock.NewDataManager(t)
-	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
-
-	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	serverInfoFather.Children = []server.Node{
-		{
-			HostName: strings.Split(httpServerChild.URL, ":")[2],
-		},
-	}
-
-	req, err := http.NewRequest(http.MethodPost, httpServerChild.URL+"/invoke-function/test_function/1.0.0", nil)
-	assert.NoError(t, err, "Expected no error when creating request")
-
-	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-CLIENT-SECRET", "client-secret")
-	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
-	req.Header.Set("X-ERMES-GROUPS", tokenString)
-
-	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
-	defer res.Body.Close()
-
-	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status code 200 OK")
-	bodyResp, err := io.ReadAll(res.Body)
-
-	var result string
-	err = json.Unmarshal(bodyResp, &result)
-	assert.NoError(t, err, "Expected no error when unmarshalling response body")
-	assert.Equal(t, "function executed correctly", result, "Expected response body to be 'function executed correctly'")
-}
-
+// TestScheduleOnChild_DoubleWeak: Child has one Weak collection locally, the other is missing.
 func TestScheduleOnChild_DoubleWeak(t *testing.T) {
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	invokedFnName := "test_function"
-	invokedFnVer := "1.0.0"
-	wasmContext := scheduler.WasmContext{
-		UserId:    "userId",
-		GroupList: []string{"groupC"},
-		Collections: map[string][]model.CollectionInfo{
-			"private_data_query": {
-				{
-					Id: "12345",
-					Metadata: model.Metadata{
-						Name:        "collectionName",
-						Owner:       "12345",
-						CreatedAt:   time.Unix(1745748000, 0),
-						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: model.EventualConsistent,
-						Geolocation: "IT/Como",
-					},
-				},
-				{
-					Id: "54321",
-					Metadata: model.Metadata{
-						Name:        "collectionName2",
-						Owner:       "12345",
-						CreatedAt:   time.Unix(1745748000, 0),
-						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: model.EventualConsistent,
-						Geolocation: "IT/Como",
-					},
-				},
-			},
-		},
-	}
-	wasmContextJson, err := json.Marshal(wasmContext)
-	assert.NoError(t, err, "Expected no error when marshalling wasm context")
+	log := createNewLogger(t)
+	defer log.Close()
 
-	tokenString := "JWTToken"
+	father := setupTestNode(t, log.With("node", "father"))
+	defer father.Close()
+	child := setupTestNode(t, log.With("node", "child"))
+	defer child.Close()
+	connectNodes(father, child)
 
-	fnCacheFather := caches_mock.NewFunctionCache(t)
+	// 1. Context: Two Weak Collections
+	wasmCtx := buildWasmContext(
+		WithWeakCollection("12345"),
+		WithWeakCollection("54321"),
+	)
+	wasmCtxJson, _ := json.Marshal(wasmCtx)
 
-	dataManagerFather := datamanager_mock.NewDataManager(t)
+	// 2. Child Data
+	child.SetupCollection("12345", &CollectionState{IsPresent: true, IsStrong: false})
+	// 54321 is missing
+	child.SetupCollection("54321", nil)
 
-	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
+	// 3. Child Mocks
+	child.FnCache.EXPECT().GetBinary(fnName, fnVer).Return([]byte("bin"), nil)
+	child.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
 
-	metadataManager := metadataManager_mock.NewMetadataManager(t)
+	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "54321"}).Return()
+	child.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
 
-	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
-
-	schedulerFatherLog := createNewLogger(t)
-	cfg := config.SchedulerConfig{
-		StartingOutdatedDataBackoff: time.Second,
-		MaxOutdatedDataRetries:      10,
-		MaxOutdatedDataBackoff:      time.Second * 5,
-	}
-	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
-
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName: strings.Split(httpServerFather.URL, ":")[2],
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	fnCacheChild := caches_mock.NewFunctionCache(t)
-	fnCacheChild.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
-
-	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
-		HttpCode: 200,
-		Response: "function executed correctly",
+	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+		HttpCode: 200, Response: "ok",
 	})
 
-	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild12345 := shared.NewWeakCollection("12345", 40, false)
-	collChild12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collChild54321 := shared.NewWeakCollection("54321", 40, true)
-
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345, nil)
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("54321", uint64(0)).Return(false, collChild54321, nil)
-
-	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "54321"}).Return()
-	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
-
-	dataManagerChild := datamanager_mock.NewDataManager(t)
-	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
-	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
-
-	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	serverInfoFather.Children = []server.Node{
-		{
-			HostName: strings.Split(httpServerChild.URL, ":")[2],
-		},
-	}
-
-	req, err := http.NewRequest(http.MethodPost, httpServerChild.URL+"/invoke-function/test_function/1.0.0", nil)
-	assert.NoError(t, err, "Expected no error when creating request")
-
-	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-CLIENT-SECRET", "client-secret")
-	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
-	req.Header.Set("X-ERMES-GROUPS", tokenString)
-
-	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
-	defer res.Body.Close()
-
-	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status code 200 OK")
-	bodyResp, err := io.ReadAll(res.Body)
-
-	var result string
-	err = json.Unmarshal(bodyResp, &result)
-	assert.NoError(t, err, "Expected no error when unmarshalling response body")
-	assert.Equal(t, "function executed correctly", result, "Expected response body to be 'function executed correctly'")
+	res := executeInvokeRequest(t, child, wasmCtx)
+	assert.Equal(t, "ok", res)
 }
 
+// TestScheduleOnFather_EmptyChildWeak: Father has the Weak collection locally,
+// Child is missing it. Request sent to Child, but execution happens on Father.
+func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
+	log := createNewLogger(t)
+	defer log.Close()
+
+	father := setupTestNode(t, log.With("node", "father"))
+	defer father.Close()
+	child := setupTestNode(t, log.With("node", "child"))
+	defer child.Close()
+	connectNodes(father, child)
+
+	// 1. Context
+	wasmCtx := buildWasmContext(WithWeakCollection("12345"))
+	wasmCtxJson, _ := json.Marshal(wasmCtx)
+
+	// 2. Father Data
+	collFather := father.SetupCollection("12345", &CollectionState{IsPresent: true, IsStrong: false})
+	collFather.AddHost(child.Host)
+
+	// 3. Father Mocks
+	father.FnCache.EXPECT().GetBinary(fnName, fnVer).Return([]byte("bin"), nil)
+	father.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
+	father.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+	father.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, child.Host).Return()
+
+	father.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+		HttpCode: 200, Response: "ok",
+	})
+
+	// 4. Child Data (Missing)
+	child.SetupCollection("12345", nil)
+
+	// 5. Child Mocks
+	child.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
+
+	res := executeInvokeRequest(t, child, wasmCtx)
+	assert.Equal(t, "ok", res)
+}
+
+// TestScheduleOnChild_EmptyFather: Father has no data, Child has it.
+// Request sent to Father, but execution happens on Child.
 func TestScheduleOnChild_EmptyFather(t *testing.T) {
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	invokedFnName := "test_function"
-	invokedFnVer := "1.0.0"
-	wasmContext := scheduler.WasmContext{
-		UserId:    "userId",
-		GroupList: []string{"groupC"},
-		Collections: map[string][]model.CollectionInfo{
-			"private_data_query": {
-				{
-					Id: "12345",
-					Metadata: model.Metadata{
-						Name:        "collectionName",
-						Owner:       "12345",
-						CreatedAt:   time.Unix(1745748000, 0),
-						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: model.EventualConsistent,
-						Geolocation: "IT/Como",
-					},
-				},
-			},
-		},
-	}
-	wasmContextJson, err := json.Marshal(wasmContext)
-	assert.NoError(t, err, "Expected no error when marshalling wasm context")
+	log := createNewLogger(t)
+	defer log.Close()
 
-	tokenString := "JWTToken"
+	father := setupTestNode(t, log.With("node", "father"))
+	defer father.Close()
+	child := setupTestNode(t, log.With("node", "child"))
+	defer child.Close()
+	connectNodes(father, child)
 
-	fnCacheFather := caches_mock.NewFunctionCache(t)
+	// Context: 1 Weak
+	wasmCtx := buildWasmContext(WithWeakCollection("12345"))
+	wasmCtxJson, _ := json.Marshal(wasmCtx)
 
-	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild12345 := shared.NewWeakCollection("12345", 40, true)
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(false, collChild12345, nil)
+	// Father Data: Does NOT have "12345"
+	collFather := father.SetupCollection("12345", &CollectionState{IsPresent: false})
+	collFather.AddHost(child.Host)
 
-	dataManagerFather := datamanager_mock.NewDataManager(t)
-	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
+	// Father Expectations (Receives request, checks local, fails, probes child)
+	father.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
 
-	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
+	// Child Data: Has "12345"
+	child.SetupCollection("12345", &CollectionState{IsPresent: true})
 
-	metadataManager := metadataManager_mock.NewMetadataManager(t)
+	// Child Expectations (Receives probe/request, executes)
+	child.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
+	child.FnCache.EXPECT().GetBinary(fnName, fnVer).Return([]byte("bin"), nil)
 
-	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
+	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
+	child.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, father.Host).Return()
 
-	schedulerFatherLog := createNewLogger(t)
-	cfg := config.SchedulerConfig{
-		StartingOutdatedDataBackoff: time.Second,
-		MaxOutdatedDataRetries:      10,
-		MaxOutdatedDataBackoff:      time.Second * 5,
-	}
-	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
-
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName: strings.Split(httpServerFather.URL, ":")[2],
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	fnCacheChild := caches_mock.NewFunctionCache(t)
-	fnCacheChild.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
-
-	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
-		HttpCode: 200,
-		Response: "function executed correctly",
+	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+		HttpCode: 200, Response: "ok",
 	})
 
-	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild12345Child := shared.NewWeakCollection("12345", 40, false)
-	collChild12345Child.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collChild12345Child, nil)
-
-	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
-	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
-
-	dataManagerChild := datamanager_mock.NewDataManager(t)
-	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
-	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
-
-	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	urlChild, err := url.Parse(httpServerChild.URL)
-	assert.NoError(t, err, "Expected no error when parsing url")
-
-	collChild12345.AddHost(urlChild.Host)
-
-	req, err := http.NewRequest(http.MethodPost, httpServerFather.URL+"/invoke-function/test_function/1.0.0", nil)
-	assert.NoError(t, err, "Expected no error when creating request")
-
-	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-CLIENT-SECRET", "client-secret")
-	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
-	req.Header.Set("X-ERMES-GROUPS", tokenString)
-
-	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
-	defer res.Body.Close()
-
-	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status code 200 OK")
-	bodyResp, err := io.ReadAll(res.Body)
-
-	var result string
-	err = json.Unmarshal(bodyResp, &result)
-	assert.NoError(t, err, "Expected no error when unmarshalling response body")
-	assert.Equal(t, "function executed correctly", result, "Expected response body to be 'function executed correctly'")
+	// Act: Send request to FATHER
+	res := executeInvokeRequest(t, father, wasmCtx)
+	assert.Equal(t, "ok", res)
 }
 
+// TestScheduleOnChild_WriteStrong: Request to Father, but Child is Strong Leader.
+// Execution must happen on Child.
 func TestScheduleOnChild_WriteStrong(t *testing.T) {
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	invokedFnName := "test_function"
-	invokedFnVer := "1.0.0"
-	wasmContext := scheduler.WasmContext{
-		UserId:    "userId",
-		GroupList: []string{"groupC"},
-		Collections: map[string][]model.CollectionInfo{
-			"private_data_query": {
-				{
-					Id: "12345",
-					Metadata: model.Metadata{
-						Name:        "collectionName",
-						Owner:       "12345",
-						CreatedAt:   time.Unix(1745748000, 0),
-						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: model.EventualConsistent,
-						Geolocation: "IT/Como",
-					},
-				},
-				{
-					Id: "1111",
-					Metadata: model.Metadata{
-						Name:        "collectionName",
-						Owner:       "12345",
-						CreatedAt:   time.Unix(1745748000, 0),
-						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: model.SequentialConsistent,
-						Geolocation: "IT/Como",
-					},
-				},
-			},
-		},
-	}
-	wasmContextJson, err := json.Marshal(wasmContext)
-	assert.NoError(t, err, "Expected no error when marshalling wasm context")
+	log := createNewLogger(t)
+	defer log.Close()
 
-	tokenString := "JWTToken"
+	father := setupTestNode(t, log.With("node", "father"))
+	defer father.Close()
+	child := setupTestNode(t, log.With("node", "child"))
+	defer child.Close()
+	connectNodes(father, child)
 
-	fnCacheFather := caches_mock.NewFunctionCache(t)
-	fnCacheFather.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
-		Name:                  invokedFnName,
-		Version:               invokedFnVer,
-		TemplateNames:         nil,
-		DeployedOn:            nil,
-		StrongCollWriteAccess: true,
+	// Context: 1 Weak + 1 Strong
+	wasmCtx := buildWasmContext(WithWeakCollection("12345"), WithStrongCollection("1111"))
+	wasmCtxJson, _ := json.Marshal(wasmCtx)
+
+	// Father Data: Has Weak "12345", Has Strong "1111" (Follower)
+	father.SetupCollection("12345", &CollectionState{IsPresent: true})
+	father.SetupCollection("1111", &CollectionState{IsPresent: true, IsStrong: true, IsLeader: false, LeaderID: child.Host})
+
+	// Father Expectations (Checks permissions, finds it's not leader)
+	father.FnCache.EXPECT().GetMetadata(fnName, fnVer).Return(&model.FunctionMetadata{
+		Name: fnName, Version: fnVer, StrongCollWriteAccess: true,
 	}, nil)
+	father.MigManager.EXPECT().HandlePostponedDecisions(mock.Anything).Return()
+	father.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
 
-	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collFather12345 := shared.NewWeakCollection("12345", 40, false)
-	collFather12345.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-	collFather1111 := shared.NewStrongCollection("1111", 40, false, false, "")
-	collFather1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
+	// Child Data: Missing Weak "12345", Has Strong "1111" (Leader)
+	child.SetupCollection("12345", nil)
+	child.SetupCollection("1111", &CollectionState{IsPresent: true, IsStrong: true, IsLeader: true, LeaderID: child.Host})
 
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(true, collFather12345, nil)
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collFather1111, nil)
-
-	migrationManagerFather := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerFather.EXPECT().HandlePostponedDecisions(mock.Anything).Return()
-
-	dataManagerFather := datamanager_mock.NewDataManager(t)
-	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
-	dataManagerFather.EXPECT().GetMigrationManager().Return(migrationManagerFather)
-
-	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	metadataManager := metadataManager_mock.NewMetadataManager(t)
-
-	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
-
-	schedulerFatherLog := createNewLogger(t)
-	cfg := config.SchedulerConfig{
-		StartingOutdatedDataBackoff: time.Second,
-		MaxOutdatedDataRetries:      10,
-		MaxOutdatedDataBackoff:      time.Second * 5,
-	}
-	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
-
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName: strings.Split(httpServerFather.URL, ":")[2],
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-
-	fnCacheChild := caches_mock.NewFunctionCache(t)
-	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
-		Name:                  invokedFnName,
-		Version:               invokedFnVer,
-		TemplateNames:         nil,
-		DeployedOn:            nil,
-		StrongCollWriteAccess: true,
+	// Child Expectations (Executes)
+	child.FnCache.EXPECT().GetMetadata(fnName, fnVer).Return(&model.FunctionMetadata{
+		Name: fnName, Version: fnVer, StrongCollWriteAccess: true,
 	}, nil)
-	fnCacheChild.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
+	child.FnCache.EXPECT().GetBinary(fnName, fnVer).Return([]byte("bin"), nil)
+	child.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
+	child.DataManager.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
-	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
+	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
+	child.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, father.Host).Return()
 
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolChild.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
-		HttpCode: 200,
-		Response: "function executed correctly",
+	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+		HttpCode: 200, Response: "ok",
 	})
 
-	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild1111 := shared.NewStrongCollection("1111", 40, false, true, "")
-	collChild1111.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111, nil)
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("12345", uint64(0)).Return(false, nil, nil)
-
-	migrationManagerChild := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
-	migrationManagerChild.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
-
-	dataManagerChild := datamanager_mock.NewDataManager(t)
-	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
-	dataManagerChild.EXPECT().GetMigrationManager().Return(migrationManagerChild)
-	dataManagerChild.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
-
-	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	urlChild, err := url.Parse(httpServerChild.URL)
-	assert.NoError(t, err, "Expected no error when parsing url")
-
-	collFather1111.AddHost(urlChild.Host)
-	collFather1111.(*shared.StrongCollection).LeaderId = urlChild.Host
-
-	req, err := http.NewRequest(http.MethodPost, httpServerFather.URL+"/invoke-function/test_function/1.0.0", nil)
-	assert.NoError(t, err, "Expected no error when creating request")
-
-	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-CLIENT-SECRET", "client-secret")
-	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
-	req.Header.Set("X-ERMES-GROUPS", tokenString)
-
-	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
-	defer res.Body.Close()
-
-	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status code 200 OK")
-	bodyResp, err := io.ReadAll(res.Body)
-
-	var result string
-	err = json.Unmarshal(bodyResp, &result)
-	assert.NoError(t, err, "Expected no error when unmarshalling response body")
-	assert.Equal(t, "function executed correctly", result, "Expected response body to be 'function executed correctly'")
+	// Act: Send request to FATHER
+	res := executeInvokeRequest(t, father, wasmCtx)
+	assert.Equal(t, "ok", res)
 }
 
 func TestScheduleThreeNodes(t *testing.T) {
-	serverInfoFather := &server.ServerInfo{
-		Father:         nil,
-		CloudNode:      nil,
-		MetadataDomain: "IT",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-	invokedFnName := "test_function"
-	invokedFnVer := "1.0.0"
-	wasmContext := scheduler.WasmContext{
-		UserId:    "userId",
-		GroupList: []string{"groupC"},
-		Collections: map[string][]model.CollectionInfo{
-			"private_data_query": {
-				{
-					Id: "1111",
-					Metadata: model.Metadata{
-						Name:        "collectionName",
-						Owner:       "12345",
-						CreatedAt:   time.Unix(1745748000, 0),
-						Groups:      []string{"groupA", "groupB", "groupC"},
-						Consistency: model.SequentialConsistent,
-						Geolocation: "IT/Como",
-					},
-				},
-			},
-		},
-	}
-	wasmContextJson, err := json.Marshal(wasmContext)
-	assert.NoError(t, err, "Expected no error when marshalling wasm context")
+	log := createNewLogger(t)
+	defer log.Close()
 
-	tokenString := "JWTToken"
+	father := setupTestNode(t, log.With("node", "father"))
+	defer father.Close()
+	child1 := setupTestNode(t, log.With("node", "child1"))
+	defer child1.Close()
+	child2 := setupTestNode(t, log.With("node", "child2"))
+	defer child2.Close()
+	connectNodes(father, child1)
+	connectNodes(father, child2)
 
-	fnCacheFather := caches_mock.NewFunctionCache(t)
-	fnCacheFather.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
-		Name:                  invokedFnName,
-		Version:               invokedFnVer,
-		TemplateNames:         nil,
-		DeployedOn:            nil,
-		StrongCollWriteAccess: true,
+	// 1. Context: Strong Collection "1111"
+	wasmCtx := buildWasmContext(WithStrongCollection("1111"))
+	wasmCtxJson, _ := json.Marshal(wasmCtx)
+
+	// 2. Node Data
+	father.SetupCollection("1111", &CollectionState{IsPresent: false, IsStrong: true, LeaderID: child2.Host})
+	child1.SetupCollection("1111", nil)
+	child2.SetupCollection("1111", &CollectionState{IsPresent: true, IsStrong: true, IsLeader: true})
+
+	// 3. Mocks
+	// Father
+	father.FnCache.EXPECT().GetMetadata(fnName, fnVer).Return(&model.FunctionMetadata{
+		Name: fnName, Version: fnVer, StrongCollWriteAccess: true,
 	}, nil)
+	father.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
 
-	collectionDiscovererFather := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collFather1111 := shared.NewStrongCollection("1111", 40, true, false, "")
+	// Child 1
+	child1.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
 
-	collectionDiscovererFather.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(false, collFather1111, nil)
-
-	dataManagerFather := datamanager_mock.NewDataManager(t)
-	dataManagerFather.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererFather)
-
-	tknDecoderFather := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderFather.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	metadataManager := metadataManager_mock.NewMetadataManager(t)
-
-	wasmExecutorPoolFather := wasm_mock.NewExecutorPool(t)
-
-	schedulerFatherLog := createNewLogger(t)
-	cfg := config.SchedulerConfig{
-		StartingOutdatedDataBackoff: time.Second,
-		MaxOutdatedDataRetries:      10,
-		MaxOutdatedDataBackoff:      time.Second * 5,
-	}
-	schedulerFather := scheduler.NewScheduler(true, dataManagerFather, metadataManager, fnCacheFather, wasmExecutorPoolFather, serverInfoFather, cfg, schedulerFatherLog)
-
-	fatherLog := createNewLogger(t)
-	serverFather, err := server.NewServer(fatherLog, serverInfoFather)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerFather.RegisterRoutes(serverFather, tknDecoderFather)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerFather := httptest.NewServer(serverFather.Handler)
-	defer httpServerFather.Close()
-
-	serverInfoChild := &server.ServerInfo{
-		Father: &server.Node{
-			HostName: strings.Split(httpServerFather.URL, ":")[2],
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-
-	fnCacheChild := caches_mock.NewFunctionCache(t)
-	fnCacheChild.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
-		Name:                  invokedFnName,
-		Version:               invokedFnVer,
-		TemplateNames:         nil,
-		DeployedOn:            nil,
-		StrongCollWriteAccess: true,
+	// Child 2 (Target)
+	child2.FnCache.EXPECT().GetMetadata(fnName, fnVer).Return(&model.FunctionMetadata{
+		Name: fnName, Version: fnVer, StrongCollWriteAccess: true,
 	}, nil)
+	child2.FnCache.EXPECT().GetBinary(fnName, fnVer).Return([]byte("bin"), nil)
+	child2.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
+	child2.DataManager.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
-	tknDecoderChild := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderChild.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
+	child2.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"1111"}).Return()
+	child2.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, father.Host).Return()
 
-	wasmExecutorPoolChild := wasm_mock.NewExecutorPool(t)
-
-	collectionDiscovererChild := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild1111 := shared.NewStrongCollection("1111", 40, true, false, "")
-
-	collectionDiscovererChild.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(false, collChild1111, nil)
-
-	dataManagerChild := datamanager_mock.NewDataManager(t)
-	dataManagerChild.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild)
-
-	schedulerChildLog := createNewLogger(t)
-	schedulerChild := scheduler.NewScheduler(true, dataManagerChild, metadataManager, fnCacheChild, wasmExecutorPoolChild, serverInfoChild, cfg, schedulerChildLog)
-
-	childLog := createNewLogger(t)
-	serverChild, err := server.NewServer(childLog, serverInfoChild)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerChild.RegisterRoutes(serverChild, tknDecoderChild)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild := httptest.NewServer(serverChild.Handler)
-	defer httpServerChild.Close()
-
-	serverInfoChild2 := &server.ServerInfo{
-		Father: &server.Node{
-			HostName: strings.Split(httpServerFather.URL, ":")[2],
-		},
-		Children:       []server.Node{},
-		MetadataDomain: "IT/Milan",
-		Secret:         "secret",
-		ClientSecret:   "client-secret",
-	}
-
-	fnCacheChild2 := caches_mock.NewFunctionCache(t)
-	fnCacheChild2.EXPECT().GetMetadata(invokedFnName, invokedFnVer).Return(&model.FunctionMetadata{
-		Name:                  invokedFnName,
-		Version:               invokedFnVer,
-		TemplateNames:         nil,
-		DeployedOn:            nil,
-		StrongCollWriteAccess: true,
-	}, nil)
-	fnCacheChild2.EXPECT().GetBinary(invokedFnName, invokedFnVer).Return([]byte("function binary"), nil)
-
-	tknDecoderChild2 := tokenDecoder_mock.NewTokenDecoder(t)
-	tknDecoderChild2.EXPECT().DecodeGroupToken(tokenString).Return([]string{"groupC"}, "userId", nil)
-
-	wasmExecutorPoolChild2 := wasm_mock.NewExecutorPool(t)
-	wasmExecutorPoolChild2.EXPECT().Invoke([]byte("function binary"), "entry", [][]byte{[]byte("{}"), wasmContextJson}).Return(model.WasmResponse{
-		HttpCode: 200,
-		Response: "function executed correctly",
+	child2.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+		HttpCode: 200, Response: "ok",
 	})
 
-	collectionDiscovererChild2 := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
-	collChild1111_2 := shared.NewStrongCollection("1111", 40, false, true, "")
-	collChild1111_2.GetCollectionState().(*shared.LocalCollection).CollectionLock.RLock()
-
-	collectionDiscovererChild2.EXPECT().IsCollectionLocallyPresent("1111", uint64(0)).Return(true, collChild1111_2, nil)
-
-	migrationManagerChild2 := migrationManager_mock.NewMigrationManager(t)
-	migrationManagerChild2.EXPECT().UpdateCollectionsLatestUsage([]string{"1111"}).Return()
-	migrationManagerChild2.EXPECT().UpdatesRequestsInfo(mock.Anything, "").Return()
-
-	dataManagerChild2 := datamanager_mock.NewDataManager(t)
-	dataManagerChild2.EXPECT().GetCollectionsDiscoverer().Return(collectionDiscovererChild2)
-	dataManagerChild2.EXPECT().GetMigrationManager().Return(migrationManagerChild2)
-	dataManagerChild2.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
-
-	schedulerChild2Log := createNewLogger(t)
-	schedulerChild2 := scheduler.NewScheduler(true, dataManagerChild2, metadataManager, fnCacheChild2, wasmExecutorPoolChild2, serverInfoChild2, cfg, schedulerChild2Log)
-
-	child2Log := createNewLogger(t)
-	serverChild2, err := server.NewServer(child2Log, serverInfoChild2)
-	assert.NoError(t, err, "Expected no error when creating server")
-
-	err = schedulerChild2.RegisterRoutes(serverChild2, tknDecoderChild2)
-	assert.NoError(t, err, "Expected no error when registering routes")
-
-	httpServerChild2 := httptest.NewServer(serverChild2.Handler)
-	defer httpServerChild2.Close()
-
-	urlChild2, err := url.Parse(httpServerChild2.URL)
-	assert.NoError(t, err, "Expected no error when parsing url")
-
-	urlFather, err := url.Parse(httpServerFather.URL)
-	assert.NoError(t, err, "Expected no error when parsing url")
-
-	collFather1111.(*shared.StrongCollection).LeaderId = urlChild2.Host
-	collChild1111.(*shared.StrongCollection).LeaderId = urlFather.Host
-
-	req, err := http.NewRequest(http.MethodPost, httpServerChild.URL+"/invoke-function/test_function/1.0.0", nil)
-	assert.NoError(t, err, "Expected no error when creating request")
-
-	cachedQueries, _ := json.Marshal(wasmContext.Collections)
-	req.Header.Set("X-CLIENT-SECRET", "client-secret")
-	req.Header.Set("X-ERMES-CACHED-QUERY", string(cachedQueries))
-	req.Header.Set("X-ERMES-GROUPS", tokenString)
-
-	res, err := http.DefaultClient.Do(req)
-	assert.NoError(t, err, "Expected no error when sending request")
-	defer res.Body.Close()
-
-	assert.Equal(t, http.StatusOK, res.StatusCode, "Expected status code 200 OK")
-	bodyResp, err := io.ReadAll(res.Body)
-
-	var result string
-	err = json.Unmarshal(bodyResp, &result)
-	assert.NoError(t, err, "Expected no error when unmarshalling response body")
-	assert.Equal(t, "function executed correctly", result, "Expected response body to be 'function executed correctly'")
+	res := executeInvokeRequest(t, child1, wasmCtx)
+	assert.Equal(t, "ok", res)
 }

@@ -3,20 +3,25 @@ package metadataManager
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"tokenDecoder"
 )
 
 func (m *MetadataManagerImpl) handleRouteLookup(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			_, _ = io.Copy(io.Discard, r.Body)
+			_ = r.Body.Close()
+		}()
+
 		fnName := r.Header.Get("X-ERMES-REQ-FUNCTION")
 		fnVersion := r.Header.Get("X-ERMES-REQ-FUNCTION-VERSION")
 		queryParams := r.Header.Get("X-ERMES-QUERY")
 		geolocation := r.Header.Get("X-ERMES-POSITION")
 		groupToken := r.Header.Get("X-ERMES-GROUPS")
-		r.Body.Close()
 
-		m.log.Info("Received collection lookup request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "node_geolocation", m.serverInfo.MetadataDomain, "templates_geolocation", geolocation)
+		m.log.Eval("Received collection lookup request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "node_geolocation", m.serverInfo.MetadataDomain, "templates_geolocation", geolocation)
 		m.log.Debug("Received collection lookup request", "fn_name", fnName, "fn_version", fnVersion, "templates_parameters", queryParams)
 
 		groups, userId, err := tokenDecoder.DecodeGroupToken(groupToken)

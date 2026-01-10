@@ -46,7 +46,7 @@ func (p *QueryPropagatorImpl) Propagate(functionName, functionVersion, templateP
 }
 
 func (p *QueryPropagatorImpl) sendHttpReqToDest(dest, functionName, functionVersion, templateParamsMappings, groupToken, geolocation string) (map[uint64]model.QueryResult, error) {
-	url := fmt.Sprintf("http://%s%s", dest, EndpointLookup)
+	url := "http://" + dest + EndpointLookup
 
 	p.log.Debug("Creating HTTP request for query propagation", "fn_name", functionName, "fn_version", functionVersion, "destination", dest, "template_parameters_mappings", templateParamsMappings, "query_geolocation", geolocation)
 	req, err := http.NewRequest(http.MethodGet, url, nil)
@@ -61,7 +61,9 @@ func (p *QueryPropagatorImpl) sendHttpReqToDest(dest, functionName, functionVers
 	req.Header.Set("X-ERMES-POSITION", geolocation)
 	req.Header.Set("X-ERMES-QUERY", templateParamsMappings)
 
-	p.log.Debug("Sending HTTP request to destination node", "url", req.URL, "headers", fmt.Sprintf("%+v", req.Header))
+	if p.log.Enabled(logger.DebugLevel) {
+		p.log.Debug("Sending HTTP request to destination node", "url", req.URL, "headers", fmt.Sprintf("%+v", req.Header))
+	}
 
 	res, err := httpClient.CustomClient.Do(req)
 	if err != nil {

@@ -208,15 +208,14 @@ func (c *CollectionsDiscovererImp) AccessRecords(
 
 func (c *CollectionsDiscovererImp) updateRecord(
 	collectionId string,
+	collection shared.Collection,
 	dbFn func(isStrong bool) (int64, error),
 	isInitiator bool,
 	updateMessage messages.UpdateMessage,
 ) (map[string]struct{}, error, bool) { //host, error, is collection locally stored
 	c.log.Info("UpdateRecord called", "collection_id", collectionId)
 
-	collection, exists := c.collectionsPartialView.GetCollection(collectionId)
-	var isStrong = false
-	if !exists {
+	if collection == nil {
 		//can't verify if collection is strong or weak, so just notify father
 		c.log.Warn("UpdateRecord: Collection not found during update. Trying to forward to father", "collection_id", collectionId)
 
@@ -253,6 +252,26 @@ func (c *CollectionsDiscovererImp) updateRecord(
 		return hosts, nil, false
 	}
 
+	c.log.Debug("Preparing list of host to which propagate the update", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+	//always notify to father
+	hosts := collection.HostsId()
+
+	if c.serverInfo.Father != nil {
+		addr := c.serverInfo.Father.HostName
+		hosts[addr] = struct{}{}
+	}
+
+	if !isInitiator || !collection.IsStrong() {
+		localState.CollectionLock.RLock()
+		c.log.Debug("LOCK: Eventual consistent collection locked in READ", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		defer localState.CollectionLock.RUnlock()
+
+		if !collection.IsLocal() {
+			c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+			return hosts, nil, false
+		}
+	}
+
 	if collection.IsStrong() {
 		c.log.Debug("Collection to be updated is local and sequential consistent", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 		if isInitiator && !collection.(*shared.StrongCollection).IsLeader { //safety check
@@ -271,30 +290,11 @@ func (c *CollectionsDiscovererImp) updateRecord(
 			return nil, nil, true //ignore outdated update
 		}
 
-		isStrong = true
+	} else {
+		collection.(*shared.WeakCollection).WriteMutex.Lock()
 	}
 
-	c.log.Debug("Preparing list of host to which propagate the update", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-	//always notify to father
-	hosts := collection.HostsId()
-
-	if c.serverInfo.Father != nil {
-		addr := c.serverInfo.Father.HostName
-		hosts[addr] = struct{}{}
-	}
-
-	if !collection.IsStrong() {
-		localState.CollectionLock.RLock()
-		c.log.Debug("LOCK: Eventual consistent collection locked in READ", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-		defer localState.CollectionLock.RUnlock()
-
-		if !collection.IsLocal() {
-			c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-			return hosts, nil, false
-		}
-	}
-
-	memUsage, err := dbFn(isStrong) // update in local db
+	memUsage, err := dbFn(collection.IsStrong()) // update in local db
 	if err != nil {
 		var staleErr *db.StaleUpdateError
 		if errors.As(err, &staleErr) {
@@ -348,6 +348,8 @@ func (c *CollectionsDiscovererImp) popolateUpdateSafetyCheck(saftyQueue shared.F
 					c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 					return
 				}
+				collection.(*shared.WeakCollection).WriteMutex.Lock()
+				defer collection.(*shared.WeakCollection).WriteMutex.Unlock()
 			}
 			memUsage, err := dbFn(isStrong) // update in local db
 			if err != nil {
@@ -375,7 +377,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 	var safetymap = make(map[string][]shared.FunctionQueue)       // host -> safetyQueue
 	//sync
 	//c.collectionsPartialView.Mutex.Lock()
-	c.mutex.Lock()
+	//c.mutex.Lock()
 	//imp
 
 	//write or delete in db and prepare messages for future propagation on other hosts
@@ -468,7 +470,8 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 		}
 
 		//write or delete in db
-		hosts, err, wasCollectionLocal := c.updateRecord(update.CollectionId, dbFn, isInitiator, &update)
+		collection, exists := c.collectionsPartialView.GetCollection(update.CollectionId)
+		hosts, err, wasCollectionLocal := c.updateRecord(update.CollectionId, collection, dbFn, isInitiator, &update)
 		if err != nil {
 			var staleErr *db.StaleUpdateError
 			if errors.As(err, &staleErr) {
@@ -488,7 +491,6 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 		}
 
 		// for each host that has the collection prepare the message
-		collection, exists := c.collectionsPartialView.GetCollection(update.CollectionId)
 		for host := range hosts {
 			if exists && collection.GetCollectionState().IsCollectionBeingMigrated() && collection.GetCollectionState().IsCollectionBeingMigratedTo(host) {
 				copyMsg := update.Copy()
@@ -528,6 +530,8 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 									c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", update.CollectionId, "collection", fmt.Sprintf("%+v", collection))
 									return
 								}
+								collection.(*shared.WeakCollection).WriteMutex.Lock()
+								defer collection.(*shared.WeakCollection).WriteMutex.Unlock()
 							}
 							memUsage, err := dbFn(isStrong) // update in local db
 							if err != nil {
@@ -561,9 +565,12 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 				safetymap[host] = append(safetymap[host], saftyQueue)
 			}
 		}
+		if wasCollectionLocal && !collection.IsStrong() {
+			collection.(*shared.WeakCollection).WriteMutex.Unlock()
+		}
 	}
 	//c.collectionsPartialView.Mutex.Unlock() // lock release
-	c.mutex.Unlock()
+	//c.mutex.Unlock()
 
 	//propagate update to other hosts
 	for host, msg := range msgs {
@@ -581,7 +588,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 	var safetymap = make(map[string][]shared.FunctionQueue)            // host -> safetyQueue
 	//sync
 	//c.collectionsPartialView.Mutex.Lock()
-	c.mutex.Lock()
+	//c.mutex.Lock()
 
 	for _, update := range updates {
 		dbFn := func(isStrong bool) (int64, error) {
@@ -595,10 +602,11 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 		}
 
 		//write or delete in db
-		hosts, err, wasCollectionLocal := c.updateRecord(update.CollectionId, dbFn, isInitiator, &update)
+		collection, exists := c.collectionsPartialView.GetCollection(update.CollectionId)
+		hosts, err, wasCollectionLocal := c.updateRecord(update.CollectionId, collection, dbFn, isInitiator, &update)
 		if err != nil {
 			//c.collectionsPartialView.Mutex.Unlock() // lock release
-			c.mutex.Unlock()
+			//c.mutex.Unlock()
 			c.log.Error("UpdateCollectionsGroupsAndPropagate: groups update failed", "collection_id", update.CollectionId, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
 			return err
 		}
@@ -612,7 +620,6 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 		}
 
 		// for each host that has the collection prepare the message
-		collection, exists := c.collectionsPartialView.GetCollection(update.CollectionId)
 		for host := range hosts {
 			if exists && collection.GetCollectionState().IsCollectionBeingMigrated() && collection.GetCollectionState().IsCollectionBeingMigratedTo(host) {
 				copyMsg := update.Copy()
@@ -653,6 +660,8 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 									c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", update.CollectionId, "collection", fmt.Sprintf("%+v", collection))
 									return
 								}
+								collection.(*shared.WeakCollection).WriteMutex.Lock()
+								defer collection.(*shared.WeakCollection).WriteMutex.Unlock()
 							}
 							memUsage, err := dbFn(isStrong) // update in local db
 							if err != nil {
@@ -687,9 +696,12 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 				safetymap[host] = append(safetymap[host], saftyQueue)
 			}
 		}
+		if wasCollectionLocal && !collection.IsStrong() {
+			collection.(*shared.WeakCollection).WriteMutex.Unlock()
+		}
 	}
 	//c.collectionsPartialView.Mutex.Unlock() // lock release
-	c.mutex.Unlock()
+	//c.mutex.Unlock()
 
 	//propagate update to other hosts
 	for host, msg := range msgs {

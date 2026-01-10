@@ -138,6 +138,7 @@ func (s *StrongCollection) RemoveHost(hostId string) {
 type WeakCollection struct {
 	collectionId    string
 	collectionState CollectionState
+	WriteMutex      sync.Mutex
 }
 
 func NewWeakCollection(collectionId string, size uint64, isRemote bool) Collection {
@@ -146,11 +147,13 @@ func NewWeakCollection(collectionId string, size uint64, isRemote bool) Collecti
 		return &WeakCollection{
 			collectionId:    collectionId,
 			collectionState: NewRemoteCollection(hosts),
+			WriteMutex:      sync.Mutex{},
 		}
 	}
 	return &WeakCollection{
 		collectionId:    collectionId,
 		collectionState: NewLocalCollection(size, hosts),
+		WriteMutex:      sync.Mutex{},
 	}
 }
 

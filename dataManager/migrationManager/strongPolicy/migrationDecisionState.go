@@ -106,10 +106,9 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 				col.(*shared.StrongCollection).HasPostponedDecisionBehaviour() {
 				return true
 			}
-			wg.Add(1)
 			m.policy.log.Infof("DEFAULT-STRONG-POLICY, start taking decisions for collection %s", outerKey)
 			//take decision on a secondary thread
-			go m.innerKeyDecision(col.(*shared.StrongCollection), innerMap, &wg, decisionCh)
+			wg.Go(func() { m.innerKeyDecision(col.(*shared.StrongCollection), innerMap, decisionCh) })
 			return true
 		})
 		//wait for all the decision to ends
@@ -151,19 +150,15 @@ func (m *MigrationManagerDecisionState) decisionReader(decisionCh chan Decisions
 	wg := sync.WaitGroup{}
 	m.policy.log.Warn("DEFAULT-STRONG-POLICY, applying taken decisions")
 	for _, decisions := range aggregatedDecisions {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			m.applyTakenDecisions(decisions.IsMigration, decisions.Decisions, decisions.Collection, decisions.LeaderDecisionTaken)
-		}()
+		})
 	}
 	wg.Wait()
 	m.policy.log.Warn("DEFAULT-STRONG-POLICY, all decisions applied")
 }
 
-func (m *MigrationManagerDecisionState) innerKeyDecision(strongCollection *shared.StrongCollection, innerMap map[string]*usage.CircularBuffer, wg *sync.WaitGroup, decisionCh chan<- Decisions) {
-	defer wg.Done()
-
+func (m *MigrationManagerDecisionState) innerKeyDecision(strongCollection *shared.StrongCollection, innerMap map[string]*usage.CircularBuffer, decisionCh chan<- Decisions) {
 	replicaInterestedNodeCounter := 0
 	leaderDecisionTaken := false
 

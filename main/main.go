@@ -122,10 +122,7 @@ func run(ctx context.Context, configPath string) error {
 	}()
 
 	var wg sync.WaitGroup
-	wg.Add(1)
-
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		<-ctx.Done()
 		shutdownCtx, newCancel := context.WithTimeout(context.Background(), 10*time.Second)
 		dataManager.GetMigrationManager().StopAsyncDump()
@@ -134,7 +131,7 @@ func run(ctx context.Context, configPath string) error {
 		if err := httpServer.Shutdown(shutdownCtx); err != nil {
 			generalLog.Errorf("error shutting down http server: %v", err)
 		}
-	}()
+	})
 
 	wg.Wait()
 

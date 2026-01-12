@@ -507,8 +507,9 @@ func (m *MigrationManagerImp) freeLru(sizeGoal uint) error {
 			continue
 		}
 
-		wg.Add(1)
-		go m.sendCollectionAndRemove(collection, &wg)
+		wg.Go(func() {
+			m.sendCollectionAndRemove(collection)
+		})
 	}
 	wg.Wait()
 
@@ -521,9 +522,7 @@ func (m *MigrationManagerImp) freeLru(sizeGoal uint) error {
 	return nil
 }
 
-func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collection, wg *sync.WaitGroup) error {
-	defer wg.Done()
-
+func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collection) error {
 	//sync -> avoid send a collection if used
 	localColl := collection.GetCollectionState().(*shared.LocalCollection)
 	if !localColl.CollectionLock.TryLock() {

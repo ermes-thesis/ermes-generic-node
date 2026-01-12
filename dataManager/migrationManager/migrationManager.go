@@ -411,7 +411,7 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 			i.Sender = m.serverInfo.HostName
 			msgs[fatherId] = messages.CollectionRequestInfoMessages{Messages: append(msgs[fatherId].Messages, i)}
 		} else if !collection.IsStrong() && !collection.IsLocal() {
-			hostId := m.collectionsPartialView.GetClosestChild(collection.HostsId(), m.serverInfo)
+			hostId := m.serverInfo.GetClosestChild(collection.HostsId())
 			if hostId == "" {
 				m.log.Error("MIG-MANAGER, no info on the collection and no child to send the info")
 				continue

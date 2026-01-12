@@ -75,7 +75,7 @@ func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo stri
 	}
 
 	if s.ServerInfo.Father != nil && s.ServerInfo.Father.HostName != nodeTo && !ok {
-		s.logger.WarnfWith("Request should be sent to %s , which is not a known node.", []any{nodeTo}, "server_info", fmt.Sprintf("%+v", s.ServerInfo))
+		s.logger.WarnfWith("Request should be sent to %s, which is not a known node.", []any{nodeTo}, "server_info", fmt.Sprintf("%+v", s.ServerInfo))
 		return nil, errors.New("node not in the hierarchy, cannot send request")
 	}
 

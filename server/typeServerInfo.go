@@ -159,3 +159,20 @@ func (i *ServerInfo) GetLatencyFor(hostname string) int {
 	}
 	return 0
 }
+
+func (i *ServerInfo) GetClosestChild(hostSet map[string]struct{}) string {
+	var minLatency int
+	var minLatencyHost string
+
+	for _, child := range i.Children {
+		if _, ok := hostSet[child.HostName]; !ok {
+			continue
+		}
+		if minLatencyHost == "" || child.Latency < minLatency {
+			minLatency = child.Latency
+			minLatencyHost = child.HostName
+		}
+	}
+
+	return minLatencyHost
+}

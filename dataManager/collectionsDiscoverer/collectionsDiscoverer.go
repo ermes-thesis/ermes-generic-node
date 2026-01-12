@@ -176,17 +176,25 @@ func (c *CollectionsDiscovererImp) AccessRecords(
 	if localState, ok := collection.GetCollectionState().(*shared.LocalCollection); ok {
 		if !collection.IsStrong() {
 			localState.CollectionLock.RLock()
-			defer localState.CollectionLock.RUnlock()
 
 			if !collection.IsLocal() {
+				localState.CollectionLock.RUnlock()
 				c.log.Debug("AccessRecords: Collection became non-local while acquiring the lock", "collection_id", collectionId)
-				child := c.collectionsPartialView.GetClosestChild(collection.HostsId(), c.serverInfo)
+				addr := c.serverInfo.GetClosestChild(collection.HostsId())
+				if addr == "" {
+					if c.serverInfo.Father == nil {
+						c.log.Error("AccessRecords: Collection not known locally, no father to query. Collection DOES NOT exists", "collection_id", collectionId)
+						return zero, errors.New("collection not found")
+					}
+					addr = c.serverInfo.Father.HostName
+				}
 				//c.collectionsPartialView.Mutex.Unlock() // lock release
-				c.log.Debug("AccessRecords: Accessing remote child for eventual collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "child", child)
-				return remoteFn(child)
+				c.log.Debug("AccessRecords: Accessing remote child for eventual collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "addr", addr)
+				return remoteFn(addr)
 			} else {
 				c.log.Debug("AccessRecords: Accessing local collection records", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 				//c.collectionsPartialView.Mutex.Unlock() // lock release
+				defer localState.CollectionLock.RUnlock()
 				return dbFn()
 			}
 		}
@@ -200,10 +208,17 @@ func (c *CollectionsDiscovererImp) AccessRecords(
 		//c.collectionsPartialView.Mutex.Unlock() // lock release
 		return zero, errors.New("strong collection can't be accessed remotely")
 	}
-	child := c.collectionsPartialView.GetClosestChild(collection.HostsId(), c.serverInfo)
+	addr := c.serverInfo.GetClosestChild(collection.HostsId())
+	if addr == "" {
+		if c.serverInfo.Father == nil {
+			c.log.Error("AccessRecords: Collection not known locally, no father to query. Collection DOES NOT exists", "collection_id", collectionId)
+			return zero, errors.New("collection not found")
+		}
+		addr = c.serverInfo.Father.HostName
+	}
 	//c.collectionsPartialView.Mutex.Unlock() // lock release
-	c.log.Debug("AccessRecords: Accessing remote child for eventual collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "child", child)
-	return remoteFn(child)
+	c.log.Debug("AccessRecords: Accessing remote child for eventual collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "addr", addr)
+	return remoteFn(addr)
 }
 
 func (c *CollectionsDiscovererImp) updateRecord(

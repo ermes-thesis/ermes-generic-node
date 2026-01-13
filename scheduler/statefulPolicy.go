@@ -46,7 +46,7 @@ func (s *statefulPolicy) RegisterRoutes(server server.ServerType, tokenDecoder t
 	return nil
 }
 
-func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum uint64) (bool, shared.Collection, error) {
+func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum uint64, fromFather bool) (bool, shared.Collection, error) {
 	var (
 		found      bool
 		collection shared.Collection
@@ -61,10 +61,14 @@ func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum ui
 		if err == nil {
 			if collection != nil {
 				s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection), "is_locally_present", found)
+				return found, collection, nil
 			} else {
 				s.log.Info("Collection not known locally", "collection_id", colId, "seq_num", seqNum, "is_locally_present", found)
+				if !fromFather {
+					return found, collection, nil
+				}
+				s.log.Warn("Father forwarded request but collection is not known locally. Retrying after backoff", "collection_id", colId, "seq_num", seqNum, "current_attempt", i)
 			}
-			return found, collection, nil
 		} else if errors.As(err, &toMigrateErr) {
 			return false, nil, toMigrateErr
 		}
@@ -110,6 +114,10 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 	if s.serverInfo.Father != nil {
 		hostWithMoreEventual = s.serverInfo.Father.HostName
 	}
+	fromFather := false
+	if s.serverInfo.Father != nil {
+		fromFather = s.serverInfo.Father.HostName == reqHostname
+	}
 
 	// Cycling over all the returned collections (they are grouped based on their "AS" defined by the dev)
 	for _, cols := range scheduleRequest.Collections {
@@ -117,7 +125,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 		for _, col := range cols {
 			// Checking if the collection is locally present, the check is retried maximum 10 times, every 500ms if the
 			// collection is a sequential consistent one. (In case of an eventual consistent the seqNumber passed is ignored)
-			found, collection, err := s.retryIsCollectionLocallyPresent(col.Id, scheduleRequest.SequentialSeqNumber)
+			found, collection, err := s.retryIsCollectionLocallyPresent(col.Id, scheduleRequest.SequentialSeqNumber, fromFather)
 			var toMigrateErr *collectionsDiscoverer.ToMigrateError
 			if err != nil {
 				if errors.As(err, &toMigrateErr) {
@@ -128,6 +136,8 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 						Body:       nil,
 					}, 0, toMigrateErr
 				}
+				s.log.Error("Error checking collection presence for scheduling", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_id", col.Id, "seq_num", scheduleRequest.SequentialSeqNumber, "error", err)
+				return nil, 0, fmt.Errorf("error checking collection presence for scheduling: %v", err)
 			}
 
 			if col.Metadata.Consistency == model.SequentialConsistent {

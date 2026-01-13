@@ -413,8 +413,11 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 		} else if !collection.IsStrong() && !collection.IsLocal() {
 			hostId := m.serverInfo.GetClosestChild(collection.HostsId())
 			if hostId == "" {
-				m.log.Error("MIG-MANAGER, no info on the collection and no child to send the info")
-				continue
+				if m.serverInfo.Father == nil {
+					m.log.Error("MIG-MANAGER, no info on the collection and no father to send the info")
+					continue
+				}
+				hostId = m.serverInfo.Father.HostName
 			}
 			i.Sender = m.serverInfo.HostName
 			msgs[hostId] = messages.CollectionRequestInfoMessages{Messages: append(msgs[hostId].Messages, i)}

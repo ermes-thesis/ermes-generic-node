@@ -278,7 +278,7 @@ func (c *CollectionsDiscovererImp) updateRecord(
 
 	if !isInitiator || !collection.IsStrong() {
 		localState.CollectionLock.RLock()
-		c.log.Debug("LOCK: Eventual consistent collection locked in READ", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		c.log.Debug("LOCK: collection locked in READ", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 		defer localState.CollectionLock.RUnlock()
 
 		if !collection.IsLocal() {
@@ -304,9 +304,6 @@ func (c *CollectionsDiscovererImp) updateRecord(
 			c.log.Warn("Received an outdated update for the local sequential collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "received_sequence", updateMessage.GetSequence(), "current_sequence", collection.(*shared.StrongCollection).ConsistencyClock, "message", fmt.Sprintf("%+v", updateMessage), "is_initiator", isInitiator)
 			return nil, nil, true //ignore outdated update
 		}
-
-	} else {
-		collection.(*shared.WeakCollection).WriteMutex.Lock()
 	}
 
 	memUsage, err := dbFn(collection.IsStrong()) // update in local db
@@ -486,6 +483,10 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 
 		//write or delete in db
 		collection, exists := c.collectionsPartialView.GetCollection(update.CollectionId)
+		if exists && !collection.IsStrong() {
+			collection.(*shared.WeakCollection).WriteMutex.Lock()
+		}
+
 		hosts, err, wasCollectionLocal := c.updateRecord(update.CollectionId, collection, dbFn, isInitiator, &update)
 		if err != nil {
 			var staleErr *db.StaleUpdateError
@@ -493,6 +494,9 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 				c.log.Warn("UpdateCollectionsRecordsAndPropagate: stale update detected", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
 			} else {
 				c.log.Error("UpdateCollectionsRecordsAndPropagate: update failed", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+			}
+			if exists && !collection.IsStrong() {
+				collection.(*shared.WeakCollection).WriteMutex.Unlock()
 			}
 			continue
 		}
@@ -580,7 +584,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 				safetymap[host] = append(safetymap[host], saftyQueue)
 			}
 		}
-		if wasCollectionLocal && !collection.IsStrong() {
+		if exists && !collection.IsStrong() {
 			collection.(*shared.WeakCollection).WriteMutex.Unlock()
 		}
 	}
@@ -618,11 +622,18 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 
 		//write or delete in db
 		collection, exists := c.collectionsPartialView.GetCollection(update.CollectionId)
+		if exists && !collection.IsStrong() {
+			collection.(*shared.WeakCollection).WriteMutex.Lock()
+		}
+
 		hosts, err, wasCollectionLocal := c.updateRecord(update.CollectionId, collection, dbFn, isInitiator, &update)
 		if err != nil {
 			//c.collectionsPartialView.Mutex.Unlock() // lock release
 			//c.mutex.Unlock()
 			c.log.Error("UpdateCollectionsGroupsAndPropagate: groups update failed", "collection_id", update.CollectionId, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+			if exists && !collection.IsStrong() {
+				collection.(*shared.WeakCollection).WriteMutex.Unlock()
+			}
 			return err
 		}
 		update.SenderIp = c.serverInfo.HostName
@@ -711,7 +722,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 				safetymap[host] = append(safetymap[host], saftyQueue)
 			}
 		}
-		if wasCollectionLocal && !collection.IsStrong() {
+		if exists && !collection.IsStrong() {
 			collection.(*shared.WeakCollection).WriteMutex.Unlock()
 		}
 	}

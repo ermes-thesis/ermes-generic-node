@@ -88,12 +88,12 @@ func (m *MigrationManagerDecisionState) computeEqState() {
 	//sync
 
 	//imp
-	var wg sync.WaitGroup
 
 	decisionCh := make(chan Decisions)
 	//start decision reader
 
 	go func() {
+		var wg sync.WaitGroup
 		//go take decision for each collection in parallel and collect decisions in decisionCh
 		m.policy.equilibriumState.Range(func(key, value any) bool { // key: string (resource), value: map[string]*usage.CircularBuffer mapping resource - nodeName
 			outerKey := key.(string)
@@ -148,14 +148,14 @@ func (m *MigrationManagerDecisionState) decisionReader(decisionCh chan Decisions
 	m.upgradeDecisionsToReachSafeLRU(aggregatedDecisions, freedSize, migrationKeys)
 
 	wg := sync.WaitGroup{}
-	m.policy.log.Warn("DEFAULT-STRONG-POLICY, applying taken decisions")
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, applying taken decisions")
 	for _, decisions := range aggregatedDecisions {
 		wg.Go(func() {
 			m.applyTakenDecisions(decisions.IsMigration, decisions.Decisions, decisions.Collection, decisions.LeaderDecisionTaken)
 		})
 	}
 	wg.Wait()
-	m.policy.log.Warn("DEFAULT-STRONG-POLICY, all decisions applied")
+	m.policy.log.Info("DEFAULT-STRONG-POLICY, all decisions applied")
 }
 
 func (m *MigrationManagerDecisionState) innerKeyDecision(strongCollection *shared.StrongCollection, innerMap map[string]*usage.CircularBuffer, decisionCh chan<- Decisions) {

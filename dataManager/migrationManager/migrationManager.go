@@ -236,7 +236,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 			}
 
 			collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
-			m.log.Warn("MIG-MANAGER, new collection already present locally", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
+			m.log.Info("MIG-MANAGER, new collection already present locally", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
 			return true, nil
 		}
 
@@ -272,7 +272,6 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		}
 
 		m.log.Info("MIG-MANAGER, new collection set to local", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
-		//m.log.Warn("AAAAAAAAAAAAAA", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
 		m.updateLru(collection, uint(actualSize))
 		collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 		return false, nil
@@ -289,7 +288,6 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	localState.CollectionLock.Lock()
 	m.collectionsPartialView.SetCollection(collectionId, coll)
 	m.log.Info("MIG-MANAGER, new collection added to known collections")
-	//m.log.Warn("BBBBBBBBBBBBBBBBBB", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
 	m.mutex.Unlock()
 
 	actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)

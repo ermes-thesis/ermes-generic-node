@@ -30,9 +30,12 @@ type CollectionState interface {
 
 type LocalCollection struct {
 	size uint64
+
 	//a collection can be stored locally and on children simultaneously
-	hostsId        map[string]struct{} //map to guarantee univocity
-	CollectionLock sync.RWMutex        //if  lock is taken, a collection can't be moved from this node => wasm functions that use a collection must take the lock
+	hostsId     map[string]struct{} //map to guarantee univocity
+	hostsIdLock sync.RWMutex
+
+	CollectionLock sync.RWMutex //if  lock is taken, a collection can't be moved from this node => wasm functions that use a collection must take the lock
 
 	collectionSendingTo map[string]DoubleFunctionQueue //map to guarantee univocity
 }
@@ -43,6 +46,9 @@ type DoubleFunctionQueue struct {
 }
 
 func (l *LocalCollection) String() string {
+	l.hostsIdLock.RLock()
+	defer l.hostsIdLock.RUnlock()
+
 	return fmt.Sprintf("{size:%d hostsId:%v local:%t}", l.size, l.hostsId, l.IsLocal())
 }
 
@@ -54,6 +60,9 @@ func NewLocalCollection(size uint64, hostNames map[string]struct{}) CollectionSt
 	}
 }
 func (l *LocalCollection) AddHost(hostId string) {
+	l.hostsIdLock.Lock()
+	defer l.hostsIdLock.Unlock()
+
 	l.hostsId[hostId] = struct{}{}
 }
 func (l *LocalCollection) IsLocal() bool {
@@ -68,10 +77,16 @@ func (l *LocalCollection) IncSize(size int64) {
 }
 
 func (l *LocalCollection) HostsId() map[string]struct{} {
+	l.hostsIdLock.RLock()
+	defer l.hostsIdLock.RUnlock()
+
 	return maps.Clone(l.hostsId)
 }
 
 func (l *LocalCollection) RemoveHost(hostId string) {
+	l.hostsIdLock.Lock()
+	defer l.hostsIdLock.Unlock()
+
 	delete(l.hostsId, hostId)
 }
 
@@ -136,12 +151,16 @@ func (l *LocalCollection) getCollectionSendingTo() map[string]DoubleFunctionQueu
 }
 
 type RemoteCollection struct {
-	hostsId map[string]struct{} //map to guarantee univocity
+	hostsId     map[string]struct{} //map to guarantee univocity
+	hostsIdLock sync.RWMutex
 
 	collectionSendingTo map[string]DoubleFunctionQueue //map to guarantee univocity
 }
 
 func (l *RemoteCollection) String() string {
+	l.hostsIdLock.RLock()
+	defer l.hostsIdLock.RUnlock()
+
 	return fmt.Sprintf("{hostsId:%v local:%t}", l.hostsId, l.IsLocal())
 }
 
@@ -156,13 +175,22 @@ func (l *RemoteCollection) IsLocal() bool {
 	return false
 }
 func (l *RemoteCollection) AddHost(hostId string) {
+	l.hostsIdLock.Lock()
+	defer l.hostsIdLock.Unlock()
+
 	l.hostsId[hostId] = struct{}{}
 }
 func (l *RemoteCollection) HostsId() map[string]struct{} {
+	l.hostsIdLock.RLock()
+	defer l.hostsIdLock.RUnlock()
+
 	return maps.Clone(l.hostsId)
 }
 
 func (l *RemoteCollection) RemoveHost(hostId string) {
+	l.hostsIdLock.Lock()
+	defer l.hostsIdLock.Unlock()
+
 	delete(l.hostsId, hostId)
 }
 

@@ -96,7 +96,6 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 
 		//sync
 		s.mutex.Lock()
-		defer s.mutex.Unlock()
 
 		//handle errors
 		if err != nil || code != http.StatusOK {
@@ -128,11 +127,18 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 			//remove collection from partial view
 			s.partialView.RemoveCollection(collection.CollectionId())
 		}
+
+		s.mutex.Unlock()
 	}()
 }
 
 func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool) {
 	collection.GetCollectionState().RemoveHost(destination) // remove host from known hosts
+
+	if collection.IsLocal() {
+		collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+		s.mutex.Unlock()
+	}
 
 	//remove postponed delete behaviour
 	if collection.IsStrong() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() && isMigration {
@@ -140,6 +146,9 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 	}
 
 	if !collection.IsLocal() {
+		collection.SetToLocal(collectionSize)
+		s.mutex.Unlock()
+
 		//set collection back in redis
 		availableMem, memErr := s.dbInterface.GetAvailableMemory()
 		if memErr != nil {
@@ -167,7 +176,6 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 			}
 		}
 
-		collection.SetToLocal(collectionSize)                              // set collection back to local
 		s.partialView.SetCollection(collection.CollectionId(), collection) // add back to known collections
 		s.log.Info("SENDER: Migration failed, set collection back to local", "collectionId", collection.CollectionId())
 
@@ -178,6 +186,8 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 		collection.(*shared.StrongCollection).LeaderId = s.serverInfo.HostName // set back as leader
 		s.log.Info("SENDER: Leader migration failed, set collection back as leader", "collectionId", collection.CollectionId())
 	}
+
+	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 }
 
 func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage, destination string) {

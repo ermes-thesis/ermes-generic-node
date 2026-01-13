@@ -100,6 +100,7 @@ func (s *StrongCollection) SetToLocal(size uint64) {
 		return
 	}
 	collectionState := NewLocalCollection(size, s.collectionState.HostsId())
+	collectionState.(*LocalCollection).CollectionLock.Lock()
 	collectionState.setCollectionSendingTo(s.GetCollectionState().getCollectionSendingTo())
 	s.collectionState = collectionState
 }
@@ -166,6 +167,7 @@ func (w *WeakCollection) SetToLocal(size uint64) {
 		return
 	}
 	collectionState := NewLocalCollection(size, w.collectionState.HostsId())
+	collectionState.(*LocalCollection).CollectionLock.Lock()
 	collectionState.setCollectionSendingTo(w.GetCollectionState().getCollectionSendingTo())
 	w.collectionState = collectionState
 }

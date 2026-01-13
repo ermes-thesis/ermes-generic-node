@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
+	"time"
 	"tokenDecoder"
 
 	"github.com/ermes-thesis/ermes-common/model"
@@ -53,6 +55,12 @@ func (s *statefulPolicy) handleOffloadFunctionInvocation(tokenDecoder tokenDecod
 			s.log.Error("Max redirects exceeded for offloaded invocation", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumuLatInt, "redirects", redirectsInt, "nodes", nodes)
 			http.Error(w, "Max redirects exceeded for offloaded invocation", http.StatusLoopDetected)
 			return
+		}
+
+		nodesList := strings.Split(nodes, ",")
+		if len(nodesList) >= 3 && nodesList[len(nodesList)-1] == nodesList[len(nodesList)-3] {
+			s.log.Warn("Detected redirection loop in offloaded invocation", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "fn_name", fnName, "fn_version", fnVersion, "collections", collectionJson, "sequential_seq_number", sequentialSeqNumberStr, "request_from_hostname", hostname, "cumulative_latency", cumulativeLatency, "nodes", nodes)
+			time.Sleep(50 * time.Millisecond)
 		}
 
 		groups, userId, err := tokenDecoder.DecodeGroupToken(groupToken)

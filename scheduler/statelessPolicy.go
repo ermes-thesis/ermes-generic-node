@@ -44,5 +44,5 @@ func (s *statelessPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname 
 		return nil, 0, fmt.Errorf("error retrieving function metadata: %v", err)
 	}
 
-	return s.executeLocally(scheduleRequest, reqHostname, groups, userId, sequentialCollectionId, nil, functionMetadata.StrongCollWriteAccess)
+	return s.executeLocally(scheduleRequest, reqHostname, groups, userId, sequentialCollectionId, nil, functionMetadata.StrongCollWriteAccess, nil)
 }

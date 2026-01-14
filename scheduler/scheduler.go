@@ -110,7 +110,7 @@ type baseScheduler struct {
 	cfg              config.SchedulerConfig
 }
 
-func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string, sequentialCollId string, seqColLock *sync.RWMutex, writeSeqCollection bool) (*FunctionResult, uint64, error) {
+func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string, sequentialCollId string, seqColLock *sync.RWMutex, writeSeqCollection bool, writeMutex *sync.Mutex) (*FunctionResult, uint64, error) {
 	var collIds []string
 	for _, cols := range scheduleRequest.Collections {
 		for _, col := range cols {
@@ -149,6 +149,10 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 		if seqColLock != nil {
 			s.log.Info("Releasing sequential collection lock after function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 			seqColLock.RUnlock()
+		}
+		if writeSeqCollection && writeMutex != nil {
+			s.log.Eval("Releasing sequential collection write mutex after function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
+			writeMutex.Unlock()
 		}
 
 		var collRequestInfo []messages.CollectionRequestInfo

@@ -95,7 +95,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 		if s.log.Enabled(logger.DebugLevel) {
 			s.log.Debug("No collections specified, executing locally", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload))
 		}
-		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false)
+		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false, nil)
 	}
 
 	s.log.Info("Start to analyze collections for scheduling decision", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId)
@@ -208,14 +208,13 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 			if sequentialCollection.IsLeader || !functionMetadata.StrongCollWriteAccess {
 				if functionMetadata.StrongCollWriteAccess {
 					sequentialCollection.WriteMutex.Lock()
-					defer sequentialCollection.WriteMutex.Unlock()
 				}
 				s.log.Info("Executing function locally with sequential collection", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 
 				if s.log.Enabled(logger.DebugLevel) {
 					s.log.Debug("Executing function locally with sequential collection", "seq_collection_id", sequentialCollection.CollectionId(), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "is_leader", sequentialCollection.IsLeader, "write_access_requested", functionMetadata.StrongCollWriteAccess)
 				}
-				return s.executeLocally(scheduleRequest, reqHostname, groups, userId, sequentialCollection.CollectionId(), &sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock, functionMetadata.StrongCollWriteAccess)
+				return s.executeLocally(scheduleRequest, reqHostname, groups, userId, sequentialCollection.CollectionId(), &sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock, functionMetadata.StrongCollWriteAccess, sequentialCollection.WriteMutex)
 			}
 
 			s.log.Info("Sequential collection must be accessed in write but the local sequential collection is not the leader. Forwarding request to the host containing the leader sequential collection",
@@ -245,7 +244,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 		if s.log.Enabled(logger.DebugLevel) {
 			s.log.Debug("Executing function locally with eventual", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "user_access_groups", groups, "request_hostname", reqHostname)
 		}
-		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false)
+		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false, nil)
 	}
 
 	// If hostWithMoreEventual is empty, it means that none of the eventual collections requested exists in the architecture

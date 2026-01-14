@@ -126,7 +126,7 @@ func (l *LocalCollection) RemoveCollectionMigrationHostExecutingPostponedUpdates
 		return errors.New("hostId not found in collectionSendingTo")
 	}
 
-	postponed.remoteUpdates.ExecuteFunctions()
+	postponed.localUpdates.ExecuteFunctions()
 
 	delete(l.collectionSendingTo, hostId)
 	return nil

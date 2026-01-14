@@ -472,7 +472,7 @@ func (m *MigrationManagerImp) HandlePostponedDecisions(collection shared.Collect
 
 func (m *MigrationManagerImp) handlePostponedDecisions(collection shared.Collection) {
 	m.log.Info("MIG-MANAGER, check postponed decision behaviour for collection", "collection_id", collection.CollectionId(), "is_strong", collection.IsStrong(), "is_local", collection.IsLocal())
-	if collection.IsLocal() && collection.IsStrong() && collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
+	if collection.IsLocal() && collection.IsStrong() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() && collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
 		m.log.Info("MIG-MANAGER, starting postponed decision behaviour execution for strong collection", "collection_id", collection.CollectionId())
 		localColl := collection.GetCollectionState().(*shared.LocalCollection)
 		collection.(*shared.StrongCollection).ExecutePostponedDecisionBehaviour(m.log)

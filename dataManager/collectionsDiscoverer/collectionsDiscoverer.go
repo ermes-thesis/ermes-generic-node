@@ -281,7 +281,12 @@ func (c *CollectionsDiscovererImp) updateRecord(
 	if !isInitiator || !collection.IsStrong() {
 		localState.CollectionLock.RLock()
 		c.log.Debug("LOCK: collection locked in READ", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-		defer localState.CollectionLock.RUnlock()
+		defer func() {
+			localState.CollectionLock.RUnlock()
+			if collection.IsStrong() {
+				c.migrationManager.HandlePostponedDecisions(collection)
+			}
+		}()
 
 		if !collection.IsLocal() {
 			c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))

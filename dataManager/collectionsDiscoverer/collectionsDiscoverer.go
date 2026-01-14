@@ -18,7 +18,7 @@ import (
 
 type CollectionsDiscoverer interface {
 	IsCollectionLocallyPresent(collectionId string, consistencyClock uint64) (bool, shared.Collection, error)
-	Init(*shared.CollectionPartialView, server.ServerInfo, server.ServerType, db.GenericDB, logger.Logger, *lru.LRUCache[shared.Collection], *sync.Mutex)
+	Init(*shared.CollectionPartialView, server.ServerInfo, server.ServerType, db.GenericDB, logger.Logger, *lru.LRUCache[shared.Collection], migrationManager.MigrationManager, *sync.Mutex)
 
 	AccessRecords(collectionId string, dbFn func() (any, error), remoteFn func(addr string) (any, error)) (any, error)
 
@@ -27,8 +27,8 @@ type CollectionsDiscoverer interface {
 
 	UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdateMessage, groups []string, userId string, isInitiator bool, ignoredHostName string) error
 	UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdateMessage, isInitiator bool, ignoredHostName string) error
-	SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong, skipUniquenessCheck bool) error
-	RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, userId string, isInitiator bool, ignoredHostName string) error
+	SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong, skipUniquenessCheck bool) error
+	RemoveCollectionAndPropagate(collectionId string, groups []string, userId string, isInitiator bool, ignoredHostName string) error
 
 	GetCollectionVectorClockValue(collectionId string) (uint64, error)
 }
@@ -41,6 +41,7 @@ type CollectionsDiscovererImp struct {
 	log                    logger.Logger
 	dbInterface            db.GenericDB
 	lruCache               *lru.LRUCache[shared.Collection]
+	migrationManager       migrationManager.MigrationManager
 	mutex                  *sync.Mutex
 }
 
@@ -56,7 +57,7 @@ func GetCollectionsDiscovererInstance() CollectionsDiscoverer {
 	return collectionsDiscovererInstance
 }
 
-func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection], mutex *sync.Mutex) {
+func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection], migrationManager migrationManager.MigrationManager, mutex *sync.Mutex) {
 	initOnce.Do(func() {
 		c.collectionsPartialView = collections
 		c.serverInfo = serverInfo
@@ -64,6 +65,7 @@ func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialVie
 		c.sender = sender.NewCollectionDiscovererSender(logger, server)
 		c.dbInterface = dbInterface
 		c.lruCache = lruCache
+		c.migrationManager = migrationManager
 		c.mutex = mutex
 
 		server.AddCustomRoute(c.sender.RemoteAccessPath(), true, c.handleIncomingRemoteAccess().ServeHTTP)
@@ -739,7 +741,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 	return nil
 }
 
-func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong bool, skipUniquenessCheck bool) error {
+func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong bool, skipUniquenessCheck bool) error {
 	c.log.Info("SetCollectionAndPropagate called. Processing collection creation", "collection_id", collectionId, "collection_name", collectionName, "records", fmt.Sprintf("%+v", records), "executing_user", userId, "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck)
 	//sync
 	//c.collectionsPartialView.Mutex.Lock()
@@ -761,7 +763,7 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 		size += uint(len(group))
 	}
 	//free space for collection
-	if err := migrationManager.FreeSpaceToCreateCollection(size); err != nil {
+	if err := c.migrationManager.FreeSpaceToCreateCollection(size); err != nil {
 		c.log.Error("Failed to free space for the new collection", "collection_id", collectionId, "collection_name", collectionName, "records", fmt.Sprintf("%+v", records), "executing_user", userId, "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck, "error", err)
 		return err
 	}
@@ -813,7 +815,7 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 	c.log.Info("Collection persisted in DB successfully", "collection_id", collectionId, "actual_size", actualSize)
 
 	//add collection in local view
-	migrationManagerErr := migrationManager.NewCollectionCreated(collectionId, actualSize, isStrong)
+	migrationManagerErr := c.migrationManager.NewCollectionCreated(collectionId, actualSize, isStrong)
 	if migrationManagerErr != nil {
 		c.log.Error("Failed to register newly created collection in Migration Manager view", "collection_id", collectionId, "collection_name", collectionName, "executing_user", userId, "records", fmt.Sprintf("%+v", records), "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck, "error", migrationManagerErr)
 		return migrationManagerErr
@@ -823,7 +825,7 @@ func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string
 	return nil
 }
 
-func (c *CollectionsDiscovererImp) RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, userId string, isInitiator bool, ignoredHostName string) error {
+func (c *CollectionsDiscovererImp) RemoveCollectionAndPropagate(collectionId string, groups []string, userId string, isInitiator bool, ignoredHostName string) error {
 	c.log.Info("RemoveCollectionAndPropagate called. Processing collection deletion", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
 	//sync
 	//c.collectionsPartialView.Mutex.Lock()
@@ -872,7 +874,7 @@ func (c *CollectionsDiscovererImp) RemoveCollectionAndPropagate(collectionId str
 	if err != nil {
 		c.log.Error("Failed to delete the local collection from DB", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
 	}
-	migrationManager.RemoveCollectionFromLru(collectionId) //remove from lru
+	c.migrationManager.RemoveCollectionFromLru(collectionId) //remove from lru
 
 	//c.collectionsPartialView.Mutex.Unlock() // lock release
 	c.mutex.Unlock()

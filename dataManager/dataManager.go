@@ -70,7 +70,7 @@ func (m *DataManagerImp) Init(collections *shared.CollectionPartialView, penalit
 			dataManagerInstance.collectionsDiscoverer.(*collectionsDiscoverer.CollectionsDiscovererStatelessGenericNode).SetCentralizedDBAddress(config.CentralizedDBName)
 			m.migrationManager.StatelessInit(collections, config, lruConfig, serverInfo, lruCache, logger.Component("migration_manager"), &m.mutex)
 		}
-		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger.Component("collections_discoverer"), lruCache, &m.mutex)
+		m.collectionsDiscoverer.Init(collections, serverInfo, server, dbInterface, logger.Component("collections_discoverer"), lruCache, m.migrationManager, &m.mutex)
 
 		m.dbInterface = dbInterface
 		m.serverInfo = serverInfo
@@ -159,14 +159,13 @@ func (m *DataManagerImp) SetCollectionAndPropagate(collectionId string, collecti
 		records,
 		groups,
 		userId,
-		m.migrationManager,
 		isStrong,
 		skipUniquenessCheck,
 	)
 }
 
 func (m *DataManagerImp) RemoveCollectionAndPropagate(collectionId string, groups []string, userId string) error {
-	return m.collectionsDiscoverer.RemoveCollectionAndPropagate(collectionId, m.migrationManager, groups, userId, true, m.serverInfo.HostName)
+	return m.collectionsDiscoverer.RemoveCollectionAndPropagate(collectionId, groups, userId, true, m.serverInfo.HostName)
 }
 
 func (m *DataManagerImp) GetCollectionVectorClockValue(collectionId string) (uint64, error) {

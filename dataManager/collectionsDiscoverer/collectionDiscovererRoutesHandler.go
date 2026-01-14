@@ -2,7 +2,6 @@ package collectionsDiscoverer
 
 import (
 	gossip "dataManager/messages"
-	"dataManager/migrationManager"
 	shared "dataManager/shared"
 	"encoding/json"
 	"errors"
@@ -291,7 +290,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler
 		senderIp := msg.SenderIp
 
 		//async
-		dbErr := c.RemoveCollectionAndPropagate(collectionId, migrationManager.GetMigrationManagerInstance(), msg.Groups, msg.UserId, false, senderIp)
+		dbErr := c.RemoveCollectionAndPropagate(collectionId, msg.Groups, msg.UserId, false, senderIp)
 		if dbErr != nil {
 			c.log.Error("Failed collection removal propagation", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg), "error", dbErr)
 			http.Error(w, "Internal Server Error: Failed to propagate collection removal", http.StatusInternalServerError)
@@ -303,7 +302,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler
 	})
 }
 
-func (c *CollectionsDiscovererImp) handleIncomingRemoteCollectionSet(migrationManager migrationManager.MigrationManager) http.Handler {
+func (c *CollectionsDiscovererImp) handleIncomingRemoteCollectionSet() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 		c.log.Eval("Received remote collection set request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
@@ -316,7 +315,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteCollectionSet(migrationMa
 		}
 
 		//collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong, skipUniquenessCheck bool
-		err := c.SetCollectionAndPropagate(msg.CollectionId, msg.CollectionName, msg.Records, msg.Groups, msg.UserId, migrationManager, msg.IsStrong, msg.SkipUniquenessCheck)
+		err := c.SetCollectionAndPropagate(msg.CollectionId, msg.CollectionName, msg.Records, msg.Groups, msg.UserId, msg.IsStrong, msg.SkipUniquenessCheck)
 
 		if err != nil {
 			c.log.Error("Failed collection set", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg), "error", err)

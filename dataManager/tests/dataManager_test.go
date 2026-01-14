@@ -38,7 +38,7 @@ func TestFromRemoteToLocalCollection(t *testing.T) {
 	mig := migrationManager.GetMigrationManagerInstance()
 	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log, mutex)
 	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
-	clDiscovererImp.Init(collections, serverinfo, ser, db, log, lruCache, mutex)
+	clDiscovererImp.Init(collections, serverinfo, ser, db, log, lruCache, mig, mutex)
 	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
@@ -84,7 +84,7 @@ func TestIterationModule(t *testing.T) {
 	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log, mutex)
 	defer mig.StopAsyncDump()
 	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
-	clDiscovererImp.Init(collections, serverinfo, ser, db, log, lruCache, mutex)
+	clDiscovererImp.Init(collections, serverinfo, ser, db, log, lruCache, mig, mutex)
 
 	// SET INITIAL STATE
 	fmt.Println("SET INITIAL STATE")

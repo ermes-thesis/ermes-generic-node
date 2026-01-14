@@ -28,9 +28,10 @@ func ResetSingleton() {
 
 func NewDataManagerForTest(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger logger.Logger) DataManager {
 	mutex := &sync.Mutex{}
+	m := mig.NewMigrationManagerForTest(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger, mutex)
 	return &DataManagerImp{
-		migrationManager:      mig.NewMigrationManagerForTest(collections, penalityFunc, config, lruConfig, server, serverInfo, lruCache, dbInterface, logger.Component("migration_manager"), mutex),
-		collectionsDiscoverer: cld.NewCollectionsDiscovererForTest(collections, serverInfo, server, dbInterface, logger.Component("collections_discoverer"), lruCache, mutex),
+		migrationManager:      m,
+		collectionsDiscoverer: cld.NewCollectionsDiscovererForTest(collections, serverInfo, server, dbInterface, logger.Component("collections_discoverer"), lruCache, m, mutex),
 		dbInterface:           dbInterface,
 		serverInfo:            serverInfo,
 	}

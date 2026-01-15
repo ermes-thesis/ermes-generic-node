@@ -155,18 +155,20 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 			writeMutex.Unlock()
 		}
 
-		var collRequestInfo []messages.CollectionRequestInfo
-		for _, colls := range scheduleRequest.Collections {
-			for _, coll := range colls {
-				collRequestInfo = append(collRequestInfo, messages.CollectionRequestInfo{
-					CollectionId:   coll.Id,
-					IsWrite:        writeSeqCollection,
-					RequestLatency: scheduleRequest.CumulativeLatency,
-				})
+		go func() {
+			var collRequestInfo []messages.CollectionRequestInfo
+			for _, colls := range scheduleRequest.Collections {
+				for _, coll := range colls {
+					collRequestInfo = append(collRequestInfo, messages.CollectionRequestInfo{
+						CollectionId:   coll.Id,
+						IsWrite:        writeSeqCollection,
+						RequestLatency: scheduleRequest.CumulativeLatency,
+					})
+				}
 			}
-		}
-		s.log.Info("Starting to update migration manager request infos for the used collections", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
-		s.dataManager.GetMigrationManager().UpdatesRequestsInfo(collRequestInfo, reqHostname)
+			s.log.Info("Starting to update migration manager request infos for the used collections", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
+			s.dataManager.GetMigrationManager().UpdatesRequestsInfo(collRequestInfo, reqHostname)
+		}()
 	}()
 
 	repBody, err := json.Marshal(resp.Response)

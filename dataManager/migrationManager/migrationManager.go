@@ -256,6 +256,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 
 			return true, err
 		}
+		localState.IncSize(int64(actualSize) - int64(collectionSize))
 
 		if hostToRemove {
 			collection.RemoveHost(hostAddress)
@@ -301,6 +302,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 
 		return true, err
 	}
+	localState.IncSize(int64(actualSize) - int64(collectionSize))
 	m.updateLru(coll, uint(actualSize))
 	localState.CollectionLock.Unlock()
 	m.log.Info("MIG-MANAGER, collection placed on top in the LRU")

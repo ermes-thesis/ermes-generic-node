@@ -243,17 +243,6 @@ func (c *CollectionsDiscovererImp) updateRecord(
 			return nil, errors.New("only leader can update strong collection"), true
 		}
 
-		_, isCollectionUpdate := updateMessage.(*messages.CollectionUpdateMessage)
-		if isInitiator && isCollectionUpdate {
-			oldClock := collection.(*shared.StrongCollection).ConsistencyClock
-			collection.(*shared.StrongCollection).ConsistencyClock++
-			updateMessage.SetSequence(collection.(*shared.StrongCollection).ConsistencyClock)
-			c.log.Debug("Local collection sequence incremented", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "old_sequence", oldClock, "new_sequence", collection.(*shared.StrongCollection).ConsistencyClock)
-		} else if !isInitiator && isCollectionUpdate && collection.(*shared.StrongCollection).ConsistencyClock > updateMessage.GetSequence() {
-			c.log.Warn("Received an outdated update for the local sequential collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "received_sequence", updateMessage.GetSequence(), "current_sequence", collection.(*shared.StrongCollection).ConsistencyClock, "message", fmt.Sprintf("%+v", updateMessage), "is_initiator", isInitiator)
-			return nil, nil, true //ignore outdated update
-		}
-
 		isStrong = true
 	}
 
@@ -284,7 +273,20 @@ func (c *CollectionsDiscovererImp) updateRecord(
 	}
 
 	if collection.IsStrong() {
-		collection.(*shared.StrongCollection).ConsistencyClock = updateMessage.GetSequence()
+		if _, isCollectionUpdate := updateMessage.(*messages.CollectionUpdateMessage); isCollectionUpdate {
+			strongColl := collection.(*shared.StrongCollection)
+
+			if isInitiator {
+				oldClock := strongColl.ConsistencyClock
+				strongColl.ConsistencyClock++
+				updateMessage.SetSequence(strongColl.ConsistencyClock)
+				c.log.Debug("Local collection sequence incremented", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "old_sequence", oldClock, "new_sequence", collection.(*shared.StrongCollection).ConsistencyClock)
+			} else if strongColl.ConsistencyClock > updateMessage.GetSequence() {
+				c.log.Warn("Received an outdated update for the local sequential collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "received_sequence", updateMessage.GetSequence(), "current_sequence", collection.(*shared.StrongCollection).ConsistencyClock, "message", fmt.Sprintf("%+v", updateMessage), "is_initiator", isInitiator)
+				return nil, nil, true //ignore outdated update
+			}
+			strongColl.ConsistencyClock = updateMessage.GetSequence()
+		}
 	}
 
 	collection.GetCollectionState().(*shared.LocalCollection).IncSize(memUsage)

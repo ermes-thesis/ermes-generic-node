@@ -284,7 +284,7 @@ func (c *CollectionsDiscovererImp) updateRecord(
 		defer func() {
 			localState.CollectionLock.RUnlock()
 			if collection.IsStrong() {
-				c.migrationManager.HandlePostponedDecisions(collection)
+				go c.migrationManager.HandlePostponedDecisions(collection)
 			}
 		}()
 

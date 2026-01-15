@@ -38,7 +38,7 @@ jobs:
           cache-dependency-path: "**/go.sum"
 
       - name: Install mockery
-        run: go install github.com/vektra/mockery/v3@latest
+        run: go install github.com/vektra/mockery/v3@v3.6.1
 
       - name: Generate mocks
         run: |

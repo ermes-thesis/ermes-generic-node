@@ -518,7 +518,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 
 		// for each host that has the collection prepare the message
 		for host := range hosts {
-			if exists && collection.GetCollectionState().IsCollectionBeingMigrated() && collection.GetCollectionState().IsCollectionBeingMigratedTo(host) {
+			if exists && collection.GetCollectionState().IsCollectionBeingMigrated() {
 				copyMsg := update.Copy()
 				if host == ignoredHostName {
 					copyMsg.ToForward = false
@@ -654,7 +654,7 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 
 		// for each host that has the collection prepare the message
 		for host := range hosts {
-			if exists && collection.GetCollectionState().IsCollectionBeingMigrated() && collection.GetCollectionState().IsCollectionBeingMigratedTo(host) {
+			if exists && collection.GetCollectionState().IsCollectionBeingMigrated() {
 				copyMsg := update.Copy()
 				if host == ignoredHostName {
 					copyMsg.ToForward = false

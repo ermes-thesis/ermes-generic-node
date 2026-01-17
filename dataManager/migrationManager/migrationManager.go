@@ -216,9 +216,17 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	m.log.Info("MIG-MANAGER, new local collection received", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
 	collection, exists := m.collectionsPartialView.GetCollection(collectionId)
 	if exists {
-		if collection.IsLocal() {
-			collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+		if localState, ok := collection.GetCollectionState().(*shared.LocalCollection); ok {
+			m.log.Eval("MIG-MANAGER, NewCollectionReceived, locking local collection", "collection_id", collectionId)
+			localState.CollectionLock.Lock()
+			m.log.Eval("MIG-MANAGER, new local collection received, lock acquired", "collection_id", collectionId)
 			m.mutex.Unlock()
+
+			if !localState.IsReady() {
+				localState.CollectionLock.Unlock()
+				m.log.Warn("MIG-MANAGER, found local collection but it was not ready (concurrent failure)", "collection_id", collectionId)
+				return false, errors.New("concurrent migration failed")
+			}
 		}
 
 		if collection.IsStrong() && collection.IsLocal() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() {
@@ -248,8 +256,10 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 		actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
 		if err != nil {
 			m.log.Warn("MIG-MANAGER, new collection could not be added to redis", "collection_id", collectionId)
+			localState.CollectionLock.Unlock()
 
 			m.mutex.Lock()
+			localState.CollectionLock.Lock()
 			collection.SetToRemote()
 			localState.CollectionLock.Unlock()
 			m.mutex.Unlock()
@@ -274,7 +284,9 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 
 		m.log.Info("MIG-MANAGER, new collection set to local", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
 		m.updateLru(collection, uint(actualSize))
-		collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+
+		localState.SetReady(true)
+		localState.CollectionLock.Unlock()
 		return false, nil
 	}
 
@@ -294,16 +306,20 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
 	if err != nil {
 		m.log.Warn("MIG-MANAGER, new collection could not be added")
+		localState.CollectionLock.Unlock()
 
 		m.mutex.Lock()
+		localState.CollectionLock.Lock()
 		coll.SetToRemote()
 		localState.CollectionLock.Unlock()
+		m.collectionsPartialView.RemoveCollection(collectionId)
 		m.mutex.Unlock()
 
 		return true, err
 	}
 	localState.IncSize(int64(actualSize) - int64(collectionSize))
 	m.updateLru(coll, uint(actualSize))
+	localState.SetReady(true)
 	localState.CollectionLock.Unlock()
 	m.log.Info("MIG-MANAGER, collection placed on top in the LRU")
 	return false, nil
@@ -391,6 +407,7 @@ func (m *MigrationManagerImp) NewCollectionCreated(collectionId string, collecti
 	} else {
 		coll = shared.NewWeakCollection(collectionId, collectionSize, false)
 	}
+	coll.GetCollectionState().(*shared.LocalCollection).SetReady(true)
 	m.collectionsPartialView.SetCollection(collectionId, coll)
 	m.log.Info("MIG-MANAGER, new collection added to known collections")
 

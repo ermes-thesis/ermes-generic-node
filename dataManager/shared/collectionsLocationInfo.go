@@ -28,7 +28,8 @@ type CollectionState interface {
 }
 
 type LocalCollection struct {
-	size uint64
+	size  uint64
+	ready bool
 
 	//a collection can be stored locally and on children simultaneously
 	hostsId     map[string]struct{} //map to guarantee univocity
@@ -75,6 +76,14 @@ func (l *LocalCollection) Size() uint64 {
 
 func (l *LocalCollection) IncSize(size int64) {
 	l.size = uint64(int64(l.size) + size)
+}
+
+func (l *LocalCollection) IsReady() bool {
+	return l.ready
+}
+
+func (l *LocalCollection) SetReady(ready bool) {
+	l.ready = ready
 }
 
 func (l *LocalCollection) HostsId() map[string]struct{} {

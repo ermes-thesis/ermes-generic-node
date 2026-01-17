@@ -111,8 +111,10 @@ func (m *DataManagerImp) GetRecord(collectionId string, groups []string, userId 
 			return m.collectionsDiscoverer.WeakCollectionRemoteRecordAccess(addr, collectionId, groups, userId, recordName)
 		},
 	)
-
-	return res.(string), err
+	if err != nil {
+		return "", err
+	}
+	return res.(string), nil
 }
 
 func (m *DataManagerImp) GetRecords(collectionId string, groups []string, userId string, recordNames ...string) ([]any, error) {
@@ -133,7 +135,10 @@ func (m *DataManagerImp) GetRecords(collectionId string, groups []string, userId
 			return m.collectionsDiscoverer.WeakCollectionRemoteRecordsAccess(addr, collectionId, groups, userId, recordNames...)
 		},
 	)
-	return res.([]any), err
+	if err != nil {
+		return nil, err
+	}
+	return res.([]any), nil
 }
 
 func (m *DataManagerImp) UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdate, groups []string, userId string) error {

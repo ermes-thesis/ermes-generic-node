@@ -114,6 +114,12 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 			return false, collection, nil
 		}
 		c.log.Debug("LOCK: Locked in READ the sequential collection", "collection_id", collectionId)
+
+		if !localState.IsReady() {
+			localState.CollectionLock.RUnlock()
+			c.log.Warn("AccessRecords: Collection local but NOT READY", "collection_id", collectionId)
+			return false, collection, errors.New("collection is initializing or failed to load")
+		}
 	}
 
 	c.log.Debug("Collection is known by the current node and is locally present", "collection_id", collectionId, "consistency_clock", consistencyClock, "collection", fmt.Sprintf("%+v", collection))
@@ -193,12 +199,18 @@ func (c *CollectionsDiscovererImp) AccessRecords(
 				//c.collectionsPartialView.Mutex.Unlock() // lock release
 				c.log.Debug("AccessRecords: Accessing remote child for eventual collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "addr", addr)
 				return remoteFn(addr)
-			} else {
-				c.log.Debug("AccessRecords: Accessing local collection records", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-				//c.collectionsPartialView.Mutex.Unlock() // lock release
-				defer localState.CollectionLock.RUnlock()
-				return dbFn()
 			}
+
+			if !localState.IsReady() {
+				localState.CollectionLock.RUnlock()
+				c.log.Warn("AccessRecords: Collection local but NOT READY", "collection_id", collectionId)
+				return nil, errors.New("collection is initializing or failed to load")
+			}
+
+			c.log.Debug("AccessRecords: Accessing local collection records", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+			//c.collectionsPartialView.Mutex.Unlock() // lock release
+			defer localState.CollectionLock.RUnlock()
+			return dbFn()
 		}
 
 		c.log.Debug("AccessRecords: Accessing local collection records", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
@@ -291,6 +303,12 @@ func (c *CollectionsDiscovererImp) updateRecord(
 		if !collection.IsLocal() {
 			c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 			return hosts, nil, false
+		}
+
+		if !localState.IsReady() {
+			localState.CollectionLock.RUnlock()
+			c.log.Warn("AccessRecords: Collection local but NOT READY", "collection_id", collectionId)
+			return hosts, errors.New("collection is initializing or failed to load"), false
 		}
 	}
 

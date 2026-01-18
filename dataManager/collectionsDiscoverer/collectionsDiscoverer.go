@@ -108,6 +108,13 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 			return true, collection, &ToMigrateError{Code: 423, Message: "Strong collection has postponed migration behaviour to execute, can't be used until migration is completed"}
 		}
 		localState.CollectionLock.RLock()
+
+		if collection.IsLocal() && localState != collection.GetCollectionState() {
+			c.log.Warn("Inconsistent local state detected for strong collection", "collection_id", collectionId, "consistency_clock", consistencyClock, "collection", fmt.Sprintf("%+v", collection), "local_state", fmt.Sprintf("%+v", localState), "actual_local_state", fmt.Sprintf("%+v", collection.GetCollectionState()))
+			localState.CollectionLock.RUnlock()
+			return false, collection, errors.New("inconsistent local state detected for strong collection")
+		}
+
 		if !collection.IsLocal() {
 			localState.CollectionLock.RUnlock()
 			c.log.Info("Collection became non-local while acquiring the lock", "collection_id", collectionId)
@@ -184,6 +191,13 @@ func (c *CollectionsDiscovererImp) AccessRecords(
 	if localState, ok := collection.GetCollectionState().(*shared.LocalCollection); ok {
 		if !collection.IsStrong() {
 			localState.CollectionLock.RLock()
+
+			for collection.IsLocal() && localState != collection.GetCollectionState() {
+				c.log.Warn("AccessRecords: Inconsistent local state detected for weak collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "local_state", fmt.Sprintf("%+v", localState), "actual_local_state", fmt.Sprintf("%+v", collection.GetCollectionState()))
+				localState.CollectionLock.RUnlock()
+				localState = collection.GetCollectionState().(*shared.LocalCollection)
+				localState.CollectionLock.RLock()
+			}
 
 			if !collection.IsLocal() {
 				localState.CollectionLock.RUnlock()
@@ -293,6 +307,14 @@ func (c *CollectionsDiscovererImp) updateRecord(
 	if !isInitiator || !collection.IsStrong() {
 		localState.CollectionLock.RLock()
 		c.log.Debug("LOCK: collection locked in READ", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+
+		for collection.IsLocal() && localState != collection.GetCollectionState() {
+			c.log.Warn("AccessRecords: Inconsistent local state detected for weak collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "local_state", fmt.Sprintf("%+v", localState), "actual_local_state", fmt.Sprintf("%+v", collection.GetCollectionState()))
+			localState.CollectionLock.RUnlock()
+			localState = collection.GetCollectionState().(*shared.LocalCollection)
+			localState.CollectionLock.RLock()
+		}
+
 		defer func() {
 			localState.CollectionLock.RUnlock()
 			if collection.IsStrong() {
@@ -380,6 +402,13 @@ func (c *CollectionsDiscovererImp) popolateUpdateSafetyCheck(saftyQueue shared.F
 			if !collection.IsStrong() {
 				localState.CollectionLock.RLock()
 				defer localState.CollectionLock.RUnlock()
+
+				for collection.IsLocal() && localState != collection.GetCollectionState() {
+					c.log.Warn("AccessRecords: Inconsistent local state detected for weak collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "local_state", fmt.Sprintf("%+v", localState), "actual_local_state", fmt.Sprintf("%+v", collection.GetCollectionState()))
+					localState.CollectionLock.RUnlock()
+					localState = collection.GetCollectionState().(*shared.LocalCollection)
+					localState.CollectionLock.RLock()
+				}
 
 				if !collection.IsLocal() {
 					c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
@@ -570,6 +599,14 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 							if !collection.IsStrong() {
 								localState.CollectionLock.RLock()
 								defer localState.CollectionLock.RUnlock()
+
+								for collection.IsLocal() && localState != collection.GetCollectionState() {
+									c.log.Warn("AccessRecords: Inconsistent local state detected for weak collection", "collection_id", collection.CollectionId(), "collection", fmt.Sprintf("%+v", collection), "local_state", fmt.Sprintf("%+v", localState), "actual_local_state", fmt.Sprintf("%+v", collection.GetCollectionState()))
+									localState.CollectionLock.RUnlock()
+									localState = collection.GetCollectionState().(*shared.LocalCollection)
+									localState.CollectionLock.RLock()
+								}
+
 								if !collection.IsLocal() {
 									c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", update.CollectionId, "collection", fmt.Sprintf("%+v", collection))
 									return
@@ -707,6 +744,14 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 							if !collection.IsStrong() {
 								localState.CollectionLock.RLock()
 								defer localState.CollectionLock.RUnlock()
+
+								for collection.IsLocal() && localState != collection.GetCollectionState() {
+									c.log.Warn("AccessRecords: Inconsistent local state detected for weak collection", "collection_id", collection.CollectionId(), "collection", fmt.Sprintf("%+v", collection), "local_state", fmt.Sprintf("%+v", localState), "actual_local_state", fmt.Sprintf("%+v", collection.GetCollectionState()))
+									localState.CollectionLock.RUnlock()
+									localState = collection.GetCollectionState().(*shared.LocalCollection)
+									localState.CollectionLock.RLock()
+								}
+
 								if !collection.IsLocal() {
 									c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", update.CollectionId, "collection", fmt.Sprintf("%+v", collection))
 									return

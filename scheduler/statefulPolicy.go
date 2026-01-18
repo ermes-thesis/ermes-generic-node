@@ -128,6 +128,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 						Body:       nil,
 					}, 0, toMigrateErr
 				}
+				return nil, 0, fmt.Errorf("error checking collection presence for collection %s: %v", col.Id, err)
 			}
 
 			if col.Metadata.Consistency == model.SequentialConsistent {

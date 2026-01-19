@@ -43,64 +43,68 @@ nodes:
 common:
   port: 12345
   secret: "ermes-secret"
-
+  clientSecret: "client-secret"
+  stateful: true
+  isCentralStorage: false
   migrationManager:
-    leaderThreshold: 5
-    followerThreshold: 5
+    leaderThreshold: 450
+    followerThreshold: 150
     viewSize: 5
-    idleTimeoutMs: 1000
+    idleTimeoutMs: 15000
     gravityConstant: 9.81
-    stateful: true
-    isCentralStorage: false
+    knownCollectionsDumpPath: /var/log/ermes-node/dump.ndjson
+    knownCollectionsDumpInterval: 7s
+    weakCollectionSendingThreshold: 0.1
     weakPolicy: ALWAYSCOPYPOLICY
     strongPolicy: ERMESPOLICY
-
   lru:
     size: 2000
     safeLevel: 0.8
-
   redis:
     address: "localhost"
     port: 6379
     db: 0
-    password: eYVX7EwVmmxKPCDmwMtyKVge8oLd2t81
+    password: very-secure-password
     protocol: 2
-
+    startingOpsBackoff: 10ms
+    maxRetries: 10
+    maxOpsBackoff: 500ms
   functionsCache:
     binaryCache:
       size: 100
-      ttl: 3600s
+      ttl: 0s
       binDir: "./functionCache"
     templateCache:
       size: 100
+      ttl: 0s
+    latestCache:
+      size: 100
       ttl: 3600s
     functionRegistry:
-      address: "localhost"
+      address: "10.10.101.58"
       port: 8080
-    latestCacheTtl: 3600s
-
   scheduler:
-    groupTokenProviderAddress: "localhost"
+    groupTokenProviderAddress: "10.10.101.58"
     groupTokenProviderPort: 8081
     wasmRuntime: "wasmtime"
     wasmPoolConfig:
-      poolSize: 10
-      timeout: 5s
-      withCache: true
+      poolSize: 50
+      timeout: 1s
+      withCache: 2
+      cacheSize: 50
       isAot: false
-    startingOutdatedDataBackoff: 500ms
-    maxOutdatedDataRetries: 10
-    maxOutdatedDataBackoff: 5s
-
-  groupTokenPublicKeyPath: "./keys/public.pem"
-
+    startingOutdatedDataBackoff: 10ms
+    maxOutdatedDataRetries: 15
+    maxOutdatedDataBackoff: 2s
+  groupTokenPublicKeyPath: "/etc/ermes-node/token-public-key.pem"
   logger:
-    level: 0
+    level: 2
     output:
-      logDir: logs
-      logFileName: test.log
-    stdoutEnabled: true
+      logDir: /var/log/ermes-node
+      logFileName: general.log
+    stdoutEnabled: false
     addSource: true
     colored: true
-    rolling: false
+    rolling: true
     muted: false
+

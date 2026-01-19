@@ -1,0 +1,88 @@
+node:
+  name: 10.10.101.53:12345
+  domain: IT/Milan/UNIMI
+  address: 10.10.101.53
+  port: 12345
+  secret: ermes-secret
+hierarchy:
+  cloud:
+    address: 10.10.101.57:12345
+    domain: IT
+  children: []
+  existingDomains:
+  - IT
+  - IT/Milan
+  - IT/Milan/Bocconi
+  - IT/Milan/POLIMI
+  - IT/Milan/UNIMI
+  - IT/Rome
+  - IT/Rome/LaSapienza
+  - IT/Rome/TorVergata
+  father:
+    address: 10.10.101.56:12345
+    domain: IT/Milan
+    latency_up: 19
+clientSecret: client-secret
+stateful: true
+isCentralStorage: false
+functionsCache:
+  binaryCache:
+    size: 100
+    ttl: 0s
+    binDir: ./functionCache
+  templateCache:
+    size: 100
+    ttl: 0s
+  latestCache:
+    size: 100
+    ttl: 3600s
+  functionRegistry:
+    address: 10.10.101.58
+    port: 8080
+scheduler:
+  groupTokenProviderAddress: 10.10.101.58
+  groupTokenProviderPort: 8081
+  wasmRuntime: wasmtime
+  wasmPoolConfig:
+    poolSize: 50
+    timeout: 1s
+    withCache: 2
+    cacheSize: 50
+    isAot: false
+  startingOutdatedDataBackoff: 10ms
+  maxOutdatedDataRetries: 15
+  maxOutdatedDataBackoff: 2s
+groupTokenPublicKeyPath: /etc/ermes-node/token-public-key.pem
+logger:
+  level: 2
+  output:
+    logDir: /var/log/ermes-node
+    logFileName: general.log
+  stdoutEnabled: false
+  addSource: true
+  colored: true
+  rolling: true
+  muted: false
+migrationManager:
+  leaderThreshold: 450
+  followerThreshold: 150
+  viewSize: 5
+  idleTimeoutMs: 15000
+  gravityConstant: 9.81
+  knownCollectionsDumpPath: /var/log/ermes-node/dump.ndjson
+  knownCollectionsDumpInterval: 7s
+  weakCollectionSendingThreshold: 0.1
+  weakPolicy: ALWAYSCOPYPOLICY
+  strongPolicy: ERMESPOLICY
+lru:
+  size: 2000
+  safeLevel: 0.8
+redis:
+  address: localhost
+  port: 6379
+  db: 0
+  password: very-secure-password
+  protocol: 2
+  startingOpsBackoff: 10ms
+  maxRetries: 10
+  maxOpsBackoff: 500ms

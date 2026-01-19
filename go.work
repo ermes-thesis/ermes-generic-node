@@ -1,14 +1,14 @@
 go 1.24.4
 
 use (
-	main
-	server
-	dataManager
-	metadataManager
-	config
-	db
 	caches
-	tokenDecoder
-	scheduler
+	config
+	dataManager
+	db
+	main
+	metadataManager
 	mocks
+	scheduler
+	server
+	tokenDecoder
 )

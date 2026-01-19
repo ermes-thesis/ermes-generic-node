@@ -2,6 +2,7 @@ package scheduler_test
 
 import (
 	"config"
+	"dataManager/messages"
 	shared "dataManager/shared"
 	"encoding/json"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"net/url"
 	"scheduler"
 	"server"
+	"sync"
 	"testing"
 	"time"
 
@@ -171,6 +173,23 @@ func (n *TestNode) SetupCollection(id string, state *CollectionState) shared.Col
 	return coll
 }
 
+func (n *TestNode) ExpectAsyncMetricUpdate(t *testing.T, expectedSender string) func() {
+	var wg sync.WaitGroup
+	wg.Add(1)
+
+	n.MigManager.EXPECT().
+		UpdatesRequestsInfo(mock.Anything, expectedSender).
+		Run(func(_ []messages.CollectionRequestInfo, _ string) {
+			wg.Done()
+		}).
+		Return()
+
+	// Restituisce una funzione che il test chiamerà alla fine per aspettare
+	return func() {
+		waitWithTimeout(t, &wg, time.Second)
+	}
+}
+
 func setupTestNode(t *testing.T, log logger.Logger) *TestNode {
 	fnCache := caches_mock.NewFunctionCache(t)
 	tokenDecoder := tokenDecoder_mock.NewTokenDecoder(t)
@@ -260,15 +279,14 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	defer child.Close()
 	connectNodes(father, child)
 
-	// 1. Build Context: Needs 1 Weak + 1 Strong
+	// 1. Context
 	wasmCtx := buildWasmContext(
 		WithWeakCollection("12345"),
 		WithStrongCollection("1111"),
 	)
 	wasmCtxJson, _ := json.Marshal(wasmCtx)
 
-	// 2. Setup Node Data (Collections)
-	// Child has both collections locally
+	// 2. Setup Node Data
 	child.SetupCollection("12345", &CollectionState{IsPresent: true, IsStrong: false})
 	child.SetupCollection("1111", &CollectionState{IsPresent: true, IsStrong: true, IsLeader: false})
 
@@ -278,11 +296,9 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	}, nil)
 	child.FnCache.EXPECT().GetBinary(fnName, fnVer).Return([]byte("bin"), nil)
 	child.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
-
 	child.DataManager.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
-
 	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
-	child.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
+	defer child.ExpectAsyncMetricUpdate(t, "user")()
 
 	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
@@ -328,7 +344,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	father.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
 	father.DataManager.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 	father.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
-	father.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, child.Host).Return()
+	defer father.ExpectAsyncMetricUpdate(t, child.Host)()
 
 	father.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
@@ -373,7 +389,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	child.FnCache.EXPECT().GetBinary(fnName, fnVer).Return([]byte("bin"), nil)
 	child.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
 	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
-	child.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
+	defer child.ExpectAsyncMetricUpdate(t, "user")()
 
 	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
@@ -411,7 +427,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	child.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
 
 	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "54321"}).Return()
-	child.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, "user").Return()
+	defer child.ExpectAsyncMetricUpdate(t, "user")()
 
 	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
@@ -445,7 +461,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	father.FnCache.EXPECT().GetBinary(fnName, fnVer).Return([]byte("bin"), nil)
 	father.TokenDecoder.EXPECT().DecodeGroupToken(token).Return([]string{"groupC"}, user, nil)
 	father.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
-	father.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, child.Host).Return()
+	defer father.ExpectAsyncMetricUpdate(t, child.Host)()
 
 	father.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
@@ -492,7 +508,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	child.FnCache.EXPECT().GetBinary(fnName, fnVer).Return([]byte("bin"), nil)
 
 	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
-	child.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, father.Host).Return()
+	defer child.ExpectAsyncMetricUpdate(t, father.Host)()
 
 	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
@@ -543,7 +559,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	child.DataManager.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
 	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
-	child.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, father.Host).Return()
+	defer child.ExpectAsyncMetricUpdate(t, father.Host)()
 
 	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
@@ -595,7 +611,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	child2.DataManager.EXPECT().GetCollectionVectorClockValue("1111").Return(uint64(0), nil)
 
 	child2.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"1111"}).Return()
-	child2.MigManager.EXPECT().UpdatesRequestsInfo(mock.Anything, father.Host).Return()
+	defer child2.ExpectAsyncMetricUpdate(t, father.Host)()
 
 	child2.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
@@ -603,4 +619,18 @@ func TestScheduleThreeNodes(t *testing.T) {
 
 	res := executeInvokeRequest(t, child1, wasmCtx)
 	assert.Equal(t, "ok", res)
+}
+
+func waitWithTimeout(t *testing.T, wg *sync.WaitGroup, duration time.Duration) {
+	c := make(chan struct{})
+	go func() {
+		defer close(c)
+		wg.Wait()
+	}()
+	select {
+	case <-c:
+		return
+	case <-time.After(duration):
+		t.Fatal("Timeout waiting for async operations")
+	}
 }

@@ -328,9 +328,8 @@ func (c *CollectionsDiscovererImp) updateRecord(
 		}
 
 		if !localState.IsReady() {
-			localState.CollectionLock.RUnlock()
-			c.log.Warn("AccessRecords: Collection local but NOT READY", "collection_id", collectionId)
-			return hosts, errors.New("collection is initializing or failed to load"), false
+			c.log.Warn("updateRecord: Collection local but NOT READY", "collection_id", collectionId)
+			return hosts, nil, false
 		}
 	}
 

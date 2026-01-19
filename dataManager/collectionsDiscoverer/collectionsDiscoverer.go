@@ -102,20 +102,11 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 		} else if strongCollection.HasPostponedDecisionBehaviour() {
 			return true, collection, &ToMigrateError{Code: 423, Message: "Strong collection has postponed migration behaviour to execute, can't be used until migration is completed"}
 		}
-		localState.CollectionLock.RLock()
+		localState = c.acquireRLockForCollection(collection, localState)
 
-		if collection.IsLocal() && localState != collection.GetCollectionState() {
-			c.log.Warn("Inconsistent local state detected for strong collection", "collection_id", collectionId, "consistency_clock", consistencyClock, "collection", fmt.Sprintf("%+v", collection), "local_state", fmt.Sprintf("%+v", localState), "actual_local_state", fmt.Sprintf("%+v", collection.GetCollectionState()))
-			localState.CollectionLock.RUnlock()
-			return false, collection, errors.New("inconsistent local state detected for strong collection")
-		}
-
-		if !collection.IsLocal() {
-			localState.CollectionLock.RUnlock()
-			c.log.Info("Collection became non-local while acquiring the lock", "collection_id", collectionId)
+		if localState == nil {
 			return false, collection, nil
 		}
-		c.log.Debug("LOCK: Locked in READ the sequential collection", "collection_id", collectionId)
 
 		if !localState.IsReady() {
 			localState.CollectionLock.RUnlock()
@@ -180,17 +171,9 @@ func (c *CollectionsDiscovererImp) AccessRecords(
 	}
 	if localState, ok := collection.GetCollectionState().(*shared.LocalCollection); ok {
 		if !collection.IsStrong() {
-			localState.CollectionLock.RLock()
+			localState = c.acquireRLockForCollection(collection, localState)
 
-			for collection.IsLocal() && localState != collection.GetCollectionState() {
-				c.log.Warn("AccessRecords: Inconsistent local state detected for weak collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "local_state", fmt.Sprintf("%+v", localState), "actual_local_state", fmt.Sprintf("%+v", collection.GetCollectionState()))
-				localState.CollectionLock.RUnlock()
-				localState = collection.GetCollectionState().(*shared.LocalCollection)
-				localState.CollectionLock.RLock()
-			}
-
-			if !collection.IsLocal() {
-				localState.CollectionLock.RUnlock()
+			if localState == nil {
 				c.log.Debug("AccessRecords: Collection became non-local while acquiring the lock", "collection_id", collectionId)
 				addr := c.serverInfo.GetClosestChild(collection.HostsId())
 				if addr == "" {
@@ -232,6 +215,26 @@ func (c *CollectionsDiscovererImp) AccessRecords(
 	}
 	c.log.Debug("AccessRecords: Accessing remote child for eventual collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "addr", addr)
 	return remoteFn(addr)
+}
+
+func (c *CollectionsDiscovererImp) acquireRLockForCollection(collection shared.Collection, localState *shared.LocalCollection) *shared.LocalCollection {
+	localState.CollectionLock.RLock()
+	c.log.Debug("LOCK: collection locked in READ", "collection_id", collection.CollectionId(), "collection", fmt.Sprintf("%+v", collection))
+
+	for collection.IsLocal() && localState != collection.GetCollectionState() {
+		c.log.Warn("Inconsistent local state detected for collection", "collection_id", collection.CollectionId(), "collection", fmt.Sprintf("%+v", collection), "local_state", fmt.Sprintf("%+v", localState), "actual_local_state", fmt.Sprintf("%+v", collection.GetCollectionState()))
+		localState.CollectionLock.RUnlock()
+		localState = collection.GetCollectionState().(*shared.LocalCollection)
+		localState.CollectionLock.RLock()
+	}
+
+	if !collection.IsLocal() {
+		localState.CollectionLock.RUnlock()
+		c.log.Info("Collection became non-local while acquiring the lock", "collection_id", collection.CollectionId())
+		return nil
+	}
+
+	return localState
 }
 
 func (c *CollectionsDiscovererImp) updateRecord(
@@ -290,27 +293,19 @@ func (c *CollectionsDiscovererImp) updateRecord(
 	}
 
 	if !isInitiator || !collection.IsStrong() {
-		localState.CollectionLock.RLock()
-		c.log.Debug("LOCK: collection locked in READ", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-
-		for collection.IsLocal() && localState != collection.GetCollectionState() {
-			c.log.Warn("UpdateRecord: Inconsistent local state detected for collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "local_state", fmt.Sprintf("%+v", localState), "actual_local_state", fmt.Sprintf("%+v", collection.GetCollectionState()))
-			localState.CollectionLock.RUnlock()
-			localState = collection.GetCollectionState().(*shared.LocalCollection)
-			localState.CollectionLock.RLock()
-		}
+		localState = c.acquireRLockForCollection(collection, localState)
 
 		defer func() {
-			localState.CollectionLock.RUnlock()
 			if collection.IsStrong() {
 				go c.migrationManager.HandlePostponedDecisions(collection)
 			}
 		}()
 
-		if !collection.IsLocal() {
-			c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		if localState == nil {
 			return hosts, nil, false
 		}
+
+		defer localState.CollectionLock.RUnlock()
 
 		if !localState.IsReady() {
 			c.log.Warn("UpdateRecord: Collection local but NOT READY", "collection_id", collectionId)
@@ -371,7 +366,7 @@ func (c *CollectionsDiscovererImp) doUpdateLocally(collectionId string, dbFn fun
 		if !ok {
 			return
 		}
-		c.log.Debug("UpdateRecord: Executing postponed update for collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		c.log.Debug("doUpdateLocally: Executing postponed update for collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 		//if update older than the collection strong
 		var isStrong = false
 		if collection.IsStrong() {
@@ -381,20 +376,19 @@ func (c *CollectionsDiscovererImp) doUpdateLocally(collectionId string, dbFn fun
 			}
 		}
 		if !collection.IsStrong() {
-			localState.CollectionLock.RLock()
-			defer localState.CollectionLock.RUnlock()
+			localState = c.acquireRLockForCollection(collection, localState)
 
-			for collection.IsLocal() && localState != collection.GetCollectionState() {
-				c.log.Warn("doUpdateLocally: Inconsistent local state detected for weak collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "local_state", fmt.Sprintf("%+v", localState), "actual_local_state", fmt.Sprintf("%+v", collection.GetCollectionState()))
-				localState.CollectionLock.RUnlock()
-				localState = collection.GetCollectionState().(*shared.LocalCollection)
-				localState.CollectionLock.RLock()
-			}
-
-			if !collection.IsLocal() {
-				c.log.Debug("UpdateRecord: Collection became non-local while acquiring the lock", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+			if localState == nil {
 				return
 			}
+
+			defer localState.CollectionLock.RUnlock()
+
+			if !localState.IsReady() {
+				c.log.Warn("doUpdateLocally: Collection local but NOT READY", "collection_id", collectionId)
+				return
+			}
+
 			collection.(*shared.WeakCollection).WriteMutex.Lock()
 			defer collection.(*shared.WeakCollection).WriteMutex.Unlock()
 		}
@@ -402,9 +396,9 @@ func (c *CollectionsDiscovererImp) doUpdateLocally(collectionId string, dbFn fun
 		if err != nil {
 			var staleErr *db.StaleUpdateError
 			if errors.As(err, &staleErr) {
-				c.log.Warn("UpdateRecord: Stale update detected during collection records update in DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "error", err)
+				c.log.Warn("doUpdateLocally: Stale update detected during collection records update in DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "error", err)
 			} else {
-				c.log.Error("UpdateRecord: Failed to update collection records in DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "error", err)
+				c.log.Error("doUpdateLocally: Failed to update collection records in DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "error", err)
 			}
 			return
 		}

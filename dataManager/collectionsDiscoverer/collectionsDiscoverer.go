@@ -108,6 +108,14 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 			return false, collection, nil
 		}
 
+		// This check is necessary because, in NewCollectionReceived can happen a nasty thing:
+		// If the m.addCollectionInRedis goes wrong for whatever reason, we have to unlock briefly
+		// the collection to bring it back to Remote state, between the Unlock and subsequent Lock,
+		// a goroutine executing this method can insert itself between the two lock calls.
+		// If that's the case we arrive here that we have the Collection set as local, but not
+		// inserted in redis, therefore there's no way the update can succeed. Therefore, we
+		// exit early, WITHOUT retrying since the addition have failed and therefore the Collection
+		// returned to the host that sent it.
 		if !localState.IsReady() {
 			localState.CollectionLock.RUnlock()
 			c.log.Warn("AccessRecords: Collection local but NOT READY", "collection_id", collectionId)
@@ -315,9 +323,17 @@ func (c *CollectionsDiscovererImp) updateRecord(
 
 	if collection.IsStrong() {
 		c.log.Debug("Collection to be updated is local and sequential consistent", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-		if isInitiator && !collection.(*shared.StrongCollection).IsLeader { //safety check
-			c.log.Error("Trying to update local sequential collection even if it's not the leader", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "is_initiator", isInitiator, "message", fmt.Sprintf("%+v", updateMessage))
-			return nil, errors.New("only leader can update strong collection"), true
+		if isInitiator {
+			if !collection.(*shared.StrongCollection).IsLeader { //safety check
+				c.log.Error("Trying to update local sequential collection even if it's not the leader", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "is_initiator", isInitiator, "message", fmt.Sprintf("%+v", updateMessage))
+				return nil, errors.New("only leader can update strong collection"), true
+			}
+		} else if _, isCollectionUpdate := updateMessage.(*messages.CollectionUpdateMessage); isCollectionUpdate {
+			strongColl := collection.(*shared.StrongCollection)
+			if strongColl.ConsistencyClock > updateMessage.GetSequence() {
+				c.log.Warn("Received an outdated update for the local sequential collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "received_sequence", updateMessage.GetSequence(), "current_sequence", collection.(*shared.StrongCollection).ConsistencyClock, "message", fmt.Sprintf("%+v", updateMessage), "is_initiator", isInitiator)
+				return nil, nil, true //ignore outdated update
+			}
 		}
 	}
 
@@ -341,9 +357,6 @@ func (c *CollectionsDiscovererImp) updateRecord(
 				strongColl.ConsistencyClock++
 				updateMessage.SetSequence(strongColl.ConsistencyClock)
 				c.log.Debug("Local collection sequence incremented", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "old_sequence", oldClock, "new_sequence", collection.(*shared.StrongCollection).ConsistencyClock)
-			} else if strongColl.ConsistencyClock > updateMessage.GetSequence() {
-				c.log.Warn("Received an outdated update for the local sequential collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "received_sequence", updateMessage.GetSequence(), "current_sequence", collection.(*shared.StrongCollection).ConsistencyClock, "message", fmt.Sprintf("%+v", updateMessage), "is_initiator", isInitiator)
-				return nil, nil, true //ignore outdated update
 			}
 			strongColl.ConsistencyClock = updateMessage.GetSequence()
 		}

@@ -258,6 +258,7 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 			m.log.Warn("MIG-MANAGER, new collection could not be added to redis", "collection_id", collectionId)
 			localState.CollectionLock.Unlock()
 
+			// Here can happen several concurrency problems :c
 			m.mutex.Lock()
 			localState.CollectionLock.Lock()
 			collection.SetToRemote()

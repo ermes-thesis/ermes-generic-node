@@ -300,7 +300,7 @@ func (c *CollectionsDiscovererImp) updateRecord(
 		hosts[addr] = struct{}{}
 	}
 
-	if !isInitiator || !collection.IsStrong() {
+	if !collection.IsStrong() || !isInitiator {
 		localState = c.acquireRLockForCollection(collection, localState)
 
 		defer func() {
@@ -442,14 +442,16 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 		var dbFn func(isStrong bool) (int64, error)
 		if update.IsDelete {
 			dbFn = func(isStrong bool) (int64, error) {
-				authorized, err := c.dbInterface.IsAuthorized(update.CollectionId, userId, groups...)
-				if err != nil {
-					c.log.Error("Failed to check user authorization access", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
-					return 0, err
-				}
-				if !authorized {
-					c.log.Error("User is not authorized to delete collection records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
-					return 0, &shared.UnauthorizedError{}
+				if isInitiator {
+					authorized, err := c.dbInterface.IsAuthorized(update.CollectionId, userId, groups...)
+					if err != nil {
+						c.log.Error("Failed to check user authorization access", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						return 0, err
+					}
+					if !authorized {
+						c.log.Error("User is not authorized to update collection records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
+						return 0, &shared.UnauthorizedError{}
+					}
 				}
 
 				memUsage, err := c.dbInterface.GetRecordsMemoryUsage(update.CollectionId, update.RecordNames...)
@@ -476,14 +478,16 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 			}
 		} else {
 			dbFn = func(isStrong bool) (int64, error) {
-				authorized, err := c.dbInterface.IsAuthorized(update.CollectionId, userId, groups...)
-				if err != nil {
-					c.log.Error("Failed to check user authorization access", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
-					return 0, err
-				}
-				if !authorized {
-					c.log.Error("User is not authorized to update collection records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
-					return 0, &shared.UnauthorizedError{}
+				if isInitiator {
+					authorized, err := c.dbInterface.IsAuthorized(update.CollectionId, userId, groups...)
+					if err != nil {
+						c.log.Error("Failed to check user authorization access", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName, "error", err)
+						return 0, err
+					}
+					if !authorized {
+						c.log.Error("User is not authorized to update collection records", "collection_id", update.CollectionId, "executing_user", userId, "user_access_groups", groups, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
+						return 0, &shared.UnauthorizedError{}
+					}
 				}
 
 				memUsage, err := c.dbInterface.GetRecordsMemoryUsage(update.CollectionId, update.RecordNames...)

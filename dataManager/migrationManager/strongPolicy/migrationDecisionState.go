@@ -230,10 +230,16 @@ func (m *MigrationManagerDecisionState) innerKeyDecision(strongCollection *share
 	}
 
 	//send taken decisions to the decision reader
+	// isMigration: (replicaInterestedNodeCounter == 0 && !strongCollection.IsLeader) || (strongCollection.IsLeader && replicaInterestedNodeCounter == 0 && leaderDecisionTaken)
+	// isMigration: (A*!B) + (B*A*C)
+	// isMigration: A * (!B + B*C)
+	// isMigration: A * (!B + C)
+	// isMigration: replicaInterestedNodeCounter == 0 && (!strongCollection.IsLeader || leaderDecisionTaken)
+
 	decisionCh <- Decisions{
 		Decisions:           decisions,
 		Collection:          strongCollection,
-		IsMigration:         (replicaInterestedNodeCounter == 0 && !strongCollection.IsLeader) || (strongCollection.IsLeader && replicaInterestedNodeCounter == 0 && leaderDecisionTaken),
+		IsMigration:         replicaInterestedNodeCounter == 0 && (!strongCollection.IsLeader || leaderDecisionTaken),
 		LeaderDecisionTaken: leaderDecisionTaken,
 	}
 	//m.applyTakenDecisions(outerKey, replicaInterestedNodeCounter, decisions, strongCollection, leaderDecisionTaken)

@@ -269,27 +269,6 @@ func (c *CollectionsDiscovererImp) updateRecord(
 		c.log.Info("UpdateRecord: Added father to collection hosts", "collection_id", collectionId, "father_hostname", addr)
 		return hosts, nil, false
 	}
-	localState, ok := collection.GetCollectionState().(*shared.LocalCollection)
-	if !ok {
-		c.log.Debug("Collection to be updated is not local", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-		if collection.IsStrong() && isInitiator { //safety check
-			c.log.Error("UpdateRecord: Attempted remote update to strong collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-			return nil, errors.New("strong collection can't be updated remotely"), false
-		}
-
-		c.log.Debug("Computing the list of hosts to which propagate the update", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-		hosts := collection.HostsId()
-		if c.serverInfo.Father == nil {
-			c.log.Debug("Current node is a cloud node. Avoiding to propagate the update to the father", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", hosts)
-			return hosts, nil, false
-		}
-
-		addr := c.serverInfo.Father.HostName
-		hosts[addr] = struct{}{}
-
-		c.log.Debug("List of hosts to which propagate the update computed successfully", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", fmt.Sprintf("%+v", hosts))
-		return hosts, nil, false
-	}
 
 	c.log.Debug("Preparing list of host to which propagate the update", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 	//always notify to father
@@ -298,6 +277,20 @@ func (c *CollectionsDiscovererImp) updateRecord(
 	if c.serverInfo.Father != nil {
 		addr := c.serverInfo.Father.HostName
 		hosts[addr] = struct{}{}
+	} else {
+		c.log.Debug("Current node is a cloud node. Avoiding to propagate the update to the father", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", hosts)
+	}
+	c.log.Debug("List of hosts to which propagate the update computed successfully", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", fmt.Sprintf("%+v", hosts))
+
+	localState, ok := collection.GetCollectionState().(*shared.LocalCollection)
+	if !ok {
+		c.log.Debug("Collection to be updated is not local", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		if collection.IsStrong() && isInitiator { //safety check
+			c.log.Error("UpdateRecord: Attempted remote update to strong collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+			return nil, errors.New("strong collection can't be updated remotely"), false
+		}
+
+		return hosts, nil, false
 	}
 
 	if !collection.IsStrong() || !isInitiator {

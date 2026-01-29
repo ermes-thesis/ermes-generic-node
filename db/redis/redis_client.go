@@ -368,7 +368,9 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]db.RecordVa
 			}
 
 			r.log.Info("GetCollection: Collection retrieved successfully", "collection_id", collectionId)
-			r.log.Debug("GetCollection: Collection retrieved successfully", "records", fmt.Sprintf("%+v", result), "groups", groups, "owner", owner, "groups_sequence", groupsSequence)
+			if r.log.Enabled(logger.DebugLevel) {
+				r.log.Debug("GetCollection: Collection retrieved successfully", "records", fmt.Sprintf("%+v", result), "groups", groups, "owner", owner, "groups_sequence", groupsSequence)
+			}
 			return result, groups, owner, groupsSequence, nil
 		}
 
@@ -395,7 +397,9 @@ func (r *RedisClient) GetCollection(collectionId string) (map[string]db.RecordVa
 // Implemented like this, we allow the overwrite of a collection. If we want to avoid to overwrite a collection
 // we would need to add a Watch( ..., infoKey) to check the existence of the collection
 func (r *RedisClient) SetCollection(collectionId string, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64) error {
-	r.log.Info("SetCollection called", "collection_id", collectionId, "records", fmt.Sprintf("%+v", records), "groups", groups, "owner", owner, "groupsSequence", groupsSequence)
+	if r.log.Enabled(logger.InfoLevel) {
+		r.log.Info("SetCollection called", "collection_id", collectionId, "records", fmt.Sprintf("%+v", records), "groups", groups, "owner", owner, "groupsSequence", groupsSequence)
+	}
 
 	keysKey := "info:" + collectionId + ":keys"
 	groupsKey := "info:" + collectionId + ":groups"
@@ -426,7 +430,9 @@ func (r *RedisClient) SetCollection(collectionId string, records map[string]db.R
 		return err
 	}
 
-	r.log.Info("SetCollection: Collection set successfully", "collection_id", collectionId, "records", fmt.Sprintf("%+v", records), "groups", groups, "owner", owner, "groups_sequence", groupsSequence)
+	if r.log.Enabled(logger.InfoLevel) {
+		r.log.Info("SetCollection: Collection set successfully", "collection_id", collectionId, "records", fmt.Sprintf("%+v", records), "groups", groups, "owner", owner, "groups_sequence", groupsSequence)
+	}
 	return nil
 }
 
@@ -525,7 +531,9 @@ func (r *RedisClient) GetMetadata(collectionId string) (*model.Metadata, error) 
 }
 
 func (r *RedisClient) SetMetadata(collectionId string, metadata model.Metadata) error {
-	r.log.Info("SetMetadata called", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", metadata))
+	if r.log.Enabled(logger.InfoLevel) {
+		r.log.Info("SetMetadata called", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", metadata))
+	}
 
 	metaList := append(metadata.ToList(), "groupsSequence", 0)
 	err := r.client.HSet(r.ctx, "meta:"+collectionId, metaList).Err()
@@ -1003,7 +1011,9 @@ func (r *RedisClient) CreateIndex(customMetadataKeys ...string) error {
 }
 
 func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userId string, userGroups []string) ([]model.CollectionInfo, error) {
-	r.log.Info("SearchOnMetadata called", "query", fmt.Sprintf("%+v", query), "user_id", userId, "user_access_groups", userGroups)
+	if r.log.Enabled(logger.InfoLevel) {
+		r.log.Info("SearchOnMetadata called", "query", fmt.Sprintf("%+v", query), "user_id", userId, "user_access_groups", userGroups)
+	}
 
 	redisQuery, err := query.ToRedisSearchCommand()
 	if err != nil {
@@ -1049,9 +1059,12 @@ func (r *RedisClient) SearchOnMetadata(query model.QueryTemplate, userId string,
 
 		result = append(result, collectionInfo)
 	}
-
-	r.log.Info("SearchOnMetadata: Query executed successfully", "query", fmt.Sprintf("%+v", query), "user_id", userId, "user_access_groups", userGroups)
-	r.log.Info("SearchOnMetadata: Query executed successfully", "query_result", fmt.Sprintf("%+v", result))
+	if r.log.Enabled(logger.InfoLevel) {
+		r.log.Info("SearchOnMetadata: Query executed successfully", "query", fmt.Sprintf("%+v", query), "user_id", userId, "user_access_groups", userGroups)
+	}
+	if r.log.Enabled(logger.DebugLevel) {
+		r.log.Debug("SearchOnMetadata: Query executed successfully", "query_result", fmt.Sprintf("%+v", result))
+	}
 	return result, nil
 }
 
@@ -1165,7 +1178,9 @@ func (r *RedisClient) GetMemoryStats() (*db.MemStats, error) {
 	}
 
 	r.log.Info("GetMemoryStats: Memory stats retrieved successfully")
-	r.log.Debug("GetMemoryStats: Memory stats retrieved successfully", "mem_stats", fmt.Sprintf("%+v", memStats))
+	if r.log.Enabled(logger.DebugLevel) {
+		r.log.Debug("GetMemoryStats: Memory stats retrieved successfully", "mem_stats", fmt.Sprintf("%+v", memStats))
+	}
 	return &memStats, err
 }
 

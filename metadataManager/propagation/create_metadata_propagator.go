@@ -2,12 +2,13 @@ package propagation
 
 import (
 	"fmt"
-	"github.com/ermes-thesis/ermes-common/logger"
-	"github.com/ermes-thesis/ermes-common/model"
-	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"net/http"
 	"server"
 	"strings"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/model"
+	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 )
 
 type CreateMetadataPropagator interface {
@@ -30,11 +31,15 @@ func NewCreateMetadataPropagator(serverInfo *server.ServerInfo, log logger.Logge
 
 func (p *CreateMetadataPropagatorImpl) Propagate(collectionId string, metadata model.Metadata, reqOrigin PropagationOrigin) error {
 	p.log.Info("Starting propagation of metadata creation", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain)
-	p.log.Debug("Starting propagation of metadata creation", "metadata", fmt.Sprintf("%v", metadata), "request_origin", reqOrigin)
+	if p.log.Enabled(logger.DebugLevel) {
+		p.log.Debug("Starting propagation of metadata creation", "metadata", fmt.Sprintf("%v", metadata), "request_origin", reqOrigin)
+	}
 
 	switch reqOrigin {
 	case FROM_FATHER:
-		p.log.Debug("Propagation origin: FROM_FATHER", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_children", fmt.Sprintf("%+v", p.serverInfo.Children))
+		if p.log.Enabled(logger.DebugLevel) {
+			p.log.Debug("Propagation origin: FROM_FATHER", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_children", fmt.Sprintf("%+v", p.serverInfo.Children))
+		}
 		for _, child := range p.serverInfo.Children {
 			if strings.HasPrefix(metadata.Geolocation, child.MetadataDomain) {
 				p.log.Info("Forwarding metadata creation to child", "collection_id", collectionId, "child_hostname", child.HostName, "child_geolocation", child.MetadataDomain)
@@ -48,7 +53,9 @@ func (p *CreateMetadataPropagatorImpl) Propagate(collectionId string, metadata m
 			}
 		}
 	case FROM_CHILD:
-		p.log.Debug("Propagation origin: FROM_CHILD", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_father", fmt.Sprintf("%+v", p.serverInfo.Father))
+		if p.log.Enabled(logger.DebugLevel) {
+			p.log.Debug("Propagation origin: FROM_CHILD", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_father", fmt.Sprintf("%+v", p.serverInfo.Father))
+		}
 		if p.serverInfo.Father != nil {
 			p.log.Info("Forwarding metadata creation to father", "collection_id", collectionId, "father_hostname", p.serverInfo.Father.HostName, "father_geolocation", p.serverInfo.Father.MetadataDomain)
 			err := p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, metadata)
@@ -58,7 +65,9 @@ func (p *CreateMetadataPropagatorImpl) Propagate(collectionId string, metadata m
 			}
 		}
 	case FROM_LOCAL:
-		p.log.Debug("Propagation origin: FROM_LOCAL", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_children", fmt.Sprintf("%+v", p.serverInfo.Children), "node_father", fmt.Sprintf("%+v", p.serverInfo.Father))
+		if p.log.Enabled(logger.DebugLevel) {
+			p.log.Debug("Propagation origin: FROM_LOCAL", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_children", fmt.Sprintf("%+v", p.serverInfo.Children), "node_father", fmt.Sprintf("%+v", p.serverInfo.Father))
+		}
 		if p.serverInfo.Father != nil {
 			p.log.Info("Forwarding metadata creation to father", "collection_id", collectionId, "father_hostname", p.serverInfo.Father.HostName, "father_geolocation", p.serverInfo.Father.MetadataDomain)
 			err := p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, metadata)
@@ -85,7 +94,9 @@ func (p *CreateMetadataPropagatorImpl) Propagate(collectionId string, metadata m
 }
 
 func (p *CreateMetadataPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, metadata model.Metadata) error {
-	p.log.Debug("Creating HTTP request for metadata propagation", "collection_id", collectionId, "destination", dest, "metadata", fmt.Sprintf("%+v", metadata))
+	if p.log.Enabled(logger.DebugLevel) {
+		p.log.Debug("Creating HTTP request for metadata propagation", "collection_id", collectionId, "destination", dest, "metadata", fmt.Sprintf("%+v", metadata))
+	}
 
 	req, err := p.httpHelper.CreateBasicPvtHttpRequest(http.MethodPost, dest, EndpointCreateMetadata, collectionId, metadata)
 	if err != nil {
@@ -107,6 +118,8 @@ func (p *CreateMetadataPropagatorImpl) sendHttpReqToDest(dest string, collection
 	}
 
 	p.log.Info("Metadata creation successfully propagated", "collection_id", collectionId)
-	p.log.Debug("Metadata creation successfully propagated", "destination", dest, "metadata", fmt.Sprintf("%+v", metadata))
+	if p.log.Enabled(logger.DebugLevel) {
+		p.log.Debug("Metadata creation successfully propagated", "destination", dest, "metadata", fmt.Sprintf("%+v", metadata))
+	}
 	return nil
 }

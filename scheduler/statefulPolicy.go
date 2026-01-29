@@ -60,7 +60,9 @@ func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum ui
 		var toMigrateErr *collectionsDiscoverer.ToMigrateError
 		if err == nil {
 			if collection != nil {
-				s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection), "is_locally_present", found)
+				if s.log.Enabled(logger.InfoLevel) {
+					s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection), "is_locally_present", found)
+				}
 			} else {
 				s.log.Info("Collection not known locally", "collection_id", colId, "seq_num", seqNum, "is_locally_present", found)
 			}
@@ -168,7 +170,9 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 		}
 	}
 
-	s.log.Info("Collection analysis completed", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "sequential_coll_needed", sequentialCollectionNeeded, "sequential_collection_found", fmt.Sprintf("%+v", sequentialCollection), "has_eventual_local", hasEventualLocal, "eventual_host_counts", fmt.Sprintf("%+v", eventualHostCounts), "max_eventual_count", maxEventualCount, "host_with_more_eventual", hostWithMoreEventual)
+	if s.log.Enabled(logger.InfoLevel) {
+		s.log.Info("Collection analysis completed", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "sequential_coll_needed", sequentialCollectionNeeded, "sequential_collection_found", fmt.Sprintf("%+v", sequentialCollection), "has_eventual_local", hasEventualLocal, "eventual_host_counts", fmt.Sprintf("%+v", eventualHostCounts), "max_eventual_count", maxEventualCount, "host_with_more_eventual", hostWithMoreEventual)
+	}
 	// Route based on collection analysis
 	// Priority: Sequential > Local Eventual > Remote Eventual
 	if sequentialCollectionNeeded {
@@ -197,13 +201,6 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 		}
 
 		if hasSequentialLocal {
-			// Re-check if the collection is still local, after acquiring the lock
-			// This is needed because the collection could be migrated while we were waiting for the lock
-			// If the collection is not local anymore, we need to forward the request
-			//if !sequentialCollection.IsLocal() {
-			//	return s.forwardRequestWithSequential(functionName, functionVersion, collections, groupToken, sequentialSeqNumber, functionMetadata.StrongCollWriteAccess, sequentialCollection)
-			//}
-
 			// If Sequential collection is present, and it's the leader execute locally.
 			// If Sequential collection is present, and the function needs only to read it, execute locally
 			if sequentialCollection.IsLeader || !functionMetadata.StrongCollWriteAccess {

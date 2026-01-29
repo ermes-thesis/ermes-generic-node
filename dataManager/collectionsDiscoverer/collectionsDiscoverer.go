@@ -57,12 +57,12 @@ func GetCollectionsDiscovererInstance() CollectionsDiscoverer {
 	return collectionsDiscovererInstance
 }
 
-func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection], migrationManager migrationManager.MigrationManager, mutex *sync.Mutex) {
+func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, log logger.Logger, lruCache *lru.LRUCache[shared.Collection], migrationManager migrationManager.MigrationManager, mutex *sync.Mutex) {
 	initOnce.Do(func() {
 		c.collectionsPartialView = collections
 		c.serverInfo = serverInfo
-		c.log = logger
-		c.sender = sender.NewCollectionDiscovererSender(logger, server)
+		c.log = log
+		c.sender = sender.NewCollectionDiscovererSender(log, server)
 		c.dbInterface = dbInterface
 		c.lruCache = lruCache
 		c.migrationManager = migrationManager
@@ -74,7 +74,9 @@ func (c *CollectionsDiscovererImp) Init(collections *shared.CollectionPartialVie
 		server.AddCustomRoute(c.sender.CreateCollectionPropagationPath(), true, c.handleIncomingNewCollection().ServeHTTP)
 		server.AddCustomRoute(c.sender.RemoveCollectionPropagationPath(), true, c.handleIncomingRemoveCollection().ServeHTTP)
 
-		c.log.Info("Collection discoverer component initialized", "server_info", fmt.Sprintf("%+v", c.serverInfo))
+		if c.log.Enabled(logger.InfoLevel) {
+			c.log.Info("Collection discoverer component initialized", "server_info", fmt.Sprintf("%+v", c.serverInfo))
+		}
 	})
 }
 
@@ -92,7 +94,9 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 		return false, nil, nil
 	}
 	if localState, ok := collection.GetCollectionState().(*shared.LocalCollection); !ok {
-		c.log.Info("Collection known by the current node, but it's not local", "collection_id", collectionId, "consistency_clock", consistencyClock, "collection", fmt.Sprintf("%+v", collection))
+		if c.log.Enabled(logger.InfoLevel) {
+			c.log.Info("Collection known by the current node, but it's not local", "collection_id", collectionId, "consistency_clock", consistencyClock, "collection", fmt.Sprintf("%+v", collection))
+		}
 		return false, collection, nil
 	} else if collection.IsStrong() {
 		strongCollection := collection.(*shared.StrongCollection)
@@ -123,7 +127,9 @@ func (c *CollectionsDiscovererImp) IsCollectionLocallyPresent(collectionId strin
 		}
 	}
 
-	c.log.Debug("Collection is known by the current node and is locally present", "collection_id", collectionId, "consistency_clock", consistencyClock, "collection", fmt.Sprintf("%+v", collection))
+	if c.log.Enabled(logger.DebugLevel) {
+		c.log.Debug("Collection is known by the current node and is locally present", "collection_id", collectionId, "consistency_clock", consistencyClock, "collection", fmt.Sprintf("%+v", collection))
+	}
 	return true, collection, nil
 }
 
@@ -191,7 +197,9 @@ func (c *CollectionsDiscovererImp) AccessRecords(
 					}
 					addr = c.serverInfo.Father.HostName
 				}
-				c.log.Debug("AccessRecords: Accessing remote child for eventual collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "addr", addr)
+				if c.log.Enabled(logger.DebugLevel) {
+					c.log.Debug("AccessRecords: Accessing remote child for eventual collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "addr", addr)
+				}
 				return remoteFn(addr)
 			}
 
@@ -201,12 +209,16 @@ func (c *CollectionsDiscovererImp) AccessRecords(
 				return nil, errors.New("collection is initializing or failed to load")
 			}
 
-			c.log.Debug("AccessRecords: Accessing local collection records", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+			if c.log.Enabled(logger.DebugLevel) {
+				c.log.Debug("AccessRecords: Accessing local collection records", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+			}
 			defer localState.CollectionLock.RUnlock()
 			return dbFn()
 		}
 
-		c.log.Debug("AccessRecords: Accessing local collection records", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		if c.log.Enabled(logger.DebugLevel) {
+			c.log.Debug("AccessRecords: Accessing local collection records", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		}
 		return dbFn()
 	}
 	if collection.IsStrong() {
@@ -221,13 +233,17 @@ func (c *CollectionsDiscovererImp) AccessRecords(
 		}
 		addr = c.serverInfo.Father.HostName
 	}
-	c.log.Debug("AccessRecords: Accessing remote child for eventual collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "addr", addr)
+	if c.log.Enabled(logger.DebugLevel) {
+		c.log.Debug("AccessRecords: Accessing remote child for eventual collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "addr", addr)
+	}
 	return remoteFn(addr)
 }
 
 func (c *CollectionsDiscovererImp) acquireRLockForCollection(collection shared.Collection, localState *shared.LocalCollection) *shared.LocalCollection {
 	localState.CollectionLock.RLock()
-	c.log.Debug("LOCK: collection locked in READ", "collection_id", collection.CollectionId(), "collection", fmt.Sprintf("%+v", collection))
+	if c.log.Enabled(logger.DebugLevel) {
+		c.log.Debug("LOCK: collection locked in READ", "collection_id", collection.CollectionId(), "collection", fmt.Sprintf("%+v", collection))
+	}
 
 	for collection.IsLocal() && localState != collection.GetCollectionState() {
 		c.log.Warn("Inconsistent local state detected for collection", "collection_id", collection.CollectionId(), "collection", fmt.Sprintf("%+v", collection), "local_state", fmt.Sprintf("%+v", localState), "actual_local_state", fmt.Sprintf("%+v", collection.GetCollectionState()))
@@ -270,19 +286,25 @@ func (c *CollectionsDiscovererImp) updateRecord(
 		return hosts, nil, false
 	}
 
-	c.log.Debug("Preparing list of host to which propagate the update", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+	if c.log.Enabled(logger.DebugLevel) {
+		c.log.Debug("Preparing list of host to which propagate the update", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+	}
 	hosts := collection.HostsId()
 	if c.serverInfo.Father != nil {
 		addr := c.serverInfo.Father.HostName
 		hosts[addr] = struct{}{}
-	} else {
+	} else if c.log.Enabled(logger.DebugLevel) {
 		c.log.Debug("Current node is a cloud node. Avoiding to propagate the update to the father", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", hosts)
 	}
-	c.log.Debug("List of hosts to which propagate the update computed successfully", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", fmt.Sprintf("%+v", hosts))
+	if c.log.Enabled(logger.DebugLevel) {
+		c.log.Debug("List of hosts to which propagate the update computed successfully", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", fmt.Sprintf("%+v", hosts))
+	}
 
 	localState, ok := collection.GetCollectionState().(*shared.LocalCollection)
 	if !ok {
-		c.log.Debug("Collection to be updated is not local", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		if c.log.Enabled(logger.DebugLevel) {
+			c.log.Debug("Collection to be updated is not local", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		}
 		if collection.IsStrong() && isInitiator { //safety check
 			c.log.Error("UpdateRecord: Attempted remote update to strong collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 			return nil, errors.New("strong collection can't be updated remotely"), false
@@ -313,7 +335,9 @@ func (c *CollectionsDiscovererImp) updateRecord(
 	}
 
 	if collection.IsStrong() {
-		c.log.Debug("Collection to be updated is local and sequential consistent", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		if c.log.Enabled(logger.DebugLevel) {
+			c.log.Debug("Collection to be updated is local and sequential consistent", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		}
 		if isInitiator {
 			if !collection.(*shared.StrongCollection).IsLeader { //safety check
 				c.log.Error("Trying to update local sequential collection even if it's not the leader", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "is_initiator", isInitiator, "message", fmt.Sprintf("%+v", updateMessage))
@@ -328,7 +352,9 @@ func (c *CollectionsDiscovererImp) updateRecord(
 		}
 	}
 
-	c.log.Debug("Proceeding to update the collection in the local DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+	if c.log.Enabled(logger.DebugLevel) {
+		c.log.Debug("Proceeding to update the collection in the local DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+	}
 	memUsage, err := dbFn(collection.IsStrong()) // update in local db
 	if err != nil {
 		var staleErr *db.StaleUpdateError
@@ -348,27 +374,35 @@ func (c *CollectionsDiscovererImp) updateRecord(
 				oldClock := strongColl.ConsistencyClock
 				strongColl.ConsistencyClock++
 				updateMessage.SetSequence(strongColl.ConsistencyClock)
-				c.log.Debug("Local collection sequence incremented", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "old_sequence", oldClock, "new_sequence", collection.(*shared.StrongCollection).ConsistencyClock)
+				if c.log.Enabled(logger.DebugLevel) {
+					c.log.Debug("Local collection sequence incremented", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "old_sequence", oldClock, "new_sequence", collection.(*shared.StrongCollection).ConsistencyClock)
+				}
 			}
 			strongColl.ConsistencyClock = updateMessage.GetSequence()
 		}
 	}
 
 	// Update hosts list after the update is done
-	c.log.Debug("Preparing list of host to which propagate the update", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+	if c.log.Enabled(logger.DebugLevel) {
+		c.log.Debug("Preparing list of host to which propagate the update", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+	}
 	hosts = collection.HostsId()
 	if c.serverInfo.Father != nil {
 		addr := c.serverInfo.Father.HostName
 		hosts[addr] = struct{}{}
 	} else {
-		c.log.Debug("Current node is a cloud node. Avoiding to propagate the update to the father", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", hosts)
+		if c.log.Enabled(logger.DebugLevel) {
+			c.log.Debug("Current node is a cloud node. Avoiding to propagate the update to the father", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", hosts)
+		}
 	}
-	c.log.Debug("List of hosts to which propagate the update computed successfully", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", fmt.Sprintf("%+v", hosts))
-
+	if c.log.Enabled(logger.DebugLevel) {
+		c.log.Debug("List of hosts to which propagate the update computed successfully", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", fmt.Sprintf("%+v", hosts))
+	}
 	collection.GetCollectionState().(*shared.LocalCollection).IncSize(memUsage)
 	c.lruCache.UpdateSize(collection.CollectionId(), uint(collection.GetCollectionState().(*shared.LocalCollection).Size()))
-	c.log.Info("UpdateRecord: Collection records updated successfully in local DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "memory_usage_change", memUsage, "new_memory_usage", collection.GetCollectionState().(*shared.LocalCollection).Size())
-
+	if c.log.Enabled(logger.InfoLevel) {
+		c.log.Info("UpdateRecord: Collection records updated successfully in local DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "memory_usage_change", memUsage, "new_memory_usage", collection.GetCollectionState().(*shared.LocalCollection).Size())
+	}
 	return hosts, nil, true
 }
 
@@ -380,7 +414,9 @@ func (c *CollectionsDiscovererImp) doUpdateLocally(collectionId string, dbFn fun
 		if !ok {
 			return
 		}
-		c.log.Debug("doUpdateLocally: Executing postponed update for collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		if c.log.Enabled(logger.DebugLevel) {
+			c.log.Debug("doUpdateLocally: Executing postponed update for collection", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+		}
 		//if update older than the collection strong
 		var isStrong = false
 		if collection.IsStrong() {
@@ -434,7 +470,9 @@ func (c *CollectionsDiscovererImp) popolateUpdateSafetyCheck(saftyQueue shared.F
 }
 
 func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates []messages.CollectionUpdateMessage, groups []string, userId string, isInitiator bool, ignoredHostName string) error {
-	c.log.Info("UpdateCollectionsRecordsAndPropagate called. Processing record updates", "record_updates", fmt.Sprintf("%+v", updates), "user_access_groups", groups, "executing_user", userId, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
+	if c.log.Enabled(logger.InfoLevel) {
+		c.log.Info("UpdateCollectionsRecordsAndPropagate called. Processing record updates", "record_updates", fmt.Sprintf("%+v", updates), "user_access_groups", groups, "executing_user", userId, "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
+	}
 	var msgs = make(map[string]messages.CollectionUpdateMessages) // host -> message
 	var safetyMap = make(map[string][]shared.FunctionQueue)       // host -> safetyQueue
 
@@ -567,7 +605,9 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 					copyMsg.ToForward = false
 				}
 				msg := messages.CollectionUpdateMessages{Groups: groups, UserId: userId, Messages: []messages.CollectionUpdateMessage{copyMsg}}
-				c.log.Debug("UpdateCollectionsRecordsAndPropagate: postponing update propagation", "collection_id", update.CollectionId, "to_host", host, "update", fmt.Sprintf("%+v", msg))
+				if c.log.Enabled(logger.DebugLevel) {
+					c.log.Debug("UpdateCollectionsRecordsAndPropagate: postponing update propagation", "collection_id", update.CollectionId, "to_host", host, "update", fmt.Sprintf("%+v", msg))
+				}
 				collection.GetCollectionState().AddPostponedUpdate(host,
 					func() {
 						c.log.Debug("UpdateCollectionsRecordsAndPropagate: executing postponed update propagation", "collection_id", update.CollectionId, "to_host", host, "update", fmt.Sprintf("%+v", msg))
@@ -596,7 +636,9 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 
 	//propagate update to other hosts
 	for host, msg := range msgs {
-		c.log.Debug("UpdateCollectionsRecordsAndPropagate: propagating update", "forward_to", host, "update", fmt.Sprintf("%+v", msg))
+		if c.log.Enabled(logger.DebugLevel) {
+			c.log.Debug("UpdateCollectionsRecordsAndPropagate: propagating update", "forward_to", host, "update", fmt.Sprintf("%+v", msg))
+		}
 		c.sender.PropagateUpdate(host, msg, safetyMap[host])
 	}
 
@@ -605,7 +647,9 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsRecordsAndPropagate(updates 
 }
 
 func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates []messages.CollectionGroupUpdateMessage, isInitiator bool, ignoredHostName string) error {
-	c.log.Info("UpdateCollectionsGroupsAndPropagate called. Processing groups updates", "groups_updates", fmt.Sprintf("%+v", updates), "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
+	if c.log.Enabled(logger.InfoLevel) {
+		c.log.Info("UpdateCollectionsGroupsAndPropagate called. Processing groups updates", "groups_updates", fmt.Sprintf("%+v", updates), "is_initiator", isInitiator, "ignored_hostname", ignoredHostName)
+	}
 	var msgs = make(map[string]messages.CollectionGroupUpdateMessages) // host -> message
 	var safetyMap = make(map[string][]shared.FunctionQueue)            // host -> safetyQueue
 
@@ -652,10 +696,14 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 				}
 				msg := make(messages.CollectionGroupUpdateMessages, 0)
 				msg = append(msg, copyMsg)
-				c.log.Debug("UpdateCollectionsGroupsAndPropagate: postponing group update propagation", "collection_id", update.CollectionId, "to_host", host, "update", fmt.Sprintf("%+v", msg))
+				if c.log.Enabled(logger.DebugLevel) {
+					c.log.Debug("UpdateCollectionsGroupsAndPropagate: postponing group update propagation", "collection_id", update.CollectionId, "to_host", host, "update", fmt.Sprintf("%+v", msg))
+				}
 				collection.GetCollectionState().AddPostponedUpdate(host,
 					func() {
-						c.log.Debug("UpdateCollectionsGroupsAndPropagate: executing postponed group update propagation", "collection_id", update.CollectionId, "to_host", host, "update", fmt.Sprintf("%+v", msg))
+						if c.log.Enabled(logger.DebugLevel) {
+							c.log.Debug("UpdateCollectionsGroupsAndPropagate: executing postponed group update propagation", "collection_id", update.CollectionId, "to_host", host, "update", fmt.Sprintf("%+v", msg))
+						}
 						c.sender.PropagateGroupUpdate(host, msg, make([]shared.FunctionQueue, 0))
 					},
 					func() {
@@ -682,7 +730,9 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 
 	//propagate update to other hosts
 	for host, msg := range msgs {
-		c.log.Debug("UpdateCollectionsRecordsAndPropagate: propagating groups update", "forward_to", host, "update", fmt.Sprintf("%+v", msg))
+		if c.log.Enabled(logger.DebugLevel) {
+			c.log.Debug("UpdateCollectionsRecordsAndPropagate: propagating groups update", "forward_to", host, "update", fmt.Sprintf("%+v", msg))
+		}
 		c.sender.PropagateGroupUpdate(host, msg, safetyMap[host])
 	}
 
@@ -691,8 +741,9 @@ func (c *CollectionsDiscovererImp) UpdateCollectionsGroupsAndPropagate(updates [
 }
 
 func (c *CollectionsDiscovererImp) SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong bool, skipUniquenessCheck bool) error {
-	c.log.Info("SetCollectionAndPropagate called. Processing collection creation", "collection_id", collectionId, "collection_name", collectionName, "records", fmt.Sprintf("%+v", records), "executing_user", userId, "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck)
-	//sync
+	if c.log.Enabled(logger.InfoLevel) {
+		c.log.Info("SetCollectionAndPropagate called. Processing collection creation", "collection_id", collectionId, "collection_name", collectionName, "records", fmt.Sprintf("%+v", records), "executing_user", userId, "is_strong", isStrong, "skip_uniqueness_check", skipUniquenessCheck)
+	} //sync
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 	//imp
@@ -834,12 +885,16 @@ func (c *CollectionsDiscovererImp) propagateRemoveCollection(collection shared.C
 		if host == ignoredHostName {
 			continue
 		}
-		c.log.Debug("Propagating collection removal towards the direction of a replica", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups, "collection", fmt.Sprintf("%+v", collection), "forward_to", host)
+		if c.log.Enabled(logger.DebugLevel) {
+			c.log.Debug("Propagating collection removal towards the direction of a replica", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups, "collection", fmt.Sprintf("%+v", collection), "forward_to", host)
+		}
 		c.sender.RemoveCollection(host, collectionId, c.serverInfo.HostName, groups, userId)
 	}
 
 	if c.serverInfo.Father != nil && c.serverInfo.Father.HostName != ignoredHostName {
-		c.log.Debug("Propagating collection removal to father node", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups, "collection", fmt.Sprintf("%+v", collection), "forward_to", c.serverInfo.Father.HostName)
+		if c.log.Enabled(logger.DebugLevel) {
+			c.log.Debug("Propagating collection removal to father node", "collection_id", collectionId, "executing_user", userId, "user_access_groups", groups, "collection", fmt.Sprintf("%+v", collection), "forward_to", c.serverInfo.Father.HostName)
+		}
 		c.sender.RemoveCollection(c.serverInfo.Father.HostName, collectionId, c.serverInfo.HostName, groups, userId)
 	}
 }

@@ -6,6 +6,8 @@ import (
 	"io"
 	"net/http"
 	"tokenDecoder"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 func (m *MetadataManagerImpl) handleRouteLookup(tokenDecoder tokenDecoder.TokenDecoder) http.HandlerFunc {
@@ -41,7 +43,9 @@ func (m *MetadataManagerImpl) handleRouteLookup(tokenDecoder tokenDecoder.TokenD
 		}
 
 		m.log.Info("Queries executed successfully", "fn_name", fnName, "fn_version", fnVersion, "node_geolocation", m.serverInfo.MetadataDomain)
-		m.log.Debug("Queries executed successfully", "templates_parameters", queryParams, "user_access_groups", groups, "applicant_user_id", userId, "templates_geolocation", geolocation, "queries_results", fmt.Sprintf("%+v", queryResults))
+		if m.log.Enabled(logger.DebugLevel) {
+			m.log.Debug("Queries executed successfully", "templates_parameters", queryParams, "user_access_groups", groups, "applicant_user_id", userId, "templates_geolocation", geolocation, "queries_results", fmt.Sprintf("%+v", queryResults))
+		}
 
 		w.Header().Set("Content-Type", "application/json")
 		if err = json.NewEncoder(w).Encode(queryResults); err != nil {

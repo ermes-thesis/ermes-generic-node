@@ -215,7 +215,9 @@ func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage
 }
 
 func (s *MigrationManagerSenderImpl) SendRequestInfoMessage(msg gossip.CollectionRequestInfoMessages, destination string) {
-	s.log.InfofWith("SENDER: send collection request info to %s", []any{destination}, "msg", fmt.Sprintf("%+v", msg))
+	if s.log.Enabled(logger.InfoLevel) {
+		s.log.InfofWith("SENDER: send collection request info to %s", []any{destination}, "msg", fmt.Sprintf("%+v", msg))
+	}
 
 	go s.server.SendGenericHTTPRequest(destination, requestInfoPath, msg)
 }

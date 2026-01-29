@@ -83,7 +83,9 @@ func (p *QueryPropagatorImpl) sendHttpReqToDest(dest, functionName, functionVers
 		return nil, err
 	}
 
-	p.log.Info("Query successfully propagated", "fn_name", functionName, "fn_version", functionVersion, "query_results", fmt.Sprintf("%+v", result))
-	p.log.Debug("Query successfully propagated", "destination", dest, "template_parameters_mappings", templateParamsMappings, "query_geolocation", geolocation)
+	if p.log.Enabled(logger.InfoLevel) {
+		p.log.Info("Query successfully propagated", "fn_name", functionName, "fn_version", functionVersion, "query_results", fmt.Sprintf("%+v", result))
+		p.log.Debug("Query successfully propagated", "destination", dest, "template_parameters_mappings", templateParamsMappings, "query_geolocation", geolocation)
+	}
 	return result, nil
 }

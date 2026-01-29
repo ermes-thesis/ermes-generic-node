@@ -126,7 +126,7 @@ func (s *statefulPolicy) handleOffloadFunctionInvocation(tokenDecoder tokenDecod
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", resSeqNumber))
+		w.Header().Set("X-ERMES-SEQUENTIAL-NUMBER", strconv.FormatUint(resSeqNumber, 10))
 		w.Header().Set("X-ERMES-EXECUTION-HOST", functionResponse.Hostname)
 		w.WriteHeader(functionResponse.StatusCode)
 		if _, err = w.Write(functionResponse.Body); err != nil {

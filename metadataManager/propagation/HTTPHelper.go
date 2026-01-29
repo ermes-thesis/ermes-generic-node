@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/ermes-thesis/ermes-common/logger"
 	"io"
 	"net/http"
 	"server"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 type HTTPHelper struct {
@@ -20,7 +21,9 @@ func NewHTTPHelper(serverInfo *server.ServerInfo, log logger.Logger) *HTTPHelper
 }
 
 func (h *HTTPHelper) CreateBasicPvtHttpRequest(method, host, endpoint, collectionId string, payload any) (*http.Request, error) {
-	h.log.Debug("Creating basic private HTTP request", "method", method, "host", host, "endpoint", endpoint, "collection_id", collectionId, "payload", fmt.Sprintf("%+v", payload))
+	if h.log.Enabled(logger.DebugLevel) {
+		h.log.Debug("Creating basic private HTTP request", "method", method, "host", host, "endpoint", endpoint, "collection_id", collectionId, "payload", fmt.Sprintf("%+v", payload))
+	}
 
 	var bodyReader io.Reader
 	if payload != nil {

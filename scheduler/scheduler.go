@@ -143,7 +143,9 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 	startTime := time.Now()
 	resp := s.wasmExecutorPool.Invoke(scheduleRequest.FunctionName+"@"+scheduleRequest.FunctionVersion, wasmBinary, "entry", scheduleRequest.Payload, ctxJson)
 	s.log.Eval("Function executed successfully", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_duration", time.Since(startTime).Nanoseconds())
-	s.log.Debug("Function executed successfully", "fn_response", fmt.Sprintf("%+v", resp))
+	if s.log.Enabled(logger.DebugLevel) {
+		s.log.Debug("Function executed successfully", "fn_response", fmt.Sprintf("%+v", resp))
+	}
 
 	defer func() {
 		if seqColLock != nil {
@@ -151,7 +153,7 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 			seqColLock.RUnlock()
 		}
 		if writeSeqCollection && writeMutex != nil {
-			s.log.Eval("Releasing sequential collection write mutex after function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
+			s.log.Info("Releasing sequential collection write mutex after function execution", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId)
 			writeMutex.Unlock()
 		}
 
@@ -166,7 +168,9 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 					})
 				}
 			}
-			s.log.Info("Starting to update migration manager request infos for the used collections", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
+			if s.log.Enabled(logger.InfoLevel) {
+				s.log.Info("Starting to update migration manager request infos for the used collections", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collections_request_infos_updates", fmt.Sprintf("%+v", collRequestInfo))
+			}
 			s.dataManager.GetMigrationManager().UpdatesRequestsInfo(collRequestInfo, reqHostname)
 		}()
 	}()
@@ -185,10 +189,14 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 	if resp.CacheUpdates == nil {
 		if sequentialCollId != "" {
 			seqNumber, err := s.dataManager.GetCollectionVectorClockValue(sequentialCollId)
-			s.log.Info("No function cache updates to commit, returning directly the result", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result), "new_sequential_collection_seq_num", seqNumber)
+			if s.log.Enabled(logger.InfoLevel) {
+				s.log.Info("No function cache updates to commit, returning directly the result", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result), "new_sequential_collection_seq_num", seqNumber)
+			}
 			return result, seqNumber, err
 		}
-		s.log.Info("No function cache updates to commit, returning directly the result", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result))
+		if s.log.Enabled(logger.InfoLevel) {
+			s.log.Info("No function cache updates to commit, returning directly the result", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_result", fmt.Sprintf("%+v", result))
+		}
 		return result, 0, nil
 	}
 
@@ -229,13 +237,17 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 						RecordValues: recordValues,
 						IsDelete:     false,
 					}}
-					s.log.Debug("Sequential collection dirty records commits prepared", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "record_updates", fmt.Sprintf("%+v", updates))
+					if s.log.Enabled(logger.DebugLevel) {
+						s.log.Debug("Sequential collection dirty records commits prepared", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "record_updates", fmt.Sprintf("%+v", updates))
+					}
 					err = s.dataManager.UpdateCollectionsRecordsAndPropagate(updates, groups, userId)
 					if err != nil {
 						s.log.Error("Failed to update sequential collection records", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "collection_updates", fmt.Sprintf("%+v", updates), "sequential_collection_write_access", writeSeqCollection, "error", err)
 						return nil, 0, fmt.Errorf("error updating sequential collection records: %v", err)
 					}
-					s.log.Debug("Sequential collection records updated and propagated", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "record_updates", fmt.Sprintf("%+v", updates))
+					if s.log.Enabled(logger.DebugLevel) {
+						s.log.Debug("Sequential collection records updated and propagated", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "record_updates", fmt.Sprintf("%+v", updates))
+					}
 				}
 				if len(update.DeletedRecords) > 0 {
 					updates := []messages.CollectionUpdate{{
@@ -243,13 +255,17 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 						RecordNames:  update.DeletedRecords,
 						IsDelete:     true,
 					}}
-					s.log.Debug("Sequential collection delete records commits prepared", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "records_to_delete", fmt.Sprintf("%+v", updates))
+					if s.log.Enabled(logger.DebugLevel) {
+						s.log.Debug("Sequential collection delete records commits prepared", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "records_to_delete", fmt.Sprintf("%+v", updates))
+					}
 					err = s.dataManager.UpdateCollectionsRecordsAndPropagate(updates, groups, userId)
 					if err != nil {
 						s.log.Error("Failed to delete sequential collection records", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "collection_updates", fmt.Sprintf("%+v", updates), "sequential_collection_write_access", writeSeqCollection, "error", err)
 						return nil, 0, fmt.Errorf("error deleting sequential collection records: %v", err)
 					}
-					s.log.Debug("Sequential collection delete records deleted and propagated", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "records_to_delete", fmt.Sprintf("%+v", updates))
+					if s.log.Enabled(logger.DebugLevel) {
+						s.log.Debug("Sequential collection delete records deleted and propagated", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "records_to_delete", fmt.Sprintf("%+v", updates))
+					}
 				}
 
 				var groupsToAdd []string
@@ -269,9 +285,9 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 						s.log.Error("Failed to update sequential collection groups", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "fn_response", fmt.Sprintf("%+v", resp), "with_context", fmt.Sprintf("%+v", ctx), "with_request_body", string(scheduleRequest.Payload), "groups_to_add", groupsToAdd, "groups_to_remove", groupsToRemove, "sequential_collection_write_access", writeSeqCollection, "error", err)
 						return nil, 0, fmt.Errorf("error updating sequential collection groups: %v", err)
 					}
-					s.log.Debug("Metadata groups updated successfully for sequential collection", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "groups_update_response", fmt.Sprintf("%+v", updateResp))
-
-					s.log.Debug("Starting sequential collection groups update and propagation", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "groups_update_response", fmt.Sprintf("%+v", updateResp))
+					if s.log.Enabled(logger.DebugLevel) {
+						s.log.Debug("Metadata groups updated successfully for sequential collection. Starting sequential collection groups update and propagation", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "sequential_collection_id", sequentialCollId, "groups_update_response", fmt.Sprintf("%+v", updateResp))
+					}
 					err = s.dataManager.UpdateCollectionsGroupsAndPropagate([]messages.CollectionGroupUpdate{{
 						CollectionId: sequentialCollId,
 						GroupNames:   updateResp.Groups,
@@ -304,7 +320,9 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 		var groupUpdateMessage []messages.CollectionGroupUpdate
 
 		for collId, update := range resp.CacheUpdates.CollectionUpdates {
-			s.log.DebugfWith("[%s] Processing collection cache update", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", userId, "collection_id", collId, "update", fmt.Sprintf("%+v", update))
+			if s.log.Enabled(logger.DebugLevel) {
+				s.log.DebugfWith("[%s] Processing collection cache update", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", userId, "collection_id", collId, "update", fmt.Sprintf("%+v", update))
+			}
 			if update.Deleted {
 				go func(collId string) {
 					routinePrefix := fmt.Sprintf("GO#%s", xid.New().String())
@@ -319,7 +337,9 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 					if err != nil {
 						s.log.ErrorfWith("[%s] Failed to delete or propagate the deletion of collection", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_id", collId, "update", fmt.Sprintf("%+v", update), "error", err)
 					}
-					s.log.DebugfWith("[%s] Removed collection asynchronously", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_id", collId, "update", fmt.Sprintf("%+v", update))
+					if s.log.Enabled(logger.DebugLevel) {
+						s.log.DebugfWith("[%s] Removed collection asynchronously", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_id", collId, "update", fmt.Sprintf("%+v", update))
+					}
 				}(collId)
 				continue
 			}
@@ -372,14 +392,18 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 		}
 
 		if len(updateMessage) > 0 {
-			s.log.DebugfWith("[%s] Propagating eventual collection updates", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates", fmt.Sprintf("%+v", updateMessage))
+			if s.log.Enabled(logger.DebugLevel) {
+				s.log.DebugfWith("[%s] Propagating eventual collection updates", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates", fmt.Sprintf("%+v", updateMessage))
+			}
 			err = s.dataManager.UpdateCollectionsRecordsAndPropagate(updateMessage, groups, userId)
 			if err != nil {
 				s.log.ErrorfWith("[%s] Failed to update or propagate eventual collections' updates", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_updates", fmt.Sprintf("%+v", updateMessage), "error", err)
 			}
 		}
 		if len(groupUpdateMessage) > 0 {
-			s.log.DebugfWith("[%s] Propagating eventual collection group updates", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_groups_updates", fmt.Sprintf("%+v", groupUpdateMessage))
+			if s.log.Enabled(logger.DebugLevel) {
+				s.log.DebugfWith("[%s] Propagating eventual collection group updates", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_groups_updates", fmt.Sprintf("%+v", groupUpdateMessage))
+			}
 			err = s.dataManager.UpdateCollectionsGroupsAndPropagate(groupUpdateMessage)
 			if err != nil {
 				s.log.ErrorfWith("[%s] Failed to update or propagate eventual collections' groups update", []any{routinePrefix}, "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "collection_groups_updates", fmt.Sprintf("%+v", groupUpdateMessage), "error", err)
@@ -395,7 +419,9 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 }
 
 func (s *baseScheduler) sendUpdateToGTP(groupsCache model.GroupsCache) {
-	s.log.Info("Sending update to GTP", "groups_cache", fmt.Sprintf("%v", groupsCache))
+	if s.log.Enabled(logger.InfoLevel) {
+		s.log.Info("Sending update to GTP", "groups_cache", fmt.Sprintf("%v", groupsCache))
+	}
 	for groupName, toCreate := range groupsCache.Groups {
 		s.log.Debug("Processing group update", "group_name", groupName, "to_create", toCreate)
 		if toCreate {
@@ -486,6 +512,8 @@ func (s *baseScheduler) makeHTTPRequest(method string, url string, body io.Reade
 	}
 	defer resp.Body.Close()
 
-	s.log.Debug("Received response from GTP", "method", method, "url", url, "headers", fmt.Sprintf("%v", req.Header), "status_code", resp.StatusCode)
+	if s.log.Enabled(logger.DebugLevel) {
+		s.log.Debug("Received response from GTP", "method", method, "url", url, "headers", fmt.Sprintf("%v", req.Header), "status_code", resp.StatusCode)
+	}
 	return resp.StatusCode, nil
 }

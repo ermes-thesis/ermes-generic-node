@@ -121,7 +121,9 @@ func (f *FunctionCacheImpl) GetTemplate(functionName string, functionVersion str
 			q := fnBundle.Templates[templateName]
 
 			f.log.Info("Missing template has been fetched correctly and is now cached.", "fn_name", functionName, "fn_version", functionVersion, "template_name", templateName)
-			f.log.Debug("Missing template has been fetched correctly and is now cached.", "fn_bundle", fmt.Sprintf("%+v", fnBundle), "template_content", fmt.Sprintf("%+v", q))
+			if f.log.Enabled(logger.DebugLevel) {
+				f.log.Debug("Missing template has been fetched correctly and is now cached.", "fn_bundle", fmt.Sprintf("%+v", fnBundle), "template_content", fmt.Sprintf("%+v", q))
+			}
 			return &q, nil
 		} else {
 			f.log.Warn("Template not associated with function", "fn_name", functionName, "fn_version", functionVersion, "fn_metadata", meta, "template_name", templateName)
@@ -142,7 +144,9 @@ func (f *FunctionCacheImpl) GetTemplate(functionName string, functionVersion str
 		}
 
 		f.log.Info("Missing metadata has been fetched correctly. Template has been found in the retrieved function bundle", "fn_name", functionName, "fn_version", functionVersion, "template_name", templateName)
-		f.log.Debug("Missing metadata has been fetched correctly. Template has been found in the retrieved function bundle", "fn_bundle", fmt.Sprintf("%+v", fnBundle), "template_content", fmt.Sprintf("%+v", q))
+		if f.log.Enabled(logger.DebugLevel) {
+			f.log.Debug("Missing metadata has been fetched correctly. Template has been found in the retrieved function bundle", "fn_bundle", fmt.Sprintf("%+v", fnBundle), "template_content", fmt.Sprintf("%+v", q))
+		}
 		return &q, nil
 	}
 }
@@ -182,7 +186,9 @@ func (f *FunctionCacheImpl) GetBinary(functionName string, functionVersion strin
 	}
 
 	f.log.Info("Missing binary has been fetched correctly", "fn_name", functionName, "fn_version", functionVersion)
-	f.log.Info("Missing binary has been fetched correctly", "fn_bundle", fmt.Sprintf("%+v", fnBundle))
+	if f.log.Enabled(logger.DebugLevel) {
+		f.log.Debug("Missing binary has been fetched correctly", "fn_bundle", fmt.Sprintf("%+v", fnBundle))
+	}
 	return fnBundle.Binary, err
 }
 
@@ -205,7 +211,9 @@ func (f *FunctionCacheImpl) GetMetadata(functionName string, functionVersion str
 
 	meta, ok := f.MetadataBinaries.Get(functionName, functionVersion)
 	if ok {
-		f.log.Info("Metadata found in cache successfully", "fn_name", functionName, "fn_version", functionVersion, "metadata", fmt.Sprintf("%+v", meta))
+		if f.log.Enabled(logger.InfoLevel) {
+			f.log.Info("Metadata found in cache successfully", "fn_name", functionName, "fn_version", functionVersion, "metadata", fmt.Sprintf("%+v", meta))
+		}
 		return &meta, nil
 	}
 
@@ -217,7 +225,9 @@ func (f *FunctionCacheImpl) GetMetadata(functionName string, functionVersion str
 	}
 
 	f.log.Info("Missing metadata has been fetched correctly", "fn_name", functionName, "fn_version", functionVersion)
-	f.log.Info("Missing metadata has been fetched correctly", "fn_bundle", fmt.Sprintf("%+v", fnBundle))
+	if f.log.Enabled(logger.DebugLevel) {
+		f.log.Debug("Missing metadata has been fetched correctly", "fn_bundle", fmt.Sprintf("%+v", fnBundle))
+	}
 	return &fnBundle.Metadata, err
 }
 
@@ -315,7 +325,9 @@ func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*caches.Fu
 				return nil, err
 			}
 
-			f.log.Debug("Function bundle fetched correctly, proceeding to store it in the caches", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+			if f.log.Enabled(logger.DebugLevel) {
+				f.log.Debug("Function bundle fetched correctly, proceeding to store it in the caches", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+			}
 			f.LatestVersions.Set(functionName, fetchedBundle.Metadata.Version)
 			err = f.store(fetchedBundle)
 			if err != nil {
@@ -338,7 +350,9 @@ func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*caches.Fu
 		}
 
 		if fetchedBundle != nil {
-			f.log.Debug("Function bundle fetched correctly, proceeding to store it in the caches", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+			if f.log.Enabled(logger.DebugLevel) {
+				f.log.Debug("Function bundle fetched correctly, proceeding to store it in the caches", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+			}
 			f.LatestVersions.Set(functionName, fetchedBundle.Metadata.Version)
 			err = f.store(fetchedBundle)
 			if err != nil {
@@ -346,12 +360,16 @@ func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*caches.Fu
 				return nil, err
 			}
 
-			f.log.Debug("Function bundle stored successfully", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+			if f.log.Enabled(logger.DebugLevel) {
+				f.log.Debug("Function bundle stored successfully", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+			}
 			return fetchedBundle, nil
 		}
 
 		// Latest version hasn't changed. Refresh TTL and return existing bundle
-		f.log.Debug("Version not changed, refreshing TTL", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+		if f.log.Enabled(logger.DebugLevel) {
+			f.log.Debug("Version not changed, refreshing TTL", "fn_name", functionName, "part_wanted", want, "fn_bundle", fmt.Sprintf("%+v", fetchedBundle))
+		}
 		f.LatestVersions.Set(functionName, cachedVersion)
 		return bundle, err
 	})
@@ -364,7 +382,9 @@ func (f *FunctionCacheImpl) resolveLatest(functionName, want string) (*caches.Fu
 }
 
 func (f *FunctionCacheImpl) store(bundle *caches.FunctionBundle) error {
-	f.log.Debug("Storing bundle in caches", "fn_bundle", fmt.Sprintf("%+v", bundle))
+	if f.log.Enabled(logger.DebugLevel) {
+		f.log.Debug("Storing bundle in caches", "fn_bundle", fmt.Sprintf("%+v", bundle))
+	}
 	for name, template := range bundle.Templates {
 		f.Templates.Set(name, template)
 	}

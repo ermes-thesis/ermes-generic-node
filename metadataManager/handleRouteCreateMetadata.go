@@ -7,6 +7,7 @@ import (
 	"metadataManager/propagation"
 	"net/http"
 
+	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 )
 
@@ -38,7 +39,9 @@ func (m *MetadataManagerImpl) handleRouteCreateMetadata() http.HandlerFunc {
 			reqOrigin = propagation.FROM_CHILD
 		}
 
-		m.log.Debug("Request body decoded successfully", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", meta), "request_origin", reqOrigin, "previous_node_geolocation", reqMetadataDomain)
+		if m.log.Enabled(logger.DebugLevel) {
+			m.log.Debug("Request body decoded successfully", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", meta), "request_origin", reqOrigin, "previous_node_geolocation", reqMetadataDomain)
+		}
 
 		err = m.CreateMetadata(collectionId, meta, reqOrigin)
 		if err != nil {
@@ -48,7 +51,9 @@ func (m *MetadataManagerImpl) handleRouteCreateMetadata() http.HandlerFunc {
 		}
 
 		m.log.Info("Metadata created successfully", "collection_id", collectionId)
-		m.log.Debug("Metadata created successfully", "metadata", fmt.Sprintf("%+v", meta), "request_origin", reqOrigin, "previous_node_geolocation", reqMetadataDomain)
+		if m.log.Enabled(logger.DebugLevel) {
+			m.log.Debug("Metadata created successfully", "metadata", fmt.Sprintf("%+v", meta), "request_origin", reqOrigin, "previous_node_geolocation", reqMetadataDomain)
+		}
 		w.WriteHeader(http.StatusCreated)
 	}
 }

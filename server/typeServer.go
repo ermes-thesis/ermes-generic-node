@@ -49,7 +49,9 @@ func NewServer(log logger.Logger, serverInfo *ServerInfo) (*Server, error) {
 		return nil, err
 	}
 
-	log.Info("New Server instance created successfully", "server", fmt.Sprintf("%+v", ser.ServerInfo))
+	if log.Enabled(logger.InfoLevel) {
+		log.Info("New Server instance created successfully", "server", fmt.Sprintf("%+v", ser.ServerInfo))
+	}
 	return ser, nil
 }
 
@@ -64,7 +66,9 @@ func (s *Server) SendGenericHTTPRequest(nodeTo string, pathTo string, messageCon
 }
 
 func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo string, messageContent interface{}) (*http.Response, error) {
-	s.logger.Info("Sending HTTP request", "to_node", nodeTo, "path", pathTo, "content", fmt.Sprintf("%+v", messageContent))
+	if s.logger.Enabled(logger.InfoLevel) {
+		s.logger.Info("Sending HTTP request", "to_node", nodeTo, "path", pathTo, "content", fmt.Sprintf("%+v", messageContent))
+	}
 
 	ok := !s.ServerInfo.Stateful
 
@@ -105,7 +109,9 @@ func (s *Server) SendGenericHTTPRequestReturnResponse(nodeTo string, pathTo stri
 		return nil, err
 	}
 
-	s.logger.Info("HTTP request sent successfully", "to_node", nodeTo, "path", pathTo, "content", fmt.Sprintf("%+v", messageContent))
+	if s.logger.Enabled(logger.InfoLevel) {
+		s.logger.Info("HTTP request sent successfully", "to_node", nodeTo, "path", pathTo, "content", fmt.Sprintf("%+v", messageContent))
+	}
 	// If everything went well return the response.
 	return res, nil
 }

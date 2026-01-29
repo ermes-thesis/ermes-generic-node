@@ -105,7 +105,9 @@ func (m *MetadataManagerImpl) RegisterRoutes(server server.ServerType, tokenDeco
 
 func (m *MetadataManagerImpl) CreateMetadata(collectionId string, metadata model.Metadata, reqOrigin propagation.PropagationOrigin) error {
 	m.log.Info("Creating metadata", "collection_id", collectionId, "origin", reqOrigin, "geolocation", metadata.Geolocation)
-	m.log.Debug("Creating metadata", "metadata", fmt.Sprintf("%+v", metadata))
+	if m.log.Enabled(logger.DebugLevel) {
+		m.log.Debug("Creating metadata", "metadata", fmt.Sprintf("%+v", metadata))
+	}
 
 	if strings.HasPrefix(metadata.Geolocation, m.serverInfo.MetadataDomain) {
 		for key := range metadata.CustomMetadata {

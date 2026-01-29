@@ -217,9 +217,9 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 	collection, exists := m.collectionsPartialView.GetCollection(collectionId)
 	if exists {
 		if localState, ok := collection.GetCollectionState().(*shared.LocalCollection); ok {
-			m.log.Eval("MIG-MANAGER, NewCollectionReceived, locking local collection", "collection_id", collectionId)
+			m.log.Debug("MIG-MANAGER, NewCollectionReceived, locking local collection", "collection_id", collectionId)
 			localState.CollectionLock.Lock()
-			m.log.Eval("MIG-MANAGER, new local collection received, lock acquired", "collection_id", collectionId)
+			m.log.Debug("MIG-MANAGER, new local collection received, lock acquired", "collection_id", collectionId)
 			m.mutex.Unlock()
 
 			if !localState.IsReady() {
@@ -475,7 +475,9 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 		}
 	}
 
-	m.log.Info("MIG-MANAGER, remote updates to send", "num_messages", len(msgs), "messages", fmt.Sprintf("%+v", msgs))
+	if m.log.Enabled(logger.InfoLevel) {
+		m.log.Info("MIG-MANAGER, remote updates to send", "num_messages", len(msgs), "messages", fmt.Sprintf("%+v", msgs))
+	}
 
 	//send remote updates
 	for host, message := range msgs {

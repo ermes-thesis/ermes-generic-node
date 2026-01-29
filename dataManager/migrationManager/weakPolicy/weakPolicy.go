@@ -77,19 +77,8 @@ func (a *AlwaysCopyPolicy) ManageNewWeakRequest(collectionId string, childName s
 	a.log.Info("WEAK-POLICY, handle request for a weak collection", "collection_id", collectionId, "to_node", childName)
 	weakCollection, _ := a.partialView.GetCollection(collectionId)
 
-	res, groups, owner, groupsSequence, err := a.dbInterface.GetCollection(collectionId)
-	if err != nil {
-		a.log.Error("WEAK-POLICY, got an error getting the collection from redis", "error", err)
-		return err
-	}
-	collectionSize, sizeError := a.dbInterface.GetCollectionMemoryUsage(collectionId)
-	if sizeError != nil {
-		a.log.Error("WEAK-POLICY, got an error getting the collection size")
-		return sizeError
-	}
-
 	weakCollection.GetCollectionState().AddCollectionMigrationHost(childName)
-	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, res, groups, owner, groupsSequence, collectionSize, false)
+	a.sender.SendRemoteCollectionTo(childName, weakCollection, false, false)
 
 	return nil
 }

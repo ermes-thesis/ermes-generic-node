@@ -33,7 +33,7 @@ const (
 //###############################################################
 
 type MigrationManagerSender interface {
-	SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool)
+	SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, isMigration bool)
 	SendGossipMessages(gossip.GossipMessage, string)
 	SendRequestInfoMessage(gossip.CollectionRequestInfoMessages, string)
 	GossipPath() string
@@ -63,9 +63,9 @@ func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, s
 	}
 }
 
-func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool) {
+func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, isMigration bool) {
 	//imp
-	s.log.Info("SENDER: Preparing to send collection", "collectionId", collection.CollectionId(), "destination", destination, "isMigration", isMigration, "sendAsLeader", sendAsLeader, "collectionSize", collectionSize)
+	s.log.Info("SENDER: Preparing to send collection", "collectionId", collection.CollectionId(), "destination", destination, "isMigration", isMigration, "sendAsLeader", sendAsLeader)
 	if s.serverInfo.Father == nil || destination != s.serverInfo.Father.HostName {
 		s.log.Debug("Adding host to collection", "hostname", s.serverInfo.HostName, "destination", destination, "known_host_ids", collection.HostsId())
 		collection.AddHost(destination)
@@ -73,9 +73,27 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 
 	hostToRemove := isMigration && s.serverInfo.Father != nil && destination == s.serverInfo.Father.HostName && len(collection.HostsId()) == 0
 
+	var seqNumber uint64
+	if collection.IsStrong() {
+		seqNumber = collection.(*shared.StrongCollection).ConsistencyClock
+	}
+
+	//get collection from db
+	res, groups, owner, groupsSequence, err := s.dbInterface.GetCollection(collection.CollectionId())
+	if err != nil {
+		s.log.Error("Error getting collection from database", "error", err)
+		return
+	}
+	collectionSize, sizeError := s.dbInterface.GetCollectionMemoryUsage(collection.CollectionId())
+	if sizeError != nil {
+		s.log.Error("Error getting collection size from database", "error", sizeError)
+		return
+	}
+
 	msg := gossip.SendCollectionMessage{
 		CollectionId:   collection.CollectionId(),
 		Records:        res,
+		SequenceNumber: seqNumber,
 		Groups:         groups,
 		Owner:          owner,
 		GroupsSequence: groupsSequence,
@@ -86,9 +104,6 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 	}
 	if collection.IsStrong() {
 		msg.IsLeader = sendAsLeader
-		msg.SequenceNumber = collection.(*shared.StrongCollection).ConsistencyClock
-	} else {
-		msg.IsLeader = false
 	}
 
 	go func() {

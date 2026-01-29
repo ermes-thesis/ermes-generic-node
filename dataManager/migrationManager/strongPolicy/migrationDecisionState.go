@@ -308,18 +308,6 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(isMigration bool, de
 		}
 	}
 
-	//get collection from redis instance
-	res, groups, owner, groupsSequence, err := m.policy.dbInterface.GetCollection(collection.CollectionId())
-	if err != nil {
-		m.policy.log.Error("Error getting collection from database", "error", err)
-		return err
-	}
-	collectionSize, sizeError := m.policy.dbInterface.GetCollectionMemoryUsage(collection.CollectionId())
-	if sizeError != nil {
-		m.policy.log.Error("Error getting collection size from database", "error", sizeError)
-		return sizeError
-	}
-
 	//send collection to the remote nodes that has positive decision
 	for _, decision := range decisions {
 		if leaderDecisionTaken && decision.SendAsLeader && !lockAcquired && collection.IsStrong() {
@@ -328,7 +316,7 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(isMigration bool, de
 			collection.(*shared.StrongCollection).AddPostponedSendBehaviour(func() {
 				m.policy.log.Info("DEFAULT-STRONG-POLICY, apply postponed leader decision for collection", "collectionId", collection.CollectionId(), "to", decision.Destination, "as leader:", decision.SendAsLeader)
 				collection.GetCollectionState().AddCollectionMigrationHost(decision.Destination)
-				m.policy.sender.SendRemoteCollectionTo(decision.Destination, collection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
+				m.policy.sender.SendRemoteCollectionTo(decision.Destination, collection, decision.SendAsLeader, isMigration)
 				collection.(*shared.StrongCollection).IsLeader = false
 				collection.(*shared.StrongCollection).LeaderId = decision.Destination
 			})
@@ -342,7 +330,7 @@ func (m *MigrationManagerDecisionState) applyTakenDecisions(isMigration bool, de
 		}
 
 		collection.GetCollectionState().AddCollectionMigrationHost(decision.Destination)
-		m.policy.sender.SendRemoteCollectionTo(decision.Destination, collection, decision.SendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
+		m.policy.sender.SendRemoteCollectionTo(decision.Destination, collection, decision.SendAsLeader, isMigration)
 	}
 
 	if !isMigration && collection.IsStrong() {

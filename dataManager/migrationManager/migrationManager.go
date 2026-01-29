@@ -585,17 +585,6 @@ func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collecti
 	//remove collection from lru
 	m.lruCache.Remove(collection.CollectionId())
 
-	//get collection from redis instance
-	res, groups, owner, groupsSequence, err := m.dbInterface.GetCollection(collection.CollectionId())
-	if err != nil {
-		m.log.Error("MIG-MANAGER, could not get collection", "collection", collection, "error", err)
-		return err //TODO: decide
-	}
-	collectionSize, sizeError := m.dbInterface.GetCollectionMemoryUsage(collection.CollectionId())
-	if sizeError != nil {
-		m.log.Error("MIG-MANAGER, failed to get the collection size")
-		return sizeError //TODO: decide
-	}
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	isLeader := false
 	if collection.IsStrong() {
@@ -610,13 +599,13 @@ func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collecti
 	fatherName := m.serverInfo.Father.HostName
 	collection.GetCollectionState().AddCollectionMigrationHost(fatherName)
 
-	//remove collection from redis instance
-	m.dbInterface.DeleteCollection(collection.CollectionId())
-
 	//set the collection as remote only in the node partial view
 	collection.SetToRemote()
 
-	m.sender.SendRemoteCollectionTo(fatherName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
+	m.sender.SendRemoteCollectionTo(fatherName, collection, isLeader, true)
+
+	//remove collection from redis instance
+	m.dbInterface.DeleteCollection(collection.CollectionId())
 
 	return nil
 }

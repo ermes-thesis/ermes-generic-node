@@ -271,9 +271,7 @@ func (c *CollectionsDiscovererImp) updateRecord(
 	}
 
 	c.log.Debug("Preparing list of host to which propagate the update", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
-	//always notify to father
 	hosts := collection.HostsId()
-
 	if c.serverInfo.Father != nil {
 		addr := c.serverInfo.Father.HostName
 		hosts[addr] = struct{}{}
@@ -330,6 +328,7 @@ func (c *CollectionsDiscovererImp) updateRecord(
 		}
 	}
 
+	c.log.Debug("Proceeding to update the collection in the local DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 	memUsage, err := dbFn(collection.IsStrong()) // update in local db
 	if err != nil {
 		var staleErr *db.StaleUpdateError
@@ -355,12 +354,21 @@ func (c *CollectionsDiscovererImp) updateRecord(
 		}
 	}
 
+	// Update hosts list after the update is done
+	c.log.Debug("Preparing list of host to which propagate the update", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
+	hosts = collection.HostsId()
+	if c.serverInfo.Father != nil {
+		addr := c.serverInfo.Father.HostName
+		hosts[addr] = struct{}{}
+	} else {
+		c.log.Debug("Current node is a cloud node. Avoiding to propagate the update to the father", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", hosts)
+	}
+	c.log.Debug("List of hosts to which propagate the update computed successfully", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", fmt.Sprintf("%+v", hosts))
+
 	collection.GetCollectionState().(*shared.LocalCollection).IncSize(memUsage)
 	c.lruCache.UpdateSize(collection.CollectionId(), uint(collection.GetCollectionState().(*shared.LocalCollection).Size()))
 	c.log.Info("UpdateRecord: Collection records updated successfully in local DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "memory_usage_change", memUsage, "new_memory_usage", collection.GetCollectionState().(*shared.LocalCollection).Size())
 
-	c.log.Debug("List of hosts prepared successfully", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection), "hosts", fmt.Sprintf("%+v", hosts))
-	c.log.Debug("Proceeding to update the collection in the local DB", "collection_id", collectionId, "collection", fmt.Sprintf("%+v", collection))
 	return hosts, nil, true
 }
 

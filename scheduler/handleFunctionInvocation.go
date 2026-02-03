@@ -7,8 +7,10 @@ import (
 	"maps"
 	"net/http"
 	"slices"
+	"strconv"
 	"tokenDecoder"
 
+	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 )
 
@@ -67,7 +69,9 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 				return
 			}
 			toCache = res
-			s.log.Debug("Metadata queries executed successfully", "queries_results", fmt.Sprintf("%+v", res))
+			if s.log.Enabled(logger.DebugLevel) {
+				s.log.Debug("Metadata queries executed successfully", "queries_results", fmt.Sprintf("%+v", res))
+			}
 
 			if collections == nil {
 				collections = make(map[string][]model.CollectionInfo)
@@ -127,7 +131,9 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 			return
 		}
 
-		s.log.Info("Function scheduled and executed successfully", "fn_name", fnName, "fn_version", fnVersion, "fn_response", fmt.Sprintf("%+v", functionResponse), "new_sequential_sequence_num", sequentialSeqNumber)
+		if s.log.Enabled(logger.InfoLevel) {
+			s.log.Info("Function scheduled and executed successfully", "fn_name", fnName, "fn_version", fnVersion, "fn_response", fmt.Sprintf("%+v", functionResponse), "new_sequential_sequence_num", sequentialSeqNumber)
+		}
 
 		jsonToCache, err := json.Marshal(toCache)
 		if err != nil {
@@ -137,7 +143,7 @@ func (s *SchedulerImpl) handleFunctionInvocation(tokenDecoder tokenDecoder.Token
 		}
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-ERMES-CACHE", string(jsonToCache))
-		w.Header().Set("X-ERMES-SEQUENTIAL-NUMBER", fmt.Sprintf("%d", resSeqNumber))
+		w.Header().Set("X-ERMES-SEQUENTIAL-NUMBER", strconv.FormatUint(resSeqNumber, 10))
 		w.Header().Set("X-ERMES-EXECUTION-HOST", functionResponse.Hostname)
 		w.WriteHeader(functionResponse.StatusCode)
 		if _, err = w.Write(functionResponse.Body); err != nil {

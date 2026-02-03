@@ -100,6 +100,7 @@ func (s *StrongCollection) SetToLocal(size uint64) {
 		return
 	}
 	collectionState := NewLocalCollection(size, s.collectionState.HostsId())
+	collectionState.(*LocalCollection).CollectionLock.Lock()
 	collectionState.setCollectionSendingTo(s.GetCollectionState().getCollectionSendingTo())
 	s.collectionState = collectionState
 }
@@ -138,6 +139,7 @@ func (s *StrongCollection) RemoveHost(hostId string) {
 type WeakCollection struct {
 	collectionId    string
 	collectionState CollectionState
+	WriteMutex      sync.Mutex
 }
 
 func NewWeakCollection(collectionId string, size uint64, isRemote bool) Collection {
@@ -146,11 +148,13 @@ func NewWeakCollection(collectionId string, size uint64, isRemote bool) Collecti
 		return &WeakCollection{
 			collectionId:    collectionId,
 			collectionState: NewRemoteCollection(hosts),
+			WriteMutex:      sync.Mutex{},
 		}
 	}
 	return &WeakCollection{
 		collectionId:    collectionId,
 		collectionState: NewLocalCollection(size, hosts),
+		WriteMutex:      sync.Mutex{},
 	}
 }
 
@@ -163,6 +167,7 @@ func (w *WeakCollection) SetToLocal(size uint64) {
 		return
 	}
 	collectionState := NewLocalCollection(size, w.collectionState.HostsId())
+	collectionState.(*LocalCollection).CollectionLock.Lock()
 	collectionState.setCollectionSendingTo(w.GetCollectionState().getCollectionSendingTo())
 	w.collectionState = collectionState
 }

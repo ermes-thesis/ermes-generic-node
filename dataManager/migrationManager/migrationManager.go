@@ -24,8 +24,8 @@ const emptyCollectionSize uint = 500
 
 type MigrationManager interface {
 	// Init initialize the singleton pattern
-	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger logger.Logger)
-	StatelessInit(collections *shared.CollectionPartialView, config config.MigrationManagerConfig, lruConfig config.LruConfig, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], logger logger.Logger)
+	Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger logger.Logger, mutex *sync.Mutex)
+	StatelessInit(collections *shared.CollectionPartialView, config config.MigrationManagerConfig, lruConfig config.LruConfig, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], logger logger.Logger, mutex *sync.Mutex)
 	// UpdatesRequestsInfo used to update lru in real time (collectionID)
 	// if the collection is strong used to update forces in real time.
 	// if the request comes from a user => nodeName = "user"
@@ -66,7 +66,7 @@ type MigrationManagerImp struct {
 
 	//impl
 	collectionsPartialView *shared.CollectionPartialView //set of local and remotes collections
-	collectionsLock        *sync.Mutex
+	mutex                  *sync.Mutex
 
 	lruCache    *lru.LRUCache[shared.Collection]
 	dbInterface db.GenericDB
@@ -89,7 +89,7 @@ func GetMigrationManagerInstance() MigrationManager {
 	return migrationManagerInstance
 }
 
-func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger logger.Logger) {
+func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, config config.MigrationManagerConfig, lruConfig config.LruConfig, server server.ServerType, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], dbInterface db.GenericDB, logger logger.Logger, mutex *sync.Mutex) {
 	initOnce.Do(func() {
 		//imp
 		m.serverInfo = serverInfo
@@ -97,11 +97,10 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		m.dbInterface = dbInterface
 		m.lruCache = lruCache
 		m.config = config
-		//m.collectionsLock = &sync.Mutex{}
-		m.collectionsLock = &collections.Mutex
+		m.mutex = mutex
 
 		//prepare server
-		m.sender = sender.NewMigrationManagerSender(m.log, server, serverInfo, collections, dbInterface, lruCache)
+		m.sender = sender.NewMigrationManagerSender(m.log, server, serverInfo, collections, dbInterface, lruCache, mutex)
 		server.AddCustomRoute(m.sender.GossipPath(), true, m.handleIncomingGossipMessages().ServeHTTP)
 		server.AddCustomRoute(m.sender.RepoPath(), true, m.handleIncomingCollection().ServeHTTP)
 		server.AddCustomRoute(m.sender.RequestInfoPath(), true, m.handleIncomingRequestInfoMessages().ServeHTTP)
@@ -113,7 +112,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 		if strongPolicy.GetPolicy(config.StrongPolicy) == strongPolicy.DONOTHINGPOLICY {
 			m.StrongCollectionPolicy = strongPolicy.NewDoNothingPolicy()
 		} else {
-			m.StrongCollectionPolicy = strongPolicy.NewDefaultPolicy(config, lruConfig, collections, penalityFunc, dbInterface, serverInfo, m.sender, m.lruCache, m.log)
+			m.StrongCollectionPolicy = strongPolicy.NewDefaultPolicy(config, lruConfig, collections, penalityFunc, dbInterface, serverInfo, m.sender, m.lruCache, m.log, mutex)
 		}
 
 		if weakpolicy.GetPolicy(config.WeakPolicy) == weakpolicy.DONOTHINGPOLICY {
@@ -146,7 +145,7 @@ func (m *MigrationManagerImp) Init(collections *shared.CollectionPartialView, pe
 	})
 }
 
-func (m *MigrationManagerImp) StatelessInit(collections *shared.CollectionPartialView, config config.MigrationManagerConfig, lruConfig config.LruConfig, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], logger logger.Logger) {
+func (m *MigrationManagerImp) StatelessInit(collections *shared.CollectionPartialView, config config.MigrationManagerConfig, lruConfig config.LruConfig, serverInfo server.ServerInfo, lruCache *lru.LRUCache[shared.Collection], logger logger.Logger, mutex *sync.Mutex) {
 	initOnce.Do(func() {
 		//imp
 		m.serverInfo = serverInfo
@@ -155,7 +154,7 @@ func (m *MigrationManagerImp) StatelessInit(collections *shared.CollectionPartia
 		m.lruCache = lruCache
 		m.config = config
 
-		m.collectionsLock = &collections.Mutex
+		m.mutex = mutex
 
 		//no sender
 		m.StrongCollectionPolicy = strongPolicy.NewDoNothingPolicy()
@@ -199,6 +198,7 @@ func (m *MigrationManagerImp) StopAsyncDump() {
 
 func (m *MigrationManagerImp) RemoveCollectionFromLru(collectionId string) {
 	//sync
+	// Lock già acquisito in RemoveCollectionAndPropagate
 	//m.collectionsLock.Lock()
 	//defer m.collectionsLock.Unlock()
 
@@ -209,13 +209,26 @@ func (m *MigrationManagerImp) RemoveCollectionFromLru(collectionId string) {
 // methods
 func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStrong bool, sequence uint64, isLeader bool, records map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, hostToRemove bool, hostAddress string) (bool, error) {
 	//sync
-	m.collectionsLock.Lock()
-	defer m.collectionsLock.Unlock()
+	m.mutex.Lock()
+	//defer m.mutex.Unlock()
 
 	//imp
 	m.log.Info("MIG-MANAGER, new local collection received", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
-	collection := m.collectionsPartialView.KnownCollections[collectionId]
-	if collection != nil {
+	collection, exists := m.collectionsPartialView.GetCollection(collectionId)
+	if exists {
+		if localState, ok := collection.GetCollectionState().(*shared.LocalCollection); ok {
+			m.log.Debug("MIG-MANAGER, NewCollectionReceived, locking local collection", "collection_id", collectionId)
+			localState.CollectionLock.Lock()
+			m.log.Debug("MIG-MANAGER, new local collection received, lock acquired", "collection_id", collectionId)
+			m.mutex.Unlock()
+
+			if !localState.IsReady() {
+				localState.CollectionLock.Unlock()
+				m.log.Warn("MIG-MANAGER, found local collection but it was not ready (concurrent failure)", "collection_id", collectionId)
+				return false, errors.New("concurrent migration failed")
+			}
+		}
+
 		if collection.IsStrong() && collection.IsLocal() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() {
 			collection.(*shared.StrongCollection).RemovePostponedDeleteBehaviour()
 		}
@@ -230,15 +243,31 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 				collection.(*shared.StrongCollection).LeaderId = m.serverInfo.HostName
 			}
 
-			m.log.Warn("MIG-MANAGER, new collection already present locally", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
+			collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
+			m.log.Info("MIG-MANAGER, new collection already present locally", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
 			return true, nil
 		}
+
+		collection.SetToLocal(collectionSize)
+		localState := collection.GetCollectionState().(*shared.LocalCollection)
+
+		m.mutex.Unlock()
 
 		actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
 		if err != nil {
 			m.log.Warn("MIG-MANAGER, new collection could not be added to redis", "collection_id", collectionId)
+			localState.CollectionLock.Unlock()
+
+			// Here can happen several concurrency problems :c
+			m.mutex.Lock()
+			localState.CollectionLock.Lock()
+			collection.SetToRemote()
+			localState.CollectionLock.Unlock()
+			m.mutex.Unlock()
+
 			return true, err
 		}
+		localState.IncSize(int64(actualSize) - int64(collectionSize))
 
 		if hostToRemove {
 			collection.RemoveHost(hostAddress)
@@ -249,32 +278,50 @@ func (m *MigrationManagerImp) NewCollectionReceived(collectionId string, isStron
 			collection.(*shared.StrongCollection).LeaderId = m.serverInfo.HostName
 		}
 
-		collection.SetToLocal(actualSize)
+		//collection.SetToLocal(actualSize)
 		if isStrong && collection.IsStrong() {
 			collection.(*shared.StrongCollection).ConsistencyClock = sequence
 		}
 
 		m.log.Info("MIG-MANAGER, new collection set to local", "collection_id", collectionId, "is_strong", isStrong, "is_leader", isLeader)
-		//m.log.Warn("AAAAAAAAAAAAAA", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
-		m.updateLru(collectionId, uint(actualSize))
+		m.updateLru(collection, uint(actualSize))
+
+		localState.SetReady(true)
+		localState.CollectionLock.Unlock()
 		return false, nil
 	}
+
+	var coll shared.Collection
+	if isStrong {
+		coll = shared.NewStrongCollection(collectionId, collectionSize, false, isLeader, m.serverInfo.HostName)
+		coll.(*shared.StrongCollection).ConsistencyClock = sequence
+	} else {
+		coll = shared.NewWeakCollection(collectionId, collectionSize, false)
+	}
+	localState := coll.GetCollectionState().(*shared.LocalCollection)
+	localState.CollectionLock.Lock()
+	m.collectionsPartialView.SetCollection(collectionId, coll)
+	m.log.Info("MIG-MANAGER, new collection added to known collections")
+	m.mutex.Unlock()
+
 	actualSize, err := m.addCollectionInRedis(collectionId, records, groups, owner, groupsSequence, collectionSize)
 	if err != nil {
 		m.log.Warn("MIG-MANAGER, new collection could not be added")
+		localState.CollectionLock.Unlock()
+
+		m.mutex.Lock()
+		localState.CollectionLock.Lock()
+		coll.SetToRemote()
+		localState.CollectionLock.Unlock()
+		m.collectionsPartialView.RemoveCollection(collectionId)
+		m.mutex.Unlock()
+
 		return true, err
 	}
-
-	if isStrong {
-		col := shared.NewStrongCollection(collectionId, actualSize, false, isLeader, m.serverInfo.HostName)
-		col.(*shared.StrongCollection).ConsistencyClock = sequence
-		m.collectionsPartialView.KnownCollections[collectionId] = col
-	} else {
-		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, actualSize, false)
-	}
-	m.log.Info("MIG-MANAGER, new collection added to known collections")
-	//m.log.Warn("BBBBBBBBBBBBBBBBBB", "actual_size", actualSize, "collection_size", collectionSize, "collection_id", collectionId)
-	m.updateLru(collectionId, uint(actualSize))
+	localState.IncSize(int64(actualSize) - int64(collectionSize))
+	m.updateLru(coll, uint(actualSize))
+	localState.SetReady(true)
+	localState.CollectionLock.Unlock()
 	m.log.Info("MIG-MANAGER, collection placed on top in the LRU")
 	return false, nil
 }
@@ -287,7 +334,7 @@ func (m *MigrationManagerImp) addCollectionInRedis(collectionId string, records 
 	}
 
 	//check size before set collection
-	m.log.Warn("Available memory and lru size before adding collection", "available_mem", availableMem, "available_lru", m.lruCache.GetAvailableSize(), "collection_size", collectionSize)
+	m.log.Info("Available memory and lru size before adding collection", "available_mem", availableMem, "available_lru", m.lruCache.GetAvailableSize(), "collection_size", collectionSize)
 	if availableMem < collectionSize || m.lruCache.GetAvailableSize() < uint(collectionSize) { //if not enough space in redis or in the lru => free space
 		m.log.Warnf("MIG-MANAGER, not enough space in the LRU to place the collection %s", collectionId)
 		err := m.freeLru(uint(collectionSize))
@@ -344,25 +391,29 @@ func (m *MigrationManagerImp) FreeSpaceToCreateCollection(size uint) error {
 
 func (m *MigrationManagerImp) NewCollectionCreated(collectionId string, collectionSize uint64, isStrong bool) error {
 	//sync
+	// Lock già acquisito in SetCollectionAndPropagate
 	//m.collectionsLock.Lock()
 	//defer m.collectionsLock.Unlock()
 
 	m.log.Info("MIG-MANAGER, new local collection created")
-	collection := m.collectionsPartialView.KnownCollections[collectionId]
-	if collection != nil {
+	_, exists := m.collectionsPartialView.GetCollection(collectionId)
+	if exists {
 		m.log.Errorf("MIG-MANAGER, can't create a collection if the id %s is already present", collectionId)
 		return errors.New("can't create a collection if the id is already present")
 	}
 
+	var coll shared.Collection
 	if isStrong {
-		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, collectionSize, false, true, m.serverInfo.HostName) //when I create a strong collection I'm the leader
+		coll = shared.NewStrongCollection(collectionId, collectionSize, false, true, m.serverInfo.HostName) //when I create a strong collection I'm the leader
 	} else {
-		m.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, collectionSize, false)
+		coll = shared.NewWeakCollection(collectionId, collectionSize, false)
 	}
+	coll.GetCollectionState().(*shared.LocalCollection).SetReady(true)
+	m.collectionsPartialView.SetCollection(collectionId, coll)
 	m.log.Info("MIG-MANAGER, new collection added to known collections")
 
 	//place on top in the LRU
-	err := m.lruCache.Put(collectionId, m.collectionsPartialView.KnownCollections[collectionId], uint(collectionSize))
+	err := m.lruCache.Put(collectionId, coll, uint(collectionSize))
 	if err != nil {
 		//if not enough space in the LRU for the new collection return error
 		return err
@@ -388,16 +439,16 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 	var msgs = make(map[string]messages.CollectionRequestInfoMessages) // host -> message
 	//sync
 	m.log.Info("MIG-MANAGER, update request info received", "num_messages", len(info.Messages))
-	m.collectionsLock.Lock()
-	defer m.collectionsLock.Unlock()
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 	m.log.Info("MIG-MANAGER, update request info received - lock acquired")
 
 	for _, i := range info.Messages {
 
-		collection := m.collectionsPartialView.KnownCollections[i.CollectionId]
+		collection, exists := m.collectionsPartialView.GetCollection(i.CollectionId)
 
 		//if no local info on the collection -> remote update -> save the message to send it later
-		if collection == nil {
+		if !exists {
 			if m.serverInfo.Father == nil {
 				m.log.Error("MIG-MANAGER, no info on the collection and no father to send the info")
 				continue
@@ -407,21 +458,26 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 			i.Sender = m.serverInfo.HostName
 			msgs[fatherId] = messages.CollectionRequestInfoMessages{Messages: append(msgs[fatherId].Messages, i)}
 		} else if !collection.IsStrong() && !collection.IsLocal() {
-			hostId := m.collectionsPartialView.GetClosestChild(collection.HostsId(), m.serverInfo)
+			hostId := m.serverInfo.GetClosestChild(collection.HostsId())
 			if hostId == "" {
-				m.log.Error("MIG-MANAGER, no info on the collection and no child to send the info")
-				continue
+				if m.serverInfo.Father == nil {
+					m.log.Error("MIG-MANAGER, no info on the collection and no father to send the info")
+					continue
+				}
+				hostId = m.serverInfo.Father.HostName
 			}
 			i.Sender = m.serverInfo.HostName
 			msgs[hostId] = messages.CollectionRequestInfoMessages{Messages: append(msgs[hostId].Messages, i)}
 		} else { // local update
-			m.localUpdateRequestInfo(i)
+			m.localUpdateRequestInfo(collection.IsStrong(), i)
 			//execute postponed migration behaviours if any and if possible
 			m.handlePostponedDecisions(collection)
 		}
 	}
 
-	m.log.Info("MIG-MANAGER, remote updates to send", "num_messages", len(msgs), "messages", fmt.Sprintf("%+v", msgs))
+	if m.log.Enabled(logger.InfoLevel) {
+		m.log.Info("MIG-MANAGER, remote updates to send", "num_messages", len(msgs), "messages", fmt.Sprintf("%+v", msgs))
+	}
 
 	//send remote updates
 	for host, message := range msgs {
@@ -430,15 +486,15 @@ func (m *MigrationManagerImp) updatesRequestsInfo(info messages.CollectionReques
 }
 
 func (m *MigrationManagerImp) HandlePostponedDecisions(collection shared.Collection) {
-	m.collectionsLock.Lock()
-	defer m.collectionsLock.Unlock()
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
 
 	m.handlePostponedDecisions(collection)
 }
 
 func (m *MigrationManagerImp) handlePostponedDecisions(collection shared.Collection) {
 	m.log.Info("MIG-MANAGER, check postponed decision behaviour for collection", "collection_id", collection.CollectionId(), "is_strong", collection.IsStrong(), "is_local", collection.IsLocal())
-	if collection.IsLocal() && collection.IsStrong() && collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
+	if collection.IsLocal() && collection.IsStrong() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() && collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.TryLock() {
 		m.log.Info("MIG-MANAGER, starting postponed decision behaviour execution for strong collection", "collection_id", collection.CollectionId())
 		localColl := collection.GetCollectionState().(*shared.LocalCollection)
 		collection.(*shared.StrongCollection).ExecutePostponedDecisionBehaviour(m.log)
@@ -446,7 +502,7 @@ func (m *MigrationManagerImp) handlePostponedDecisions(collection shared.Collect
 	}
 }
 
-func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionRequestInfoMessage) error {
+func (m *MigrationManagerImp) localUpdateRequestInfo(isStrong bool, i messages.CollectionRequestInfoMessage) error {
 	m.log.Info("MIG-MANAGER, new request for a local collection received")
 
 	m.log.Info("MIG-MANAGER, update size in the LRU")
@@ -456,7 +512,7 @@ func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionReques
 	}
 
 	//if the collection is strong update forces
-	if m.collectionsPartialView.KnownCollections[i.CollectionId].IsStrong() {
+	if isStrong {
 		m.log.Info("MIG-MANAGER, handle request for a strong collection")
 		m.StrongCollectionPolicy.ManageNewStrongRequest(i.CollectionId, i.Sender, i.IsWrite, i.RequestLatency)
 	} else {
@@ -470,11 +526,11 @@ func (m *MigrationManagerImp) localUpdateRequestInfo(i messages.CollectionReques
 	return nil
 }
 
-func (m *MigrationManagerImp) updateLru(collectionId string, collectionSize uint) error {
-	err := m.lruCache.Put(collectionId, m.collectionsPartialView.KnownCollections[collectionId], collectionSize)
+func (m *MigrationManagerImp) updateLru(collection shared.Collection, collectionSize uint) error {
+	err := m.lruCache.Put(collection.CollectionId(), collection, collectionSize)
 	m.log.Info("MIG-MANAGER, collection placed on top in the LRU", "lru_size", m.lruCache.GetCurrentSize())
 	if err != nil {
-		m.log.Error("MIG-MANAGER, not enough space in the LRU to place the collection even after free", "collection_id", collectionId, "error", err)
+		m.log.Error("MIG-MANAGER, not enough space in the LRU to place the collection even after free", "collection_id", collection.CollectionId(), "error", err)
 		return err //TODO: decide
 	}
 	return nil
@@ -531,17 +587,6 @@ func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collecti
 	//remove collection from lru
 	m.lruCache.Remove(collection.CollectionId())
 
-	//get collection from redis instance
-	res, groups, owner, groupsSequence, err := m.dbInterface.GetCollection(collection.CollectionId())
-	if err != nil {
-		m.log.Error("MIG-MANAGER, could not get collection", "collection", collection, "error", err)
-		return err //TODO: decide
-	}
-	collectionSize, sizeError := m.dbInterface.GetCollectionMemoryUsage(collection.CollectionId())
-	if sizeError != nil {
-		m.log.Error("MIG-MANAGER, failed to get the collection size")
-		return sizeError //TODO: decide
-	}
 	//send collection to the remote node -> sync on collection lock => wait for was execution to ends
 	isLeader := false
 	if collection.IsStrong() {
@@ -556,13 +601,13 @@ func (m *MigrationManagerImp) sendCollectionAndRemove(collection shared.Collecti
 	fatherName := m.serverInfo.Father.HostName
 	collection.GetCollectionState().AddCollectionMigrationHost(fatherName)
 
-	//remove collection from redis instance
-	m.dbInterface.DeleteCollection(collection.CollectionId())
-
 	//set the collection as remote only in the node partial view
 	collection.SetToRemote()
 
-	m.sender.SendRemoteCollectionTo(fatherName, collection, isLeader, res, groups, owner, groupsSequence, collectionSize, true)
+	m.sender.SendRemoteCollectionTo(fatherName, collection, isLeader, true)
+
+	//remove collection from redis instance
+	m.dbInterface.DeleteCollection(collection.CollectionId())
 
 	return nil
 }

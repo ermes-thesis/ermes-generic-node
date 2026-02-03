@@ -15,11 +15,56 @@ import (
 
 type CollectionPartialView struct {
 	//sync
-	Mutex sync.Mutex
+	mutex sync.RWMutex
 	//data
-	KnownCollections map[string]Collection //maps collectionID to info related to that collection
+	knownCollections map[string]Collection //maps collectionID to info related to that collection
 
-	NodeResourceUsage map[string]NodeStateInfo //maps nodeID to resource usage info
+	resourceUsageMutex sync.RWMutex
+	nodeResourceUsage  map[string]NodeStateInfo //maps nodeID to resource usage info
+}
+
+func NewCollectionPartialView() *CollectionPartialView {
+	return &CollectionPartialView{
+		knownCollections:  make(map[string]Collection),
+		nodeResourceUsage: make(map[string]NodeStateInfo),
+	}
+}
+
+func (c *CollectionPartialView) GetCollection(collectionId string) (Collection, bool) {
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
+
+	collection, exists := c.knownCollections[collectionId]
+	return collection, exists
+}
+
+func (c *CollectionPartialView) SetCollection(collectionId string, collection Collection) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	c.knownCollections[collectionId] = collection
+}
+
+func (c *CollectionPartialView) RemoveCollection(collectionId string) {
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	delete(c.knownCollections, collectionId)
+}
+
+func (c *CollectionPartialView) GetNodeResourceUsage(nodeId string) (NodeStateInfo, bool) {
+	c.resourceUsageMutex.RLock()
+	defer c.resourceUsageMutex.RUnlock()
+
+	info, exists := c.nodeResourceUsage[nodeId]
+	return info, exists
+}
+
+func (c *CollectionPartialView) SetNodeResourceUsage(nodeId string, usage NodeStateInfo) {
+	c.resourceUsageMutex.Lock()
+	defer c.resourceUsageMutex.Unlock()
+
+	c.nodeResourceUsage[nodeId] = usage
 }
 
 type NodeStateInfo struct {
@@ -41,11 +86,11 @@ type collectionDump struct {
 func (c *CollectionPartialView) DumpToJsonFile(path string) error {
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 
-	c.Mutex.Lock()
+	c.mutex.RLock()
 
-	snapshot := make([]collectionDump, 0, len(c.KnownCollections))
+	snapshot := make([]collectionDump, 0, len(c.knownCollections))
 
-	for id, collection := range c.KnownCollections {
+	for id, collection := range c.knownCollections {
 		hosts := maps.Clone(collection.HostsId())
 		isStrong := collection.IsStrong()
 		isLocal := collection.IsLocal()
@@ -74,7 +119,7 @@ func (c *CollectionPartialView) DumpToJsonFile(path string) error {
 
 		snapshot = append(snapshot, entry)
 	}
-	c.Mutex.Unlock()
+	c.mutex.RUnlock()
 
 	slices.SortFunc(snapshot, func(e collectionDump, e2 collectionDump) int {
 		return cmp.Compare(e.CollectionID, e2.CollectionID)
@@ -102,12 +147,12 @@ func (c *CollectionPartialView) DumpToJsonFile(path string) error {
 
 func (c *CollectionPartialView) RestoreInfoFromSettings(configData []config.CollectionSettingsInfo, serverInfo server.ServerInfo) error {
 	//sync
-	c.Mutex.Lock()
-	defer c.Mutex.Unlock()
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
 	//imp
 
-	c.KnownCollections = make(map[string]Collection)
-	c.NodeResourceUsage = make(map[string]NodeStateInfo)
+	c.knownCollections = make(map[string]Collection)
+	c.nodeResourceUsage = make(map[string]NodeStateInfo)
 
 	for _, coll := range configData {
 		if coll.IsStrong {
@@ -138,7 +183,7 @@ func (c *CollectionPartialView) restoreStrongCollectionFromSettings(info config.
 		coll.AddHost(host)
 	}
 
-	c.KnownCollections[info.CollectionID] = coll
+	c.knownCollections[info.CollectionID] = coll
 }
 
 func (c *CollectionPartialView) restoreWeakCollectionFromSettings(info config.CollectionSettingsInfo) {
@@ -154,22 +199,5 @@ func (c *CollectionPartialView) restoreWeakCollectionFromSettings(info config.Co
 		coll.AddHost(host)
 	}
 
-	c.KnownCollections[info.CollectionID] = coll
-}
-
-func (c *CollectionPartialView) GetClosestChild(hostSet map[string]struct{}, serverInfo server.ServerInfo) string {
-	var minLatency int
-	var minLatencyHost string
-
-	for _, child := range serverInfo.Children {
-		if _, ok := hostSet[child.HostName]; !ok {
-			continue
-		}
-		if minLatencyHost == "" || child.Latency < minLatency {
-			minLatency = child.Latency
-			minLatencyHost = child.HostName
-		}
-	}
-
-	return minLatencyHost
+	c.knownCollections[info.CollectionID] = coll
 }

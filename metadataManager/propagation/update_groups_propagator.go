@@ -3,11 +3,12 @@ package propagation
 import (
 	"errors"
 	"fmt"
-	"github.com/ermes-thesis/ermes-common/logger"
-	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"net/http"
 	"server"
 	"strings"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 )
 
 type UpdateGroupsPropagator interface {
@@ -65,7 +66,8 @@ func (p *UpdateGroupsPropagatorImpl) sendHttpReqToDest(dest string, collectionId
 	}
 
 	p.log.Info("Group update successfully propagated", "collection_id", collectionId)
-	p.log.Debug("Group update successfully propagated", "destination", dest, "message", fmt.Sprintf("%+v", message))
-
+	if p.log.Enabled(logger.DebugLevel) {
+		p.log.Debug("Group update successfully propagated", "destination", dest, "message", fmt.Sprintf("%+v", message))
+	}
 	return nil
 }

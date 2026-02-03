@@ -74,11 +74,11 @@ func (f *FunctionQueueWithCounter) AddFunction(function func()) {
 }
 
 func (f *FunctionQueueWithCounter) ExecuteFunctions() {
-	val := f.counter.Load()
-	if f.counter.Load() > 0 {
-		val = f.counter.Add(^uint32(0)) // Decrement by 1
-	}
-	if f.functions != nil && val == 0 { // atomic condition???
+	val := f.counter.Add(^uint32(0)) // Decrement by 1
+
+	// Works only if we call ExecuteFunctions exactly the same number of time equal to the counter,
+	// otherwise we should simply use a sync.Once
+	if f.functions != nil && val == 0 {
 		f.functions()
 		f.functions = nil
 	}

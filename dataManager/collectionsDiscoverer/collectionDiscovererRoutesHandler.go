@@ -2,13 +2,14 @@ package collectionsDiscoverer
 
 import (
 	gossip "dataManager/messages"
-	"dataManager/migrationManager"
 	shared "dataManager/shared"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+
+	"github.com/ermes-thesis/ermes-common/logger"
 )
 
 func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
@@ -39,7 +40,9 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 		}
 
 		if len(msg.RecordNames) == 1 {
-			c.log.Debug("Single-record remote access", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
+			if c.log.Enabled(logger.DebugLevel) {
+				c.log.Debug("Single-record remote access", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
+			}
 			dbFn := func() (any, error) {
 				c.log.Debug("Accessing the record value locally through dbFn", "collection_id", msg.CollectionId, "executing_user", msg.UserId, "user_access_groups", msg.Groups)
 				authorized, err := c.dbInterface.IsAuthorized(msg.CollectionId, msg.UserId, msg.Groups...)
@@ -81,7 +84,9 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 				Records: []any{res},
 			}
 		} else {
-			c.log.Debug("Multi-record remote access", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
+			if c.log.Enabled(logger.DebugLevel) {
+				c.log.Debug("Multi-record remote access", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
+			}
 			dbFn := func() (any, error) {
 				c.log.Debug("Accessing the record value locally through dbFn", "collection_id", msg.CollectionId, "executing_user", msg.UserId, "user_access_groups", msg.Groups)
 				authorized, err := c.dbInterface.IsAuthorized(msg.CollectionId, msg.UserId, msg.Groups...)
@@ -132,7 +137,9 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteAccess() http.Handler {
 		}
 
 		c.log.Info("Remote access request completed successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
-		c.log.Debug("Remote access request completed successfully", "response", fmt.Sprintf("%+v", res))
+		if c.log.Enabled(logger.DebugLevel) {
+			c.log.Debug("Remote access request completed successfully", "response", fmt.Sprintf("%+v", res))
+		}
 	})
 }
 
@@ -153,7 +160,9 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdatePropagation() http.Handle
 		}
 		c.log.Debug("Request body read successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
-		c.log.Info("Propagating collections updates", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
+		if c.log.Enabled(logger.InfoLevel) {
+			c.log.Info("Propagating collections updates", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
+		}
 		err := c.UpdateCollectionsRecordsAndPropagate(msg.Messages, msg.Groups, msg.UserId, false, msg.Messages[0].SenderIp)
 		if err != nil {
 			c.log.Error("Failed to propagate collections updates", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", err)
@@ -177,7 +186,9 @@ func (c *CollectionsDiscovererImp) handleIncomingUpdateGroupPropagation() http.H
 		}
 		c.log.Debug("Request body read successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 
-		c.log.Info("Propagating collection groups updates", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
+		if c.log.Enabled(logger.InfoLevel) {
+			c.log.Info("Propagating collection groups updates", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
+		}
 		err := c.UpdateCollectionsGroupsAndPropagate(msg, false, msg[0].SenderIp)
 		if err != nil {
 			c.log.Error("Failed to propagate collection groups updates", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "error", err)
@@ -211,12 +222,14 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 		leaderIp := msg.LeaderIp
 
 		//sync
-		c.collectionsPartialView.Mutex.Lock()
-		defer c.collectionsPartialView.Mutex.Unlock()
+		c.mutex.Lock()
+		defer c.mutex.Unlock()
 
-		c.log.Info("Processing new collection creation", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
+		if c.log.Enabled(logger.InfoLevel) {
+			c.log.Info("Processing new collection creation", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg))
+		}
 
-		_, exists := c.collectionsPartialView.KnownCollections[collectionId]
+		_, exists := c.collectionsPartialView.GetCollection(collectionId)
 		if exists {
 			c.log.Error("Duplicate collection ID detected. A collection with the same UUID already exists", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "collection_id", collectionId, "message", fmt.Sprintf("%+v", msg))
 			http.Error(w, "Duplicate collection ID detected", http.StatusConflict)
@@ -225,7 +238,9 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 
 		//propagate update to father
 		if c.serverInfo.Father != nil {
-			c.log.Info("Propagating new collection creation to father node", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg), "father_hostname", c.serverInfo.Father.HostName)
+			if c.log.Enabled(logger.InfoLevel) {
+				c.log.Info("Propagating new collection creation to father node", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg), "father_hostname", c.serverInfo.Father.HostName)
+			}
 			msg.SenderIp = c.serverInfo.HostName
 			msg.LeaderIp = c.serverInfo.HostName
 			err := c.sender.NewCollectionCreated(c.serverInfo.Father.HostName, msg)
@@ -251,15 +266,21 @@ func (c *CollectionsDiscovererImp) handleIncomingNewCollection() http.Handler {
 		}
 
 		// Process the new collection creation
+		var coll shared.Collection
 		if isStrong {
-			c.collectionsPartialView.KnownCollections[collectionId] = shared.NewStrongCollection(collectionId, 0, true, false, leaderIp) // remote strong collection
+			coll = shared.NewStrongCollection(collectionId, 0, true, false, leaderIp) // remote strong collection
 		} else {
-			c.collectionsPartialView.KnownCollections[collectionId] = shared.NewWeakCollection(collectionId, 0, true) // remote weak collection
+			coll = shared.NewWeakCollection(collectionId, 0, true) // remote weak collection
 		}
 
-		c.log.Debug("Adding message sender hostname to the Hosts directions for the collection instance in the current node", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "node_hostname", c.serverInfo.HostName, "added_hostname(sender)", senderIp, "current_known_hosts", c.collectionsPartialView.KnownCollections[collectionId].HostsId())
-		c.collectionsPartialView.KnownCollections[collectionId].AddHost(senderIp)
-		c.log.Debug("Host added to collection successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "updated_known_hosts", c.collectionsPartialView.KnownCollections[collectionId].HostsId())
+		if c.log.Enabled(logger.DebugLevel) {
+			c.log.Debug("Adding message sender hostname to the Hosts directions for the collection instance in the current node", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "node_hostname", c.serverInfo.HostName, "added_hostname(sender)", senderIp, "current_known_hosts", coll.HostsId())
+		}
+		coll.AddHost(senderIp)
+		if c.log.Enabled(logger.DebugLevel) {
+			c.log.Debug("Host added to collection successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "updated_known_hosts", coll.HostsId())
+		}
+		c.collectionsPartialView.SetCollection(collectionId, coll)
 
 		c.log.Info("New collection creation completed successfully", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
 		w.WriteHeader(http.StatusOK)
@@ -287,7 +308,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler
 		senderIp := msg.SenderIp
 
 		//async
-		dbErr := c.RemoveCollectionAndPropagate(collectionId, migrationManager.GetMigrationManagerInstance(), msg.Groups, msg.UserId, false, senderIp)
+		dbErr := c.RemoveCollectionAndPropagate(collectionId, msg.Groups, msg.UserId, false, senderIp)
 		if dbErr != nil {
 			c.log.Error("Failed collection removal propagation", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg), "error", dbErr)
 			http.Error(w, "Internal Server Error: Failed to propagate collection removal", http.StatusInternalServerError)
@@ -299,7 +320,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoveCollection() http.Handler
 	})
 }
 
-func (c *CollectionsDiscovererImp) handleIncomingRemoteCollectionSet(migrationManager migrationManager.MigrationManager) http.Handler {
+func (c *CollectionsDiscovererImp) handleIncomingRemoteCollectionSet() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
 		c.log.Eval("Received remote collection set request", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI())
@@ -312,7 +333,7 @@ func (c *CollectionsDiscovererImp) handleIncomingRemoteCollectionSet(migrationMa
 		}
 
 		//collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong, skipUniquenessCheck bool
-		err := c.SetCollectionAndPropagate(msg.CollectionId, msg.CollectionName, msg.Records, msg.Groups, msg.UserId, migrationManager, msg.IsStrong, msg.SkipUniquenessCheck)
+		err := c.SetCollectionAndPropagate(msg.CollectionId, msg.CollectionName, msg.Records, msg.Groups, msg.UserId, msg.IsStrong, msg.SkipUniquenessCheck)
 
 		if err != nil {
 			c.log.Error("Failed collection set", "remote_addr", r.RemoteAddr, "method", r.Method, "path", r.URL.RequestURI(), "message", fmt.Sprintf("%+v", msg), "error", err)

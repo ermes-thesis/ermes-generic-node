@@ -60,7 +60,9 @@ func (s *statefulPolicy) retryIsCollectionLocallyPresent(colId string, seqNum ui
 		var toMigrateErr *collectionsDiscoverer.ToMigrateError
 		if err == nil {
 			if collection != nil {
-				s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection), "is_locally_present", found)
+				if s.log.Enabled(logger.InfoLevel) {
+					s.log.Info("Collection existence known locally", "collection_id", colId, "seq_num", seqNum, "collection", fmt.Sprintf("%+v", collection), "is_locally_present", found)
+				}
 			} else {
 				s.log.Info("Collection not known locally", "collection_id", colId, "seq_num", seqNum, "is_locally_present", found)
 			}
@@ -95,7 +97,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 		if s.log.Enabled(logger.DebugLevel) {
 			s.log.Debug("No collections specified, executing locally", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload))
 		}
-		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false)
+		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false, nil)
 	}
 
 	s.log.Info("Start to analyze collections for scheduling decision", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId)
@@ -128,6 +130,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 						Body:       nil,
 					}, 0, toMigrateErr
 				}
+				return nil, 0, fmt.Errorf("error checking collection presence for collection %s: %v", col.Id, err)
 			}
 
 			if col.Metadata.Consistency == model.SequentialConsistent {
@@ -167,7 +170,9 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 		}
 	}
 
-	s.log.Info("Collection analysis completed", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "sequential_coll_needed", sequentialCollectionNeeded, "sequential_collection_found", fmt.Sprintf("%+v", sequentialCollection), "has_eventual_local", hasEventualLocal, "eventual_host_counts", fmt.Sprintf("%+v", eventualHostCounts), "max_eventual_count", maxEventualCount, "host_with_more_eventual", hostWithMoreEventual)
+	if s.log.Enabled(logger.InfoLevel) {
+		s.log.Info("Collection analysis completed", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "sequential_coll_needed", sequentialCollectionNeeded, "sequential_collection_found", fmt.Sprintf("%+v", sequentialCollection), "has_eventual_local", hasEventualLocal, "eventual_host_counts", fmt.Sprintf("%+v", eventualHostCounts), "max_eventual_count", maxEventualCount, "host_with_more_eventual", hostWithMoreEventual)
+	}
 	// Route based on collection analysis
 	// Priority: Sequential > Local Eventual > Remote Eventual
 	if sequentialCollectionNeeded {
@@ -196,26 +201,18 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 		}
 
 		if hasSequentialLocal {
-			// Re-check if the collection is still local, after acquiring the lock
-			// This is needed because the collection could be migrated while we were waiting for the lock
-			// If the collection is not local anymore, we need to forward the request
-			//if !sequentialCollection.IsLocal() {
-			//	return s.forwardRequestWithSequential(functionName, functionVersion, collections, groupToken, sequentialSeqNumber, functionMetadata.StrongCollWriteAccess, sequentialCollection)
-			//}
-
 			// If Sequential collection is present, and it's the leader execute locally.
 			// If Sequential collection is present, and the function needs only to read it, execute locally
 			if sequentialCollection.IsLeader || !functionMetadata.StrongCollWriteAccess {
 				if functionMetadata.StrongCollWriteAccess {
 					sequentialCollection.WriteMutex.Lock()
-					defer sequentialCollection.WriteMutex.Unlock()
 				}
 				s.log.Info("Executing function locally with sequential collection", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 
 				if s.log.Enabled(logger.DebugLevel) {
 					s.log.Debug("Executing function locally with sequential collection", "seq_collection_id", sequentialCollection.CollectionId(), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "is_leader", sequentialCollection.IsLeader, "write_access_requested", functionMetadata.StrongCollWriteAccess)
 				}
-				return s.executeLocally(scheduleRequest, reqHostname, groups, userId, sequentialCollection.CollectionId(), &sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock, functionMetadata.StrongCollWriteAccess)
+				return s.executeLocally(scheduleRequest, reqHostname, groups, userId, sequentialCollection.CollectionId(), &sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock, functionMetadata.StrongCollWriteAccess, sequentialCollection.WriteMutex)
 			}
 
 			s.log.Info("Sequential collection must be accessed in write but the local sequential collection is not the leader. Forwarding request to the host containing the leader sequential collection",
@@ -229,7 +226,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 			}
 
 			sequentialCollection.GetCollectionState().(*shared.LocalCollection).CollectionLock.RUnlock()
-			s.dataManager.GetMigrationManager().HandlePostponedDecisions(sequentialCollection)
+			go s.dataManager.GetMigrationManager().HandlePostponedDecisions(sequentialCollection)
 			return s.forwardRequest(dest, scheduleRequest)
 		}
 
@@ -245,7 +242,7 @@ func (s *statefulPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname s
 		if s.log.Enabled(logger.DebugLevel) {
 			s.log.Debug("Executing function locally with eventual", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "user_access_groups", groups, "request_hostname", reqHostname)
 		}
-		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false)
+		return s.executeLocally(scheduleRequest, reqHostname, groups, userId, "", nil, false, nil)
 	}
 
 	// If hostWithMoreEventual is empty, it means that none of the eventual collections requested exists in the architecture

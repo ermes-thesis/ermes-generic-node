@@ -29,16 +29,16 @@ func createNewLogger(t *testing.T) logger.Logger {
 }
 
 func TestFromRemoteToLocalCollection(t *testing.T) {
-	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
+	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser, mutex := TestSetUp(t)
 
 	log := createNewLogger(t)
 
 	db.EXPECT().GetCollectionMemoryUsage("repoId").Return(10, nil)
 
 	mig := migrationManager.GetMigrationManagerInstance()
-	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log, mutex)
 	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
-	clDiscovererImp.Init(collections, serverinfo, ser, db, log, lruCache)
+	clDiscovererImp.Init(collections, serverinfo, ser, db, log, lruCache, mig, mutex)
 	mig.UpdatesRequestsInfo([]gossip.CollectionRequestInfo{
 		{
 			CollectionId:   "repoId",
@@ -73,7 +73,7 @@ func TestIterationModule(t *testing.T) {
 	red := "\033[31m"
 	reset := "\033[0m"
 
-	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := CycleTestSetUp(t)
+	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser, mutex := CycleTestSetUp(t)
 	log := createNewLogger(t)
 
 	db.EXPECT().GetCollectionMemoryUsage("repoId0").Return(10, nil)
@@ -81,10 +81,10 @@ func TestIterationModule(t *testing.T) {
 	db.EXPECT().GetCollectionMemoryUsage("repoId2").Return(10, nil)
 
 	mig := migrationManager.GetMigrationManagerInstance()
-	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	mig.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log, mutex)
 	defer mig.StopAsyncDump()
 	clDiscovererImp := clDiscoverer.GetCollectionsDiscovererInstance()
-	clDiscovererImp.Init(collections, serverinfo, ser, db, log, lruCache)
+	clDiscovererImp.Init(collections, serverinfo, ser, db, log, lruCache, mig, mutex)
 
 	// SET INITIAL STATE
 	fmt.Println("SET INITIAL STATE")
@@ -99,7 +99,7 @@ func TestIterationModule(t *testing.T) {
 	}
 
 	// FIRST CYCLE
-	fmt.Println(string(red), "START FIRST CYCLE", string(reset))
+	fmt.Println(red, "START FIRST CYCLE", reset)
 	ser.On("SendGenericHTTPRequest", "2222", "/pvt-repo", mock.Anything).Return(200, nil).Once()
 	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Once()
 	ser.On("SendGenericHTTPRequest", mock.AnythingOfType("string"), "/pvt-gossip", mock.Anything).Return(200, nil).Times(3)
@@ -173,7 +173,7 @@ func TestIterationModule(t *testing.T) {
 	}
 
 	// SECOND CYCLE
-	fmt.Println(string(red), "START SECOND CYCLE", string(reset))
+	fmt.Println(red, "START SECOND CYCLE", reset)
 	ser.On("SendGenericHTTPRequest", "2222", "/pvt-repo", mock.Anything).Return(200, nil).Once()
 	ser.On("SendGenericHTTPRequest", "3333", "/pvt-repo", mock.Anything).Return(200, nil).Times(2)
 	ser.On("SendGenericHTTPRequest", "1111", "/pvt-repo", mock.Anything).Return(200, nil).Times(2)

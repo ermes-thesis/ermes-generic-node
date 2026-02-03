@@ -17,7 +17,7 @@ func myT1PenalityFunc(bufferPos int, currentValue int) int {
 }
 
 func TestSingletonInstance(t *testing.T) {
-	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
+	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser, mutex := TestSetUp(t)
 	log := createNewLogger(t)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
@@ -25,9 +25,9 @@ func TestSingletonInstance(t *testing.T) {
 		t.Fatal("Expected non-nil instance from GetMigrationManagerInstance")
 	}
 
-	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log, mutex)
 	instance2 := migrationManager.GetMigrationManagerInstance()
-	instance2.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	instance2.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log, mutex)
 
 	if instance1 != instance2 {
 		t.Error("Expected the same instance for both calls, but got different ones")
@@ -39,14 +39,14 @@ func TestSingletonInstance(t *testing.T) {
 }
 
 func TestManageNewStrongRequest(t *testing.T) {
-	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
+	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser, mutex := TestSetUp(t)
 	log := createNewLogger(t)
 
 	db.EXPECT().GetCollectionMemoryUsage("repoId").Return(10, nil)
 	db.EXPECT().GetCollectionMemoryUsage("repoId1").Return(10, nil)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log, mutex)
 	instance1.NewCollectionReceived("repoId", true, 0, false, make(map[string]database.RecordValue, 13), []string{}, "", 0, 13, false, "host")
 	instance1.NewCollectionReceived("repoId1", true, 0, false, make(map[string]database.RecordValue, 14), []string{}, "", 0, 14, false, "host")
 
@@ -106,7 +106,9 @@ func TestManageNewStrongRequest(t *testing.T) {
 		t.Error("wrong latency values")
 	}
 
-	if collections.KnownCollections["repoId"] == nil || collections.KnownCollections["repoId1"] == nil {
+	_, exists := collections.GetCollection("repoId")
+	_, exists1 := collections.GetCollection("repoId1")
+	if !exists || !exists1 {
 		t.Fatal("collection not initialized")
 	}
 
@@ -116,13 +118,13 @@ func TestManageNewStrongRequest(t *testing.T) {
 }
 
 func TestManageNewStrongRequestComputeForces(t *testing.T) {
-	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
+	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser, mutex := TestSetUp(t)
 	log := createNewLogger(t)
 	db.EXPECT().GetCollectionMemoryUsage("repoId").Return(10, nil)
 	db.EXPECT().GetCollectionMemoryUsage("repoId1").Return(10, nil)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log, mutex)
 	instance1.NewCollectionReceived("repoId", true, 0, false, make(map[string]database.RecordValue), []string{}, "", 0, 12, false, "host")
 	instance1.NewCollectionReceived("repoId1", true, 0, false, make(map[string]database.RecordValue), []string{}, "", 0, 13, false, "host")
 
@@ -159,14 +161,14 @@ func TestManageNewStrongRequestComputeForces(t *testing.T) {
 }
 
 func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
-	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
+	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser, mutex := TestSetUp(t)
 	log := createNewLogger(t)
 
 	db.EXPECT().GetCollectionMemoryUsage("repoId").Return(10, nil)
 	db.EXPECT().GetCollectionMemoryUsage("repoId1").Return(10, nil)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log, mutex)
 	instance1.NewCollectionReceived("repoId", true, 0, false, make(map[string]database.RecordValue), []string{}, "", 0, 13, false, "host")
 	instance1.NewCollectionReceived("repoId1", true, 0, false, make(map[string]database.RecordValue), []string{}, "", 0, 14, false, "host")
 
@@ -226,11 +228,11 @@ func TestComputeElasticForcesOnCircularBuffer(t *testing.T) {
 }
 
 func TestMigrationFromIdleToGossipAfterReceiveAMessage(t *testing.T) {
-	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser := TestSetUp(t)
+	migrationManagerConfig, lruConfig, collections, serverinfo, lruCache, db, ser, mutex := TestSetUp(t)
 	log := createNewLogger(t)
 
 	instance1 := migrationManager.GetMigrationManagerInstance()
-	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log)
+	instance1.Init(collections, penality.StupidPenalityFunc, migrationManagerConfig, lruConfig, ser, serverinfo, lruCache, db, log, mutex)
 
 	msg := gossip.NewChildStateMessage("senderId", 0.0)
 

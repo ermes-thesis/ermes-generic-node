@@ -5,6 +5,7 @@ import (
 	"server"
 	"tokenDecoder"
 
+	"github.com/ermes-thesis/ermes-common/logger"
 	"github.com/ermes-thesis/ermes-common/model"
 )
 
@@ -24,7 +25,9 @@ func (s *statelessPolicy) RegisterRoutes(server server.ServerType, tokenDecoder 
 
 func (s *statelessPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname string, groups []string, userId string) (*FunctionResult, uint64, error) {
 	s.log.Info("Scheduling function", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
-	s.log.Debug("Scheduling function", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname)
+	if s.log.Enabled(logger.DebugLevel) {
+		s.log.Debug("Scheduling function", "with_collections", fmt.Sprintf("%+v", scheduleRequest.Collections), "with_request_body", string(scheduleRequest.Payload), "sequential_seq_num", scheduleRequest.SequentialSeqNumber, "req_hostname", reqHostname)
+	}
 
 	sequentialCollectionId := ""
 	for _, colls := range scheduleRequest.Collections {
@@ -44,5 +47,5 @@ func (s *statelessPolicy) Schedule(scheduleRequest ScheduleRequest, reqHostname 
 		return nil, 0, fmt.Errorf("error retrieving function metadata: %v", err)
 	}
 
-	return s.executeLocally(scheduleRequest, reqHostname, groups, userId, sequentialCollectionId, nil, functionMetadata.StrongCollWriteAccess)
+	return s.executeLocally(scheduleRequest, reqHostname, groups, userId, sequentialCollectionId, nil, functionMetadata.StrongCollWriteAccess, nil)
 }

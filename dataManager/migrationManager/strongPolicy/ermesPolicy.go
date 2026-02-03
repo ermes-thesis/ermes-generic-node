@@ -10,6 +10,7 @@ import (
 	"db"
 	"server"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ermes-thesis/ermes-common/logger"
@@ -18,7 +19,8 @@ import (
 // ErmesStrongCollectionPolicy default policy
 type ErmesStrongCollectionPolicy struct {
 	//sync
-	migLock *sync.Mutex
+	stateLock *sync.Mutex
+	mutex     *sync.Mutex
 	//config
 	currentConfig config.MigrationManagerConfig
 	lruConfig     config.LruConfig
@@ -49,13 +51,14 @@ type ErmesStrongCollectionPolicy struct {
 	penalityFunc penality.PenalityFunc
 }
 
-func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.LruConfig, collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo server.ServerInfo, sender sender.MigrationManagerSender, lruCache *lru.LRUCache[shared.Collection], logger logger.Logger) StrongCollectionPolicy {
+func NewDefaultPolicy(config config.MigrationManagerConfig, lruConfig config.LruConfig, collections *shared.CollectionPartialView, penalityFunc penality.PenalityFunc, dbInterface db.GenericDB, serverInfo server.ServerInfo, sender sender.MigrationManagerSender, lruCache *lru.LRUCache[shared.Collection], logger logger.Logger, mutex *sync.Mutex) StrongCollectionPolicy {
 	policy := &ErmesStrongCollectionPolicy{
 		lruCache:         lruCache,
 		lruConfig:        lruConfig,
 		sender:           sender,
 		log:              logger,
-		migLock:          &sync.Mutex{},
+		stateLock:        &sync.Mutex{},
+		mutex:            mutex,
 		currentConfig:    config,
 		serverInfo:       serverInfo,
 		partialView:      collections,
@@ -75,7 +78,7 @@ func (s *ErmesStrongCollectionPolicy) SetDefaultState() {
 	s.log.Info("[DEFAULT-STRONG-POLICY], Setting default state")
 	//state pattern
 	s.idleState = &MigrationManagerIdleState{policy: s}
-	s.gossipState = &MigrationManagerGossipState{policy: s, dbInterface: s.dbInterface, MissingMessageCounter: 0}
+	s.gossipState = &MigrationManagerGossipState{policy: s, dbInterface: s.dbInterface, MissingMessageCounter: atomic.Int32{}}
 	s.decisionState = &MigrationManagerDecisionState{policy: s}
 
 	s.currentState = s.idleState
@@ -104,8 +107,8 @@ func (s *ErmesStrongCollectionPolicy) setState(state MigrationManagerState) {
 func (s *ErmesStrongCollectionPolicy) transitionToGossip() {
 	s.log.Eval("[DEFAULT-STRONG-POLICY], transition to gossip state")
 	//sync
-	s.migLock.Lock()
-	defer s.migLock.Unlock()
+	s.stateLock.Lock()
+	defer s.stateLock.Unlock()
 
 	//imp
 	// Only transition if still in idle state

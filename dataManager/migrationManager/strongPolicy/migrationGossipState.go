@@ -5,6 +5,7 @@ import (
 	shared "dataManager/shared"
 	"db"
 	"fmt"
+	"sync/atomic"
 )
 
 // MigrationManagerGossipState
@@ -12,7 +13,7 @@ import (
 type MigrationManagerGossipState struct {
 	policy                *ErmesStrongCollectionPolicy
 	dbInterface           db.GenericDB
-	MissingMessageCounter int
+	MissingMessageCounter atomic.Int32
 }
 
 func (m *MigrationManagerGossipState) Setup(args ...any) {
@@ -23,7 +24,8 @@ func (m *MigrationManagerGossipState) Setup(args ...any) {
 	if !ok {
 		panic("expected int for counter")
 	}
-	m.MissingMessageCounter = counter
+	m.MissingMessageCounter = atomic.Int32{}
+	m.MissingMessageCounter.Store(int32(counter))
 
 	go m.SendGossipMessages()
 }
@@ -60,8 +62,8 @@ func (m *MigrationManagerGossipState) SendGossipMessages() {
 
 func (m *MigrationManagerGossipState) ManageGossipMessage(msg gossip.GossipMessage) {
 	//sync
-	m.policy.migLock.Lock()
-	defer m.policy.migLock.Unlock()
+	//m.policy.stateLock.Lock()
+	//defer m.policy.stateLock.Unlock()
 
 	//imp
 	switch parsed := msg.(type) {
@@ -74,8 +76,7 @@ func (m *MigrationManagerGossipState) ManageGossipMessage(msg gossip.GossipMessa
 		return
 	}
 
-	m.MissingMessageCounter -= 1
-	if m.MissingMessageCounter <= 0 {
+	if m.MissingMessageCounter.Add(-1) <= 0 {
 		m.policy.transitionToDecision()
 	}
 }
@@ -87,9 +88,7 @@ func (m *MigrationManagerGossipState) manageChildGossipMessage(msg gossip.ChildS
 		//childName:   msg.GetSenderID(),
 		FreeRedisMemory: msg.FreeRedisMemory,
 	}
-	m.policy.partialView.Mutex.Lock()
-	m.policy.partialView.NodeResourceUsage[msg.GetSenderID()] = childStateInfo
-	m.policy.partialView.Mutex.Unlock()
+	m.policy.partialView.SetNodeResourceUsage(msg.GetSenderID(), childStateInfo)
 }
 
 func (m *MigrationManagerGossipState) manageAncestorGossipMessage(msg gossip.LeaderDelegaMessage) {
@@ -98,7 +97,5 @@ func (m *MigrationManagerGossipState) manageAncestorGossipMessage(msg gossip.Lea
 		//childName:   msg.GetSenderID(),
 		FreeRedisMemory: msg.FreeRedisMemory,
 	}
-	m.policy.partialView.Mutex.Lock()
-	m.policy.partialView.NodeResourceUsage[msg.GetSenderID()] = childStateInfo
-	m.policy.partialView.Mutex.Unlock()
+	m.policy.partialView.SetNodeResourceUsage(msg.GetSenderID(), childStateInfo)
 }

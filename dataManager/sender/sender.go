@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"server"
+	"sync"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 )
@@ -32,7 +33,7 @@ const (
 //###############################################################
 
 type MigrationManagerSender interface {
-	SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool)
+	SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, isMigration bool)
 	SendGossipMessages(gossip.GossipMessage, string)
 	SendRequestInfoMessage(gossip.CollectionRequestInfoMessages, string)
 	GossipPath() string
@@ -47,9 +48,10 @@ type MigrationManagerSenderImpl struct {
 	log         logger.Logger
 	dbInterface db.GenericDB
 	lruCache    *lru.LRUCache[shared.Collection]
+	mutex       *sync.Mutex
 }
 
-func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo, partialView *shared.CollectionPartialView, dbInterface db.GenericDB, lruCache *lru.LRUCache[shared.Collection]) MigrationManagerSender {
+func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, serverInfo server.ServerInfo, partialView *shared.CollectionPartialView, dbInterface db.GenericDB, lruCache *lru.LRUCache[shared.Collection], mutex *sync.Mutex) MigrationManagerSender {
 	return &MigrationManagerSenderImpl{
 		server:      server,
 		log:         logger,
@@ -57,12 +59,13 @@ func NewMigrationManagerSender(logger logger.Logger, server server.ServerType, s
 		partialView: partialView,
 		dbInterface: dbInterface,
 		lruCache:    lruCache,
+		mutex:       mutex,
 	}
 }
 
-func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool) {
+func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, collection shared.Collection, sendAsLeader bool, isMigration bool) {
 	//imp
-	s.log.Info("SENDER: Preparing to send collection", "collectionId", collection.CollectionId(), "destination", destination, "isMigration", isMigration, "sendAsLeader", sendAsLeader, "collectionSize", collectionSize)
+	s.log.Info("SENDER: Preparing to send collection", "collectionId", collection.CollectionId(), "destination", destination, "isMigration", isMigration, "sendAsLeader", sendAsLeader)
 	if s.serverInfo.Father == nil || destination != s.serverInfo.Father.HostName {
 		s.log.Debug("Adding host to collection", "hostname", s.serverInfo.HostName, "destination", destination, "known_host_ids", collection.HostsId())
 		collection.AddHost(destination)
@@ -70,9 +73,27 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 
 	hostToRemove := isMigration && s.serverInfo.Father != nil && destination == s.serverInfo.Father.HostName && len(collection.HostsId()) == 0
 
+	var seqNumber uint64
+	if collection.IsStrong() {
+		seqNumber = collection.(*shared.StrongCollection).ConsistencyClock
+	}
+
+	//get collection from db
+	res, groups, owner, groupsSequence, err := s.dbInterface.GetCollection(collection.CollectionId())
+	if err != nil {
+		s.log.Error("Error getting collection from database", "error", err)
+		return
+	}
+	collectionSize, sizeError := s.dbInterface.GetCollectionMemoryUsage(collection.CollectionId())
+	if sizeError != nil {
+		s.log.Error("Error getting collection size from database", "error", sizeError)
+		return
+	}
+
 	msg := gossip.SendCollectionMessage{
 		CollectionId:   collection.CollectionId(),
 		Records:        res,
+		SequenceNumber: seqNumber,
 		Groups:         groups,
 		Owner:          owner,
 		GroupsSequence: groupsSequence,
@@ -83,17 +104,13 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 	}
 	if collection.IsStrong() {
 		msg.IsLeader = sendAsLeader
-		msg.SequenceNumber = collection.(*shared.StrongCollection).ConsistencyClock
-	} else {
-		msg.IsLeader = false
 	}
 
 	go func() {
 		code, err := s.server.SendGenericHTTPRequest(destination, repoPath, msg)
 
 		//sync
-		s.partialView.Mutex.Lock()
-		defer s.partialView.Mutex.Unlock()
+		s.mutex.Lock()
 
 		//handle errors
 		if err != nil || code != http.StatusOK {
@@ -101,10 +118,10 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 				s.log.Warnf("SENDER , Collection refused from %s (%d), for collection %s", destination, code, collection.CollectionId())
 
 				//stop sending to this node, at least until next gossip
-				nodeInfo, ok := s.partialView.NodeResourceUsage[destination]
-				if ok {
+				nodeInfo, exists := s.partialView.GetNodeResourceUsage(destination)
+				if exists {
 					nodeInfo.FreeRedisMemory = 0.0
-					s.partialView.NodeResourceUsage[destination] = nodeInfo
+					s.partialView.SetNodeResourceUsage(destination, nodeInfo)
 				}
 
 				s.sendRemoteCollectionErrorHandler(destination, collection, sendAsLeader, res, groups, owner, groupsSequence, collectionSize, isMigration)
@@ -123,13 +140,20 @@ func (s *MigrationManagerSenderImpl) SendRemoteCollectionTo(destination string, 
 		//if collection not present in subtree and no more postponed updates
 		if isMigration && len(collection.HostsId()) == 0 && !collection.IsLocal() /* && !collection.GetCollectionState().IsCollectionBeingMigrated() */ {
 			//remove collection from partial view
-			delete(s.partialView.KnownCollections, collection.CollectionId())
+			s.partialView.RemoveCollection(collection.CollectionId())
 		}
+
+		s.mutex.Unlock()
 	}()
 }
 
 func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destination string, collection shared.Collection, sendAsLeader bool, res map[string]db.RecordValue, groups []string, owner string, groupsSequence uint64, collectionSize uint64, isMigration bool) {
 	collection.GetCollectionState().RemoveHost(destination) // remove host from known hosts
+
+	if collection.IsLocal() {
+		collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Lock()
+		s.mutex.Unlock()
+	}
 
 	//remove postponed delete behaviour
 	if collection.IsStrong() && collection.(*shared.StrongCollection).HasPostponedDecisionBehaviour() && isMigration {
@@ -137,6 +161,9 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 	}
 
 	if !collection.IsLocal() {
+		collection.SetToLocal(collectionSize)
+		s.mutex.Unlock()
+
 		//set collection back in redis
 		availableMem, memErr := s.dbInterface.GetAvailableMemory()
 		if memErr != nil {
@@ -164,8 +191,7 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 			}
 		}
 
-		collection.SetToLocal(collectionSize)                                  // set collection back to local
-		s.partialView.KnownCollections[collection.CollectionId()] = collection // add back to known collections
+		s.partialView.SetCollection(collection.CollectionId(), collection) // add back to known collections
 		s.log.Info("SENDER: Migration failed, set collection back to local", "collectionId", collection.CollectionId())
 
 	}
@@ -175,6 +201,8 @@ func (s *MigrationManagerSenderImpl) sendRemoteCollectionErrorHandler(destinatio
 		collection.(*shared.StrongCollection).LeaderId = s.serverInfo.HostName // set back as leader
 		s.log.Info("SENDER: Leader migration failed, set collection back as leader", "collectionId", collection.CollectionId())
 	}
+
+	collection.GetCollectionState().(*shared.LocalCollection).CollectionLock.Unlock()
 }
 
 func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage, destination string) {
@@ -187,7 +215,9 @@ func (s *MigrationManagerSenderImpl) SendGossipMessages(msg gossip.GossipMessage
 }
 
 func (s *MigrationManagerSenderImpl) SendRequestInfoMessage(msg gossip.CollectionRequestInfoMessages, destination string) {
-	s.log.InfofWith("SENDER: send collection request info to %s", []any{destination}, "msg", fmt.Sprintf("%+v", msg))
+	if s.log.Enabled(logger.InfoLevel) {
+		s.log.InfofWith("SENDER: send collection request info to %s", []any{destination}, "msg", fmt.Sprintf("%+v", msg))
+	}
 
 	go s.server.SendGenericHTTPRequest(destination, requestInfoPath, msg)
 }

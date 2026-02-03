@@ -2,12 +2,13 @@ package propagation
 
 import (
 	"fmt"
-	"github.com/ermes-thesis/ermes-common/logger"
-	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"net/http"
 	"server"
 	"strconv"
 	"strings"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 )
 
 type DeleteMetadataPropagator interface {
@@ -34,7 +35,9 @@ func (p *DeleteMetadataPropagatorImpl) Propagate(collectionId string, geolocatio
 
 	switch reqOrigin {
 	case FROM_FATHER:
-		p.log.Debug("Propagation origin: FROM_FATHER", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_children", fmt.Sprintf("%+v", p.serverInfo.Children))
+		if p.log.Enabled(logger.DebugLevel) {
+			p.log.Debug("Propagation origin: FROM_FATHER", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_children", fmt.Sprintf("%+v", p.serverInfo.Children))
+		}
 		for _, child := range p.serverInfo.Children {
 			if strings.HasPrefix(geolocation, child.MetadataDomain) {
 				p.log.Info("Forwarding metadata deletion to child", "collection_id", collectionId, "child_hostname", child.HostName, "child_geolocation", child.MetadataDomain)
@@ -47,7 +50,9 @@ func (p *DeleteMetadataPropagatorImpl) Propagate(collectionId string, geolocatio
 			}
 		}
 	case FROM_CHILD:
-		p.log.Debug("Propagation origin: FROM_CHILD", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_father", fmt.Sprintf("%+v", p.serverInfo.Father))
+		if p.log.Enabled(logger.DebugLevel) {
+			p.log.Debug("Propagation origin: FROM_CHILD", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_father", fmt.Sprintf("%+v", p.serverInfo.Father))
+		}
 		if p.serverInfo.Father != nil {
 			p.log.Info("Forwarding metadata deletion to father", "collection_id", collectionId, "father_hostname", p.serverInfo.Father.HostName, "father_geolocation", p.serverInfo.Father.MetadataDomain)
 			err := p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, geolocation, isCollRecreated)
@@ -57,7 +62,9 @@ func (p *DeleteMetadataPropagatorImpl) Propagate(collectionId string, geolocatio
 			}
 		}
 	case FROM_LOCAL:
-		p.log.Debug("Propagation origin: FROM_LOCAL", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_children", fmt.Sprintf("%+v", p.serverInfo.Children), "node_father", fmt.Sprintf("%+v", p.serverInfo.Father))
+		if p.log.Enabled(logger.DebugLevel) {
+			p.log.Debug("Propagation origin: FROM_LOCAL", "collection_id", collectionId, "node_geolocation", p.serverInfo.MetadataDomain, "node_children", fmt.Sprintf("%+v", p.serverInfo.Children), "node_father", fmt.Sprintf("%+v", p.serverInfo.Father))
+		}
 		if p.serverInfo.Father != nil {
 			p.log.Info("Forwarding metadata deletion to father", "collection_id", collectionId, "father_hostname", p.serverInfo.Father.HostName, "father_geolocation", p.serverInfo.Father.MetadataDomain)
 			err := p.sendHttpReqToDest(p.serverInfo.Father.HostName, collectionId, geolocation, isCollRecreated)

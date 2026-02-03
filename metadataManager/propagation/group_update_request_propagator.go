@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/ermes-thesis/ermes-common/logger"
-	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 	"net/http"
 	"server"
+
+	"github.com/ermes-thesis/ermes-common/logger"
+	"github.com/ermes-thesis/ermes-common/utils/httpClient"
 )
 
 type GroupUpdateRequestPropagator interface {
@@ -52,7 +53,9 @@ func (p *GroupsUpdateRequestPropagatorImpl) Propagate(collectionId string, messa
 }
 
 func (p *GroupsUpdateRequestPropagatorImpl) sendHttpReqToDest(dest string, collectionId string, message GroupMessage) (*UpdateGroupResponse, error) {
-	p.log.Debug("Creating HTTP request for group update request propagation", "collection_id", collectionId, "destination", dest, "message", fmt.Sprintf("%+v", message))
+	if p.log.Enabled(logger.DebugLevel) {
+		p.log.Debug("Creating HTTP request for group update request propagation", "collection_id", collectionId, "destination", dest, "message", fmt.Sprintf("%+v", message))
+	}
 
 	req, err := p.httpHelper.CreateBasicPvtHttpRequest(http.MethodPost, dest, EndpointRequestUpdateGroups, collectionId, message)
 	if err != nil {
@@ -60,7 +63,9 @@ func (p *GroupsUpdateRequestPropagatorImpl) sendHttpReqToDest(dest string, colle
 		return nil, err
 	}
 
-	p.log.Debug("Sending HTTP request to destination node", "url", req.URL, "headers", fmt.Sprintf("%+v", req.Header))
+	if p.log.Enabled(logger.DebugLevel) {
+		p.log.Debug("Sending HTTP request to destination node", "url", req.URL, "headers", fmt.Sprintf("%+v", req.Header))
+	}
 
 	resp, err := httpClient.CustomClient.Do(req)
 	if err != nil {
@@ -85,6 +90,8 @@ func (p *GroupsUpdateRequestPropagatorImpl) sendHttpReqToDest(dest string, colle
 	}
 
 	p.log.Info("Group update request successfully propagated", "collection_id", collectionId)
-	p.log.Debug("Group update request successfully propagated", "destination", dest, "message", fmt.Sprintf("%+v", message))
+	if p.log.Enabled(logger.DebugLevel) {
+		p.log.Debug("Group update request successfully propagated", "destination", dest, "message", fmt.Sprintf("%+v", message))
+	}
 	return respData, err
 }

@@ -156,7 +156,9 @@ func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAd
 
 	err = h.dataManager.SetCollectionAndPropagate(collectionId, metadata.Name, make(map[string]db.RecordValue), metadata.Groups, metadata.Owner, metadata.Consistency == model.SequentialConsistent, skipUniquenessCheckBool)
 	if err != nil {
-		h.logger.Debug("HostCreateCollection error creating collection", "metadata", fmt.Sprintf("%+v", metadata), "error", err)
+		if h.logger.Enabled(logger.DebugLevel) {
+			h.logger.Debug("HostCreateCollection error creating collection", "metadata", fmt.Sprintf("%+v", metadata), "error", err)
+		}
 		return wasmComponent.WriteError(model.RedisError, err)
 	}
 
@@ -164,10 +166,14 @@ func (h *HostFunctions) hostCreateCollection(wasmComponent adapter.WasmRuntimeAd
 	go func() {
 		err = h.metadataManager.CreateMetadata(collectionId, metadata, propagation.FROM_LOCAL)
 		if err != nil {
-			h.logger.Debug("HostCreateCollection error creating metadata", "metadata", fmt.Sprintf("%+v", metadata), "collection_id", collectionId, "error", err)
+			if h.logger.Enabled(logger.DebugLevel) {
+				h.logger.Debug("HostCreateCollection error creating metadata", "metadata", fmt.Sprintf("%+v", metadata), "collection_id", collectionId, "error", err)
+			}
 		}
 	}()
 
-	h.logger.Debug("HostCreateCollection completed successfully", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", metadata))
+	if h.logger.Enabled(logger.DebugLevel) {
+		h.logger.Debug("HostCreateCollection completed successfully", "collection_id", collectionId, "metadata", fmt.Sprintf("%+v", metadata))
+	}
 	return wasmComponent.WriteResult(collectionId)
 }

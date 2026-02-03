@@ -31,12 +31,12 @@ func (e ermesPolicyUpdateStrategy) updatesRequestsInfo(info []messages.Collectio
 }
 func (e ermesPolicyUpdateStrategy) updateCollectionsLatestUsage(collections []string, m *MigrationManagerImp) {
 	//sync
-	m.collectionsLock.Lock()
-	defer m.collectionsLock.Unlock()
+	//m.mutex.Lock()
+	//defer m.mutex.Unlock()
 
 	for _, c := range collections {
-		collection := m.collectionsPartialView.KnownCollections[c]
-		if collection != nil && collection.IsLocal() {
+		collection, exists := m.collectionsPartialView.GetCollection(c)
+		if exists && collection.IsLocal() {
 			err := m.lruCache.MoveToFront(c)
 			if err != nil {
 				m.log.Warn("Error moving to front in LRU cache", "collection_id", c, "error", err)

@@ -9,6 +9,7 @@ import (
 	"db"
 	"errors"
 	"server"
+	"sync"
 
 	"github.com/ermes-thesis/ermes-common/logger"
 )
@@ -27,7 +28,7 @@ func GetCollectionsDiscovererStatelessGenericNodeInstance() CollectionsDiscovere
 	return collectionsDiscovererInstance
 }
 
-func (c *CollectionsDiscovererStatelessGenericNode) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection]) {
+func (c *CollectionsDiscovererStatelessGenericNode) Init(collections *shared.CollectionPartialView, serverInfo server.ServerInfo, server server.ServerType, dbInterface db.GenericDB, logger logger.Logger, lruCache *lru.LRUCache[shared.Collection], m migrationManager.MigrationManager, mutex *sync.Mutex) {
 	initOnce.Do(func() {
 		c.log = logger
 		c.serverInfo = serverInfo
@@ -87,11 +88,11 @@ func (c *CollectionsDiscovererStatelessGenericNode) UpdateCollectionsGroupsAndPr
 	return nil
 }
 
-func (c *CollectionsDiscovererStatelessGenericNode) SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, migrationManager migrationManager.MigrationManager, isStrong, skipUniquenessCheck bool) error {
+func (c *CollectionsDiscovererStatelessGenericNode) SetCollectionAndPropagate(collectionId string, collectionName string, records map[string]db.RecordValue, groups []string, userId string, isStrong, skipUniquenessCheck bool) error {
 	return c.sender.RemoteSetCollectionAndPropagate(c.centralizedDBAddress, collectionId, collectionName, records, groups, userId, isStrong, skipUniquenessCheck)
 }
 
-func (c *CollectionsDiscovererStatelessGenericNode) RemoveCollectionAndPropagate(collectionId string, migrationManager migrationManager.MigrationManager, groups []string, userId string, isInitiator bool, ignoredHostName string) error {
+func (c *CollectionsDiscovererStatelessGenericNode) RemoveCollectionAndPropagate(collectionId string, groups []string, userId string, isInitiator bool, ignoredHostName string) error {
 	c.sender.RemoveCollection(c.centralizedDBAddress, collectionId, c.serverInfo.HostName, groups, userId)
 	return nil
 }

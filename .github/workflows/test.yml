@@ -22,7 +22,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: 'ermes-thesis/ermes-common'
-          token: '${{ secrets.READ_TOKEN }}'
           path: 'ermes-common'
 
       - name: Install WasmEdge

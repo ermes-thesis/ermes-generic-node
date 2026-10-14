@@ -25,12 +25,7 @@ jobs:
           path: 'ermes-common'
 
       - name: Install WasmEdge
-        run: wget https://github.com/WasmEdge/WasmEdge/releases/download/0.16.3/WasmEdge-0.16.3-manylinux_2_28_x86_64.tar.gz && \
-            mkdir -p WasmEdge-0.16.3-x86_64 && \
-            tar -xf WasmEdge-0.16.3-manylinux_2_28_x86_64.tar.gz -C WasmEdge-0.16.3-x86_64 && \
-            mkdir -p /wasmedge_libs_amd64 && \
-            cp -r WasmEdge-0.16.3-x86_64/lib64/* /wasmedge_libs_amd64/ && \
-            rm -rf WasmEdge-0.16.3*
+        run: curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | bash -s -- -p /usr/local -v 0.16.3
     
       - name: Verify WasmEdge installation
         run: wasmedge --version

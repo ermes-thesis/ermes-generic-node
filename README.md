@@ -42,6 +42,10 @@ To run the ermes node use
 $ ./main {pathToConfigFile}
 ```
 
+## How to cross-compile
+
+See [CROSS_COMPILING.md](./CROSS_COMPILING.md) for more info.
+
 ## How to test
 
 This project uses [mockery](https://vektra.github.io/mockery/latest/) to generate mocks for testing purposes.

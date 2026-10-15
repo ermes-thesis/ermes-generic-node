@@ -33,11 +33,11 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
-          go-version: "1.25.5"
+          go-version: "1.27.1"
           cache-dependency-path: "**/go.sum"
 
       - name: Install mockery
-        run: go install github.com/vektra/mockery/v3@v3.6.1
+        run: go install github.com/vektra/mockery/v3@v3.8.1
 
       - name: Generate mocks
         run: |

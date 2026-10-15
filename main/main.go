@@ -86,7 +86,7 @@ func run(ctx context.Context, configPath string) error {
 			return fmt.Errorf("error registering metadata routes: %w", err)
 		}
 
-		var wasmExecutorPool wasm.ExecutorPool
+		var wasmExecutorPool wasm.WASP
 		hostFunctions := scheduler.NewHostFunctions(dataManager, metadataManager, serverInfo, generalLog.Component("host_functions"))
 		switch cfg.Scheduler.WasmRuntime {
 		case wasm.Wasmedge:

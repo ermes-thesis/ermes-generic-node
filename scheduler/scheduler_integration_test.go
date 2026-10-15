@@ -124,7 +124,7 @@ type TestNode struct {
 	DataManager  *datamanager_mock.DataManager
 	MetaManager  *metadataManager_mock.MetadataManager
 	TokenDecoder *tokenDecoder_mock.TokenDecoder
-	WasmPool     *wasm_mock.ExecutorPool
+	WasmPool     *wasm_mock.WASP
 	ColDisc      *collectionsDiscoverer_mock.CollectionsDiscoverer
 	MigManager   *migrationManager_mock.MigrationManager
 }
@@ -197,7 +197,7 @@ func setupTestNode(t *testing.T, log logger.Logger) *TestNode {
 	colDisc := collectionsDiscoverer_mock.NewCollectionsDiscoverer(t)
 	migManager := migrationManager_mock.NewMigrationManager(t)
 	metaManager := metadataManager_mock.NewMetadataManager(t)
-	wasmPool := wasm_mock.NewExecutorPool(t)
+	wasmPool := wasm_mock.NewWASP(t)
 
 	serverInfo := &server.ServerInfo{
 		MetadataDomain: "IT",

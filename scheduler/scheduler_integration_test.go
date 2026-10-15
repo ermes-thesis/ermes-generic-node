@@ -300,7 +300,7 @@ func TestScheduleOnChild_ReadStrong(t *testing.T) {
 	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
 	defer child.ExpectAsyncMetricUpdate(t, "user")()
 
-	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+	child.WasmPool.EXPECT().InvokeFunction(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
 	})
 
@@ -346,7 +346,7 @@ func TestScheduleOnFather_WriteStrong(t *testing.T) {
 	father.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
 	defer father.ExpectAsyncMetricUpdate(t, child.Host)()
 
-	father.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+	father.WasmPool.EXPECT().InvokeFunction(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
 	})
 
@@ -391,7 +391,7 @@ func TestScheduleOnChild_WeakReplicated(t *testing.T) {
 	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
 	defer child.ExpectAsyncMetricUpdate(t, "user")()
 
-	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+	child.WasmPool.EXPECT().InvokeFunction(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
 	})
 
@@ -429,7 +429,7 @@ func TestScheduleOnChild_DoubleWeak(t *testing.T) {
 	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "54321"}).Return()
 	defer child.ExpectAsyncMetricUpdate(t, "user")()
 
-	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+	child.WasmPool.EXPECT().InvokeFunction(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
 	})
 
@@ -463,7 +463,7 @@ func TestScheduleOnFather_EmptyChildWeak(t *testing.T) {
 	father.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
 	defer father.ExpectAsyncMetricUpdate(t, child.Host)()
 
-	father.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+	father.WasmPool.EXPECT().InvokeFunction(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
 	})
 
@@ -510,7 +510,7 @@ func TestScheduleOnChild_EmptyFather(t *testing.T) {
 	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345"}).Return()
 	defer child.ExpectAsyncMetricUpdate(t, father.Host)()
 
-	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+	child.WasmPool.EXPECT().InvokeFunction(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
 	})
 
@@ -561,7 +561,7 @@ func TestScheduleOnChild_WriteStrong(t *testing.T) {
 	child.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"12345", "1111"}).Return()
 	defer child.ExpectAsyncMetricUpdate(t, father.Host)()
 
-	child.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+	child.WasmPool.EXPECT().InvokeFunction(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
 	})
 
@@ -613,7 +613,7 @@ func TestScheduleThreeNodes(t *testing.T) {
 	child2.MigManager.EXPECT().UpdateCollectionsLatestUsage([]string{"1111"}).Return()
 	defer child2.ExpectAsyncMetricUpdate(t, father.Host)()
 
-	child2.WasmPool.EXPECT().Invoke(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
+	child2.WasmPool.EXPECT().InvokeFunction(fnName+"@"+fnVer, []byte("bin"), "entry", [][]byte{[]byte("{}"), wasmCtxJson}).Return(model.WasmResponse{
 		HttpCode: 200, Response: "ok",
 	})
 

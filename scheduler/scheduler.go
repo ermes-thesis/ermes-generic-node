@@ -141,7 +141,7 @@ func (s *baseScheduler) executeLocally(scheduleRequest ScheduleRequest, reqHostn
 
 	s.log.Info("Invoking function locally", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups)
 	startTime := time.Now()
-	resp := s.wasmExecutorPool.Invoke(scheduleRequest.FunctionName+"@"+scheduleRequest.FunctionVersion, wasmBinary, "entry", scheduleRequest.Payload, ctxJson)
+	resp := s.wasmExecutorPool.InvokeFunction(scheduleRequest.FunctionName+"@"+scheduleRequest.FunctionVersion, wasmBinary, "entry", scheduleRequest.Payload, ctxJson)
 	s.log.Eval("Function executed successfully", "fn_name", scheduleRequest.FunctionName, "fn_version", scheduleRequest.FunctionVersion, "executing_user", userId, "user_access_groups", groups, "fn_duration", time.Since(startTime).Nanoseconds())
 	if s.log.Enabled(logger.DebugLevel) {
 		s.log.Debug("Function executed successfully", "fn_response", fmt.Sprintf("%+v", resp))

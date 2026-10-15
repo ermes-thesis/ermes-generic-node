@@ -23,7 +23,7 @@ func (h *HostFunctions) RegisterWasmtimeHostFns(pool *wasm.WasmtimeExecutorPool)
 		},
 	}
 
-	err := pool.RegisterHostFns(fns)
+	err := pool.RegisterHostFunctions(fns)
 	if err != nil {
 		h.logger.Error("Error registering Wasmtime host functions", "host_functions_map", fmt.Sprintf("%+v", fns), "error", err)
 		return fmt.Errorf("failed to register module: %v", err)

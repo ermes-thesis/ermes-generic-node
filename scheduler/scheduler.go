@@ -61,7 +61,7 @@ type SchedulerImpl struct {
 	*baseScheduler
 }
 
-func NewScheduler(stateful bool, dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, cache caches.FunctionCache, wasmExecutorPool wasm.ExecutorPool, serverInfo *server.ServerInfo, config config.SchedulerConfig, logger logger.Logger) Scheduler {
+func NewScheduler(stateful bool, dataManager datamanager.DataManager, metadataManager metadataManager.MetadataManager, cache caches.FunctionCache, wasmExecutorPool wasm.WASP, serverInfo *server.ServerInfo, config config.SchedulerConfig, logger logger.Logger) Scheduler {
 	var policy Scheduler
 
 	sched := &baseScheduler{
@@ -105,7 +105,7 @@ type baseScheduler struct {
 	dataManager      datamanager.DataManager
 	metadataManager  metadataManager.MetadataManager
 	cache            caches.FunctionCache
-	wasmExecutorPool wasm.ExecutorPool
+	wasmExecutorPool wasm.WASP
 	serverInfo       *server.ServerInfo
 	cfg              config.SchedulerConfig
 }

@@ -1,10 +1,10 @@
 module db
 
-go 1.24.4
+go 1.27.1
 
 require (
 	github.com/ermes-thesis/ermes-common/logger v0.0.0-00010101000000-000000000000
-	github.com/ermes-thesis/ermes-common/model v0.0.0-00010101000000-000000000000
+	github.com/ermes-thesis/ermes-common/model v0.0.0-20261015092440-7c3be19f3b38
 	github.com/redis/go-redis/v9 v9.17.2
 	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.40.0
@@ -35,7 +35,7 @@ require (
 	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/ebitengine/purego v0.9.1 // indirect
-	github.com/ermes-thesis/ermes-common/utils v0.0.0-00010101000000-000000000000 // indirect
+	github.com/ermes-thesis/ermes-common/utils v0.0.0-20261015092440-7c3be19f3b38 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect

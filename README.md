@@ -2,8 +2,8 @@
 Repository which contains the code to run an ermes node.
 
 ## Requirements
-- [Go](https://go.dev/dl/) 1.25 or higher
-- [WasmEdge](https://wasmedge.org/)
+- [Go](https://go.dev/dl/) 1.27.1 or higher
+- [WasmEdge](https://wasmedge.org/) 0.16.3 or lower
 - [Redis](https://redis.io/open-source/) 8.4
 
 For this repository to work properly, you must also clone
@@ -21,8 +21,10 @@ projects
 To install WasmEdge run
 
 ```bash
-curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | sudo bash -s -- -p /usr/local
+curl -sSf https://raw.githubusercontent.com/WasmEdge/WasmEdge/master/utils/install.sh | sudo bash -s -- -p /usr/local -v 0.16.3
 ```
+
+Later versions of WasmEdge present compatibility issues with its [go API](https://wasmedge.org/docs/embed/go/intro/) which remains at `0.14.0`.
 
 ## How to build and run
 
@@ -40,13 +42,17 @@ To run the ermes node use
 $ ./main {pathToConfigFile}
 ```
 
+## How to cross-compile
+
+See [CROSS_COMPILING.md](./CROSS_COMPILING.md) for more info.
+
 ## How to test
 
 This project uses [mockery](https://vektra.github.io/mockery/latest/) to generate mocks for testing purposes.
 To install mockery run
 
 ```bash
-go install github.com/vektra/mockery/v3@v3.6.1
+go install github.com/vektra/mockery/v3@v3.8.1
 ```
 
 To generate the mocks open a terminal in the root folder of the project and run

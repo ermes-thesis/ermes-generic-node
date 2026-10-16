@@ -260,13 +260,19 @@ type CollectionDiscovererSender interface {
 type CollectionDiscovererSenderImpl struct {
 	server server.ServerType
 	log    logger.Logger
+	mq     *MultiQueue
 }
 
 func NewCollectionDiscovererSender(log logger.Logger, server server.ServerType) CollectionDiscovererSender {
-	return &CollectionDiscovererSenderImpl{
+	s := &CollectionDiscovererSenderImpl{
 		server: server,
 		log:    log,
 	}
+	s.mq = NewMultiQueue(func(msg outboundMessage) {
+		s.server.SendGenericHTTPRequest(msg.hostId, msg.path, msg.payload)
+		s.executeUpdateSaftyCheck(msg.saftyQueues)
+	})
+	return s
 }
 
 func (s *CollectionDiscovererSenderImpl) WeakCollectionRemoteRecordAccess(hostId string, collectionId string, groups []string, userId string, recordNames ...string) ([]any, error) {
@@ -364,10 +370,18 @@ func (s *CollectionDiscovererSenderImpl) RemoteSetCollectionAndPropagate(hostId 
 func (s *CollectionDiscovererSenderImpl) PropagateUpdate(hostId string, update gossip.CollectionUpdateMessages, saftyQueues []shared.FunctionQueue) {
 	s.log.Infof("SENDER: request collection update propagation to %s", hostId)
 
-	go func() {
-		s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)
-		s.executeUpdateSaftyCheck(saftyQueues)
-	}()
+	hq := s.mq.getOrCreateQueue(hostId)
+	hq.channel <- outboundMessage{
+		hostId:      hostId,
+		path:        updatePropagationPath,
+		payload:     update,
+		saftyQueues: saftyQueues,
+	}
+	//FIXME instead of spawning a go routine I need to use just one with a queue
+	//go func() {
+	//	s.server.SendGenericHTTPRequest(hostId, updatePropagationPath, update)
+	//	s.executeUpdateSaftyCheck(saftyQueues)
+	//}()
 }
 
 func (s *CollectionDiscovererSenderImpl) SyncPropagateUpdate(hostId string, update gossip.CollectionUpdateMessages, saftyQueues []shared.FunctionQueue) {
@@ -378,10 +392,19 @@ func (s *CollectionDiscovererSenderImpl) SyncPropagateUpdate(hostId string, upda
 func (s *CollectionDiscovererSenderImpl) PropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages, saftyQueues []shared.FunctionQueue) {
 	s.log.Infof("SENDER: request collection group update propagation to %s", hostId)
 
-	go func() {
-		s.server.SendGenericHTTPRequest(hostId, updateGroupPropagationPath, update)
-		s.executeUpdateSaftyCheck(saftyQueues)
-	}()
+	hq := s.mq.getOrCreateQueue(hostId)
+	hq.channel <- outboundMessage{
+		hostId:      hostId,
+		path:        updateGroupPropagationPath,
+		payload:     update,
+		saftyQueues: saftyQueues,
+	}
+
+	//FIXME instead of spawning a go routine I need to use just one with a queue
+	//go func() {
+	//	s.server.SendGenericHTTPRequest(hostId, updateGroupPropagationPath, update)
+	//	s.executeUpdateSaftyCheck(saftyQueues)
+	//}()
 }
 
 func (s *CollectionDiscovererSenderImpl) SyncPropagateGroupUpdate(hostId string, update gossip.CollectionGroupUpdateMessages, saftyQueues []shared.FunctionQueue) {

@@ -93,7 +93,7 @@ type SchedulerConfig struct {
 	GroupTokenProviderPort    string `yaml:"groupTokenProviderPort"`
 
 	WasmRuntime    wasm.ChosenWasmRuntime `yaml:"wasmRuntime"`
-	WasmPoolConfig wasm.Config            `yaml:"wasmPoolConfig"`
+	WasmPoolConfig wasm.WASPConfig        `yaml:"wasmPoolConfig"`
 
 	StartingOutdatedDataBackoff time.Duration `yaml:"startingOutdatedDataBackoff"`
 	MaxOutdatedDataRetries      int           `yaml:"maxOutdatedDataRetries"`

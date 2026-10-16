@@ -24,7 +24,7 @@ func (h *HostFunctions) RegisterWazeroHostFns(pool *wasm.WazeroExecutorPool) err
 		},
 	}
 
-	err := pool.RegisterHostFns(fns)
+	err := pool.RegisterHostFunctions(fns)
 	if err != nil {
 		h.logger.Error("Error registering Wazero host functions", "host_functions_map", fmt.Sprintf("%+v", fns), "error", err)
 		return fmt.Errorf("failed to register module: %v", err)

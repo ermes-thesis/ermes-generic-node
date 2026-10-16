@@ -40,7 +40,7 @@ func (h *HostFunctions) RegisterWasmedgeHostFns(pool *wasm.WasmedgeExecutorPool)
 	fnTwoParamOneReturnType.Release()
 	fnFourParamOneReturnType.Release()
 
-	err := pool.RegisterHostFns(fns)
+	err := pool.RegisterHostFunctions(fns)
 	if err != nil {
 		h.logger.Error("Error registering Wasmedge host functions", "host_functions_map", fmt.Sprintf("%+v", fns), "error", err)
 		return fmt.Errorf("failed to register module: %v", err)
